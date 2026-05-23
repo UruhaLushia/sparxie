@@ -1,0 +1,339 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+env:
+  RUST_TOOLCHAIN: 'stable'
+  FRB_VERSION: '2.12.0'
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: android
+            kind: android
+
+          - os: ubuntu-latest
+            label: linux-x86_64
+            kind: linux
+            arch: x86_64
+            rust_target: x86_64-unknown-linux-gnu
+
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            kind: linux
+            arch: arm64
+            rust_target: aarch64-unknown-linux-gnu
+
+          - os: windows-latest
+            label: windows-x86_64
+            kind: windows
+            arch: x86_64
+            rust_target: x86_64-pc-windows-msvc
+
+          - os: windows-11-arm
+            label: windows-arm64
+            kind: windows
+            arch: arm64
+            rust_target: aarch64-pc-windows-msvc
+
+          - os: macos-26
+            label: macos-arm64
+            kind: macos
+            arch: arm64
+            rust_target: aarch64-apple-darwin
+          - os: macos-26-intel
+            label: macos-x86_64
+            kind: macos
+            arch: x86_64
+            rust_target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        if: matrix.kind == 'android'
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        if: ${{ !(startsWith(matrix.os, 'windows-11-arm') || startsWith(matrix.os, 'ubuntu-24.04-arm')) }}
+        with:
+          channel: stable
+          cache: true
+          pub-cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: subosito/flutter-action@v2
+        if: startsWith(matrix.os, 'windows-11-arm') || startsWith(matrix.os, 'ubuntu-24.04-arm')
+        with:
+          channel: master
+          cache: true
+          pub-cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.kind == 'android' && 'aarch64-linux-android,x86_64-linux-android' || matrix.rust_target }}
+
+      - uses: nttld/setup-ndk@v1
+        if: matrix.kind == 'android'
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Cache cargo-installed binaries
+        id: cargo-bin-cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/flutter_rust_bridge_codegen*
+            ~/.cargo/bin/cargo-expand*
+          key: cargo-bin-${{ runner.os }}-${{ runner.arch }}-frb-${{ env.FRB_VERSION }}-v2
+
+      - name: Cache pub
+        uses: actions/cache@v5
+        with:
+          path: .dart_tool
+          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            dart-tool-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache Gradle
+        if: matrix.kind == 'android'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache CocoaPods
+        if: matrix.kind == 'macos' && matrix.arch == 'x86_64'
+        uses: actions/cache@v5
+        with:
+          path: macos/Pods
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache Xcode DerivedData
+        if: matrix.kind == 'macos' && matrix.arch == 'x86_64'
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: xcode-dd-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', 'macos/Podfile') }}
+          restore-keys: |
+            xcode-dd-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install Linux desktop deps
+        if: matrix.kind == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev clang cmake pkg-config rpm
+          sudo gem install --no-document fpm
+
+      - name: Install cargo-ndk
+        if: matrix.kind == 'android'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Install frb_codegen
+        if: steps.cargo-bin-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+
+      - name: Generate FFI bindings
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Run build_runner (freezed)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Android — cross-compile cdylib for all ABIs
+        if: matrix.kind == 'android'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: ./scripts/build-android.sh
+
+      - name: Android — per-ABI APKs + universal APK
+        if: matrix.kind == 'android'
+        run: |
+          flutter build apk --release --split-per-abi
+          flutter build apk --release
+          mkdir -p out
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk out/sparxie-android-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk out/sparxie-android-x86_64.apk
+          cp build/app/outputs/flutter-apk/app-release.apk out/sparxie-android-universal.apk
+
+      - name: Linux — cdylib + bundle + .deb / .rpm
+        if: matrix.kind == 'linux'
+        env:
+          PKG_ARCH_DEB: ${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }}
+          PKG_ARCH_RPM: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+        run: |
+          (cd core && cargo build --release)
+          flutter build linux --release
+          BUNDLE=$(ls -d build/linux/*/release/bundle | head -n1)
+          cp core/target/release/libsparxie.so "$BUNDLE/lib/"
+
+          STAGE=fpm-stage
+          mkdir -p "$STAGE/usr/lib/sparxie" "$STAGE/usr/bin" "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/512x512/apps"
+          cp -r "$BUNDLE"/* "$STAGE/usr/lib/sparxie/"
+          ln -sf /usr/lib/sparxie/sparxie "$STAGE/usr/bin/sparxie"
+          cp assets/icon.jpg "$STAGE/usr/share/icons/hicolor/512x512/apps/sparxie.png"
+          cat > "$STAGE/usr/share/applications/sparxie.desktop" <<EOF
+          [Desktop Entry]
+          Name=Sparxie
+          Comment=mihomo 控制器
+          Exec=sparxie
+          Icon=sparxie
+          Terminal=false
+          Type=Application
+          Categories=Network;
+          EOF
+
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          mkdir -p out
+
+          fpm -s dir -t deb \
+            -n sparxie -v "$VERSION" \
+            -a "$PKG_ARCH_DEB" \
+            --description 'mihomo 控制器' \
+            --url 'https://github.com/UruhaLushia/sparxie' \
+            --maintainer 'Sparxie' \
+            -d 'libgtk-3-0' -d 'libglib2.0-0' \
+            -p "out/sparxie-linux-${{ matrix.arch }}.deb" \
+            -C "$STAGE" .
+
+          fpm -s dir -t rpm \
+            -n sparxie -v "$VERSION" \
+            -a "$PKG_ARCH_RPM" \
+            --description 'mihomo 控制器' \
+            --url 'https://github.com/UruhaLushia/sparxie' \
+            --maintainer 'Sparxie' \
+            -d gtk3 -d glib2 \
+            -p "out/sparxie-linux-${{ matrix.arch }}.rpm" \
+            -C "$STAGE" .
+
+      - name: Windows — cdylib + bundle + zip
+        if: matrix.kind == 'windows'
+        shell: bash
+        run: |
+          (cd core && cargo build --release)
+          flutter build windows --release
+          BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
+          cp core/target/release/sparxie.dll "$BUNDLE/"
+          mkdir -p out
+          (cd "$BUNDLE" && 7z a "$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip" .)
+
+      - name: Windows — installer (Inno Setup)
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $raw     = (Get-Content pubspec.yaml | Select-String '^version:').Line
+          $version = ($raw -split ':\s+')[1] -split '\+' | Select-Object -First 1
+          $bundle  = (Get-ChildItem build\windows\*\runner\Release -Directory | Select-Object -First 1).FullName
+          $issArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'arm64' } else { 'x64compatible' }
+          & $iscc `
+              /DMyAppVersion="$version" `
+              /DMyAppBundleDir="$bundle" `
+              /DMyAppArch="$issArch" `
+              "/DMyAppOutputDir=$env:GITHUB_WORKSPACE\out" `
+              /DMyAppOutputFilename="sparxie-windows-${{ matrix.arch }}-setup" `
+              windows\installer.iss
+
+      - name: macOS — slice-specific dylib + bundle + zip
+        if: matrix.kind == 'macos'
+        run: |
+          (cd core && cargo build --release --target ${{ matrix.rust_target }})
+          flutter build macos --release
+          APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
+          mkdir -p "$APP/Contents/Frameworks"
+          cp core/target/${{ matrix.rust_target }}/release/libsparxie.dylib "$APP/Contents/Frameworks/"
+          mkdir -p out
+          ditto -c -k --sequesterRsrc --keepParent "$APP" out/sparxie-macos-${{ matrix.arch }}.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.label }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.apk' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          ls -la release/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+
+  pre-release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.apk' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+
+      - name: Delete current release assets
+        uses: 8Mi-Tech/delete-release-assets-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: pre-release
+          deleteOnlyFromDrafts: false
+
+      - name: Tag Repo
+        uses: richardsimko/update-tag@v1
+        with:
+          tag_name: pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pre-release
+          prerelease: true
+          files: release/*
