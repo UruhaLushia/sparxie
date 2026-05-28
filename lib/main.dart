@@ -214,11 +214,16 @@ class _HomeShellState extends State<HomeShell> {
       // Rebuild on prefs (nav layout) and on isCmfa (drops 内核配置 nav).
       listenable: Listenable.merge([widget.prefs, widget.session.isCmfa]),
       builder: (context, _) {
-        final wide = MediaQuery.sizeOf(context).width >= 800;
+        final size = MediaQuery.sizeOf(context);
+        // `wide` picks rail-vs-bar chrome; `isShort` keys the destination
+        // set so a phone in landscape (low height) still shows the 5-item
+        // nav rather than the 7-item tablet rail.
+        final wide = size.width >= 800;
+        final isShort = size.height < 600;
         final cards = widget.prefs.navLayout == NavLayout.cards;
         final destinations = _destinationsFor(
           widget.prefs.navLayout,
-          isCompact: !wide,
+          isCompact: isShort || !wide,
           isCmfa: widget.session.isCmfa.value,
         );
         if (wide) {
