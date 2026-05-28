@@ -1,21 +1,18 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import '../rust_api.dart' as rust;
 
-/// Mirror of Rust's per-(target, level) log cache.
-///
-/// The authoritative ring buffer lives in Rust (`logs_state`) — Dart only
-/// holds the entries currently being rendered. On every (re)subscribe, the
-/// Rust stream replays its cache before live deltas, so this buffer
-/// reseeds itself automatically without us having to track capacity here.
+/// Mirror of Rust's per-(target, level) log cache. Rust owns the ring
+/// buffer; this just renders what each subscribe replays + delta-streams.
 class LogBuffer extends ChangeNotifier {
   final List<rust.LogEntry> _entries = <rust.LogEntry>[];
+  late final UnmodifiableListView<rust.LogEntry> entries =
+      UnmodifiableListView(_entries);
 
-  /// True while the user paused appending. The upstream stream keeps
-  /// running; resume picks up the next event with no gap.
   final ValueNotifier<bool> paused = ValueNotifier(false);
 
-  List<rust.LogEntry> get entries => _entries;
   int get length => _entries.length;
   bool get isEmpty => _entries.isEmpty;
 
@@ -25,8 +22,8 @@ class LogBuffer extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Drop locally-rendered entries. The Rust cache is unaffected — call
-  /// `rust.clearLogs(...)` separately if you want both wiped.
+  /// Drop the rendered list. The Rust ring buffer is untouched — call
+  /// `rust.clearLogs(...)` to wipe both.
   void clearLocal() {
     if (_entries.isEmpty) return;
     _entries.clear();
@@ -34,6 +31,7 @@ class LogBuffer extends ChangeNotifier {
   }
 
   void reset() {
+    if (_entries.isEmpty && !paused.value) return;
     _entries.clear();
     paused.value = false;
     notifyListeners();
