@@ -179,7 +179,7 @@ class _HomeShellState extends State<HomeShell> {
       '内核配置' =>
         CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       '外部资源' => ResourcesScreen(store: widget.store),
-      '日志' => LogsScreen(store: widget.store),
+      '日志' => LogsScreen(store: widget.store, session: widget.session),
       _ => SettingsScreen(
           store: widget.store,
           prefs: widget.prefs,

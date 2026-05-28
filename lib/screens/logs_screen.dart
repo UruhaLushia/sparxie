@@ -1,67 +1,59 @@
 import 'dart:async';
-import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
+import '../session.dart';
 
+/// Renders the buffer owned by `MihomoSession` (`session.logs`). The
+/// WebSocket is opened on controller connect — independent of this widget's
+/// lifecycle — so navigating to "日志" shows already-cached lines instead of
+/// waiting for a fresh subscription.
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({super.key, required this.store});
+  const LogsScreen({super.key, required this.store, required this.session});
 
   final ctl.ControllerStore store;
+  final MihomoSession session;
 
   @override
   State<LogsScreen> createState() => _LogsScreenState();
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  static const _maxBuffer = 2000;
   static const _levels = ['info', 'debug', 'warning', 'error', 'silent'];
 
-  final Queue<rust.LogEntry> _buffer = Queue<rust.LogEntry>();
-  final ValueNotifier<int> _revision = ValueNotifier(0);
   final ScrollController _scroll = ScrollController();
-
-  ctl.Controller? _activeKey;
-  StreamSubscription<rust.LogEntry>? _sub;
-  Timer? _retry;
   Timer? _flushTimer;
-  String _level = 'info';
+
   String _filter = '';
-  bool _paused = false;
   bool _follow = true;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_onStore);
     _scroll.addListener(_onScroll);
-    _bind();
+    widget.session.logs.addListener(_onLogs);
   }
 
   @override
   void dispose() {
-    widget.store.removeListener(_onStore);
+    widget.session.logs.removeListener(_onLogs);
     _scroll.removeListener(_onScroll);
-    _sub?.cancel();
-    _retry?.cancel();
     _flushTimer?.cancel();
     _scroll.dispose();
-    _revision.dispose();
     super.dispose();
   }
 
-  void _onStore() {
-    if (!identical(widget.store.active, _activeKey)) _bind();
+  void _onLogs() {
+    if (!mounted) return;
+    setState(() {});
+    _scheduleAutoScroll();
   }
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
-    // SuperListView keeps offset 0 pinned at the top; we follow the bottom by
-    // checking whether we're within a few rows of maxScrollExtent.
     final pos = _scroll.position;
     final atBottom = pos.pixels >= pos.maxScrollExtent - 80;
     if (atBottom != _follow) {
@@ -69,93 +61,41 @@ class _LogsScreenState extends State<LogsScreen> {
     }
   }
 
-  rust.MihomoTarget? _target() {
-    final c = widget.store.active;
-    if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-    );
-  }
-
-  void _bind() {
-    _activeKey = widget.store.active;
-    _resubscribe();
-  }
-
-  void _resubscribe() {
-    _sub?.cancel();
-    _retry?.cancel();
-    _sub = null;
-    _retry = null;
-    _buffer.clear();
-    _revision.value++;
-    if (mounted) setState(() => _error = null);
-    final target = _target();
-    if (target == null) {
-      setState(() => _error = '请先在“后端”中添加一个 mihomo 实例');
-      return;
-    }
-    final controller = _activeKey;
-    _sub = rust.logsStream(target: target, level: _level).listen(
-      (entry) {
-        if (!mounted) return;
-        if (!identical(_activeKey, controller)) return;
-        if (_paused) return;
-        _buffer.addLast(entry);
-        while (_buffer.length > _maxBuffer) {
-          _buffer.removeFirst();
-        }
-        _scheduleFlush();
-      },
-      onError: (Object e) {
-        if (!mounted) return;
-        setState(() => _error = '$e');
-        _retry = Timer(const Duration(seconds: 2), () {
-          if (mounted && identical(_activeKey, controller)) _resubscribe();
-        });
-      },
-      cancelOnError: true,
-    );
-  }
-
-  // Coalesce bursty stream events into one rebuild every ~80 ms. A short
-  // timer runs the flush between frames, avoiding the post-frame re-entry
-  // that trips `debugFrameWasSentToEngine` / `parentDataDirty` asserts.
-  void _scheduleFlush() {
+  // Defer follow-scroll until the rebuild from setState has materialized.
+  void _scheduleAutoScroll() {
+    if (!_follow) return;
     if (_flushTimer != null) return;
     _flushTimer = Timer(const Duration(milliseconds: 80), () {
       _flushTimer = null;
       if (!mounted) return;
-      _revision.value++;
-      if (_follow && _scroll.hasClients) {
-        final pos = _scroll.position;
-        if (pos.hasContentDimensions) {
-          _scroll.jumpTo(pos.maxScrollExtent);
-        }
+      if (!_follow || !_scroll.hasClients) return;
+      final pos = _scroll.position;
+      if (pos.hasContentDimensions) {
+        _scroll.jumpTo(pos.maxScrollExtent);
       }
     });
   }
 
   void _setLevel(String level) {
-    if (level == _level) return;
-    setState(() => _level = level);
-    _resubscribe();
+    if (level == widget.session.logsLevel) return;
+    widget.session.setLogsLevel(level);
+    setState(() {});
   }
 
   void _togglePause() {
-    setState(() => _paused = !_paused);
+    final paused = widget.session.logs.paused;
+    paused.value = !paused.value;
   }
 
   void _clear() {
-    _buffer.clear();
-    _revision.value++;
+    widget.session.clearLogs();
   }
 
   List<rust.LogEntry> _visibleEntries() {
-    if (_filter.isEmpty) return _buffer.toList(growable: false);
+    final all = widget.session.logs.entries;
+    if (_filter.isEmpty) return all.toList(growable: false);
     final f = _filter.toLowerCase();
-    return _buffer
+    return all
         .where(
           (e) =>
               e.message.toLowerCase().contains(f) ||
@@ -167,18 +107,22 @@ class _LogsScreenState extends State<LogsScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final logs = widget.session.logs;
     return Scaffold(
       appBar: AppBar(
         title: const Text('日志'),
         actions: [
-          IconButton(
-            tooltip: _paused ? '继续' : '暂停',
-            onPressed: _togglePause,
-            icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+          ValueListenableBuilder<bool>(
+            valueListenable: logs.paused,
+            builder: (_, paused, _) => IconButton(
+              tooltip: paused ? '继续' : '暂停',
+              onPressed: _togglePause,
+              icon: Icon(paused ? Icons.play_arrow : Icons.pause),
+            ),
           ),
           IconButton(
             tooltip: '清空',
-            onPressed: _buffer.isEmpty ? null : _clear,
+            onPressed: logs.isEmpty ? null : _clear,
             icon: const Icon(Icons.delete_outline),
           ),
         ],
@@ -209,7 +153,7 @@ class _LogsScreenState extends State<LogsScreen> {
                         for (final l in _levels)
                           ChoiceChip(
                             label: Text(l),
-                            selected: _level == l,
+                            selected: widget.session.logsLevel == l,
                             onSelected: (_) => _setLevel(l),
                           ),
                       ],
@@ -218,39 +162,43 @@ class _LogsScreenState extends State<LogsScreen> {
                 ],
               ),
             ),
-            if (_error != null)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.warning_rounded,
-                      color: scheme.onErrorContainer,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: scheme.onErrorContainer),
+            ValueListenableBuilder<String?>(
+              valueListenable: widget.session.error,
+              builder: (_, err, _) {
+                if (err == null) return const SizedBox.shrink();
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_rounded,
+                        color: scheme.onErrorContainer,
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          err,
+                          style: TextStyle(color: scheme.onErrorContainer),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             Expanded(
-              child: ValueListenableBuilder<int>(
-                valueListenable: _revision,
-                builder: (_, _, _) {
+              child: Builder(
+                builder: (_) {
                   final entries = _visibleEntries();
                   if (entries.isEmpty) {
                     return Center(
                       child: Text(
-                        _buffer.isEmpty ? '暂无日志' : '没有匹配的日志',
+                        logs.isEmpty ? '暂无日志' : '没有匹配的日志',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     );
@@ -276,7 +224,7 @@ class _LogsScreenState extends State<LogsScreen> {
               tooltip: '回到底部',
               onPressed: () {
                 setState(() => _follow = true);
-                _scheduleFlush();
+                _scheduleAutoScroll();
               },
               child: const Icon(Icons.arrow_downward),
             ),

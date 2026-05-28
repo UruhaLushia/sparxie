@@ -7,9 +7,11 @@ import 'controller.dart';
 import 'error_format.dart';
 import 'rust_api.dart' as rust;
 import 'session/connections.dart';
+import 'session/logs.dart';
 import 'session/proxies.dart';
 
 export 'session/connections.dart';
+export 'session/logs.dart';
 export 'session/proxies.dart';
 
 class MihomoSession {
@@ -26,14 +28,17 @@ class MihomoSession {
   StreamSubscription<rust.TrafficSample>? _trafficSub;
   StreamSubscription<rust.MemorySample>? _memorySub;
   StreamSubscription<rust.ConnectionsFrame>? _connSub;
+  StreamSubscription<rust.LogEntry>? _logsSub;
   Timer? _trafficRetry;
   Timer? _memoryRetry;
   Timer? _connRetry;
+  Timer? _logsRetry;
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
+  String _logsLevel = 'info';
 
   final ValueNotifier<rust.TrafficSample> traffic = ValueNotifier(
     rust.TrafficSample(
@@ -73,6 +78,10 @@ class MihomoSession {
   final ValueNotifier<ConnectionsTotals> connectionsTotals =
       ValueNotifier(ConnectionsTotals.zero);
 
+  /// Rolling 500-entry buffer of `/logs` for the active controller. Owned
+  /// here so the WebSocket is alive even when the user is on another tab.
+  final LogBuffer logs = LogBuffer();
+
   final ProxiesNotifier proxies = ProxiesNotifier();
 
   /// Raw `version` field from `/version`. Empty until first poll succeeds.
@@ -106,6 +115,15 @@ class MihomoSession {
     _restartProxiesPoll();
   }
 
+  String get logsLevel => _logsLevel;
+
+  void setLogsLevel(String level) {
+    final next = level.isEmpty ? 'info' : level;
+    if (next == _logsLevel) return;
+    _logsLevel = next;
+    _restartLogs();
+  }
+
   Future<void> refreshProxies() => _refreshProxies();
 
   void _onStoreChange() {
@@ -126,6 +144,7 @@ class MihomoSession {
     isStreaming.value = false;
     connections.reset();
     connectionsTotals.value = ConnectionsTotals.zero;
+    logs.reset();
     proxies.reset();
     versionString.value = '';
     isCmfa.value = false;
@@ -138,6 +157,7 @@ class MihomoSession {
     _subscribeTraffic();
     _subscribeMemory();
     _subscribeConnections();
+    _subscribeLogs();
     _startProxiesPoll();
     // Version is build-time fixed; one probe per controller switch is enough.
     unawaited(_probeVersion());
@@ -147,16 +167,20 @@ class MihomoSession {
     _trafficSub?.cancel();
     _memorySub?.cancel();
     _connSub?.cancel();
+    _logsSub?.cancel();
     _trafficRetry?.cancel();
     _memoryRetry?.cancel();
     _connRetry?.cancel();
+    _logsRetry?.cancel();
     _proxiesPoll?.cancel();
     _trafficSub = null;
     _memorySub = null;
     _connSub = null;
+    _logsSub = null;
     _trafficRetry = null;
     _memoryRetry = null;
     _connRetry = null;
+    _logsRetry = null;
     _proxiesPoll = null;
   }
 
@@ -165,6 +189,15 @@ class MihomoSession {
     _connRetry?.cancel();
     connections.reset();
     if (_target != null) _subscribeConnections();
+  }
+
+  void _restartLogs() {
+    _logsSub?.cancel();
+    _logsRetry?.cancel();
+    _logsSub = null;
+    _logsRetry = null;
+    logs.reset();
+    if (_target != null) _subscribeLogs();
   }
 
   void _restartProxiesPoll() {
@@ -269,6 +302,34 @@ class MihomoSession {
         );
   }
 
+  void _subscribeLogs() {
+    final t = _target;
+    if (t == null) return;
+    final controller = _activeKey;
+    // Each (re)subscribe replays Rust's ring buffer through this stream
+    // before live deltas, so we wipe Dart's mirror first to avoid stacking
+    // duplicates from the previous subscribe.
+    logs.reset();
+    _logsSub = rust.logsStream(target: t, level: _logsLevel).listen(
+      (entry) {
+        if (!identical(_activeKey, controller)) return;
+        logs.add(entry);
+      },
+      onError: (Object e) => _scheduleRetry(_RetryKind.logs, e),
+      cancelOnError: true,
+    );
+  }
+
+  /// Drop both the Rust ring buffer and the Dart mirror for the active
+  /// `(target, level)`. The upstream WebSocket keeps running so new
+  /// entries continue to land normally.
+  Future<void> clearLogs() async {
+    final t = _target;
+    logs.clearLocal();
+    if (t == null) return;
+    await rust.clearLogs(target: t, level: _logsLevel);
+  }
+
   void _scheduleRetry(_RetryKind kind, Object cause) {
     error.value = '$cause';
     final controller = _activeKey;
@@ -289,6 +350,11 @@ class MihomoSession {
         _connRetry = Timer(delay, () {
           if (identical(_activeKey, controller)) _subscribeConnections();
         });
+      case _RetryKind.logs:
+        _logsRetry?.cancel();
+        _logsRetry = Timer(delay, () {
+          if (identical(_activeKey, controller)) _subscribeLogs();
+        });
     }
   }
 
@@ -299,6 +365,7 @@ class MihomoSession {
     memory.dispose();
     connectionsTotals.dispose();
     connections.dispose();
+    logs.dispose();
     versionString.dispose();
     isCmfa.dispose();
     connectionsPaused.dispose();
@@ -307,4 +374,4 @@ class MihomoSession {
   }
 }
 
-enum _RetryKind { traffic, memory, connections }
+enum _RetryKind { traffic, memory, connections, logs }

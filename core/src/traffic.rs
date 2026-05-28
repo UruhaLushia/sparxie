@@ -1,14 +1,14 @@
-//! Per-target WebSocket stream broadcasting.
+//! Per-target WebSocket stream broadcasting for `/traffic` and `/memory`.
 //!
-//! mihomo exposes 4 streaming endpoints (`/traffic`, `/memory`, `/connections`,
-//! `/logs`) that all support a `Upgrade: websocket` handshake and emit one
-//! JSON frame per tick / event. We open at most one upstream connection per
-//! (target, path) and fan out to N Dart subscribers via a tokio broadcast
-//! channel. Idle channels self-prune.
+//! Both endpoints emit one JSON frame per second and have lots of fan-out
+//! potential (every screen in the app subscribes to traffic), so we open
+//! at most one upstream connection per (target, path) and fan out via a
+//! tokio broadcast channel. Idle channels self-prune.
 //!
-//! `connections` is special-cased in [`crate::connections_diff`] because the
-//! frame is large and most fields are stable; this module handles the three
-//! lightweight feeds where forwarding the full frame is fine.
+//! `/connections` lives in [`crate::connections_state`] (frame post-processing
+//! + paginated row fetching), and `/logs` in [`crate::logs_state`] (ring
+//! buffer + replay-on-subscribe). Those two endpoints carry too much state
+//! to fit this generic broadcast pattern.
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -21,8 +21,6 @@ use tokio::sync::{Mutex, broadcast};
 use crate::api::MihomoTarget;
 use crate::client::{MihomoClient, read_ws_text};
 use crate::error::MihomoError;
-
-// ---------- public sample types ------------------------------------------
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TrafficSample {
@@ -42,20 +40,6 @@ pub struct MemorySample {
     pub oslimit: u64,
 }
 
-/// One log line. Mirrors mihomo's two output formats; we always request
-/// `format=structured` so `time`/`level`/`message`/`fields` are populated.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct LogEntry {
-    #[serde(default)]
-    pub time: String,
-    #[serde(default)]
-    pub level: String,
-    #[serde(default)]
-    pub message: String,
-}
-
-// ---------- generic broadcast plumbing -----------------------------------
-
 trait Sample: Clone + Send + Sync + 'static {
     fn parse(line: &str) -> Option<Self>;
 }
@@ -67,12 +51,6 @@ impl Sample for TrafficSample {
 }
 
 impl Sample for MemorySample {
-    fn parse(line: &str) -> Option<Self> {
-        serde_json::from_str(line).ok()
-    }
-}
-
-impl Sample for LogEntry {
     fn parse(line: &str) -> Option<Self> {
         serde_json::from_str(line).ok()
     }
@@ -99,11 +77,6 @@ fn registry_traffic() -> &'static Registry<TrafficSample> {
 
 fn registry_memory() -> &'static Registry<MemorySample> {
     static R: OnceLock<Registry<MemorySample>> = OnceLock::new();
-    R.get_or_init(Registry::new)
-}
-
-fn registry_logs() -> &'static Registry<LogEntry> {
-    static R: OnceLock<Registry<LogEntry>> = OnceLock::new();
     R.get_or_init(Registry::new)
 }
 
@@ -177,8 +150,6 @@ async fn stream_once<T: Sample>(
     Ok(())
 }
 
-// ---------- public subscribe entry points --------------------------------
-
 pub async fn traffic_subscribe(
     target: MihomoTarget,
 ) -> Result<broadcast::Receiver<TrafficSample>, MihomoError> {
@@ -189,14 +160,4 @@ pub async fn memory_subscribe(
     target: MihomoTarget,
 ) -> Result<broadcast::Receiver<MemorySample>, MihomoError> {
     Ok(subscribe(registry_memory(), target_key(&target), target, "memory".into()).await)
-}
-
-pub async fn logs_subscribe(
-    target: MihomoTarget,
-    level: &str,
-) -> Result<broadcast::Receiver<LogEntry>, MihomoError> {
-    let normalized = if level.is_empty() { "info" } else { level };
-    let path = format!("logs?level={normalized}&format=structured");
-    let key = format!("{}::{normalized}", target_key(&target));
-    Ok(subscribe(registry_logs(), key, target, path).await)
 }
