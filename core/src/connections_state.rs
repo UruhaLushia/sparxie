@@ -170,6 +170,19 @@ pub async fn set_sort(
     }
 }
 
+/// Drop the entire closed-connections FIFO for the given target/interval slot.
+/// The next stream frame will report `closed_count = 0`. No-op if the slot
+/// hasn't been spun up yet.
+pub async fn clear_closed(target: MihomoTarget, interval_ms: u32) {
+    let interval = if interval_ms == 0 { 1000 } else { interval_ms };
+    let key = target_key(&target, interval);
+    let map = slots().lock().await;
+    if let Some(slot) = map.get(&key) {
+        let mut state = slot.state.lock().expect("connections state poisoned");
+        state.closed.clear();
+    }
+}
+
 pub async fn fetch_rows(
     target: MihomoTarget,
     interval_ms: u32,

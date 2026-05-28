@@ -404,6 +404,21 @@ class ConnectionListNotifier extends ChangeNotifier {
     if (changed) notifyListeners();
   }
 
+  /// Optimistically drop the entire closed buffer. Pair with a Rust call
+  /// to `clearClosedConnections` so the next frame agrees.
+  void clearClosedOptimistic() {
+    if (_closedCount == 0 && _closedRows.isEmpty) return;
+    for (final row in _closedRows.values) {
+      row.bytes.dispose();
+      row.speeds.dispose();
+    }
+    _closedRows.clear();
+    _closedWindowIds.clear();
+    _closedOffset = 0;
+    _closedCount = 0;
+    notifyListeners();
+  }
+
   void reset() {
     _activeWindowIds.clear();
     _activeRows.clear();

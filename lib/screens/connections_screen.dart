@@ -132,6 +132,26 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     }
   }
 
+  Future<void> _clearClosed() async {
+    final target = _target();
+    if (target == null) return;
+    // Optimistic: zero the local buffer immediately so the count chip and
+    // the list both update without waiting on a round-trip.
+    widget.session.connections.clearClosedOptimistic();
+    try {
+      await rust.clearClosedConnections(
+        target: target,
+        intervalMs: widget.prefs.connectionsRefreshMs,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('清空失败:${formatError(e)}')),
+        );
+      }
+    }
+  }
+
   void _showDetail(ConnectionRow row) {
     showModalBottomSheet(
       context: context,
@@ -198,13 +218,29 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
           ),
           ValueListenableBuilder<ConnectionsTotals>(
             valueListenable: widget.session.connectionsTotals,
-            builder: (_, totals, _) => IconButton(
-              tooltip: '关闭所有',
-              visualDensity: VisualDensity.compact,
-              onPressed:
-                  totals.count == 0 ? null : () => _closeAll(totals.count),
-              icon: const Icon(Icons.delete_sweep_outlined),
-            ),
+            builder: (_, totals, _) {
+              if (_tab == ConnectionsTab.closed) {
+                return ListenableBuilder(
+                  listenable: widget.session.connections,
+                  builder: (_, _) {
+                    final n = widget.session.connections.closedCount;
+                    return IconButton(
+                      tooltip: '清空已关闭',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: n == 0 ? null : _clearClosed,
+                      icon: const Icon(Icons.delete_outline),
+                    );
+                  },
+                );
+              }
+              return IconButton(
+                tooltip: '关闭所有',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    totals.count == 0 ? null : () => _closeAll(totals.count),
+                icon: const Icon(Icons.delete_sweep_outlined),
+              );
+            },
           ),
           ConnectionsSettingsMenu(prefs: widget.prefs),
         ],

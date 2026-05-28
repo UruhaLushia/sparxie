@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::connections_state::{fetch_rows, fetch_window, set_sort, subscribe};
+use crate::connections_state::{clear_closed, fetch_rows, fetch_window, set_sort, subscribe};
 // Re-export the wire types so frb scanning `crate::api::*` discovers them
 // alongside the functions that use them (otherwise they'd be treated as
 // opaque). They live in `connections_state` for organizational reasons but
@@ -125,4 +125,10 @@ pub async fn set_connections_sort(
     asc: bool,
 ) {
     set_sort(target, interval_ms, sort, asc).await
+}
+
+/// Drop the closed-connections FIFO buffer for the given target/interval.
+/// The next emitted frame will report `closed_count = 0`.
+pub async fn clear_closed_connections(target: MihomoTarget, interval_ms: u32) {
+    clear_closed(target, interval_ms).await
 }
