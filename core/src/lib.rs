@@ -4,6 +4,7 @@ mod client;
 mod connections_state;
 mod error;
 mod icons;
+mod logs_state;
 mod regex_util;
 mod traffic;
 

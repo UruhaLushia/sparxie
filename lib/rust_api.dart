@@ -4,7 +4,8 @@ library;
 
 export 'src/rust/api.dart' show MihomoTarget;
 export 'src/rust/error.dart';
-export 'src/rust/traffic.dart' show LogEntry, MemorySample, TrafficSample;
+export 'src/rust/logs_state.dart' show LogEntry;
+export 'src/rust/traffic.dart' show MemorySample, TrafficSample;
 export 'src/rust/connections_state.dart'
     show
         Connection,

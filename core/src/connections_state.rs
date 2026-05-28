@@ -11,9 +11,8 @@
 //! - `closed`: a fixed-capacity FIFO of recently-disconnected connections.
 //! - `sort` / `asc`: per-target sort key, set by Dart via [`set_sort`].
 //!
-//! The stream pushes only a [`ConnectionsFrame`] (totals + the first
-//! [`ORDERED_CAP`] sorted ids) — Dart pulls the actual row payloads via
-//! [`fetch_rows`] as it scrolls.
+//! The stream pushes only a [`ConnectionsFrame`] (totals + counts); Dart
+//! pages the actual rows via [`fetch_window`] as it scrolls.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
@@ -181,29 +180,6 @@ pub async fn clear_closed(target: MihomoTarget, interval_ms: u32) {
         let mut state = slot.state.lock().expect("connections state poisoned");
         state.closed.clear();
     }
-}
-
-pub async fn fetch_rows(
-    target: MihomoTarget,
-    interval_ms: u32,
-    ids: Vec<String>,
-) -> Vec<Connection> {
-    let interval = if interval_ms == 0 { 1000 } else { interval_ms };
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    let Some(slot) = map.get(&key) else {
-        return Vec::new();
-    };
-    let state = slot.state.lock().expect("connections state poisoned");
-    let mut out = Vec::with_capacity(ids.len());
-    for id in &ids {
-        if let Some(c) = state.active.get(id) {
-            out.push(c.clone());
-        } else if let Some(c) = state.closed.iter().rfind(|c| &c.id == id) {
-            out.push(c.clone());
-        }
-    }
-    out
 }
 
 /// Slice the sorted list (active or closed) at `[offset, offset + limit)`.

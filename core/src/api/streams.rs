@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::connections_state::{clear_closed, fetch_rows, fetch_window, set_sort, subscribe};
+use crate::connections_state::{clear_closed, fetch_window, set_sort, subscribe};
 // Re-export the wire types so frb scanning `crate::api::*` discovers them
 // alongside the functions that use them (otherwise they'd be treated as
 // opaque). They live in `connections_state` for organizational reasons but
@@ -17,10 +17,9 @@ use crate::error::MihomoError;
 // `T: 'static` but the inherent method only exists on the generated alias for
 // concrete `T`s, so each call site below inlines its own loop.
 use crate::frb_generated::StreamSink;
-use crate::traffic::{
-    LogEntry, MemorySample, TrafficSample, logs_subscribe, memory_subscribe,
-    traffic_subscribe,
-};
+pub use crate::logs_state::LogEntry;
+use crate::logs_state::{clear as logs_clear, subscribe as logs_subscribe};
+use crate::traffic::{MemorySample, TrafficSample, memory_subscribe, traffic_subscribe};
 
 use super::MihomoTarget;
 
@@ -56,13 +55,23 @@ pub async fn memory_stream(
     Ok(())
 }
 
-/// Subscribe to mihomo's `/logs?level=&format=structured` WebSocket feed.
+/// Subscribe to mihomo's `/logs?level=&format=structured` feed.
+///
+/// The stream first replays up to `LOGS_CAP` cached entries (so the UI
+/// shows context immediately on (re)subscribe), then continues with live
+/// deltas. Snapshot + stream are taken under the same lock, so no entries
+/// are dropped or duplicated across the boundary.
 pub async fn logs_stream(
     target: MihomoTarget,
     level: String,
     sink: StreamSink<LogEntry>,
 ) -> Result<(), MihomoError> {
-    let rx = logs_subscribe(target, &level).await?;
+    let (snapshot, rx) = logs_subscribe(target, &level).await?;
+    for entry in snapshot {
+        if sink.add(entry).is_err() {
+            return Ok(());
+        }
+    }
     let mut stream = BroadcastStream::new(rx);
     while let Some(item) = stream.next().await {
         let Ok(sample) = item else { continue };
@@ -73,12 +82,16 @@ pub async fn logs_stream(
     Ok(())
 }
 
+/// Drop the cached log buffer for `(target, level)`. The upstream stream
+/// keeps running so new lines flow normally.
+pub async fn clear_logs(target: MihomoTarget, level: String) {
+    logs_clear(target, &level).await
+}
+
 /// Subscribe to mihomo's `/connections?interval=<ms>` WebSocket feed.
 ///
-/// Each frame carries the totals plus the first 500 sort-ordered ids for
-/// both active and recently-closed connections. Dart fetches the row
-/// payloads for the ids it actually wants to render via
-/// [`fetch_connection_rows`].
+/// Each frame carries totals and the active/closed counts. Dart pages
+/// the row payloads it actually needs via [`fetch_connection_window`].
 pub async fn connections_stream(
     target: MihomoTarget,
     interval_ms: u32,
@@ -93,16 +106,6 @@ pub async fn connections_stream(
         }
     }
     Ok(())
-}
-
-/// Resolve `ids` to row payloads. Returns rows from active first, then
-/// the closed buffer; missing ids produce no entry.
-pub async fn fetch_connection_rows(
-    target: MihomoTarget,
-    interval_ms: u32,
-    ids: Vec<String>,
-) -> Vec<Connection> {
-    fetch_rows(target, interval_ms, ids).await
 }
 
 /// Page a slice of the sorted connections list. `kind` picks active vs
