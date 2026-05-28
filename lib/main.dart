@@ -1,11 +1,8 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'app_prefs.dart';
 import 'controller.dart';
@@ -21,18 +18,13 @@ import 'session.dart';
 import 'src/rust/frb_generated.dart';
 import 'utils.dart';
 import 'widgets/outbound_mode_card.dart';
+import 'window_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Constrain the desktop window to a width that fits the multi-control
-  // toolbars without overflow. window_manager only supports desktop —
-  // probing kIsWeb keeps mobile builds happy without an `import 'dart:io'`
-  // crash on web.
-  if (!kIsWeb &&
-      (Platform.isLinux || Platform.isMacOS || Platform.isWindows)) {
-    await windowManager.ensureInitialized();
-    await windowManager.setMinimumSize(const Size(380, 600));
-  }
+  // Restore the desktop window's saved size / position / maximized state.
+  // No-op on mobile and web — `WindowState.bind` short-circuits there.
+  await WindowState.bind();
   await RustLib.init();
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
