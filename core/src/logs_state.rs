@@ -1,16 +1,6 @@
-//! Per-target rolling log buffer with replay-on-subscribe.
-//!
-//! Logs need to keep accumulating while the user is on a different tab —
-//! the WebSocket should not disconnect just because the screen unmounted.
-//! Rust owns the authoritative ring buffer; Dart subscribers get a one-shot
-//! snapshot followed by live deltas, so a freshly-mounted screen sees the
-//! last `LOGS_CAP` lines instantly rather than waiting for upstream traffic.
-//!
-//! Slots are keyed by `(target, level)` and never auto-prune — at full
-//! capacity each slot holds at most a few hundred KB of strings plus one
-//! idle WebSocket, which is well within phone budgets. Use [`clear`] to
-//! drop a slot's buffer; the upstream loop keeps running so the next event
-//! still flows.
+//! Per-target rolling log buffer with replay-on-subscribe. Rust owns the
+//! ring; Dart subscribes for an atomic snapshot + delta stream so a fresh
+//! screen sees the last `LOGS_CAP` lines instantly.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -25,7 +15,6 @@ use crate::error::MihomoError;
 
 pub const LOGS_CAP: usize = 500;
 
-/// One log line. Mirrors mihomo's `format=structured` output.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LogEntry {
     #[serde(default)]
@@ -61,11 +50,8 @@ fn slot_key(target: &MihomoTarget, level: &str) -> String {
     )
 }
 
-/// Atomically grab the cached snapshot plus a fresh broadcast receiver.
-///
-/// Holding the buffer mutex across `subscribe()` and `iter().cloned()`
-/// guarantees the ingest task can't insert between snapshot and delta
-/// stream — no dropped or duplicated entries.
+/// Snapshot + receiver are taken under one lock so the ingest task can't
+/// slip an entry between them — no dropped or duplicated lines.
 pub async fn subscribe(
     target: MihomoTarget,
     level: &str,
@@ -93,15 +79,12 @@ pub async fn subscribe(
     Ok((snapshot, rx))
 }
 
-/// Drop the cached buffer. The upstream stream keeps running, so new
-/// entries continue to land normally.
 pub async fn clear(target: MihomoTarget, level: &str) {
     let level = normalize_level(level);
     let key = slot_key(&target, level);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
-        let mut buf = slot.buffer.lock().expect("logs buffer poisoned");
-        buf.clear();
+        slot.buffer.lock().expect("logs buffer poisoned").clear();
     }
 }
 
@@ -135,8 +118,6 @@ async fn stream_once(
         let Ok(entry): Result<LogEntry, _> = serde_json::from_str(trimmed) else {
             continue;
         };
-        // Append + broadcast under the same mutex so concurrent `subscribe`
-        // calls see a consistent (snapshot, delta-stream) pair.
         let mut buf = slot.buffer.lock().expect("logs buffer poisoned");
         if buf.len() >= LOGS_CAP {
             buf.pop_front();

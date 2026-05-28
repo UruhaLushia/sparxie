@@ -126,6 +126,14 @@ class MihomoSession {
 
   Future<void> refreshProxies() => _refreshProxies();
 
+  /// Mobile OSes silently kill backgrounded sockets — Dart still sees the
+  /// stream as healthy but no events arrive. Call this on resume to break
+  /// out of that limbo.
+  void reconnect() {
+    if (_target == null) return;
+    _resubscribeAll();
+  }
+
   void _onStoreChange() {
     final next = store.active;
     if (identical(next, _activeKey)) return;
@@ -306,9 +314,8 @@ class MihomoSession {
     final t = _target;
     if (t == null) return;
     final controller = _activeKey;
-    // Each (re)subscribe replays Rust's ring buffer through this stream
-    // before live deltas, so we wipe Dart's mirror first to avoid stacking
-    // duplicates from the previous subscribe.
+    // Rust replays its ring buffer on every subscribe, so wipe the mirror
+    // first to avoid stacking duplicates.
     logs.reset();
     _logsSub = rust.logsStream(target: t, level: _logsLevel).listen(
       (entry) {
@@ -320,9 +327,8 @@ class MihomoSession {
     );
   }
 
-  /// Drop both the Rust ring buffer and the Dart mirror for the active
-  /// `(target, level)`. The upstream WebSocket keeps running so new
-  /// entries continue to land normally.
+  /// Drop both the Rust ring buffer and the Dart mirror; upstream stream
+  /// keeps running.
   Future<void> clearLogs() async {
     final t = _target;
     logs.clearLocal();
