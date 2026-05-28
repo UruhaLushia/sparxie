@@ -8,6 +8,14 @@ name = "sparxie"
 path = "src/lib.rs"
 crate-type = ["cdylib", "staticlib"]
 
+# Release profile is tuned for binary size — the cdylib ships inside an
+# APK / app bundle, so a few extra build minutes on CI are well worth a
+# ~40% smaller native library.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
 [dependencies]
 flutter_rust_bridge = "=2.12.0"
 anyhow = "1.0"
