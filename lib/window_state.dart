@@ -20,11 +20,9 @@ class WindowState with WindowListener {
 
   static const Size _defaultSize = Size(1100, 720);
   static const Size _minimumSize = Size(380, 600);
-  // Defensive ceiling — anything past this came from corrupted prefs or a
-  // since-removed monitor.
   static const double _maxDim = 8192;
 
-  static const Duration _saveDebounce = Duration(milliseconds: 500);
+  static const Duration _saveDebounce = Duration(milliseconds: 300);
 
   final SharedPreferences _prefs;
   Timer? _saveTimer;
@@ -36,8 +34,7 @@ class WindowState with WindowListener {
     if (!_isDesktop) return null;
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(_minimumSize);
-    // Intercept close so a debounced save isn't lost when the process
-    // exits before its timer fires.
+    // setPreventClose lets us flush a pending save before the process exits.
     await windowManager.setPreventClose(true);
     final prefs = await SharedPreferences.getInstance();
     final state = WindowState._(prefs);
@@ -98,12 +95,12 @@ class WindowState with WindowListener {
   void onWindowClose() => unawaited(_flushAndDestroy());
 
   Future<void> _flushAndDestroy() async {
-    _saveTimer?.cancel();
-    try {
+    final timer = _saveTimer;
+    if (timer != null && timer.isActive) {
+      timer.cancel();
       await _save();
-    } finally {
-      await windowManager.destroy();
     }
+    await windowManager.destroy();
   }
 
   void _scheduleSave() {
@@ -113,19 +110,24 @@ class WindowState with WindowListener {
 
   Future<void> _save() async {
     try {
-      final fullscreen = await windowManager.isFullScreen();
-      final maximized = !fullscreen && await windowManager.isMaximized();
-      // Skip persisting bounds while maximized/fullscreen — they reflect
-      // the screen, not the user's preferred floating layout.
-      if (!maximized && !fullscreen) {
-        final bounds = await windowManager.getBounds();
-        await _prefs.setDouble(_kWidth, bounds.width);
-        await _prefs.setDouble(_kHeight, bounds.height);
-        await _prefs.setDouble(_kX, bounds.left);
-        await _prefs.setDouble(_kY, bounds.top);
-      }
-      await _prefs.setBool(_kMaximized, maximized);
-      await _prefs.setBool(_kFullScreen, fullscreen);
+      final (fullscreen, rawMaximized, bounds) = await (
+        windowManager.isFullScreen(),
+        windowManager.isMaximized(),
+        windowManager.getBounds(),
+      ).wait;
+      final maximized = !fullscreen && rawMaximized;
+      await Future.wait([
+        // Bounds under maximized/fullscreen are the screen's, not the
+        // user's floating layout — don't overwrite the saved one.
+        if (!maximized && !fullscreen) ...[
+          _prefs.setDouble(_kWidth, bounds.width),
+          _prefs.setDouble(_kHeight, bounds.height),
+          _prefs.setDouble(_kX, bounds.left),
+          _prefs.setDouble(_kY, bounds.top),
+        ],
+        _prefs.setBool(_kMaximized, maximized),
+        _prefs.setBool(_kFullScreen, fullscreen),
+      ]);
     } catch (e) {
       if (kDebugMode) debugPrint('window state save failed: $e');
     }
