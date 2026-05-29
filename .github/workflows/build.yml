@@ -261,7 +261,11 @@ jobs:
           BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
           cp core/target/release/sparxie.dll "$BUNDLE/"
           mkdir -p out
-          (cd "$BUNDLE" && 7z a "$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip" .)
+          ZIP="$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip"
+          (cd "$BUNDLE" && 7z a "$ZIP" .)
+          : > .portable
+          7z a "$ZIP" .portable
+          rm -f .portable
 
       - name: Windows — installer (Inno Setup)
         if: matrix.kind == 'windows'

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'config_store.dart';
 
 /// How a proxy group's nodes are ordered in the grid.
 enum ProxiesSort {
@@ -74,42 +75,27 @@ enum CloseMode { all, group }
 
 /// App-wide preferences not tied to any particular mihomo controller.
 class AppPrefs extends ChangeNotifier {
-  AppPrefs._(
-    this._prefs,
-    this._connectionsRefreshMs,
-    this._proxiesSort,
-    this._proxiesColumns,
-    this._navLayout,
-    this._autoCloseOnSwitch,
-    this._delayTestUrl,
-    this._delayTestTimeoutMs,
-    this._delayTestScope,
-    this._closeMode,
-    this._connectionsSort,
-    this._connectionsSortAsc,
-    this._showProcessIcon,
-    this._showAppName,
-    this._groupByProcess,
-    this._groupSort,
-    this._groupSortAsc,
-  );
+  AppPrefs._(this._store);
 
-  static const _kConnectionsRefreshMs = 'prefs.connectionsRefreshMs';
-  static const _kProxiesSort = 'prefs.proxiesSort';
-  static const _kProxiesColumns = 'prefs.proxiesColumns';
-  static const _kNavLayout = 'prefs.navLayout';
-  static const _kAutoCloseOnSwitch = 'prefs.autoCloseOnSwitch';
-  static const _kDelayTestUrl = 'prefs.delayTestUrl';
-  static const _kDelayTestTimeoutMs = 'prefs.delayTestTimeoutMs';
-  static const _kDelayTestScope = 'prefs.delayTestScope';
-  static const _kCloseMode = 'prefs.closeMode';
-  static const _kConnectionsSort = 'prefs.connectionsSort';
-  static const _kConnectionsSortAsc = 'prefs.connectionsSortAsc';
-  static const _kShowProcessIcon = 'prefs.connectionsShowProcessIcon';
-  static const _kShowAppName = 'prefs.connectionsShowAppName';
-  static const _kGroupByProcess = 'prefs.connectionsGroupByProcess';
-  static const _kGroupSort = 'prefs.connectionsGroupSort';
-  static const _kGroupSortAsc = 'prefs.connectionsGroupSortAsc';
+  final JsonStore _store;
+  Map<String, dynamic> get _s => _store.section('prefs');
+
+  static const _kConnectionsRefreshMs = 'connectionsRefreshMs';
+  static const _kProxiesSort = 'proxiesSort';
+  static const _kProxiesColumns = 'proxiesColumns';
+  static const _kNavLayout = 'navLayout';
+  static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
+  static const _kDelayTestUrl = 'delayTestUrl';
+  static const _kDelayTestTimeoutMs = 'delayTestTimeoutMs';
+  static const _kDelayTestScope = 'delayTestScope';
+  static const _kCloseMode = 'closeMode';
+  static const _kConnectionsSort = 'connectionsSort';
+  static const _kConnectionsSortAsc = 'connectionsSortAsc';
+  static const _kShowProcessIcon = 'connectionsShowProcessIcon';
+  static const _kShowAppName = 'connectionsShowAppName';
+  static const _kGroupByProcess = 'connectionsGroupByProcess';
+  static const _kGroupSort = 'connectionsGroupSort';
+  static const _kGroupSortAsc = 'connectionsGroupSortAsc';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -132,203 +118,170 @@ class AppPrefs extends ChangeNotifier {
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
 
-  final SharedPreferences _prefs;
-  int _connectionsRefreshMs;
-  ProxiesSort _proxiesSort;
-  int _proxiesColumns;
-  NavLayout _navLayout;
-  bool _autoCloseOnSwitch;
-  String _delayTestUrl;
-  int _delayTestTimeoutMs;
-  DelayTestScope _delayTestScope;
-  CloseMode _closeMode;
-  ConnectionsSort _connectionsSort;
-  bool _connectionsSortAsc;
-  bool _showProcessIcon;
-  bool _showAppName;
-  bool _groupByProcess;
-  GroupSort _groupSort;
-  bool _groupSortAsc;
+  static Future<AppPrefs> load(JsonStore store) async => AppPrefs._(store);
 
-  static Future<AppPrefs> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    return AppPrefs._(
-      prefs,
-      prefs.getInt(_kConnectionsRefreshMs) ?? defaultConnectionsRefreshMs,
-      _decodeSort(prefs.getString(_kProxiesSort)),
-      prefs.getInt(_kProxiesColumns) ?? defaultProxiesColumns,
-      _decodeNavLayout(prefs.getString(_kNavLayout)),
-      prefs.getBool(_kAutoCloseOnSwitch) ?? defaultAutoCloseOnSwitch,
-      prefs.getString(_kDelayTestUrl) ?? defaultDelayTestUrl,
-      prefs.getInt(_kDelayTestTimeoutMs) ?? defaultDelayTestTimeoutMs,
-      _decodeScope(prefs.getString(_kDelayTestScope)),
-      _decodeCloseMode(prefs.getString(_kCloseMode)),
-      _decodeConnectionsSort(prefs.getString(_kConnectionsSort)),
-      prefs.getBool(_kConnectionsSortAsc) ?? defaultConnectionsSortAsc,
-      prefs.getBool(_kShowProcessIcon) ?? defaultShowProcessIcon,
-      prefs.getBool(_kShowAppName) ?? defaultShowAppName,
-      prefs.getBool(_kGroupByProcess) ?? defaultGroupByProcess,
-      _decodeGroupSort(prefs.getString(_kGroupSort)),
-      prefs.getBool(_kGroupSortAsc) ?? defaultGroupSortAsc,
-    );
+  // Typed section accessors. Values live directly in the `prefs` section of
+  // the shared config.json; getters read through with a default fallback.
+  int _int(String key, int fallback) {
+    final v = _s[key];
+    return v is int ? v : (v is num ? v.toInt() : fallback);
+  }
+
+  bool _bool(String key, bool fallback) {
+    final v = _s[key];
+    return v is bool ? v : fallback;
+  }
+
+  String _str(String key, String fallback) {
+    final v = _s[key];
+    return v is String ? v : fallback;
+  }
+
+  void _put(String key, Object value) {
+    _s[key] = value;
+    _store.scheduleSave();
+    notifyListeners();
   }
 
   /// Polling interval for the connections list, in milliseconds.
-  int get connectionsRefreshMs => _connectionsRefreshMs;
+  int get connectionsRefreshMs =>
+      _int(_kConnectionsRefreshMs, defaultConnectionsRefreshMs);
 
   Future<void> setConnectionsRefreshMs(int value) async {
     final clamped = value.clamp(250, 30000);
-    if (clamped == _connectionsRefreshMs) return;
-    _connectionsRefreshMs = clamped;
-    await _prefs.setInt(_kConnectionsRefreshMs, clamped);
-    notifyListeners();
+    if (clamped == connectionsRefreshMs) return;
+    _put(_kConnectionsRefreshMs, clamped);
   }
 
-  ProxiesSort get proxiesSort => _proxiesSort;
+  ProxiesSort get proxiesSort =>
+      _decodeSort(_str(_kProxiesSort, defaultProxiesSort.name));
 
   Future<void> setProxiesSort(ProxiesSort value) async {
-    if (value == _proxiesSort) return;
-    _proxiesSort = value;
-    await _prefs.setString(_kProxiesSort, value.name);
-    notifyListeners();
+    if (value == proxiesSort) return;
+    _put(_kProxiesSort, value.name);
   }
 
   /// `0` = auto, `1..4` = explicit override.
-  int get proxiesColumns => _proxiesColumns;
+  int get proxiesColumns => _int(_kProxiesColumns, defaultProxiesColumns);
 
   Future<void> setProxiesColumns(int value) async {
     final clamped = value.clamp(0, 4);
-    if (clamped == _proxiesColumns) return;
-    _proxiesColumns = clamped;
-    await _prefs.setInt(_kProxiesColumns, clamped);
-    notifyListeners();
+    if (clamped == proxiesColumns) return;
+    _put(_kProxiesColumns, clamped);
   }
 
-  NavLayout get navLayout => _navLayout;
+  NavLayout get navLayout =>
+      _decodeNavLayout(_str(_kNavLayout, defaultNavLayout.name));
 
   Future<void> setNavLayout(NavLayout value) async {
-    if (value == _navLayout) return;
-    _navLayout = value;
-    await _prefs.setString(_kNavLayout, value.name);
-    notifyListeners();
+    if (value == navLayout) return;
+    _put(_kNavLayout, value.name);
   }
 
   /// When true, switching a group's selected proxy also closes all active
   /// connections so the new node takes effect immediately.
-  bool get autoCloseOnSwitch => _autoCloseOnSwitch;
+  bool get autoCloseOnSwitch =>
+      _bool(_kAutoCloseOnSwitch, defaultAutoCloseOnSwitch);
 
   Future<void> setAutoCloseOnSwitch(bool value) async {
-    if (value == _autoCloseOnSwitch) return;
-    _autoCloseOnSwitch = value;
-    await _prefs.setBool(_kAutoCloseOnSwitch, value);
-    notifyListeners();
+    if (value == autoCloseOnSwitch) return;
+    _put(_kAutoCloseOnSwitch, value);
   }
 
   /// URL hit by group/node delay tests. Empty string falls back to the default.
-  String get delayTestUrl =>
-      _delayTestUrl.isEmpty ? defaultDelayTestUrl : _delayTestUrl;
+  String get delayTestUrl {
+    final v = _str(_kDelayTestUrl, '');
+    return v.isEmpty ? defaultDelayTestUrl : v;
+  }
 
   Future<void> setDelayTestUrl(String value) async {
     final v = value.trim();
-    if (v == _delayTestUrl) return;
-    _delayTestUrl = v;
-    await _prefs.setString(_kDelayTestUrl, v);
-    notifyListeners();
+    if (v == _str(_kDelayTestUrl, '')) return;
+    _put(_kDelayTestUrl, v);
   }
 
-  int get delayTestTimeoutMs => _delayTestTimeoutMs;
+  int get delayTestTimeoutMs =>
+      _int(_kDelayTestTimeoutMs, defaultDelayTestTimeoutMs);
 
   Future<void> setDelayTestTimeoutMs(int value) async {
     final clamped = value.clamp(500, 30000);
-    if (clamped == _delayTestTimeoutMs) return;
-    _delayTestTimeoutMs = clamped;
-    await _prefs.setInt(_kDelayTestTimeoutMs, clamped);
-    notifyListeners();
+    if (clamped == delayTestTimeoutMs) return;
+    _put(_kDelayTestTimeoutMs, clamped);
   }
 
-  DelayTestScope get delayTestScope => _delayTestScope;
+  DelayTestScope get delayTestScope =>
+      _decodeScope(_str(_kDelayTestScope, defaultDelayTestScope.name));
 
   Future<void> setDelayTestScope(DelayTestScope value) async {
-    if (value == _delayTestScope) return;
-    _delayTestScope = value;
-    await _prefs.setString(_kDelayTestScope, value.name);
-    notifyListeners();
+    if (value == delayTestScope) return;
+    _put(_kDelayTestScope, value.name);
   }
 
-  CloseMode get closeMode => _closeMode;
+  CloseMode get closeMode =>
+      _decodeCloseMode(_str(_kCloseMode, defaultCloseMode.name));
 
   Future<void> setCloseMode(CloseMode value) async {
-    if (value == _closeMode) return;
-    _closeMode = value;
-    await _prefs.setString(_kCloseMode, value.name);
-    notifyListeners();
+    if (value == closeMode) return;
+    _put(_kCloseMode, value.name);
   }
 
-  ConnectionsSort get connectionsSort => _connectionsSort;
+  ConnectionsSort get connectionsSort =>
+      _decodeConnectionsSort(_str(_kConnectionsSort, defaultConnectionsSort.name));
 
   Future<void> setConnectionsSort(ConnectionsSort value) async {
-    if (value == _connectionsSort) return;
-    _connectionsSort = value;
-    await _prefs.setString(_kConnectionsSort, value.name);
-    notifyListeners();
+    if (value == connectionsSort) return;
+    _put(_kConnectionsSort, value.name);
   }
 
-  bool get connectionsSortAsc => _connectionsSortAsc;
+  bool get connectionsSortAsc =>
+      _bool(_kConnectionsSortAsc, defaultConnectionsSortAsc);
 
   Future<void> setConnectionsSortAsc(bool value) async {
-    if (value == _connectionsSortAsc) return;
-    _connectionsSortAsc = value;
-    await _prefs.setBool(_kConnectionsSortAsc, value);
-    notifyListeners();
+    if (value == connectionsSortAsc) return;
+    _put(_kConnectionsSortAsc, value);
   }
 
   /// Show each connection's owning-process icon (local backend only).
-  bool get connectionsShowProcessIcon => _showProcessIcon;
+  bool get connectionsShowProcessIcon =>
+      _bool(_kShowProcessIcon, defaultShowProcessIcon);
 
   Future<void> setConnectionsShowProcessIcon(bool value) async {
-    if (value == _showProcessIcon) return;
-    _showProcessIcon = value;
-    await _prefs.setBool(_kShowProcessIcon, value);
-    notifyListeners();
+    if (value == connectionsShowProcessIcon) return;
+    _put(_kShowProcessIcon, value);
   }
 
   /// Show the resolved application name in place of the raw process name.
-  bool get connectionsShowAppName => _showAppName;
+  bool get connectionsShowAppName => _bool(_kShowAppName, defaultShowAppName);
 
   Future<void> setConnectionsShowAppName(bool value) async {
-    if (value == _showAppName) return;
-    _showAppName = value;
-    await _prefs.setBool(_kShowAppName, value);
-    notifyListeners();
+    if (value == connectionsShowAppName) return;
+    _put(_kShowAppName, value);
   }
 
   /// Group the active connections list by owning process.
-  bool get connectionsGroupByProcess => _groupByProcess;
+  bool get connectionsGroupByProcess =>
+      _bool(_kGroupByProcess, defaultGroupByProcess);
 
   Future<void> setConnectionsGroupByProcess(bool value) async {
-    if (value == _groupByProcess) return;
-    _groupByProcess = value;
-    await _prefs.setBool(_kGroupByProcess, value);
-    notifyListeners();
+    if (value == connectionsGroupByProcess) return;
+    _put(_kGroupByProcess, value);
   }
 
   /// Sort key for the grouped connections view (groups, not connections).
-  GroupSort get connectionsGroupSort => _groupSort;
+  GroupSort get connectionsGroupSort =>
+      _decodeGroupSort(_str(_kGroupSort, defaultGroupSort.name));
 
   Future<void> setConnectionsGroupSort(GroupSort value) async {
-    if (value == _groupSort) return;
-    _groupSort = value;
-    await _prefs.setString(_kGroupSort, value.name);
-    notifyListeners();
+    if (value == connectionsGroupSort) return;
+    _put(_kGroupSort, value.name);
   }
 
-  bool get connectionsGroupSortAsc => _groupSortAsc;
+  bool get connectionsGroupSortAsc =>
+      _bool(_kGroupSortAsc, defaultGroupSortAsc);
 
   Future<void> setConnectionsGroupSortAsc(bool value) async {
-    if (value == _groupSortAsc) return;
-    _groupSortAsc = value;
-    await _prefs.setBool(_kGroupSortAsc, value);
-    notifyListeners();
+    if (value == connectionsGroupSortAsc) return;
+    _put(_kGroupSortAsc, value);
   }
 
   static ProxiesSort _decodeSort(String? raw) {

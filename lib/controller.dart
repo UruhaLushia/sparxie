@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'config_store.dart';
 
 class Controller {
   Controller({
@@ -41,31 +40,29 @@ class Controller {
 }
 
 class ControllerStore extends ChangeNotifier {
-  ControllerStore._(this._prefs);
+  ControllerStore._(this._store);
 
-  static const _kControllers = 'controllers.v1';
-  static const _kActiveId = 'controllers.active';
-
-  final SharedPreferences _prefs;
+  final JsonStore _store;
   List<Controller> _controllers = [];
   String? _activeId;
 
-  static Future<ControllerStore> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = ControllerStore._(prefs);
-    store._restore();
-    if (store._controllers.isEmpty) {
-      store._controllers = [
+  Map<String, dynamic> get _section => _store.section('controllers');
+
+  static Future<ControllerStore> load(JsonStore store) async {
+    final s = ControllerStore._(store);
+    s._restore();
+    if (s._controllers.isEmpty) {
+      s._controllers = [
         Controller(
           id: _newId(),
           name: '本地内核',
           baseUrl: 'http://127.0.0.1:9090',
         ),
       ];
-      store._activeId = store._controllers.first.id;
-      await store._persist();
+      s._activeId = s._controllers.first.id;
+      await s._persist();
     }
-    return store;
+    return s;
   }
 
   List<Controller> get controllers => List.unmodifiable(_controllers);
@@ -81,31 +78,27 @@ class ControllerStore extends ChangeNotifier {
   String? get activeId => active?.id;
 
   void _restore() {
-    final raw = _prefs.getString(_kControllers);
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final list = jsonDecode(raw) as List;
-        _controllers = list
-            .whereType<Map<String, dynamic>>()
-            .map(Controller.fromJson)
-            .toList();
-      } catch (_) {
-        _controllers = [];
-      }
+    final section = _section;
+    final list = section['list'];
+    if (list is List) {
+      _controllers = list
+          .whereType<Map>()
+          .map((m) => Controller.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
     }
-    _activeId = _prefs.getString(_kActiveId);
+    final active = section['active'];
+    _activeId = active is String ? active : null;
   }
 
   Future<void> _persist() async {
-    await _prefs.setString(
-      _kControllers,
-      jsonEncode(_controllers.map((c) => c.toJson()).toList()),
-    );
+    final section = _section;
+    section['list'] = _controllers.map((c) => c.toJson()).toList();
     if (_activeId != null) {
-      await _prefs.setString(_kActiveId, _activeId!);
+      section['active'] = _activeId;
     } else {
-      await _prefs.remove(_kActiveId);
+      section.remove('active');
     }
+    await _store.flush();
   }
 
   Future<Controller> add({
