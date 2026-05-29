@@ -44,6 +44,27 @@ enum ConnectionsSort {
   process,
 }
 
+/// Sort key for the process-group list (grouped connections view).
+enum GroupSort {
+  /// Process / group name.
+  name,
+
+  /// Connection count.
+  count,
+
+  /// Aggregated upload bytes.
+  upload,
+
+  /// Aggregated download bytes.
+  download,
+
+  /// Aggregated upload speed.
+  uploadSpeed,
+
+  /// Aggregated download speed.
+  downloadSpeed,
+}
+
 /// Which connections to drop when [AppPrefs.autoCloseOnSwitch] kicks in.
 ///
 /// `all` closes every active connection on the controller; `group` only
@@ -68,6 +89,9 @@ class AppPrefs extends ChangeNotifier {
     this._connectionsSortAsc,
     this._showProcessIcon,
     this._showAppName,
+    this._groupByProcess,
+    this._groupSort,
+    this._groupSortAsc,
   );
 
   static const _kConnectionsRefreshMs = 'prefs.connectionsRefreshMs';
@@ -83,6 +107,9 @@ class AppPrefs extends ChangeNotifier {
   static const _kConnectionsSortAsc = 'prefs.connectionsSortAsc';
   static const _kShowProcessIcon = 'prefs.connectionsShowProcessIcon';
   static const _kShowAppName = 'prefs.connectionsShowAppName';
+  static const _kGroupByProcess = 'prefs.connectionsGroupByProcess';
+  static const _kGroupSort = 'prefs.connectionsGroupSort';
+  static const _kGroupSortAsc = 'prefs.connectionsGroupSortAsc';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -101,6 +128,9 @@ class AppPrefs extends ChangeNotifier {
   static const defaultConnectionsSortAsc = false;
   static const defaultShowProcessIcon = true;
   static const defaultShowAppName = false;
+  static const defaultGroupByProcess = false;
+  static const defaultGroupSort = GroupSort.name;
+  static const defaultGroupSortAsc = true;
 
   final SharedPreferences _prefs;
   int _connectionsRefreshMs;
@@ -116,6 +146,9 @@ class AppPrefs extends ChangeNotifier {
   bool _connectionsSortAsc;
   bool _showProcessIcon;
   bool _showAppName;
+  bool _groupByProcess;
+  GroupSort _groupSort;
+  bool _groupSortAsc;
 
   static Future<AppPrefs> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -134,6 +167,9 @@ class AppPrefs extends ChangeNotifier {
       prefs.getBool(_kConnectionsSortAsc) ?? defaultConnectionsSortAsc,
       prefs.getBool(_kShowProcessIcon) ?? defaultShowProcessIcon,
       prefs.getBool(_kShowAppName) ?? defaultShowAppName,
+      prefs.getBool(_kGroupByProcess) ?? defaultGroupByProcess,
+      _decodeGroupSort(prefs.getString(_kGroupSort)),
+      prefs.getBool(_kGroupSortAsc) ?? defaultGroupSortAsc,
     );
   }
 
@@ -266,6 +302,35 @@ class AppPrefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Group the active connections list by owning process.
+  bool get connectionsGroupByProcess => _groupByProcess;
+
+  Future<void> setConnectionsGroupByProcess(bool value) async {
+    if (value == _groupByProcess) return;
+    _groupByProcess = value;
+    await _prefs.setBool(_kGroupByProcess, value);
+    notifyListeners();
+  }
+
+  /// Sort key for the grouped connections view (groups, not connections).
+  GroupSort get connectionsGroupSort => _groupSort;
+
+  Future<void> setConnectionsGroupSort(GroupSort value) async {
+    if (value == _groupSort) return;
+    _groupSort = value;
+    await _prefs.setString(_kGroupSort, value.name);
+    notifyListeners();
+  }
+
+  bool get connectionsGroupSortAsc => _groupSortAsc;
+
+  Future<void> setConnectionsGroupSortAsc(bool value) async {
+    if (value == _groupSortAsc) return;
+    _groupSortAsc = value;
+    await _prefs.setBool(_kGroupSortAsc, value);
+    notifyListeners();
+  }
+
   static ProxiesSort _decodeSort(String? raw) {
     if (raw == null) return defaultProxiesSort;
     for (final v in ProxiesSort.values) {
@@ -304,5 +369,13 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultConnectionsSort;
+  }
+
+  static GroupSort _decodeGroupSort(String? raw) {
+    if (raw == null) return defaultGroupSort;
+    for (final v in GroupSort.values) {
+      if (v.name == raw) return v;
+    }
+    return defaultGroupSort;
   }
 }

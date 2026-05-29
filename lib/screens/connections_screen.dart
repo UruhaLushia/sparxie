@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sliver_tools/sliver_tools.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
@@ -7,6 +8,7 @@ import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
 import '../widgets/connection_detail_sheet.dart';
+import '../widgets/connection_group_header.dart';
 import '../widgets/connection_tile.dart';
 import '../widgets/connections_settings_menu.dart';
 
@@ -44,6 +46,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     super.initState();
     widget.prefs.addListener(_onPrefsChanged);
     _pushSortToBackend();
+    _syncGrouping();
   }
 
   @override
@@ -54,7 +57,26 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   void _onPrefsChanged() {
     _pushSortToBackend();
+    _syncGrouping();
   }
+
+  void _syncGrouping() {
+    final cn = widget.session.connections;
+    cn.grouped = widget.prefs.connectionsGroupByProcess;
+    cn.setGroupSort(
+      _toRustGroupSort(widget.prefs.connectionsGroupSort),
+      widget.prefs.connectionsGroupSortAsc,
+    );
+  }
+
+  static rust.ConnectionGroupSort _toRustGroupSort(GroupSort s) => switch (s) {
+    GroupSort.name => rust.ConnectionGroupSort.name,
+    GroupSort.count => rust.ConnectionGroupSort.count,
+    GroupSort.upload => rust.ConnectionGroupSort.upload,
+    GroupSort.download => rust.ConnectionGroupSort.download,
+    GroupSort.uploadSpeed => rust.ConnectionGroupSort.uploadSpeed,
+    GroupSort.downloadSpeed => rust.ConnectionGroupSort.downloadSpeed,
+  };
 
   void _pushSortToBackend() {
     final target = _target();
@@ -416,13 +438,30 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               },
             ),
             Expanded(
-              child: _ConnectionsList(
-                session: widget.session,
-                prefs: widget.prefs,
-                tab: _tab,
-                filter: _filter,
-                onTap: _showDetail,
-                onClose: _close,
+              child: ListenableBuilder(
+                listenable: widget.prefs,
+                builder: (context, _) {
+                  final grouped =
+                      widget.prefs.connectionsGroupByProcess &&
+                      _tab == ConnectionsTab.active;
+                  if (grouped) {
+                    return _GroupedConnectionsList(
+                      session: widget.session,
+                      prefs: widget.prefs,
+                      filter: _filter,
+                      onTap: _showDetail,
+                      onClose: _close,
+                    );
+                  }
+                  return _ConnectionsList(
+                    session: widget.session,
+                    prefs: widget.prefs,
+                    tab: _tab,
+                    filter: _filter,
+                    onTap: _showDetail,
+                    onClose: _close,
+                  );
+                },
               ),
             ),
           ],
@@ -655,6 +694,179 @@ class _RowPlaceholder extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(14),
+      ),
+    );
+  }
+}
+
+/// Grouped (by-process) active connections. Each process is a pinned header
+/// (icon + label + count + aggregated bytes/speed); expanding one lists its
+/// member connections. Group summaries and member rows are kept fresh by the
+/// notifier, which patches volatile counters in place.
+class _GroupedConnectionsList extends StatefulWidget {
+  const _GroupedConnectionsList({
+    required this.session,
+    required this.prefs,
+    required this.filter,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  final MihomoSession session;
+  final AppPrefs prefs;
+  final String filter;
+  final ValueChanged<ConnectionRow> onTap;
+  final ValueChanged<String> onClose;
+
+  @override
+  State<_GroupedConnectionsList> createState() =>
+      _GroupedConnectionsListState();
+}
+
+class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
+  @override
+  void initState() {
+    super.initState();
+    widget.session.connections.addListener(_onChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _GroupedConnectionsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != widget.session) {
+      oldWidget.session.connections.removeListener(_onChange);
+      widget.session.connections.addListener(_onChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.session.connections.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    if (mounted) setState(() {});
+  }
+
+  bool _matches(ConnectionGroupSummary g) {
+    final f = widget.filter;
+    if (f.isEmpty) return true;
+    final n = f.toLowerCase();
+    return g.label.toLowerCase().contains(n) ||
+        g.process.toLowerCase().contains(n) ||
+        g.processPath.toLowerCase().contains(n) ||
+        g.sourceIp.toLowerCase().contains(n);
+  }
+
+  Future<void> _closeGroup(ConnectionGroupSummary g) async {
+    final target = widget.session.target;
+    if (target == null) return;
+    final count = g.count.value;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('关闭进程连接'),
+        content: Text('将关闭「${g.label}」的 $count 条连接'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await rust.closeConnectionsByGroup(target: target, group: g.key);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cn = widget.session.connections;
+    final groups = cn.groups.where(_matches).toList(growable: false);
+    if (groups.isEmpty) {
+      return Center(
+        child: Text(
+          widget.filter.isEmpty ? '暂无连接' : '没有匹配的进程',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
+    final processIcons = widget.session.isLocalBackend
+        ? widget.session.processIcons
+        : null;
+    final showIcon = widget.prefs.connectionsShowProcessIcon;
+    final showAppName = widget.prefs.connectionsShowAppName;
+
+    return RepaintBoundary(
+      child: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 4)),
+          for (final group in groups)
+            MultiSliver(
+              pushPinnedChildren: true,
+              children: [
+                SliverPinnedHeader(
+                  child: RepaintBoundary(
+                    child: ConnectionGroupHeader(
+                      summary: group,
+                      expanded: cn.isExpanded(group.key),
+                      onToggle: () => cn.toggleGroup(group.key),
+                      onCloseAll: () => _closeGroup(group),
+                      processIcons: processIcons,
+                      showIcon: showIcon,
+                      showAppName: showAppName,
+                    ),
+                  ),
+                ),
+                if (cn.isExpanded(group.key))
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    sliver: Builder(
+                      builder: (_) {
+                        final ids = cn.groupMemberIds(group.key);
+                        return SliverList.builder(
+                          itemCount: ids.length,
+                          itemBuilder: (context, index) {
+                            final row = cn.groupMemberAt(group.key, index);
+                            if (row == null) {
+                              return const SizedBox(height: 74);
+                            }
+                            return Padding(
+                              key: ValueKey('grp::${group.key}::${row.id}'),
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: ConnectionTile(
+                                row: row,
+                                // Members sit under the group's process
+                                // header, so the per-row icon and process
+                                // prefix are redundant.
+                                showIcon: false,
+                                hideProcess: true,
+                                onTap: () => widget.onTap(row),
+                                onClose: () => widget.onClose(row.id),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
       ),
     );
   }

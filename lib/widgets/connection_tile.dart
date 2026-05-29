@@ -9,7 +9,7 @@ import 'connection_tag.dart';
 import 'process_icon.dart';
 
 /// Connection list row:
-///   line 1: `process → host`        time      close
+///   line 1: `process → host` (or just host for group members) · time · close
 ///   line 2: chips — protocol(network), active proxy, ↑/↓ totals
 class ConnectionTile extends StatelessWidget {
   const ConnectionTile({
@@ -20,6 +20,7 @@ class ConnectionTile extends StatelessWidget {
     this.processIcons,
     this.showIcon = false,
     this.showAppName = false,
+    this.hideProcess = false,
   });
 
   final ConnectionRow row;
@@ -31,6 +32,10 @@ class ConnectionTile extends StatelessWidget {
   final bool showIcon;
   final bool showAppName;
 
+  /// Drop the leading `process →` from the title — used for group members,
+  /// where the process already labels the group header.
+  final bool hideProcess;
+
   // Android keys by package name (mihomo's `process`), desktop by exec path.
   String _iconKey() {
     final isAndroid = !kIsWeb && Platform.isAndroid;
@@ -40,6 +45,9 @@ class ConnectionTile extends StatelessWidget {
   String _rawProcessName() => row.process.replaceAll(RegExp(r'\.exe$'), '');
 
   String _titleFor(String? appName) {
+    if (hideProcess) {
+      return row.host.isEmpty ? row.sourceIp : row.host;
+    }
     final p = (appName != null && appName.isNotEmpty)
         ? appName
         : _rawProcessName();
@@ -62,7 +70,8 @@ class ConnectionTile extends StatelessWidget {
     final cache = processIcons;
     final iconKey = _iconKey();
     final wantIcon = showIcon && cache != null;
-    final wantName = showAppName && cache != null && iconKey.isNotEmpty;
+    final wantName =
+        !hideProcess && showAppName && cache != null && iconKey.isNotEmpty;
     if (wantName) cache.requestName(iconKey);
 
     // Tile chrome rebuilds only on identity change. Bytes line repaints

@@ -9,6 +9,8 @@ export 'src/rust/traffic.dart' show MemorySample, TrafficSample;
 export 'src/rust/connections_state.dart'
     show
         Connection,
+        ConnectionGroup,
+        ConnectionGroupSort,
         ConnectionsFrame,
         ConnectionsListKind,
         ConnectionsSort,
