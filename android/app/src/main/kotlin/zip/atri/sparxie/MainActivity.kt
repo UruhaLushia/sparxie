@@ -14,7 +14,7 @@ import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
     private val channel = "zip.atri.sparxie/process_icons"
-    private val iconSize = 128
+    private val iconSize = 256
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
