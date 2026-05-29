@@ -47,12 +47,20 @@ class ProcessIcon extends StatelessWidget {
       listenable: cache,
       builder: (context, _) {
         final bytes = cache.iconFor(key);
+        // Decode at display resolution — source icons are up to 256px, so
+        // decoding at native res on a 44px slot wastes memory and softens.
+        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final cachePx = (size * dpr).round();
         return SizedBox.square(
           dimension: size,
           child: bytes != null
               ? Image.memory(
                   bytes,
                   fit: BoxFit.contain,
+                  width: size,
+                  height: size,
+                  cacheWidth: cachePx,
+                  cacheHeight: cachePx,
                   gaplessPlayback: true,
                   filterQuality: FilterQuality.medium,
                   errorBuilder: (_, _, _) => _DefaultIcon(asset: fallback),

@@ -16,9 +16,6 @@ use crate::error::MihomoError;
 /// dozens of parallel desktop-file scans. Mirrors Sparkle's cap.
 const MAX_CONCURRENT: usize = 5;
 
-#[cfg(not(target_os = "android"))]
-const ICON_SIZE: u32 = 64;
-
 struct State {
     sem: Semaphore,
     /// Keys known to have no resolvable icon — avoids rescanning the
@@ -217,11 +214,10 @@ async fn resolve(
 
 #[cfg(not(target_os = "android"))]
 fn resolve_icon_bytes(path: &str) -> Option<Vec<u8>> {
-    let options = file_icon::FileIconOptions {
-        size: Some(ICON_SIZE),
-        ..Default::default()
-    };
-    file_icon::file_to_buf_with_options(path, options).ok()
+    // No explicit size — let the platform return its best/native icon (256px
+    // jumbo on Windows). The UI downscales at the display layer; forcing a
+    // small size here produced blurry icons on high-DPI screens.
+    file_icon::file_to_buf(path).ok()
 }
 
 // Android resolves icons via PackageManager, so `file-icon` is absent here.
