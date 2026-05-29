@@ -223,7 +223,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       '内核配置' => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       '外部资源' => ResourcesScreen(store: widget.store),
       '日志' => LogsScreen(store: widget.store, session: widget.session),
-      '核心操作' => CoreActionsScreen(store: widget.store),
+      '核心操作' => CoreActionsScreen(store: widget.store, session: widget.session),
       '分流规则' => RulesScreen(store: widget.store),
       _ => SettingsScreen(
         store: widget.store,
