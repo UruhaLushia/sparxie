@@ -1,28 +1,24 @@
-//! On-disk icon cache with stale-while-revalidate semantics.
+//! Remote proxy-group icon cache with stale-while-revalidate semantics.
 //!
-//! Calls return whatever's on disk immediately (even if stale); when an
-//! entry's mtime is older than [`TTL`] a background refetch is spawned but
-//! we still serve the stale bytes. On miss we fetch synchronously.
-//!
-//! Initialized once from Dart with the platform's cache directory; paths
-//! and config live in a single global [`State`].
+//! Backed by the shared redb database ([`crate::cache_db`]). Entries are
+//! stamped with their fetch time; reads return cached bytes immediately and
+//! spawn a background refetch once an entry is older than [`TTL`]. Misses
+//! fetch synchronously, coalescing concurrent first-time fetches per URL.
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use reqwest::Client;
-use tokio::fs;
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::cache_db::{self, ICONS};
 use crate::error::MihomoError;
 
 /// 1 day; entries older than this trigger a background refetch.
 pub const TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct State {
-    dir: PathBuf,
     client: Client,
     /// URLs currently being refetched in the background, so we don't
     /// fan out multiple parallel refreshes for the same icon.
@@ -34,23 +30,17 @@ struct State {
 
 static STATE: OnceLock<State> = OnceLock::new();
 
-/// Configure the on-disk cache directory. Called once from Dart with the
-/// platform's app cache dir. Idempotent — subsequent calls are ignored
-/// (the path is fixed for the process lifetime).
-pub fn init(cache_dir: PathBuf) -> Result<(), MihomoError> {
-    let dir = cache_dir.join("icons");
-    if let Err(error) = std::fs::create_dir_all(&dir) {
-        return Err(MihomoError::Other(format!(
-            "failed to create icon cache dir {}: {error}",
-            dir.display()
-        )));
+/// Initialize the HTTP client. The shared cache DB is opened separately via
+/// [`cache_db::init`]. Idempotent.
+pub fn init() -> Result<(), MihomoError> {
+    if STATE.get().is_some() {
+        return Ok(());
     }
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| MihomoError::Other(format!("icon http client build: {e}")))?;
     let _ = STATE.set(State {
-        dir,
         client,
         inflight: Mutex::new(HashSet::new()),
         miss_locks: Mutex::new(HashMap::new()),
@@ -59,57 +49,60 @@ pub fn init(cache_dir: PathBuf) -> Result<(), MihomoError> {
 }
 
 fn state() -> Result<&'static State, MihomoError> {
-    STATE.get().ok_or_else(|| {
-        MihomoError::Other("icon cache not initialized; call init_icon_cache".into())
-    })
+    STATE
+        .get()
+        .ok_or_else(|| MihomoError::Other("icon cache not initialized".into()))
 }
 
-fn path_for(state: &State, url: &str) -> PathBuf {
-    let hash = blake3::hash(url.as_bytes());
-    state.dir.join(format!("{}.bin", hash.to_hex()))
+fn key_for(url: &str) -> String {
+    blake3::hash(url.as_bytes()).to_hex().to_string()
 }
 
-/// Return the cached bytes for [`url`].
-///
-/// - Disk hit (fresh): return bytes immediately.
-/// - Disk hit (stale): return bytes immediately, refetch in the background.
-/// - Disk miss: fetch synchronously and persist.
-/// - Network failure on miss: return [`MihomoError::Network`].
+/// Return cached bytes for `url`: fresh hit returns immediately, stale hit
+/// returns immediately and refetches in the background, miss fetches
+/// synchronously (coalesced per URL).
 pub async fn fetch(url: String) -> Result<Vec<u8>, MihomoError> {
     let state = state()?;
-    let path = path_for(state, &url);
+    let key = key_for(&url);
 
-    // Disk lookup. Treat any read error as a miss.
-    let cached = read_with_age(&path).await;
-
-    if let Some((bytes, age)) = cached {
-        if age >= TTL {
-            spawn_refetch(state, url.clone(), path);
+    if let Some((created, bytes)) = read_entry(&key).await? {
+        if cache_db::age(created) >= TTL {
+            spawn_refetch(state, url.clone(), key.clone());
         }
         return Ok(bytes);
     }
 
-    // Miss — coalesce concurrent first-time fetches for the same URL so a
-    // group's many nodes don't each hit the network.
+    // Miss — coalesce concurrent first-time fetches for the same URL.
     let lock = miss_lock_for(state, &url);
     let _guard = lock.lock().await;
 
-    // Another waiter may have populated the cache while we waited.
-    if let Some((bytes, _)) = read_with_age(&path).await {
+    if let Some((_, bytes)) = read_entry(&key).await? {
         release_miss_lock(state, &url);
         return Ok(bytes);
     }
 
     let result = download(&state.client, &url).await;
-    if let Ok(bytes) = &result
-        && let Err(error) = write_atomic(&path, bytes).await
-    {
-        // Don't fail the read just because we couldn't persist.
-        tracing_warn(&format!("icon cache write failed for {url}: {error}"));
+    if let Ok(bytes) = &result {
+        let _ = store_entry(key, bytes.clone()).await;
     }
     drop(_guard);
     release_miss_lock(state, &url);
     result
+}
+
+async fn read_entry(key: &str) -> Result<Option<(u64, Vec<u8>)>, MihomoError> {
+    let key = key.to_string();
+    let raw = tokio::task::spawn_blocking(move || cache_db::get_bytes(ICONS, &key))
+        .await
+        .map_err(|e| MihomoError::Other(format!("icon cache join: {e}")))??;
+    Ok(raw.and_then(|v| cache_db::unstamp(&v).map(|(s, b)| (s, b.to_vec()))))
+}
+
+async fn store_entry(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
+    let value = cache_db::stamp(cache_db::now_secs(), &bytes);
+    tokio::task::spawn_blocking(move || cache_db::put_bytes(ICONS, &key, &value))
+        .await
+        .map_err(|e| MihomoError::Other(format!("icon cache join: {e}")))?
 }
 
 fn miss_lock_for(state: &State, url: &str) -> Arc<AsyncMutex<()>> {
@@ -121,22 +114,11 @@ fn miss_lock_for(state: &State, url: &str) -> Arc<AsyncMutex<()>> {
 
 fn release_miss_lock(state: &State, url: &str) {
     let mut map = state.miss_locks.lock().expect("icon miss_locks poisoned");
-    // Drop the entry only when we hold the last reference besides the map's,
-    // so a still-waiting task keeps the same lock instance.
     if let Some(lock) = map.get(url)
         && Arc::strong_count(lock) <= 2
     {
         map.remove(url);
     }
-}
-
-async fn read_with_age(path: &Path) -> Option<(Vec<u8>, Duration)> {
-    let bytes = fs::read(path).await.ok()?;
-    let mtime = fs::metadata(path).await.ok()?.modified().ok()?;
-    let age = SystemTime::now()
-        .duration_since(mtime)
-        .unwrap_or(Duration::ZERO);
-    Some((bytes, age))
 }
 
 async fn download(client: &Client, url: &str) -> Result<Vec<u8>, MihomoError> {
@@ -158,16 +140,10 @@ async fn download(client: &Client, url: &str) -> Result<Vec<u8>, MihomoError> {
     Ok(bytes.to_vec())
 }
 
-async fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, bytes).await?;
-    fs::rename(&tmp, path).await
-}
-
-fn spawn_refetch(state: &'static State, url: String, path: PathBuf) {
+fn spawn_refetch(state: &'static State, url: String, key: String) {
     let mut inflight = match state.inflight.lock() {
         Ok(g) => g,
-        Err(_) => return, // poisoned; treat as full backoff
+        Err(_) => return,
     };
     if !inflight.insert(url.clone()) {
         return; // already refreshing
@@ -177,18 +153,11 @@ fn spawn_refetch(state: &'static State, url: String, path: PathBuf) {
     let client = state.client.clone();
     let inflight = &state.inflight;
     tokio::spawn(async move {
-        let result = download(&client, &url).await;
-        if let Ok(bytes) = result {
-            let _ = write_atomic(&path, &bytes).await;
+        if let Ok(bytes) = download(&client, &url).await {
+            let _ = store_entry(key, bytes).await;
         }
         if let Ok(mut guard) = inflight.lock() {
             guard.remove(&url);
         }
     });
-}
-
-fn tracing_warn(msg: &str) {
-    // No tracing dep right now; eprintln is enough — this only fires on
-    // genuine disk write failures, which a user can spot in logs.
-    eprintln!("[icons] {msg}");
 }

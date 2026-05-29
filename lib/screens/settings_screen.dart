@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
+import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../utils.dart';
 import '../widgets/section_panel.dart';
 import 'core_config_screen.dart';
 import 'resources_screen.dart';
@@ -61,7 +63,7 @@ class SettingsScreen extends StatelessWidget {
                           subtitle: '导航布局等',
                           onTap: () => _push(
                             context,
-                            AppSettingsScreen(prefs: prefs),
+                            AppSettingsScreen(prefs: prefs, session: session),
                           ),
                         ),
                         if (showCore) ...[
@@ -157,8 +159,9 @@ class BackendSettingsScreen extends StatelessWidget {
 }
 
 class AppSettingsScreen extends StatelessWidget {
-  const AppSettingsScreen({super.key, required this.prefs});
+  const AppSettingsScreen({super.key, required this.prefs, required this.session});
   final AppPrefs prefs;
+  final MihomoSession session;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +173,7 @@ class AppSettingsScreen extends StatelessWidget {
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
-              child: AppSettingsPanel(prefs: prefs),
+              child: AppSettingsPanel(prefs: prefs, session: session),
             ),
           ],
         ),
@@ -180,8 +183,9 @@ class AppSettingsScreen extends StatelessWidget {
 }
 
 class AppSettingsPanel extends StatelessWidget {
-  const AppSettingsPanel({super.key, required this.prefs});
+  const AppSettingsPanel({super.key, required this.prefs, required this.session});
   final AppPrefs prefs;
+  final MihomoSession session;
 
   @override
   Widget build(BuildContext context) {
@@ -221,10 +225,95 @@ class AppSettingsPanel extends StatelessWidget {
                 '卡片：窄屏首页用网格入口、宽屏侧栏用卡片;标准:NavigationBar / NavigationRail。',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              const Divider(height: 24),
+              _CacheRow(session: session),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Shows the on-disk cache size (icons + process icons/names) with a clear
+/// button. Size is fetched from Rust and refreshed after a clear.
+class _CacheRow extends StatefulWidget {
+  const _CacheRow({required this.session});
+  final MihomoSession session;
+
+  @override
+  State<_CacheRow> createState() => _CacheRowState();
+}
+
+class _CacheRowState extends State<_CacheRow> {
+  BigInt? _size;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final size = await rust.iconCacheSize();
+      if (mounted) setState(() => _size = size);
+    } catch (_) {
+      if (mounted) setState(() => _size = null);
+    }
+  }
+
+  Future<void> _clear() async {
+    setState(() => _clearing = true);
+    try {
+      await rust.clearIconCache();
+      widget.session.processIcons.clearAll();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('清理失败:$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _clearing = false);
+      await _refresh();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final sizeText = _size == null ? '—' : formatBytes(_size!);
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('缓存', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 2),
+              Text(
+                '图标与进程信息 · $sizeText',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton.icon(
+          onPressed: _clearing ? null : _clear,
+          icon: _clearing
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_outline, size: 18),
+          label: const Text('清空缓存'),
+        ),
+      ],
     );
   }
 }

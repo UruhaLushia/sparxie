@@ -1,5 +1,6 @@
 //! mihomo controller backend, exposed to Flutter via flutter_rust_bridge.
 
+mod cache_db;
 mod client;
 mod connections_state;
 mod error;
