@@ -101,6 +101,17 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                           value: prefs.connectionsShowAppName,
                           onChanged: prefs.setConnectionsShowAppName,
                         ),
+                        SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                          title: const Text('进程归类'),
+                          subtitle: const Text('活动连接按进程分组'),
+                          value: prefs.connectionsGroupByProcess,
+                          onChanged: prefs.setConnectionsGroupByProcess,
+                        ),
+                        if (prefs.connectionsGroupByProcess)
+                          _GroupSortRow(prefs: prefs),
                       ],
                     ),
                   ),
@@ -204,4 +215,56 @@ String _formatMs(int ms) {
   if (ms < 1000) return '${ms}ms';
   final s = ms / 1000;
   return s == s.roundToDouble() ? '${s.toInt()}s' : '${s.toStringAsFixed(1)}s';
+}
+
+class _GroupSortRow extends StatelessWidget {
+  const _GroupSortRow({required this.prefs});
+
+  final AppPrefs prefs;
+
+  static const _labels = <GroupSort, String>{
+    GroupSort.name: '名称',
+    GroupSort.count: '连接数',
+    GroupSort.upload: '上传量',
+    GroupSort.download: '下载量',
+    GroupSort.uploadSpeed: '上传速度',
+    GroupSort.downloadSpeed: '下载速度',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final asc = prefs.connectionsGroupSortAsc;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('归类排序', style: Theme.of(context).textTheme.bodyLarge),
+          ),
+          const SizedBox(width: 12),
+          DropdownButton<GroupSort>(
+            value: prefs.connectionsGroupSort,
+            underline: const SizedBox.shrink(),
+            borderRadius: BorderRadius.circular(8),
+            items: [
+              for (final entry in _labels.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+            ],
+            onChanged: (v) {
+              if (v != null) prefs.setConnectionsGroupSort(v);
+            },
+          ),
+          IconButton(
+            tooltip: asc ? '升序' : '降序',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => prefs.setConnectionsGroupSortAsc(!asc),
+            icon: Icon(
+              asc ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

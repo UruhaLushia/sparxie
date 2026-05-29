@@ -1,13 +1,16 @@
 use futures_util::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::connections_state::{clear_closed, fetch_window, set_sort, subscribe};
+use crate::connections_state::{
+    clear_closed, fetch_group_connections, fetch_groups, fetch_window, set_sort, subscribe,
+};
 // Re-export the wire types so frb scanning `crate::api::*` discovers them
 // alongside the functions that use them (otherwise they'd be treated as
 // opaque). They live in `connections_state` for organizational reasons but
 // the Dart-facing surface is here.
 pub use crate::connections_state::{
-    Connection, ConnectionsFrame, ConnectionsListKind, ConnectionsSort, ConnectionsTotals,
+    Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame, ConnectionsListKind,
+    ConnectionsSort, ConnectionsTotals,
 };
 use crate::error::MihomoError;
 // `StreamSink<T>` is emitted into `frb_generated.rs` by the
@@ -118,6 +121,27 @@ pub async fn fetch_connection_window(
     limit: u32,
 ) -> Vec<Connection> {
     fetch_window(target, interval_ms, kind, offset, limit).await
+}
+
+/// Aggregate active connections into per-process groups (process name, or
+/// source IP when unknown), ordered by `sort`.
+pub async fn fetch_connection_groups(
+    target: MihomoTarget,
+    interval_ms: u32,
+    sort: ConnectionGroupSort,
+    asc: bool,
+) -> Vec<ConnectionGroup> {
+    fetch_groups(target, interval_ms, sort, asc).await
+}
+
+/// Active connections belonging to `group`, sorted and capped at `limit`.
+pub async fn fetch_connection_group_members(
+    target: MihomoTarget,
+    interval_ms: u32,
+    group: String,
+    limit: u32,
+) -> Vec<Connection> {
+    fetch_group_connections(target, interval_ms, group, limit).await
 }
 
 /// Update the per-target sort key. Effective from the next emitted frame.

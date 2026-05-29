@@ -58,6 +58,8 @@ class MihomoSession {
 
   late final ConnectionListNotifier connections = ConnectionListNotifier(
     windowFetcher: _fetchConnectionWindow,
+    groupsFetcher: _fetchConnectionGroups,
+    groupMembersFetcher: _fetchConnectionGroupMembers,
   );
 
   Future<List<rust.Connection>> _fetchConnectionWindow(
@@ -78,8 +80,37 @@ class MihomoSession {
     );
   }
 
-  final ValueNotifier<ConnectionsTotals> connectionsTotals =
-      ValueNotifier(ConnectionsTotals.zero);
+  Future<List<rust.ConnectionGroup>> _fetchConnectionGroups(
+    rust.ConnectionGroupSort sort,
+    bool asc,
+  ) async {
+    final t = _target;
+    if (t == null) return const [];
+    return rust.fetchConnectionGroups(
+      target: t,
+      intervalMs: _connectionsIntervalMs,
+      sort: sort,
+      asc: asc,
+    );
+  }
+
+  Future<List<rust.Connection>> _fetchConnectionGroupMembers(
+    String groupKey,
+    int limit,
+  ) async {
+    final t = _target;
+    if (t == null) return const [];
+    return rust.fetchConnectionGroupMembers(
+      target: t,
+      intervalMs: _connectionsIntervalMs,
+      group: groupKey,
+      limit: limit,
+    );
+  }
+
+  final ValueNotifier<ConnectionsTotals> connectionsTotals = ValueNotifier(
+    ConnectionsTotals.zero,
+  );
 
   /// Rolling 500-entry buffer of `/logs` for the active controller. Owned
   /// here so the WebSocket is alive even when the user is on another tab.
@@ -296,24 +327,28 @@ class MihomoSession {
   void _subscribeTraffic() {
     final t = _target;
     if (t == null) return;
-    _trafficSub = rust.trafficStream(target: t).listen(
-      (sample) {
-        traffic.value = sample;
-        isStreaming.value = true;
-      },
-      onError: (Object e) => _scheduleRetry(_RetryKind.traffic, e),
-      cancelOnError: true,
-    );
+    _trafficSub = rust
+        .trafficStream(target: t)
+        .listen(
+          (sample) {
+            traffic.value = sample;
+            isStreaming.value = true;
+          },
+          onError: (Object e) => _scheduleRetry(_RetryKind.traffic, e),
+          cancelOnError: true,
+        );
   }
 
   void _subscribeMemory() {
     final t = _target;
     if (t == null) return;
-    _memorySub = rust.memoryStream(target: t).listen(
-      (sample) => memory.value = sample,
-      onError: (Object e) => _scheduleRetry(_RetryKind.memory, e),
-      cancelOnError: true,
-    );
+    _memorySub = rust
+        .memoryStream(target: t)
+        .listen(
+          (sample) => memory.value = sample,
+          onError: (Object e) => _scheduleRetry(_RetryKind.memory, e),
+          cancelOnError: true,
+        );
   }
 
   void _subscribeConnections() {
@@ -348,14 +383,16 @@ class MihomoSession {
     // Rust replays its ring buffer on every subscribe, so wipe the mirror
     // first to avoid stacking duplicates.
     logs.reset();
-    _logsSub = rust.logsStream(target: t, level: _logsLevel).listen(
-      (entry) {
-        if (!identical(_activeKey, controller)) return;
-        logs.add(entry);
-      },
-      onError: (Object e) => _scheduleRetry(_RetryKind.logs, e),
-      cancelOnError: true,
-    );
+    _logsSub = rust
+        .logsStream(target: t, level: _logsLevel)
+        .listen(
+          (entry) {
+            if (!identical(_activeKey, controller)) return;
+            logs.add(entry);
+          },
+          onError: (Object e) => _scheduleRetry(_RetryKind.logs, e),
+          cancelOnError: true,
+        );
   }
 
   /// Drop both the Rust ring buffer and the Dart mirror; upstream stream

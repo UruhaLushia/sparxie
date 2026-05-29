@@ -69,6 +69,23 @@ pub struct ConnectionsTotals {
     pub memory: u64,
 }
 
+/// Aggregate of all active connections sharing one process (or source IP
+/// when the process is unknown). Totals/speeds sum over the group's active
+/// connections only — a closed connection drops out of its group.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConnectionGroup {
+    pub key: String,
+    pub label: String,
+    pub process: String,
+    pub process_path: String,
+    pub source_ip: String,
+    pub count: u32,
+    pub upload: u64,
+    pub download: u64,
+    pub upload_speed: u64,
+    pub download_speed: u64,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ConnectionsFrame {
     pub active_count: u32,
@@ -100,6 +117,23 @@ pub enum ConnectionsSort {
 impl Default for ConnectionsSort {
     fn default() -> Self {
         Self::Time
+    }
+}
+
+/// Sort key for the process-group list. Mirrors Dart's `ConnectionGroupSort`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ConnectionGroupSort {
+    Name,
+    Count,
+    Upload,
+    Download,
+    UploadSpeed,
+    DownloadSpeed,
+}
+
+impl Default for ConnectionGroupSort {
+    fn default() -> Self {
+        Self::Name
     }
 }
 
@@ -220,6 +254,113 @@ fn slice(rows: Vec<Connection>, offset: u32, limit: u32) -> Vec<Connection> {
     let start = (offset as usize).min(rows.len());
     let end = start.saturating_add(limit as usize).min(rows.len());
     rows[start..end].to_vec()
+}
+
+/// Grouping key for an active connection: its process name, or the source
+/// IP when no process is reported (e.g. remote / non-local backends).
+fn group_key(conn: &Connection) -> String {
+    if !conn.process.is_empty() {
+        conn.process.clone()
+    } else {
+        conn.source_ip.clone()
+    }
+}
+
+/// Aggregate active connections into per-process groups, ordered by `sort`.
+/// The per-target connection sort key orders connections *within* a group,
+/// independent of how the groups themselves are ordered here.
+pub async fn fetch_groups(
+    target: MihomoTarget,
+    interval_ms: u32,
+    sort: ConnectionGroupSort,
+    asc: bool,
+) -> Vec<ConnectionGroup> {
+    let interval = if interval_ms == 0 { 1000 } else { interval_ms };
+    let key = target_key(&target, interval);
+    let map = slots().lock().await;
+    let Some(slot) = map.get(&key) else {
+        return Vec::new();
+    };
+    let state = slot.state.lock().expect("connections state poisoned");
+
+    let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
+    for conn in state.active.values() {
+        let gkey = group_key(conn);
+        let group = groups.entry(gkey.clone()).or_insert_with(|| ConnectionGroup {
+            key: gkey,
+            label: if conn.process.is_empty() {
+                conn.source_ip.clone()
+            } else {
+                conn.process.clone()
+            },
+            process: conn.process.clone(),
+            process_path: conn.process_path.clone(),
+            source_ip: conn.source_ip.clone(),
+            ..Default::default()
+        });
+        group.count += 1;
+        group.upload = group.upload.saturating_add(conn.upload);
+        group.download = group.download.saturating_add(conn.download);
+        group.upload_speed = group.upload_speed.saturating_add(conn.upload_speed);
+        group.download_speed = group.download_speed.saturating_add(conn.download_speed);
+        // A group's first-seen member may lack a path even when later ones have it.
+        if group.process_path.is_empty() && !conn.process_path.is_empty() {
+            group.process_path = conn.process_path.clone();
+        }
+    }
+
+    let mut rows: Vec<ConnectionGroup> = groups.into_values().collect();
+    sort_groups(&mut rows, sort, asc);
+    rows
+}
+
+fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSort, asc: bool) {
+    match sort {
+        ConnectionGroupSort::Name => {
+            rows.sort_by(|a, b| {
+                cmp_str(&a.label.to_lowercase(), &b.label.to_lowercase(), asc)
+            })
+        }
+        ConnectionGroupSort::Count => {
+            rows.sort_by(|a, b| cmp_u64(a.count as u64, b.count as u64, asc))
+        }
+        ConnectionGroupSort::Upload => rows.sort_by(|a, b| cmp_u64(a.upload, b.upload, asc)),
+        ConnectionGroupSort::Download => {
+            rows.sort_by(|a, b| cmp_u64(a.download, b.download, asc))
+        }
+        ConnectionGroupSort::UploadSpeed => {
+            rows.sort_by(|a, b| cmp_u64(a.upload_speed, b.upload_speed, asc))
+        }
+        ConnectionGroupSort::DownloadSpeed => {
+            rows.sort_by(|a, b| cmp_u64(a.download_speed, b.download_speed, asc))
+        }
+    }
+}
+
+/// Active connections belonging to `group`, sorted by the per-target sort
+/// key and capped at `limit`.
+pub async fn fetch_group_connections(
+    target: MihomoTarget,
+    interval_ms: u32,
+    group: String,
+    limit: u32,
+) -> Vec<Connection> {
+    let interval = if interval_ms == 0 { 1000 } else { interval_ms };
+    let key = target_key(&target, interval);
+    let map = slots().lock().await;
+    let Some(slot) = map.get(&key) else {
+        return Vec::new();
+    };
+    let state = slot.state.lock().expect("connections state poisoned");
+    let mut rows: Vec<Connection> = state
+        .active
+        .values()
+        .filter(|c| group_key(c) == group)
+        .cloned()
+        .collect();
+    sort_rows(&mut rows, state.sort, state.asc);
+    rows.truncate(limit as usize);
+    rows
 }
 
 fn sort_rows(rows: &mut [Connection], sort: ConnectionsSort, asc: bool) {
