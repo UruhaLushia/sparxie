@@ -146,7 +146,10 @@ class MihomoSession {
   bool get isLocalBackend {
     final c = _activeKey;
     if (c == null) return false;
-    final host = Uri.tryParse(c.baseUrl)?.host.toLowerCase() ?? '';
+    final url = c.baseUrl.trim();
+    // IPC transports are always on this machine.
+    if (url.startsWith('unix:') || url.startsWith('pipe:')) return true;
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
     return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 
