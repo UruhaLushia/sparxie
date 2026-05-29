@@ -226,11 +226,144 @@ class AppSettingsPanel extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const Divider(height: 24),
+              _FontRow(prefs: prefs),
+              const Divider(height: 24),
               _CacheRow(session: session),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Inline row showing the current UI font with a picker that lists installed
+/// system fonts (enumerated by the Rust backend), each previewed in its own
+/// face. Empty selection means "follow the system default".
+class _FontRow extends StatelessWidget {
+  const _FontRow({required this.prefs});
+  final AppPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = prefs.uiFontFamily;
+    final label = current.isEmpty ? '跟随系统' : current;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('字体', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton(
+          onPressed: () => _pick(context),
+          child: const Text('选择'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _FontPicker(current: prefs.uiFontFamily),
+    );
+    // A non-null result is a deliberate choice ('' = follow system).
+    if (picked != null) await prefs.setUiFontFamily(picked);
+  }
+}
+
+class _FontPicker extends StatefulWidget {
+  const _FontPicker({required this.current});
+  final String current;
+
+  @override
+  State<_FontPicker> createState() => _FontPickerState();
+}
+
+class _FontPickerState extends State<_FontPicker> {
+  List<String>? _families;
+  String _filter = '';
+
+  @override
+  void initState() {
+    super.initState();
+    rust.systemFontFamilies().then((list) {
+      if (mounted) setState(() => _families = list);
+    }).catchError((_) {
+      if (mounted) setState(() => _families = const []);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = _families;
+    final filtered = all == null
+        ? const <String>[]
+        : (_filter.isEmpty
+              ? all
+              : all
+                    .where((f) => f.toLowerCase().contains(_filter.toLowerCase()))
+                    .toList());
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: '搜索字体',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (v) => setState(() => _filter = v.trim()),
+              ),
+            ),
+            Expanded(
+              child: all == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      itemCount: filtered.length + 1,
+                      itemBuilder: (context, index) {
+                        final family = index == 0 ? '' : filtered[index - 1];
+                        final selected = family == widget.current;
+                        return ListTile(
+                          title: Text(
+                            family.isEmpty ? '跟随系统' : family,
+                            style: family.isEmpty
+                                ? null
+                                : TextStyle(fontFamily: family),
+                          ),
+                          trailing: selected
+                              ? Icon(
+                                  Icons.check,
+                                  color: Theme.of(context).colorScheme.primary,
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(context, family),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

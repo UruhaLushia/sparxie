@@ -96,6 +96,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kGroupByProcess = 'connectionsGroupByProcess';
   static const _kGroupSort = 'connectionsGroupSort';
   static const _kGroupSortAsc = 'connectionsGroupSortAsc';
+  static const _kUiFontFamily = 'uiFontFamily';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -282,6 +283,14 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setConnectionsGroupSortAsc(bool value) async {
     if (value == connectionsGroupSortAsc) return;
     _put(_kGroupSortAsc, value);
+  }
+
+  /// UI font family. Empty = platform default (no override).
+  String get uiFontFamily => _str(_kUiFontFamily, '');
+
+  Future<void> setUiFontFamily(String value) async {
+    if (value == uiFontFamily) return;
+    _put(_kUiFontFamily, value);
   }
 
   static ProxiesSort _decodeSort(String? raw) {

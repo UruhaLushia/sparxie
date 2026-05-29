@@ -20,6 +20,7 @@ export 'src/rust/api/cache.dart';
 export 'src/rust/api/configs.dart';
 export 'src/rust/api/connections.dart';
 export 'src/rust/api/dns.dart';
+export 'src/rust/api/fonts.dart';
 export 'src/rust/api/groups.dart';
 export 'src/rust/api/icons.dart';
 export 'src/rust/api/providers.dart';
