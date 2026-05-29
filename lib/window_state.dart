@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -109,7 +109,7 @@ class WindowState with WindowListener {
       timer.cancel();
       await _save();
     }
-    await windowManager.destroy();
+    exit(0);
   }
 
   void _scheduleSave() {
