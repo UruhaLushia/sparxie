@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
@@ -648,31 +651,85 @@ class _EditDialog extends StatefulWidget {
   State<_EditDialog> createState() => _EditDialogState();
 }
 
+enum _Scheme { http, https, unix, pipe }
+
 class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
-  late final TextEditingController _baseUrl;
+  late final TextEditingController _address;
   late final TextEditingController _secret;
   late bool _allowInsecure;
+  late _Scheme _scheme;
   final _formKey = GlobalKey<FormState>();
+
+  static bool get _isWindows => !kIsWeb && Platform.isWindows;
+  static bool get _isUnixHost =>
+      !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isAndroid);
+
+  /// Schemes offered on this platform: http/https everywhere, unix on Unix
+  /// hosts + Android, pipe on Windows only.
+  List<_Scheme> get _schemes => [
+    _Scheme.http,
+    _Scheme.https,
+    if (_isUnixHost) _Scheme.unix,
+    if (_isWindows) _Scheme.pipe,
+  ];
+
+  static String _schemeLabel(_Scheme s) => switch (s) {
+    _Scheme.http => 'http',
+    _Scheme.https => 'https',
+    _Scheme.unix => 'unix',
+    _Scheme.pipe => 'pipe',
+  };
+
+  bool get _isIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
 
   @override
   void initState() {
     super.initState();
     final c = widget.existing;
     _name = TextEditingController(text: c?.name ?? '');
-    _baseUrl = TextEditingController(
-      text: c?.baseUrl ?? 'http://127.0.0.1:9090',
-    );
+    final (scheme, addr) = _decompose(c?.baseUrl ?? 'http://127.0.0.1:9090');
+    _scheme = _schemes.contains(scheme) ? scheme : _Scheme.http;
+    _address = TextEditingController(text: addr);
     _secret = TextEditingController(text: c?.secret ?? '');
     _allowInsecure = c?.allowInsecure ?? false;
-    // Re-render the https-only switch as the URL scheme changes.
-    _baseUrl.addListener(() => setState(() {}));
+  }
+
+  /// Split a stored baseUrl into (scheme, address-without-scheme).
+  static (_Scheme, String) _decompose(String url) {
+    final u = url.trim();
+    if (u.startsWith('unix:')) {
+      return (_Scheme.unix, _stripLeadingSlashes(u.substring('unix:'.length)));
+    }
+    if (u.startsWith('pipe:')) {
+      return (_Scheme.pipe, _stripLeadingSlashes(u.substring('pipe:'.length)));
+    }
+    if (u.startsWith('https://')) {
+      return (_Scheme.https, u.substring('https://'.length));
+    }
+    if (u.startsWith('http://')) {
+      return (_Scheme.http, u.substring('http://'.length));
+    }
+    return (_Scheme.http, u);
+  }
+
+  static String _stripLeadingSlashes(String s) =>
+      s.startsWith('//') ? s.substring(2) : s;
+
+  String _composeUrl() {
+    final addr = _address.text.trim();
+    return switch (_scheme) {
+      _Scheme.http => 'http://$addr',
+      _Scheme.https => 'https://$addr',
+      _Scheme.unix => 'unix:$addr',
+      _Scheme.pipe => 'pipe:$addr',
+    };
   }
 
   @override
   void dispose() {
     _name.dispose();
-    _baseUrl.dispose();
+    _address.dispose();
     _secret.dispose();
     super.dispose();
   }
@@ -699,31 +756,54 @@ class _EditDialogState extends State<_EditDialog> {
                   (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _baseUrl,
-              decoration: const InputDecoration(
-                labelText: 'External Controller 地址',
-                hintText: 'http://127.0.0.1:9090',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                final u = Uri.tryParse(v?.trim() ?? '');
-                if (u == null || !(u.isScheme('http') || u.isScheme('https'))) {
-                  return '请输入合法的 http(s) URL';
-                }
-                return null;
-              },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 116,
+                  child: _SchemeDropdown(
+                    scheme: _scheme,
+                    schemes: _schemes,
+                    label: _schemeLabel,
+                    onChanged: (s) => setState(() => _scheme = s),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _address,
+                    decoration: InputDecoration(
+                      labelText: _isIpc ? '路径' : '地址',
+                      hintText: switch (_scheme) {
+                        _Scheme.http || _Scheme.https => '127.0.0.1:9090',
+                        _Scheme.unix => '/path/to/mihomo.sock',
+                        _Scheme.pipe => r'\\.\pipe\mihomo',
+                      },
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (v) {
+                      final addr = v?.trim() ?? '';
+                      if (addr.isEmpty) {
+                        return _isIpc ? '请输入路径' : '请输入地址';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _secret,
-              decoration: const InputDecoration(
-                labelText: '密钥 (可选)',
-                border: OutlineInputBorder(),
+            if (!_isIpc) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _secret,
+                decoration: const InputDecoration(
+                  labelText: '密钥 (可选)',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
               ),
-              obscureText: true,
-            ),
-            if (_isHttps) ...[
+            ],
+            if (_scheme == _Scheme.https) ...[
               const SizedBox(height: 4),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -748,9 +828,10 @@ class _EditDialogState extends State<_EditDialog> {
               context,
               _EditResult(
                 name: _name.text.trim(),
-                baseUrl: _baseUrl.text.trim(),
-                secret: _secret.text.trim(),
-                allowInsecure: _isHttps && _allowInsecure,
+                baseUrl: _composeUrl(),
+                // Secret is only meaningful for TCP backends.
+                secret: _isIpc ? '' : _secret.text.trim(),
+                allowInsecure: _scheme == _Scheme.https && _allowInsecure,
               ),
             );
           },
@@ -759,7 +840,41 @@ class _EditDialogState extends State<_EditDialog> {
       ],
     );
   }
+}
 
-  bool get _isHttps =>
-      Uri.tryParse(_baseUrl.text.trim())?.isScheme('https') ?? false;
+/// Compact scheme prefix selector for the backend address field. Built as a
+/// form field so it shares the exact box metrics of the address TextFormField
+/// beside it (same border, height, baseline) and stays aligned.
+class _SchemeDropdown extends StatelessWidget {
+  const _SchemeDropdown({
+    required this.scheme,
+    required this.schemes,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final _Scheme scheme;
+  final List<_Scheme> schemes;
+  final String Function(_Scheme) label;
+  final ValueChanged<_Scheme> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<_Scheme>(
+      initialValue: scheme,
+      isDense: true,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: '协议',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final s in schemes)
+          DropdownMenuItem(value: s, child: Text(label(s))),
+      ],
+      onChanged: (s) {
+        if (s != null) onChanged(s);
+      },
+    );
+  }
 }
