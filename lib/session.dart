@@ -124,6 +124,10 @@ class MihomoSession {
   /// Raw `version` field from `/version`. Empty until first poll succeeds.
   final ValueNotifier<String> versionString = ValueNotifier('');
 
+  /// Number of routing rules on the active backend. Probed once per
+  /// controller switch (the ruleset only changes on config reload).
+  final ValueNotifier<int> ruleCount = ValueNotifier(0);
+
   /// True when the active controller is a CMFA-flavored mihomo build.
   /// Driven entirely by [versionString] — its substring `cmfa` is the only
   /// signal mihomo exposes today (no boolean field on `/version`).
@@ -209,6 +213,7 @@ class MihomoSession {
     versionString.value = '';
     isCmfa.value = false;
     connectionsPaused.value = false;
+    ruleCount.value = 0;
     _iconsWarmed = false;
     if (_target == null) {
       error.value = '请先在“后端”中添加一个 mihomo 实例';
@@ -222,6 +227,7 @@ class MihomoSession {
     _startProxiesPoll();
     // Version is build-time fixed; one probe per controller switch is enough.
     unawaited(_probeVersion());
+    unawaited(_probeRuleCount());
   }
 
   void _cancelAll() {
@@ -296,6 +302,20 @@ class MihomoSession {
       isCmfa.value = version.toLowerCase().contains('cmfa');
     } catch (_) {
       // Non-critical; absent version just means CMFA features default to false.
+    }
+  }
+
+  // Rules only change on a config reload, so one probe per (re)connect is
+  // enough. Count-only so it never disturbs the rules screen's paging cache.
+  Future<void> _probeRuleCount() async {
+    final t = _target;
+    final controller = _activeKey;
+    if (t == null) return;
+    try {
+      final n = await rust.rulesCount(target: t);
+      if (identical(_activeKey, controller)) ruleCount.value = n;
+    } catch (_) {
+      // Non-critical; the badge just stays hidden at 0.
     }
   }
 
@@ -447,6 +467,7 @@ class MihomoSession {
     processIcons.dispose();
     versionString.dispose();
     isCmfa.dispose();
+    ruleCount.dispose();
     connectionsPaused.dispose();
     error.dispose();
     isStreaming.dispose();
