@@ -1,13 +1,15 @@
 //! Local-process icon + name cache. Desktop resolves via `file-icon`;
 //! Android resolves through its PackageManager (Kotlin) and persists the
 //! result here via [`store`] / [`store_name`], so the .so omits `file-icon`.
+//!
+//! Bytes and names live in the shared redb database ([`crate::cache_db`]).
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use tokio::sync::Semaphore;
 
+use crate::cache_db::{self, PROC_ICONS};
 use crate::error::MihomoError;
 
 /// Bounds concurrent resolves so a burst of new connections doesn't spawn
@@ -18,7 +20,6 @@ const MAX_CONCURRENT: usize = 5;
 const ICON_SIZE: u32 = 64;
 
 struct State {
-    dir: PathBuf,
     sem: Semaphore,
     /// Keys known to have no resolvable icon — avoids rescanning the
     /// filesystem every frame for the same misses.
@@ -30,16 +31,10 @@ struct State {
 
 static STATE: OnceLock<State> = OnceLock::new();
 
-pub fn init(cache_dir: PathBuf) -> Result<(), MihomoError> {
-    let dir = cache_dir.join("proc-icons");
-    if let Err(error) = std::fs::create_dir_all(&dir) {
-        return Err(MihomoError::Other(format!(
-            "failed to create process-icon cache dir {}: {error}",
-            dir.display()
-        )));
-    }
+/// Initialize the in-memory resolve state. The shared cache DB is opened
+/// separately via [`cache_db::init`]. Idempotent.
+pub fn init() -> Result<(), MihomoError> {
     let _ = STATE.set(State {
-        dir,
         sem: Semaphore::new(MAX_CONCURRENT),
         negative: Mutex::new(HashSet::new()),
         inflight: Mutex::new(HashSet::new()),
@@ -54,37 +49,54 @@ fn state() -> Result<&'static State, MihomoError> {
         .ok_or_else(|| MihomoError::Other("process-icon cache not initialized".into()))
 }
 
-fn path_for(state: &State, key: &str) -> PathBuf {
-    let hash = blake3::hash(key.as_bytes());
-    state.dir.join(format!("{}.png", hash.to_hex()))
+fn icon_key(key: &str) -> String {
+    blake3::hash(key.as_bytes()).to_hex().to_string()
 }
 
-fn name_path_for(state: &State, key: &str) -> PathBuf {
-    let hash = blake3::hash(key.as_bytes());
-    state.dir.join(format!("{}.name", hash.to_hex()))
+async fn db_get_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
+    tokio::task::spawn_blocking(move || cache_db::get_bytes(PROC_ICONS, &icon_key(&key)))
+        .await
+        .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
+}
+
+async fn db_put_icon(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
+    tokio::task::spawn_blocking(move || {
+        cache_db::put_bytes(PROC_ICONS, &icon_key(&key), &bytes)
+    })
+    .await
+    .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
+}
+
+async fn db_get_name(key: String) -> Result<Option<String>, MihomoError> {
+    tokio::task::spawn_blocking(move || cache_db::get_str(&icon_key(&key)))
+        .await
+        .map_err(|e| MihomoError::Other(format!("proc-name join: {e}")))?
+}
+
+async fn db_put_name(key: String, value: String) -> Result<(), MihomoError> {
+    tokio::task::spawn_blocking(move || cache_db::put_str(&icon_key(&key), &value))
+        .await
+        .map_err(|e| MihomoError::Other(format!("proc-name join: {e}")))?
 }
 
 /// Disk-only icon lookup; `None` on a miss without resolving.
 pub async fn cached(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
-    let state = state()?;
     if key.is_empty() {
         return Ok(None);
     }
-    Ok(tokio::fs::read(path_for(state, &key)).await.ok())
+    db_get_icon(key).await
 }
 
 /// Persist icon `bytes` resolved outside Rust (Android) into the shared cache.
 pub async fn store(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
-    let state = state()?;
     if key.is_empty() || bytes.is_empty() {
         return Ok(());
     }
-    let _ = write_atomic(&path_for(state, &key), &bytes).await;
-    Ok(())
+    db_put_icon(key, bytes).await
 }
 
-/// Resolve `process_path` to its application name, memoized in memory and on
-/// disk. `None` means no better name than the caller's fallback was found.
+/// Resolve `process_path` to its application name, memoized in memory and in
+/// the cache DB. `None` means no better name than the caller's fallback.
 pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
     let state = state()?;
     if process_path.is_empty() {
@@ -96,9 +108,8 @@ pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
         return Ok(cached.clone());
     }
 
-    // An existing `.name` file is authoritative, even when empty (= no name).
-    let name_path = name_path_for(state, &process_path);
-    if let Ok(text) = tokio::fs::read_to_string(&name_path).await {
+    // A stored entry is authoritative, even when empty (= resolved, no name).
+    if let Some(text) = db_get_name(process_path.clone()).await? {
         let resolved = if text.is_empty() { None } else { Some(text) };
         if let Ok(mut names) = state.names.lock() {
             names.insert(process_path, resolved.clone());
@@ -116,7 +127,7 @@ pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
         .await
         .map_err(|e| MihomoError::Other(format!("process-name join: {e}")))?;
 
-    let _ = write_atomic(&name_path, resolved.as_deref().unwrap_or("").as_bytes()).await;
+    let _ = db_put_name(process_path.clone(), resolved.clone().unwrap_or_default()).await;
     if let Ok(mut names) = state.names.lock() {
         names.insert(process_path, resolved.clone());
     }
@@ -125,27 +136,21 @@ pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
 
 /// Disk-only name lookup; `None` on a miss or a cached "no name" (Android).
 pub async fn cached_name(key: String) -> Result<Option<String>, MihomoError> {
-    let state = state()?;
     if key.is_empty() {
         return Ok(None);
     }
-    match tokio::fs::read_to_string(name_path_for(state, &key)).await {
-        Ok(text) if !text.is_empty() => Ok(Some(text)),
-        _ => Ok(None),
-    }
+    Ok(db_get_name(key).await?.filter(|s| !s.is_empty()))
 }
 
 /// Persist an app `name` resolved outside Rust (Android) into the shared cache.
 pub async fn store_name(key: String, name: String) -> Result<(), MihomoError> {
-    let state = state()?;
     if key.is_empty() {
         return Ok(());
     }
-    let _ = write_atomic(&name_path_for(state, &key), name.as_bytes()).await;
-    Ok(())
+    db_put_name(key, name).await
 }
 
-/// Resolve `process_path` to icon bytes: disk hit, then negative cache, then
+/// Resolve `process_path` to icon bytes: cache hit, then negative cache, then
 /// a deduped resolve on the blocking pool.
 pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError> {
     let state = state()?;
@@ -153,8 +158,7 @@ pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError>
         return Ok(None);
     }
 
-    let cache_path = path_for(state, &process_path);
-    if let Ok(bytes) = tokio::fs::read(&cache_path).await {
+    if let Some(bytes) = db_get_icon(process_path.clone()).await? {
         return Ok(Some(bytes));
     }
     if state
@@ -174,7 +178,7 @@ pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError>
         }
     }
 
-    let result = resolve(state, &process_path, &cache_path).await;
+    let result = resolve(state, process_path.clone()).await;
 
     if let Ok(mut inflight) = state.inflight.lock() {
         inflight.remove(&process_path);
@@ -184,8 +188,7 @@ pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError>
 
 async fn resolve(
     state: &'static State,
-    process_path: &str,
-    cache_path: &Path,
+    process_path: String,
 ) -> Result<Option<Vec<u8>>, MihomoError> {
     let _permit = state
         .sem
@@ -193,19 +196,19 @@ async fn resolve(
         .await
         .map_err(|e| MihomoError::Other(format!("process-icon semaphore closed: {e}")))?;
 
-    let path = process_path.to_string();
+    let path = process_path.clone();
     let icon = tokio::task::spawn_blocking(move || resolve_icon_bytes(&path))
         .await
         .map_err(|e| MihomoError::Other(format!("process-icon join: {e}")))?;
 
     match icon {
         Some(bytes) if !bytes.is_empty() => {
-            let _ = write_atomic(cache_path, &bytes).await;
+            let _ = db_put_icon(process_path, bytes.clone()).await;
             Ok(Some(bytes))
         }
         _ => {
             if let Ok(mut neg) = state.negative.lock() {
-                neg.insert(process_path.to_string());
+                neg.insert(process_path);
             }
             Ok(None)
         }
@@ -239,21 +242,19 @@ fn resolve_app_name(_path: &str) -> Option<String> {
     None
 }
 
-async fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    tokio::fs::write(&tmp, bytes).await?;
-    tokio::fs::rename(&tmp, path).await
-}
-
 fn poisoned<T>(_: std::sync::PoisonError<T>) -> MihomoError {
     MihomoError::Other("process-icon cache lock poisoned".into())
 }
 
-/// Forget negative-cache entries so previously-unresolved keys retry.
-pub fn clear_negative() {
-    if let Some(state) = STATE.get()
-        && let Ok(mut neg) = state.negative.lock()
-    {
-        neg.clear();
+/// Forget in-memory negative + name memo so previously-unresolved keys retry
+/// and cleared DB entries aren't masked by stale memory.
+pub fn clear_memory() {
+    if let Some(state) = STATE.get() {
+        if let Ok(mut neg) = state.negative.lock() {
+            neg.clear();
+        }
+        if let Ok(mut names) = state.names.lock() {
+            names.clear();
+        }
     }
 }

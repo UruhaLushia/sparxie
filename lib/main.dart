@@ -33,10 +33,9 @@ Future<void> main() async {
   // fall back to letter chips when unreachable.
   try {
     final dir = await getApplicationCacheDirectory();
-    await rust.initIconCache(cacheDir: dir.path);
-    await rust.initProcessIconCache(cacheDir: dir.path);
+    await rust.initCache(cacheDir: dir.path);
   } catch (e) {
-    if (kDebugMode) debugPrint('icon cache init failed: $e');
+    if (kDebugMode) debugPrint('cache init failed: $e');
   }
   final store = await ControllerStore.load();
   final prefs = await AppPrefs.load();

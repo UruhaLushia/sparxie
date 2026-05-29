@@ -119,6 +119,18 @@ class ProcessIconCache extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drop every resolved icon/name as well — used when the backing cache is
+  /// wiped, so tiles re-resolve instead of showing now-stale entries.
+  void clearAll() {
+    _icons.clear();
+    _names.clear();
+    _missing.clear();
+    _requested.clear();
+    _nameMissing.clear();
+    _nameRequested.clear();
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _icons.clear();
