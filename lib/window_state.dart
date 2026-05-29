@@ -3,20 +3,21 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'config_store.dart';
 
 /// Desktop-only persistence of the OS window's geometry. Mobile/web
 /// targets are no-ops.
 class WindowState with WindowListener {
-  WindowState._(this._prefs);
+  WindowState._(this._store);
 
-  static const _kWidth = 'window.width';
-  static const _kHeight = 'window.height';
-  static const _kX = 'window.x';
-  static const _kY = 'window.y';
-  static const _kMaximized = 'window.maximized';
-  static const _kFullScreen = 'window.fullscreen';
+  static const _kWidth = 'width';
+  static const _kHeight = 'height';
+  static const _kX = 'x';
+  static const _kY = 'y';
+  static const _kMaximized = 'maximized';
+  static const _kFullScreen = 'fullscreen';
 
   static const Size _defaultSize = Size(1100, 720);
   static const Size _minimumSize = Size(380, 600);
@@ -24,32 +25,40 @@ class WindowState with WindowListener {
 
   static const Duration _saveDebounce = Duration(milliseconds: 300);
 
-  final SharedPreferences _prefs;
+  final JsonStore _store;
   Timer? _saveTimer;
+
+  Map<String, dynamic> get _s => _store.section('window');
 
   static bool get _isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
-  static Future<WindowState?> bind() async {
+  static Future<WindowState?> bind(JsonStore store) async {
     if (!_isDesktop) return null;
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(_minimumSize);
     // setPreventClose lets us flush a pending save before the process exits.
     await windowManager.setPreventClose(true);
-    final prefs = await SharedPreferences.getInstance();
-    final state = WindowState._(prefs);
+    final state = WindowState._(store);
     await state._restore();
     windowManager.addListener(state);
     return state;
   }
 
+  double? _double(String key) {
+    final v = _s[key];
+    return v is num ? v.toDouble() : null;
+  }
+
+  bool _bool(String key) => _s[key] == true;
+
   Future<void> _restore() async {
-    final width = _prefs.getDouble(_kWidth) ?? _defaultSize.width;
-    final height = _prefs.getDouble(_kHeight) ?? _defaultSize.height;
-    final x = _prefs.getDouble(_kX);
-    final y = _prefs.getDouble(_kY);
-    final maximized = _prefs.getBool(_kMaximized) ?? false;
-    final fullscreen = _prefs.getBool(_kFullScreen) ?? false;
+    final width = _double(_kWidth) ?? _defaultSize.width;
+    final height = _double(_kHeight) ?? _defaultSize.height;
+    final x = _double(_kX);
+    final y = _double(_kY);
+    final maximized = _bool(_kMaximized);
+    final fullscreen = _bool(_kFullScreen);
 
     final size = Size(
       width.clamp(_minimumSize.width, _maxDim),
@@ -116,18 +125,18 @@ class WindowState with WindowListener {
         windowManager.getBounds(),
       ).wait;
       final maximized = !fullscreen && rawMaximized;
-      await Future.wait([
-        // Bounds under maximized/fullscreen are the screen's, not the
-        // user's floating layout — don't overwrite the saved one.
-        if (!maximized && !fullscreen) ...[
-          _prefs.setDouble(_kWidth, bounds.width),
-          _prefs.setDouble(_kHeight, bounds.height),
-          _prefs.setDouble(_kX, bounds.left),
-          _prefs.setDouble(_kY, bounds.top),
-        ],
-        _prefs.setBool(_kMaximized, maximized),
-        _prefs.setBool(_kFullScreen, fullscreen),
-      ]);
+      final s = _s;
+      // Bounds under maximized/fullscreen are the screen's, not the user's
+      // floating layout — don't overwrite the saved one.
+      if (!maximized && !fullscreen) {
+        s[_kWidth] = bounds.width;
+        s[_kHeight] = bounds.height;
+        s[_kX] = bounds.left;
+        s[_kY] = bounds.top;
+      }
+      s[_kMaximized] = maximized;
+      s[_kFullScreen] = fullscreen;
+      await _store.flush();
     } catch (e) {
       if (kDebugMode) debugPrint('window state save failed: $e');
     }

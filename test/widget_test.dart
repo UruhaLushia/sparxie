@@ -1,12 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:sparxie/config_store.dart';
 import 'package:sparxie/controller.dart';
 
 void main() {
   test('ControllerStore add/update/remove persists', () async {
-    SharedPreferences.setMockInitialValues({});
-    final store = await ControllerStore.load();
+    final store = await ControllerStore.load(JsonStore.memory());
 
     final added = await store.add(name: '机房', baseUrl: 'http://1.2.3.4:9090');
     expect(store.controllers.any((c) => c.id == added.id), isTrue);

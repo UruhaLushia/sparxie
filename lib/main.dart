@@ -4,9 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
+import 'app_paths.dart';
 import 'app_prefs.dart';
+import 'config_store.dart';
 import 'controller.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
@@ -24,21 +25,23 @@ import 'window_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // One shared config.json holds controllers, prefs and window geometry.
+  final config = await JsonStore.load();
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
-  await WindowState.bind();
+  await WindowState.bind(config);
   await RustLib.init();
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
   try {
-    final dir = await getApplicationCacheDirectory();
+    final dir = await AppPaths.cacheDir();
     await rust.initCache(cacheDir: dir.path);
   } catch (e) {
     if (kDebugMode) debugPrint('cache init failed: $e');
   }
-  final store = await ControllerStore.load();
-  final prefs = await AppPrefs.load();
+  final store = await ControllerStore.load(config);
+  final prefs = await AppPrefs.load(config);
   final session = MihomoSession(store)
     ..setConnectionsInterval(prefs.connectionsRefreshMs);
   prefs.addListener(() {
