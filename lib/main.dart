@@ -12,10 +12,12 @@ import 'controller.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
 import 'screens/connections_screen.dart';
+import 'screens/core_actions_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/logs_screen.dart';
 import 'screens/proxies_screen.dart';
 import 'screens/resources_screen.dart';
+import 'screens/rules_screen.dart';
 import 'screens/settings_screen.dart';
 import 'session.dart';
 import 'src/rust/frb_generated.dart';
@@ -196,6 +198,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       if (showOnStandardWide)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       const _Dest(icon: Icons.terminal, label: '日志'),
+      if (showOnStandardWide)
+        const _Dest(icon: Icons.build_outlined, label: '核心操作'),
+      if (showOnStandardWide) const _Dest(icon: Icons.rule, label: '分流规则'),
       if (layout == NavLayout.cards)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       const _Dest(icon: Icons.more_horiz, label: '其他'),
@@ -206,24 +211,25 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     return switch (dest.label) {
       '概览' => DashboardScreen(store: widget.store, session: widget.session),
       '代理组' => ProxiesScreen(
-          store: widget.store,
-          session: widget.session,
-          prefs: widget.prefs,
-        ),
+        store: widget.store,
+        session: widget.session,
+        prefs: widget.prefs,
+      ),
       '连接' => ConnectionsScreen(
-          store: widget.store,
-          prefs: widget.prefs,
-          session: widget.session,
-        ),
-      '内核配置' =>
-        CoreConfigScreen(store: widget.store, prefs: widget.prefs),
+        store: widget.store,
+        prefs: widget.prefs,
+        session: widget.session,
+      ),
+      '内核配置' => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       '外部资源' => ResourcesScreen(store: widget.store),
       '日志' => LogsScreen(store: widget.store, session: widget.session),
+      '核心操作' => CoreActionsScreen(store: widget.store),
+      '分流规则' => RulesScreen(store: widget.store),
       _ => SettingsScreen(
-          store: widget.store,
-          prefs: widget.prefs,
-          session: widget.session,
-        ),
+        store: widget.store,
+        prefs: widget.prefs,
+        session: widget.session,
+      ),
     };
   }
 
@@ -250,59 +256,106 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         }
       },
       child: ListenableBuilder(
-      // Rebuild on prefs (nav layout) and on isCmfa (drops 内核配置 nav).
-      listenable: Listenable.merge([widget.prefs, widget.session.isCmfa]),
-      builder: (context, _) {
-        final size = MediaQuery.sizeOf(context);
-        // `wide` picks rail-vs-bar chrome; `isShort` keys the destination
-        // set so a phone in landscape (low height) still shows the 5-item
-        // nav rather than the 7-item tablet rail.
-        final wide = size.width >= 800;
-        final isShort = size.height < 600;
-        final cards = widget.prefs.navLayout == NavLayout.cards;
-        final destinations = _destinationsFor(
-          widget.prefs.navLayout,
-          isCompact: isShort || !wide,
-          isCmfa: widget.session.isCmfa.value,
-        );
-        if (wide) {
+        // Rebuild on prefs (nav layout) and on isCmfa (drops 内核配置 nav).
+        listenable: Listenable.merge([widget.prefs, widget.session.isCmfa]),
+        builder: (context, _) {
+          final size = MediaQuery.sizeOf(context);
+          // `wide` picks rail-vs-bar chrome. In wide standard the rail gets
+          // the full destination set and trims itself by measured height
+          // (see _computeRail); only the compact bottom bar uses a reduced
+          // set, since a NavigationBar can't grow.
+          final wide = size.width >= 800;
+          final cards = widget.prefs.navLayout == NavLayout.cards;
+          final destinations = _destinationsFor(
+            widget.prefs.navLayout,
+            isCompact: !wide,
+            isCmfa: widget.session.isCmfa.value,
+          );
+          if (wide) {
+            return cards
+                ? _buildWideCards(destinations)
+                : _buildWideStandard(destinations);
+          }
           return cards
-              ? _buildWideCards(destinations)
-              : _buildWideStandard(destinations);
-        }
-        return cards
-            ? _buildCompactLauncher(context, destinations)
-            : _buildCompactStandard(destinations);
-      },
+              ? _buildCompactLauncher(context, destinations)
+              : _buildCompactStandard(destinations);
+        },
       ),
     );
   }
 
   Widget _buildWideStandard(List<_Dest> destinations) {
     return Scaffold(
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            labelType: NavigationRailLabelType.all,
-            destinations: [
-              for (final d in destinations)
-                NavigationRailDestination(
-                  icon: Icon(d.icon),
-                  label: Text(d.label),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final n = destinations.length;
+          final otherIndex = n - 1;
+          // Fixed item height (rail items never stretch). Account for the top
+          // safe-area inset so the fit count matches what actually renders.
+          final topInset = MediaQuery.paddingOf(context).top;
+          final fit =
+              ((constraints.maxHeight - topInset) / _SideRail.itemHeight)
+                  .floor()
+                  .clamp(2, n);
+          final shownLeading = fit >= n ? otherIndex : fit - 1;
+
+          final visibleReal = <int>[
+            for (var i = 0; i < shownLeading; i++) i,
+            otherIndex,
+          ];
+
+          // Destinations that didn't fit become tiles on the 其他 page; they
+          // push a full route (with its own AppBar + back button) rather than
+          // swapping the IndexedStack, so navigation is unambiguous.
+          final extras = <SettingsExtra>[
+            for (var i = shownLeading; i < otherIndex; i++)
+              SettingsExtra(
+                icon: destinations[i].icon,
+                label: destinations[i].label,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _buildPage(destinations[i]),
+                  ),
                 ),
+              ),
+          ];
+
+          // If the current page overflowed (no longer a rail item), show 其他
+          // instead — its list links to the overflowed page. Growing the
+          // window back makes _index a visible rail item again, restoring it.
+          final effectiveIndex = visibleReal.contains(_index)
+              ? _index
+              : otherIndex;
+
+          final pages = _ensureStackPages(NavLayout.standard, destinations);
+          final children = [
+            for (var i = 0; i < pages.length; i++)
+              if (i == otherIndex)
+                SettingsScreen(
+                  store: widget.store,
+                  prefs: widget.prefs,
+                  session: widget.session,
+                  extras: extras,
+                  railManagesPages: true,
+                )
+              else
+                pages[i],
+          ];
+
+          return Row(
+            children: [
+              _SideRail(
+                destinations: [for (final i in visibleReal) destinations[i]],
+                selectedIndex: visibleReal.indexOf(effectiveIndex),
+                onSelected: (pos) => setState(() => _index = visibleReal[pos]),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: IndexedStack(index: effectiveIndex, children: children),
+              ),
             ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: IndexedStack(
-              index: _index,
-              children:
-                  _ensureStackPages(NavLayout.standard, destinations),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -312,17 +365,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     // Sentinel _index < 0 means a hero-card-driven main area:
     //   -1: 内核配置  (内核设置 hero card)
     //   -2: 连接列表  (实时流量 / 连接 hero card)
+    //   -3: 分流规则  (规则 card)
     final Widget mainArea = switch (_index) {
       -1 => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       -2 => ConnectionsScreen(
-          store: widget.store,
-          prefs: widget.prefs,
-          session: widget.session,
-        ),
+        store: widget.store,
+        prefs: widget.prefs,
+        session: widget.session,
+      ),
+      -3 => RulesScreen(store: widget.store),
       _ => IndexedStack(
-          index: _index,
-          children: _ensureStackPages(NavLayout.cards, destinations),
-        ),
+        index: _index,
+        children: _ensureStackPages(NavLayout.cards, destinations),
+      ),
     };
     return Scaffold(
       body: Row(
@@ -341,6 +396,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 kernelSelected: _index == -1,
                 onConnectionsTap: () => setState(() => _index = -2),
                 connectionsSelected: _index == -2,
+                onRulesTap: () => setState(() => _index = -3),
+                rulesSelected: _index == -3,
               ),
             ),
           ),
@@ -399,6 +456,108 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             ),
           ),
           connectionsSelected: false,
+          onRulesTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => RulesScreen(store: widget.store)),
+          ),
+          rulesSelected: false,
+        ),
+      ),
+    );
+  }
+}
+
+/// Side rail for wide standard layout. Items are a fixed height and packed
+/// from the top, so spacing never changes; leftover space appears only at the
+/// bottom, and only once every fitting item is already shown. The caller sizes
+/// the visible set to [_SideRail.itemHeight].
+class _SideRail extends StatelessWidget {
+  const _SideRail({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  /// Fixed per-item height; the fit calculation in [_buildWideStandard] uses
+  /// this same value so the rail never under- or over-fills.
+  static const double itemHeight = 64;
+
+  final List<_Dest> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 84,
+      child: SafeArea(
+        right: false,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            for (var i = 0; i < destinations.length; i++)
+              SizedBox(
+                height: itemHeight,
+                child: _SideRailItem(
+                  icon: destinations[i].icon,
+                  label: destinations[i].label,
+                  selected: i == selectedIndex,
+                  onTap: () => onSelected(i),
+                  scheme: scheme,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideRailItem extends StatelessWidget {
+  const _SideRailItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.scheme,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: selected ? scheme.secondaryContainer : null,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(icon, size: 22, color: fg),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -416,6 +575,8 @@ class _NavCardGrid extends StatelessWidget {
     required this.kernelSelected,
     required this.onConnectionsTap,
     required this.connectionsSelected,
+    required this.onRulesTap,
+    required this.rulesSelected,
   });
 
   final ControllerStore store;
@@ -427,94 +588,99 @@ class _NavCardGrid extends StatelessWidget {
   final bool kernelSelected;
   final VoidCallback onConnectionsTap;
   final bool connectionsSelected;
+  final VoidCallback onRulesTap;
+  final bool rulesSelected;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 16),
-          child: Text(
-            'Sparxie',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ),
-        // CMFA builds disable mihomo's `/configs` mode endpoint, so hide the
-        // launcher control entirely while connected to one. The listener
-        // keeps it cheap — no rebuilds on traffic / proxies updates.
-        ValueListenableBuilder<bool>(
-          valueListenable: session.isCmfa,
-          builder: (context, cmfa, child) =>
-              cmfa ? const SizedBox.shrink() : child!,
-          child: Column(
-            children: [
-              OutboundModeCard(store: store),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-        ValueListenableBuilder<bool>(
-          valueListenable: session.isCmfa,
-          builder: (context, cmfa, _) => Opacity(
-            opacity: cmfa ? 0.5 : 1,
-            child: _StatusHeroCard(
-              store: store,
-              session: session,
-              selected: kernelSelected,
-              onTap: cmfa ? null : onKernelTap,
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 16),
+            child: Text(
+              'Sparxie',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _TrafficHeroCard(
-          session: session,
-          selected: connectionsSelected,
-          onTap: onConnectionsTap,
-        ),
-        const SizedBox(height: 12),
-        ...(_buildNavRows(context)),
-      ],
+          // CMFA builds disable mihomo's `/configs` mode endpoint, so hide the
+          // launcher control entirely while connected to one. The listener
+          // keeps it cheap — no rebuilds on traffic / proxies updates.
+          ValueListenableBuilder<bool>(
+            valueListenable: session.isCmfa,
+            builder: (context, cmfa, child) =>
+                cmfa ? const SizedBox.shrink() : child!,
+            child: Column(
+              children: [
+                OutboundModeCard(store: store),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: session.isCmfa,
+            builder: (context, cmfa, _) => Opacity(
+              opacity: cmfa ? 0.5 : 1,
+              child: _StatusHeroCard(
+                store: store,
+                session: session,
+                selected: kernelSelected,
+                onTap: cmfa ? null : onKernelTap,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _TrafficHeroCard(
+            session: session,
+            selected: connectionsSelected,
+            onTap: onConnectionsTap,
+          ),
+          const SizedBox(height: 12),
+          ...(_buildNavRows(context)),
+        ],
+      ),
     );
   }
 
   List<Widget> _buildNavRows(BuildContext context) {
-    final tiles = <Widget>[];
-    for (var i = 0; i < destinations.length; i += 2) {
-      if (i > 0) tiles.add(const SizedBox(height: 12));
-      final left = destinations[i];
-      final right = i + 1 < destinations.length ? destinations[i + 1] : null;
-      tiles.add(
+    final navCards = [
+      for (var i = 0; i < destinations.length; i++)
+        _NavCard(
+          icon: destinations[i].icon,
+          label: destinations[i].label,
+          selected: selectedIndex == i,
+          onTap: () => onSelected(i),
+          badge: _badgeFor(i),
+        ),
+    ];
+    final ruleCard = _RuleNavCard(
+      session: session,
+      selected: rulesSelected,
+      onTap: onRulesTap,
+    );
+    // 规则 sits as the third small card in the grid.
+    final cards = <Widget>[...navCards];
+    cards.insert(cards.length < 2 ? cards.length : 2, ruleCard);
+
+    final rows = <Widget>[];
+    for (var i = 0; i < cards.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: 12));
+      final right = i + 1 < cards.length ? cards[i + 1] : null;
+      rows.add(
         Row(
           children: [
-            Expanded(
-              child: _NavCard(
-                icon: left.icon,
-                label: left.label,
-                selected: selectedIndex == i,
-                onTap: () => onSelected(i),
-                badge: _badgeFor(i),
-              ),
-            ),
+            Expanded(child: cards[i]),
             const SizedBox(width: 12),
-            Expanded(
-              child: right == null
-                  ? const SizedBox.shrink()
-                  : _NavCard(
-                      icon: right.icon,
-                      label: right.label,
-                      selected: selectedIndex == i + 1,
-                      onTap: () => onSelected(i + 1),
-                      badge: _badgeFor(i + 1),
-                    ),
-            ),
+            Expanded(child: right ?? const SizedBox.shrink()),
           ],
         ),
       );
     }
-    return tiles;
+    return rows;
   }
 
   Widget? _badgeFor(int i) {
@@ -558,66 +724,65 @@ class _StatusHeroCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: session.isStreaming,
-                      builder: (_, live, _) => Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: live
-                              ? scheme.primary
-                              : scheme.outlineVariant,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '内核设置',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Icon(Icons.memory_outlined,
-                        size: 16, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: RepaintBoundary(
-                        child: ValueListenableBuilder<rust.MemorySample>(
-                          valueListenable: session.memory,
-                          builder: (_, sample, _) => Text(
-                            formatBytes(sample.inuse),
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: session.isStreaming,
+                        builder: (_, live, _) => Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: live
+                                ? scheme.primary
+                                : scheme.outlineVariant,
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '内核设置',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.memory_outlined,
+                        size: 16,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: RepaintBoundary(
+                          child: ValueListenableBuilder<rust.MemorySample>(
+                            valueListenable: session.memory,
+                            builder: (_, sample, _) => Text(
+                              formatBytes(sample.inuse),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -659,8 +824,11 @@ class _TrafficHeroCard extends StatelessWidget {
                       color: scheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(Icons.lan_outlined,
-                        size: 16, color: scheme.primary),
+                    child: Icon(
+                      Icons.lan_outlined,
+                      size: 16,
+                      color: scheme.primary,
+                    ),
                   ),
                   const Spacer(),
                   RepaintBoundary(
@@ -677,8 +845,11 @@ class _TrafficHeroCard extends StatelessWidget {
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(width: 4),
-                              Icon(Icons.arrow_upward,
-                                  size: 14, color: scheme.onSurfaceVariant),
+                              Icon(
+                                Icons.arrow_upward,
+                                size: 14,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 2),
@@ -690,8 +861,11 @@ class _TrafficHeroCard extends StatelessWidget {
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(width: 4),
-                              Icon(Icons.arrow_downward,
-                                  size: 14, color: scheme.onSurfaceVariant),
+                              Icon(
+                                Icons.arrow_downward,
+                                size: 14,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ],
                           ),
                         ],
@@ -706,8 +880,8 @@ class _TrafficHeroCard extends StatelessWidget {
                   Text(
                     '连接',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   _ConnectionCountBadge(session: session),
                 ],
@@ -715,6 +889,34 @@ class _TrafficHeroCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Small grid card for 规则：same shape as [_NavCard] but with a live
+// rule-count badge instead of a static one.
+class _RuleNavCard extends StatelessWidget {
+  const _RuleNavCard({
+    required this.session,
+    required this.selected,
+    required this.onTap,
+  });
+  final MihomoSession session;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _NavCard(
+      icon: Icons.alt_route,
+      label: '规则',
+      selected: selected,
+      onTap: onTap,
+      badge: ValueListenableBuilder<int>(
+        valueListenable: session.ruleCount,
+        builder: (_, count, _) =>
+            count == 0 ? const SizedBox.shrink() : _BadgePill(text: '$count'),
       ),
     );
   }
@@ -769,9 +971,9 @@ class _BadgePill extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
-            ),
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+        ),
       ),
     );
   }
@@ -840,9 +1042,7 @@ class _NavCard extends StatelessWidget {
         color: cardColor,
         elevation: selected ? 0 : 1,
         shadowColor: Colors.black.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -870,9 +1070,9 @@ class _NavCard extends StatelessWidget {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: labelFg,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: labelFg,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),

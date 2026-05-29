@@ -1,0 +1,428 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
+import '../controller.dart' as ctl;
+import '../error_format.dart';
+import '../rust_api.dart' as rust;
+
+/// Read-only view of the active backend's routing rules.
+///
+/// Rulesets run to thousands of entries, so the full list stays in Rust:
+/// [rust.rulesLoad] fetches and caches it, [rust.rulesSetFilter] re-filters
+/// in place, and this screen only ever holds a sliding window of rows pulled
+/// via [rust.rulesWindow] as the user scrolls.
+class RulesScreen extends StatefulWidget {
+  const RulesScreen({super.key, required this.store});
+
+  final ctl.ControllerStore store;
+
+  @override
+  State<RulesScreen> createState() => _RulesScreenState();
+}
+
+class _RulesScreenState extends State<RulesScreen> {
+  // Visible viewport is ~12 rows; keep ~120 around it so short scrolls don't
+  // hit the backend.
+  static const int _windowSize = 120;
+  static const int _edgeMargin = 30;
+  static const double _rowHeight = 86;
+  static const Duration _filterDebounce = Duration(milliseconds: 200);
+
+  final ScrollController _scrollController = ScrollController();
+
+  ctl.Controller? _activeKey;
+  bool _loading = false;
+  String? _error;
+  String _filter = '';
+  Timer? _filterTimer;
+
+  int _total = 0;
+  int _filtered = 0;
+
+  int _offset = 0;
+  final List<rust.RuleEntry> _window = <rust.RuleEntry>[];
+  bool _scheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_onStore);
+    _scrollController.addListener(_onScroll);
+    _bind();
+  }
+
+  @override
+  void dispose() {
+    _filterTimer?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    widget.store.removeListener(_onStore);
+    super.dispose();
+  }
+
+  void _onStore() {
+    if (!identical(widget.store.active, _activeKey)) _bind();
+  }
+
+  rust.MihomoTarget? _target() {
+    final c = widget.store.active;
+    if (c == null) return null;
+    return rust.MihomoTarget(
+      baseUrl: c.baseUrl,
+      secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
+    );
+  }
+
+  void _bind() {
+    _activeKey = widget.store.active;
+    _resetWindow();
+    if (_activeKey == null) {
+      setState(() => _error = '请先在“后端”中添加一个 mihomo 实例');
+      return;
+    }
+    _load();
+  }
+
+  void _resetWindow() {
+    _offset = 0;
+    _window.clear();
+    _total = 0;
+    _filtered = 0;
+  }
+
+  /// (Re)fetch the full ruleset into the backend cache, then load the head
+  /// window. Used on bind, controller switch, and manual refresh.
+  Future<void> _load() async {
+    final target = _target();
+    if (target == null) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final summary = await rust.rulesLoad(target: target, filter: _filter);
+      if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      _total = summary.total;
+      _filtered = summary.filtered;
+      _offset = 0;
+      await _fetchWindow(0);
+    } catch (e) {
+      if (mounted) setState(() => _error = formatError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _onFilterChanged(String value) {
+    _filter = value.trim();
+    _filterTimer?.cancel();
+    _filterTimer = Timer(_filterDebounce, _applyFilter);
+  }
+
+  Future<void> _applyFilter() async {
+    final target = _target();
+    if (target == null) return;
+    try {
+      final summary = await rust.rulesSetFilter(
+        target: target,
+        filter: _filter,
+      );
+      if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      _total = summary.total;
+      _filtered = summary.filtered;
+      _offset = 0;
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      await _fetchWindow(0);
+    } catch (_) {
+      // Filter failures are non-fatal; the list just stays as-is.
+    }
+  }
+
+  void _onScroll() {
+    if (_scheduled) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      _ensureWindow();
+    });
+  }
+
+  void _ensureWindow() {
+    if (!_scrollController.hasClients || _filtered == 0) return;
+    final pos = _scrollController.position;
+    final centerPx = pos.pixels + pos.viewportDimension / 2;
+    final centerIndex = (centerPx / _rowHeight).floor().clamp(0, 1 << 30);
+    final localCenter = centerIndex - _offset;
+    final near =
+        localCenter < _edgeMargin || localCenter > _windowSize - _edgeMargin;
+    if (!near) return;
+    final desired = (centerIndex - _windowSize ~/ 2).clamp(
+      0,
+      (_filtered - _windowSize).clamp(0, _filtered),
+    );
+    if (desired == _offset) return;
+    _offset = desired;
+    _fetchWindow(desired);
+  }
+
+  Future<void> _fetchWindow(int offset) async {
+    final target = _target();
+    if (target == null) return;
+    try {
+      final rows = await rust.rulesWindow(
+        target: target,
+        offset: offset,
+        limit: _windowSize,
+      );
+      if (!mounted ||
+          !identical(widget.store.active, _activeKey) ||
+          offset != _offset) {
+        return;
+      }
+      setState(() {
+        _window
+          ..clear()
+          ..addAll(rows);
+      });
+    } catch (_) {
+      // Silent — a later scroll or frame retriggers.
+    }
+  }
+
+  rust.RuleEntry? _ruleAt(int index) {
+    final local = index - _offset;
+    if (local < 0 || local >= _window.length) return null;
+    return _window[local];
+  }
+
+  Future<void> _toggle(rust.RuleEntry rule, bool enabled) async {
+    final target = _target();
+    if (target == null) return;
+    // Optimistic: swap the cached entry's disabled flag locally. The backend
+    // patches its own cache on success, so the next window fetch agrees.
+    final local = _window.indexOf(rule);
+    if (local >= 0) {
+      setState(() => _window[local] = _withDisabled(rule, !enabled));
+    }
+    try {
+      await rust.rulesDisable(
+        target: target,
+        indicesJson: jsonEncode({'${rule.index}': !enabled}),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (local >= 0 && local < _window.length) {
+        setState(() => _window[local] = _withDisabled(rule, enabled));
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('切换失败:${formatError(e)}')));
+    }
+  }
+
+  static rust.RuleEntry _withDisabled(rust.RuleEntry r, bool disabled) =>
+      rust.RuleEntry(
+        index: r.index,
+        ruleType: r.ruleType,
+        payload: r.payload,
+        proxy: r.proxy,
+        disabled: disabled,
+        hitCount: r.hitCount,
+        missCount: r.missCount,
+        hasExtra: r.hasExtra,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('分流规则'),
+        actions: [
+          IconButton(
+            tooltip: '刷新',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: '筛选 规则 / 类型 / 出站',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  suffixText: '$_filtered/$_total',
+                ),
+                onChanged: _onFilterChanged,
+              ),
+            ),
+            if (_error != null)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: scheme.onErrorContainer),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: scheme.onErrorContainer),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: _loading && _window.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filtered == 0
+                  ? Center(
+                      child: Text(
+                        _total == 0 ? '暂无规则' : '没有匹配的规则',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                        itemExtent: _rowHeight,
+                        itemCount: _filtered,
+                        itemBuilder: (_, index) {
+                          final rule = _ruleAt(index);
+                          if (rule == null) return const _RulePlaceholder();
+                          return _RuleTile(
+                            rule: rule,
+                            onToggle: (v) => _toggle(rule, v),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RulePlaceholder extends StatelessWidget {
+  const _RulePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+}
+
+class _RuleTile extends StatelessWidget {
+  const _RuleTile({required this.rule, required this.onToggle});
+
+  final rust.RuleEntry rule;
+  final ValueChanged<bool> onToggle;
+
+  double? get _hitRate {
+    final total = rule.hitCount + rule.missCount;
+    return total > BigInt.zero
+        ? rule.hitCount / total * 100
+        : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rate = _hitRate;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rule.payload.isEmpty ? 'Match' : rule.payload,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (rule.hasExtra)
+                    Switch(
+                      value: !rule.disabled,
+                      onChanged: onToggle,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${rule.ruleType}  ·  ${rule.proxy}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (rate != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${rate.toStringAsFixed(1)}%',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

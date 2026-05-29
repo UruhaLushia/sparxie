@@ -12,20 +12,34 @@ import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
 import 'resources_screen.dart';
+import 'rules_screen.dart';
 
 /// "其他" — aggregator page that lists every settings/config destination
 /// as a tile. Each tile pushes a dedicated screen.
+///
+/// [extras] are navigation destinations that overflowed the standard-layout
+/// rail (too short a window to show them all). They're merged into the tile
+/// list alongside the settings tiles so every page stays reachable.
+///
+/// [railManagesPages] is true in wide standard layout, where 内核配置 /
+/// 外部资源 / 核心操作 / 分流规则 are rail destinations (or [extras] when they
+/// overflow) — so their static tiles are suppressed here to avoid a second
+/// path to the same page. 后端设置 / 应用设置 always live here.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
     required this.store,
     required this.prefs,
     required this.session,
+    this.extras = const <SettingsExtra>[],
+    this.railManagesPages = false,
   });
 
   final ctl.ControllerStore store;
   final AppPrefs prefs;
   final MihomoSession session;
+  final List<SettingsExtra> extras;
+  final bool railManagesPages;
 
   @override
   Widget build(BuildContext context) {
@@ -34,10 +48,70 @@ class SettingsScreen extends StatelessWidget {
       // and on isCmfa (CMFA hides 内核配置).
       listenable: Listenable.merge([prefs, session.isCmfa]),
       builder: (context, _) {
-        // Cards layout already exposes 内核配置 and 外部资源 as launcher
-        // hero cards, so hide them here to avoid two paths to the same page.
-        final showResources = prefs.navLayout != NavLayout.cards;
-        final showCore = showResources && !session.isCmfa.value;
+        final isCards = prefs.navLayout == NavLayout.cards;
+        // 分流规则 has a dedicated 规则 card in cards layout; in wide standard
+        // it's a rail item. Only the compact bottom bar shows its tile here.
+        final showRules = !isCards && !railManagesPages;
+        // 核心操作 is a rail item in wide standard; shown here otherwise.
+        final showCoreActions = !railManagesPages;
+        // 内核配置 / 外部资源 are hero cards in cards layout and rail items in
+        // wide standard; only the compact bottom bar (neither) needs the
+        // static tiles below.
+        final showCoreResources = !isCards && !railManagesPages;
+        final showCore = showCoreResources && !session.isCmfa.value;
+        final showResources = showCoreResources;
+
+        // Overflow rail items lead the list, then the settings tiles — one
+        // flat section, no separate 导航 grouping.
+        final tiles = <Widget>[
+          for (final e in extras)
+            _Tile(icon: e.icon, title: e.label, onTap: e.onTap),
+          _Tile(
+            icon: Icons.dns_outlined,
+            title: '后端设置',
+            subtitle: '管理 mihomo 后端实例',
+            onTap: () => _push(context, BackendSettingsScreen(store: store)),
+          ),
+          _Tile(
+            icon: Icons.app_settings_alt_outlined,
+            title: '应用设置',
+            subtitle: '导航布局等',
+            onTap: () => _push(
+              context,
+              AppSettingsScreen(prefs: prefs, session: session),
+            ),
+          ),
+          if (showCore)
+            _Tile(
+              icon: Icons.memory_outlined,
+              title: '内核配置',
+              subtitle: '出站模式、日志级别、端口等',
+              onTap: () =>
+                  _push(context, CoreConfigScreen(store: store, prefs: prefs)),
+            ),
+          if (showCoreActions)
+            _Tile(
+              icon: Icons.build_outlined,
+              title: '核心操作',
+              subtitle: '重载 / 重启 / 升级、清空缓存',
+              onTap: () => _push(context, CoreActionsScreen(store: store)),
+            ),
+          if (showRules)
+            _Tile(
+              icon: Icons.rule,
+              title: '分流规则',
+              subtitle: '查看与筛选当前规则',
+              onTap: () => _push(context, RulesScreen(store: store)),
+            ),
+          if (showResources)
+            _Tile(
+              icon: Icons.cloud_outlined,
+              title: '外部资源',
+              subtitle: '代理订阅 / 规则集',
+              onTap: () => _push(context, ResourcesScreen(store: store)),
+            ),
+        ];
+
         return Scaffold(
           appBar: AppBar(title: const Text('其他')),
           body: SafeArea(
@@ -51,61 +125,9 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icons.tune,
                     child: Column(
                       children: [
-                        _Tile(
-                          icon: Icons.dns_outlined,
-                          title: '后端设置',
-                          subtitle: '管理 mihomo 后端实例',
-                          onTap: () => _push(
-                            context,
-                            BackendSettingsScreen(store: store),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _Tile(
-                          icon: Icons.app_settings_alt_outlined,
-                          title: '应用设置',
-                          subtitle: '导航布局等',
-                          onTap: () => _push(
-                            context,
-                            AppSettingsScreen(prefs: prefs, session: session),
-                          ),
-                        ),
-                        if (showCore) ...[
-                          const Divider(height: 1),
-                          _Tile(
-                            icon: Icons.memory_outlined,
-                            title: '内核配置',
-                            subtitle: '出站模式、日志级别、端口等',
-                            onTap: () => _push(
-                              context,
-                              CoreConfigScreen(
-                                store: store,
-                                prefs: prefs,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Divider(height: 1),
-                        _Tile(
-                          icon: Icons.build_outlined,
-                          title: '核心操作',
-                          subtitle: '重载 / 重启 / 升级、清空缓存',
-                          onTap: () => _push(
-                            context,
-                            CoreActionsScreen(store: store),
-                          ),
-                        ),
-                        if (showResources) ...[
-                          const Divider(height: 1),
-                          _Tile(
-                            icon: Icons.cloud_outlined,
-                            title: '外部资源',
-                            subtitle: '代理订阅 / 规则集',
-                            onTap: () => _push(
-                              context,
-                              ResourcesScreen(store: store),
-                            ),
-                          ),
+                        for (var i = 0; i < tiles.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          tiles[i],
                         ],
                       ],
                     ),
@@ -128,12 +150,12 @@ class _Tile extends StatelessWidget {
   const _Tile({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.onTap,
   });
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -142,11 +164,24 @@ class _Tile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon),
       title: Text(title),
-      subtitle: Text(subtitle),
+      subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
+}
+
+/// A navigation destination that overflowed the standard-layout rail and is
+/// surfaced in the "其他" page's 导航 section instead.
+class SettingsExtra {
+  const SettingsExtra({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 }
 
 class BackendSettingsScreen extends StatelessWidget {
@@ -173,7 +208,11 @@ class BackendSettingsScreen extends StatelessWidget {
 }
 
 class AppSettingsScreen extends StatelessWidget {
-  const AppSettingsScreen({super.key, required this.prefs, required this.session});
+  const AppSettingsScreen({
+    super.key,
+    required this.prefs,
+    required this.session,
+  });
   final AppPrefs prefs;
   final MihomoSession session;
 
@@ -197,7 +236,11 @@ class AppSettingsScreen extends StatelessWidget {
 }
 
 class AppSettingsPanel extends StatelessWidget {
-  const AppSettingsPanel({super.key, required this.prefs, required this.session});
+  const AppSettingsPanel({
+    super.key,
+    required this.prefs,
+    required this.session,
+  });
   final AppPrefs prefs;
   final MihomoSession session;
 
@@ -212,10 +255,7 @@ class AppSettingsPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '导航布局',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              Text('导航布局', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<NavLayout>(
                 showSelectedIcon: false,
@@ -315,11 +355,14 @@ class _FontPickerState extends State<_FontPicker> {
   @override
   void initState() {
     super.initState();
-    rust.systemFontFamilies().then((list) {
-      if (mounted) setState(() => _families = list);
-    }).catchError((_) {
-      if (mounted) setState(() => _families = const []);
-    });
+    rust
+        .systemFontFamilies()
+        .then((list) {
+          if (mounted) setState(() => _families = list);
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _families = const []);
+        });
   }
 
   @override
@@ -330,7 +373,9 @@ class _FontPickerState extends State<_FontPicker> {
         : (_filter.isEmpty
               ? all
               : all
-                    .where((f) => f.toLowerCase().contains(_filter.toLowerCase()))
+                    .where(
+                      (f) => f.toLowerCase().contains(_filter.toLowerCase()),
+                    )
                     .toList());
     return SafeArea(
       child: SizedBox(
