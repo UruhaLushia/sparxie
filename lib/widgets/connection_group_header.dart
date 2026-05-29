@@ -154,12 +154,15 @@ class _StatsLine extends StatelessWidget {
     ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
     return Row(
       children: [
-        ValueListenableBuilder<RowBytes>(
-          valueListenable: summary.bytes,
-          builder: (_, b, _) => Text(
-            '↑${formatBytes(b.upload)} ↓${formatBytes(b.download)}',
-            style: style,
-            overflow: TextOverflow.ellipsis,
+        Flexible(
+          child: ValueListenableBuilder<RowBytes>(
+            valueListenable: summary.bytes,
+            builder: (_, b, _) => Text(
+              '↑${formatBytes(b.upload)} ↓${formatBytes(b.download)}',
+              style: style,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         ValueListenableBuilder<RowSpeeds>(
@@ -168,12 +171,15 @@ class _StatsLine extends StatelessWidget {
             if (s.upload == BigInt.zero && s.download == BigInt.zero) {
               return const SizedBox.shrink();
             }
-            return Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                '↑${formatBytes(s.upload)}/s ↓${formatBytes(s.download)}/s',
-                style: style?.copyWith(color: scheme.primary),
-                overflow: TextOverflow.ellipsis,
+            return Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  '↑${formatBytes(s.upload)}/s ↓${formatBytes(s.download)}/s',
+                  style: style?.copyWith(color: scheme.primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             );
           },

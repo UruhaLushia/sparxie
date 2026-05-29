@@ -21,6 +21,7 @@ class ConnectionTile extends StatelessWidget {
     this.showIcon = false,
     this.showAppName = false,
     this.hideProcess = false,
+    this.compact = false,
   });
 
   final ConnectionRow row;
@@ -35,6 +36,9 @@ class ConnectionTile extends StatelessWidget {
   /// Drop the leading `process →` from the title — used for group members,
   /// where the process already labels the group header.
   final bool hideProcess;
+
+  /// Tighter vertical padding for dense lists (e.g. group members).
+  final bool compact;
 
   // Android keys by package name (mihomo's `process`), desktop by exec path.
   String _iconKey() {
@@ -81,9 +85,12 @@ class ConnectionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: wantIcon
-              ? const EdgeInsets.fromLTRB(10, 8, 8, 8)
-              : const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          padding: EdgeInsets.fromLTRB(
+            wantIcon ? 10 : 14,
+            compact ? 6 : 8,
+            8,
+            compact ? 6 : 8,
+          ),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(14),
