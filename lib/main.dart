@@ -50,6 +50,17 @@ Future<void> main() async {
   runApp(MihomoControllerApp(store: store, prefs: prefs, session: session));
 }
 
+String? _resolveFontFamily(String userPick) {
+  if (userPick.isNotEmpty) return userPick;
+  if (kIsWeb) return null;
+  return Platform.isWindows ? 'Microsoft YaHei UI' : null;
+}
+
+List<String>? _resolveFontFallback() {
+  if (kIsWeb) return null;
+  return Platform.isWindows ? const ['Microsoft YaHei', 'Segoe UI'] : null;
+}
+
 class MihomoControllerApp extends StatelessWidget {
   const MihomoControllerApp({
     super.key,
@@ -64,24 +75,35 @@ class MihomoControllerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Sparxie',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2563eb),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff60a5fa),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: HomeShell(store: store, prefs: prefs, session: session),
+    return ListenableBuilder(
+      listenable: prefs,
+      builder: (context, _) {
+        final fontFamily = _resolveFontFamily(prefs.uiFontFamily);
+        final fontFallback = _resolveFontFallback();
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Sparxie',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xff2563eb),
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFallback,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xff60a5fa),
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            fontFamily: fontFamily,
+            fontFamilyFallback: fontFallback,
+          ),
+          home: HomeShell(store: store, prefs: prefs, session: session),
+        );
+      },
     );
   }
 }

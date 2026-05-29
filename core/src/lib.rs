@@ -4,6 +4,7 @@ mod cache_db;
 mod client;
 mod connections_state;
 mod error;
+mod fonts;
 mod icons;
 mod logs_state;
 mod process_icons;

@@ -33,6 +33,8 @@ url = "2.5"
 
 # Native icon resolver — only desktop resolves icons in Rust. Android uses
 # its PackageManager via a platform channel, so the dependency (and its
-# windows/objc deps) is excluded there to keep the .so small.
+# windows/objc deps) is excluded there to keep the .so small. fontdb (pure
+# Rust) enumerates installed UI fonts for the desktop font picker.
 [target.'cfg(not(target_os = "android"))'.dependencies]
 file-icon = { git = "https://github.com/UruhaLushia/file-icon-rs", rev = "1a70444f17e47e0e7755f67a5e91a4c0664c78fe" }
+fontdb = "0.23"
