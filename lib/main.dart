@@ -64,7 +64,7 @@ class MihomoControllerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mihomo Controller',
+      title: 'Sparxie',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xff2563eb),
@@ -412,7 +412,7 @@ class _NavCardGrid extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 16),
           child: Text(
-            'Mihomo',
+            'Sparxie',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
