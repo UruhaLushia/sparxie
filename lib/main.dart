@@ -34,6 +34,7 @@ Future<void> main() async {
   try {
     final dir = await getApplicationCacheDirectory();
     await rust.initIconCache(cacheDir: dir.path);
+    await rust.initProcessIconCache(cacheDir: dir.path);
   } catch (e) {
     if (kDebugMode) debugPrint('icon cache init failed: $e');
   }

@@ -66,6 +66,8 @@ class AppPrefs extends ChangeNotifier {
     this._closeMode,
     this._connectionsSort,
     this._connectionsSortAsc,
+    this._showProcessIcon,
+    this._showAppName,
   );
 
   static const _kConnectionsRefreshMs = 'prefs.connectionsRefreshMs';
@@ -79,6 +81,8 @@ class AppPrefs extends ChangeNotifier {
   static const _kCloseMode = 'prefs.closeMode';
   static const _kConnectionsSort = 'prefs.connectionsSort';
   static const _kConnectionsSortAsc = 'prefs.connectionsSortAsc';
+  static const _kShowProcessIcon = 'prefs.connectionsShowProcessIcon';
+  static const _kShowAppName = 'prefs.connectionsShowAppName';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -95,6 +99,8 @@ class AppPrefs extends ChangeNotifier {
   static const defaultConnectionsSort = ConnectionsSort.time;
   // Newest connections first when sorting by time.
   static const defaultConnectionsSortAsc = false;
+  static const defaultShowProcessIcon = true;
+  static const defaultShowAppName = false;
 
   final SharedPreferences _prefs;
   int _connectionsRefreshMs;
@@ -108,6 +114,8 @@ class AppPrefs extends ChangeNotifier {
   CloseMode _closeMode;
   ConnectionsSort _connectionsSort;
   bool _connectionsSortAsc;
+  bool _showProcessIcon;
+  bool _showAppName;
 
   static Future<AppPrefs> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -124,6 +132,8 @@ class AppPrefs extends ChangeNotifier {
       _decodeCloseMode(prefs.getString(_kCloseMode)),
       _decodeConnectionsSort(prefs.getString(_kConnectionsSort)),
       prefs.getBool(_kConnectionsSortAsc) ?? defaultConnectionsSortAsc,
+      prefs.getBool(_kShowProcessIcon) ?? defaultShowProcessIcon,
+      prefs.getBool(_kShowAppName) ?? defaultShowAppName,
     );
   }
 
@@ -233,6 +243,26 @@ class AppPrefs extends ChangeNotifier {
     if (value == _connectionsSortAsc) return;
     _connectionsSortAsc = value;
     await _prefs.setBool(_kConnectionsSortAsc, value);
+    notifyListeners();
+  }
+
+  /// Show each connection's owning-process icon (local backend only).
+  bool get connectionsShowProcessIcon => _showProcessIcon;
+
+  Future<void> setConnectionsShowProcessIcon(bool value) async {
+    if (value == _showProcessIcon) return;
+    _showProcessIcon = value;
+    await _prefs.setBool(_kShowProcessIcon, value);
+    notifyListeners();
+  }
+
+  /// Show the resolved application name in place of the raw process name.
+  bool get connectionsShowAppName => _showAppName;
+
+  Future<void> setConnectionsShowAppName(bool value) async {
+    if (value == _showAppName) return;
+    _showAppName = value;
+    await _prefs.setBool(_kShowAppName, value);
     notifyListeners();
   }
 

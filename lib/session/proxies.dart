@@ -18,6 +18,19 @@ class ProxiesNotifier extends ChangeNotifier {
 
   ProxyNode? nodeByName(String name) => _nodesById[name];
 
+  /// Every distinct non-empty icon URL across groups and nodes — used to
+  /// warm the icon cache as soon as the proxy list lands.
+  Set<String> iconUrls() {
+    final urls = <String>{};
+    for (final n in _nodesById.values) {
+      if (n.icon.isNotEmpty) urls.add(n.icon);
+    }
+    for (final g in _groupsById.values) {
+      if (g.icon.isNotEmpty) urls.add(g.icon);
+    }
+    return urls;
+  }
+
   void reset() {
     if (_groupsById.isEmpty && _nodesById.isEmpty) return;
     for (final g in _groupsById.values) {
