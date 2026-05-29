@@ -1,8 +1,12 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../session.dart';
 import '../utils.dart';
 import 'connection_tag.dart';
+import 'process_icon.dart';
 
 /// Connection list row:
 ///   line 1: `process → host`        time      close
@@ -13,14 +17,32 @@ class ConnectionTile extends StatelessWidget {
     required this.row,
     required this.onTap,
     required this.onClose,
+    this.processIcons,
+    this.showIcon = false,
+    this.showAppName = false,
   });
 
   final ConnectionRow row;
   final VoidCallback onTap;
   final VoidCallback onClose;
 
-  String get _title {
-    final p = row.process.replaceAll(RegExp(r'\.exe$'), '');
+  /// Non-null only on a local backend.
+  final ProcessIconCache? processIcons;
+  final bool showIcon;
+  final bool showAppName;
+
+  // Android keys by package name (mihomo's `process`), desktop by exec path.
+  String _iconKey() {
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    return isAndroid ? row.process : row.processPath;
+  }
+
+  String _rawProcessName() => row.process.replaceAll(RegExp(r'\.exe$'), '');
+
+  String _titleFor(String? appName) {
+    final p = (appName != null && appName.isNotEmpty)
+        ? appName
+        : _rawProcessName();
     final left = p.isNotEmpty ? p : row.sourceIp;
     return left.isEmpty ? row.host : '$left → ${row.host}';
   }
@@ -37,6 +59,11 @@ class ConnectionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final timeText = row.start == null ? '' : _ago(row.start!);
+    final cache = processIcons;
+    final iconKey = _iconKey();
+    final wantIcon = showIcon && cache != null;
+    final wantName = showAppName && cache != null && iconKey.isNotEmpty;
+    if (wantName) cache.requestName(iconKey);
 
     // Tile chrome rebuilds only on identity change. Bytes line repaints
     // independently when this row's counters tick.
@@ -45,7 +72,9 @@ class ConnectionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          padding: wantIcon
+              ? const EdgeInsets.fromLTRB(10, 8, 8, 8)
+              : const EdgeInsets.fromLTRB(14, 8, 8, 8),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(14),
@@ -53,87 +82,117 @@ class ConnectionTile extends StatelessWidget {
               color: scheme.outlineVariant.withValues(alpha: 0.5),
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (timeText.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      timeText,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                  IconButton(
-                    tooltip: '关闭',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+              if (wantIcon) ...[
+                ProcessIcon(
+                  cache: cache,
+                  process: row.process,
+                  processPath: row.processPath,
+                  size: 38,
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (row.protocolLabel.isNotEmpty) ...[
-                      ConnectionTag(
-                        label: row.protocolLabel,
-                        variant: ConnectionTagVariant.dot,
-                        color: scheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    if (row.activeProxy.isNotEmpty) ...[
-                      ConnectionTag(
-                        label: row.activeProxy,
-                        variant: ConnectionTagVariant.bordered,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    // Only this chip rebuilds each tick; the static chips
-                    // above stay stable to avoid wasted work on long lists.
-                    ValueListenableBuilder<RowBytes>(
-                      valueListenable: row.bytes,
-                      builder: (_, bytes, _) => ConnectionTag(
-                        label:
-                            '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
-                        variant: ConnectionTagVariant.bordered,
-                      ),
-                    ),
-                    ValueListenableBuilder<RowSpeeds>(
-                      valueListenable: row.speeds,
-                      builder: (_, speeds, _) {
-                        if (speeds.upload == BigInt.zero &&
-                            speeds.download == BigInt.zero) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: ConnectionTag(
-                            label:
-                                '↑ ${formatBytes(speeds.upload)}/s  ↓ ${formatBytes(speeds.download)}/s',
-                            variant: ConnectionTagVariant.bordered,
-                            color: scheme.primary,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: wantName
+                              ? ListenableBuilder(
+                                  listenable: cache,
+                                  builder: (context, _) => Text(
+                                    _titleFor(cache.nameFor(iconKey)),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )
+                              : Text(
+                                  _titleFor(null),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                        ),
+                        if (timeText.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            timeText,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
-                        );
-                      },
+                        ],
+                        IconButton(
+                          tooltip: '关闭',
+                          onPressed: onClose,
+                          icon: const Icon(Icons.close, size: 20),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (row.protocolLabel.isNotEmpty) ...[
+                            ConnectionTag(
+                              label: row.protocolLabel,
+                              variant: ConnectionTagVariant.dot,
+                              color: scheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          if (row.activeProxy.isNotEmpty) ...[
+                            ConnectionTag(
+                              label: row.activeProxy,
+                              variant: ConnectionTagVariant.bordered,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          // Only this chip rebuilds each tick; the static chips
+                          // above stay stable to avoid wasted work on long lists.
+                          ValueListenableBuilder<RowBytes>(
+                            valueListenable: row.bytes,
+                            builder: (_, bytes, _) => ConnectionTag(
+                              label:
+                                  '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
+                              variant: ConnectionTagVariant.bordered,
+                            ),
+                          ),
+                          ValueListenableBuilder<RowSpeeds>(
+                            valueListenable: row.speeds,
+                            builder: (_, speeds, _) {
+                              if (speeds.upload == BigInt.zero &&
+                                  speeds.download == BigInt.zero) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: ConnectionTag(
+                                  label:
+                                      '↑ ${formatBytes(speeds.upload)}/s  ↓ ${formatBytes(speeds.download)}/s',
+                                  variant: ConnectionTagVariant.bordered,
+                                  color: scheme.primary,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

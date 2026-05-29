@@ -93,9 +93,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       await rust.closeConnection(target: target, id: id);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('关闭失败:${formatError(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
       }
     }
   }
@@ -125,9 +125,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       await rust.closeAllConnections(target: target);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('关闭失败:${formatError(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
       }
     }
   }
@@ -145,9 +145,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('清空失败:${formatError(e)}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('清空失败:${formatError(e)}')));
       }
     }
   }
@@ -157,10 +157,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => ConnectionDetailSheet(
-        row: row,
-        onClose: () => _close(row.id),
-      ),
+      builder: (_) =>
+          ConnectionDetailSheet(row: row, onClose: () => _close(row.id)),
     );
   }
 
@@ -196,8 +194,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 builder: (_, totals, _) => Text(
                   '↑${formatBytes(totals.upload)}/↓${formatBytes(totals.download)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -211,8 +209,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
             builder: (_, paused, _) => IconButton(
               tooltip: paused ? '继续' : '暂停',
               visualDensity: VisualDensity.compact,
-              onPressed: () =>
-                  widget.session.connectionsPaused.value = !paused,
+              onPressed: () => widget.session.connectionsPaused.value = !paused,
               icon: Icon(paused ? Icons.play_arrow : Icons.pause),
             ),
           ),
@@ -236,8 +233,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               return IconButton(
                 tooltip: '关闭所有',
                 visualDensity: VisualDensity.compact,
-                onPressed:
-                    totals.count == 0 ? null : () => _closeAll(totals.count),
+                onPressed: totals.count == 0
+                    ? null
+                    : () => _closeAll(totals.count),
                 icon: const Icon(Icons.delete_sweep_outlined),
               );
             },
@@ -299,8 +297,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                     );
                     final sortField = ListenableBuilder(
                       listenable: widget.prefs,
-                      builder: (context, _) =>
-                          PopupMenuButton<ConnectionsSort>(
+                      builder: (context, _) => PopupMenuButton<ConnectionsSort>(
                         tooltip: '排序字段',
                         position: PopupMenuPosition.under,
                         initialValue: widget.prefs.connectionsSort,
@@ -315,8 +312,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                         ],
                         child: Container(
                           height: 36,
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(10),
@@ -325,8 +321,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                             children: [
                               Text(
                                 _sortLabel(widget.prefs.connectionsSort),
-                                style:
-                                    Theme.of(context).textTheme.bodySmall,
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
                               const SizedBox(width: 4),
                               const Icon(Icons.expand_more, size: 18),
@@ -338,15 +333,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                     final direction = ListenableBuilder(
                       listenable: widget.prefs,
                       builder: (context, _) => IconButton(
-                        tooltip: widget.prefs.connectionsSortAsc
-                            ? '升序'
-                            : '降序',
+                        tooltip: widget.prefs.connectionsSortAsc ? '升序' : '降序',
                         onPressed: () => widget.prefs.setConnectionsSortAsc(
                           !widget.prefs.connectionsSortAsc,
                         ),
                         style: IconButton.styleFrom(
-                          backgroundColor:
-                              colorScheme.surfaceContainerHighest,
+                          backgroundColor: colorScheme.surfaceContainerHighest,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -415,8 +407,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       Expanded(
                         child: Text(
                           err,
-                          style:
-                              TextStyle(color: colorScheme.onErrorContainer),
+                          style: TextStyle(color: colorScheme.onErrorContainer),
                         ),
                       ),
                     ],
@@ -427,6 +418,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
             Expanded(
               child: _ConnectionsList(
                 session: widget.session,
+                prefs: widget.prefs,
                 tab: _tab,
                 filter: _filter,
                 onTap: _showDetail,
@@ -445,6 +437,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 class _ConnectionsList extends StatefulWidget {
   const _ConnectionsList({
     required this.session,
+    required this.prefs,
     required this.tab,
     required this.filter,
     required this.onTap,
@@ -452,6 +445,7 @@ class _ConnectionsList extends StatefulWidget {
   });
 
   final MihomoSession session;
+  final AppPrefs prefs;
   final ConnectionsTab tab;
   final String filter;
   final ValueChanged<ConnectionRow> onTap;
@@ -463,7 +457,7 @@ class _ConnectionsList extends StatefulWidget {
 
 class _ConnectionsListState extends State<_ConnectionsList> {
   static const Duration _animDuration = Duration(milliseconds: 200);
-  static const double _rowHeight = 96; // tile content + bottom padding + slack
+  static const double _rowHeight = 82; // tile content + bottom padding + slack
 
   final ScrollController _scrollController = ScrollController();
   // Coalesce ensureWindow calls during fast scrolls — one call per frame.
@@ -550,32 +544,43 @@ class _ConnectionsListState extends State<_ConnectionsList> {
       );
     }
     final filter = widget.filter;
+    // Local backend only: the process paths in /connections refer to the
+    // backend host, so resolving icons for a remote controller is wrong.
+    final processIcons = widget.session.isLocalBackend
+        ? widget.session.processIcons
+        : null;
     return RepaintBoundary(
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        // Fixed-height items let ListView do exact scroll math without
-        // measuring offscreen widgets.
-        itemExtent: _rowHeight,
-        itemCount: total,
-        itemBuilder: (context, index) {
-          final cn = widget.session.connections;
-          final row = cn.rowAt(widget.tab, index);
-          // When a filter is active, hide rows that don't match (they
-          // remain in the virtual list space — ListView still shows the
-          // gap, but the slot stays empty so the user perceives the
-          // matching rows packed together visually within the window).
-          // For now we keep filtering off the virtual scroll, treating
-          // filter-misses identically to out-of-window slots.
-          final visible = filter.isEmpty || (row != null && row.matches(filter));
-          return _RowSlot(
-            // Same key for the same row id keeps state across frames so
-            // the AnimatedSwitcher inside doesn't re-trigger transitions.
-            key: ValueKey(row?.id ?? 'idx::$index'),
-            row: visible ? row : null,
-            duration: _animDuration,
-            onTap: row == null ? null : () => widget.onTap(row),
-            onClose: row == null ? null : () => widget.onClose(row.id),
+      child: ListenableBuilder(
+        listenable: widget.prefs,
+        builder: (context, _) {
+          final showIcon = widget.prefs.connectionsShowProcessIcon;
+          final showAppName = widget.prefs.connectionsShowAppName;
+          return ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            // Fixed-height items let ListView do exact scroll math without
+            // measuring offscreen widgets.
+            itemExtent: _rowHeight,
+            itemCount: total,
+            itemBuilder: (context, index) {
+              final cn = widget.session.connections;
+              final row = cn.rowAt(widget.tab, index);
+              // When a filter is active, hide rows that don't match.
+              final visible =
+                  filter.isEmpty || (row != null && row.matches(filter));
+              return _RowSlot(
+                // Same key for the same row id keeps state across frames so
+                // the AnimatedSwitcher inside doesn't re-trigger transitions.
+                key: ValueKey(row?.id ?? 'idx::$index'),
+                row: visible ? row : null,
+                duration: _animDuration,
+                processIcons: processIcons,
+                showIcon: showIcon,
+                showAppName: showAppName,
+                onTap: row == null ? null : () => widget.onTap(row),
+                onClose: row == null ? null : () => widget.onClose(row.id),
+              );
+            },
           );
         },
       ),
@@ -591,12 +596,18 @@ class _RowSlot extends StatelessWidget {
     super.key,
     required this.row,
     required this.duration,
+    this.processIcons,
+    this.showIcon = false,
+    this.showAppName = false,
     this.onTap,
     this.onClose,
   });
 
   final ConnectionRow? row;
   final Duration duration;
+  final ProcessIconCache? processIcons;
+  final bool showIcon;
+  final bool showAppName;
   final VoidCallback? onTap;
   final VoidCallback? onClose;
 
@@ -608,6 +619,9 @@ class _RowSlot extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: ConnectionTile(
               row: row!,
+              processIcons: processIcons,
+              showIcon: showIcon,
+              showAppName: showAppName,
               onTap: onTap ?? () {},
               onClose: onClose ?? () {},
             ),
@@ -623,10 +637,7 @@ class _RowSlot extends StatelessWidget {
       switchOutCurve: Curves.easeIn,
       transitionBuilder: (child, animation) => FadeTransition(
         opacity: animation,
-        child: SizeTransition(
-          sizeFactor: animation,
-          child: child,
-        ),
+        child: SizeTransition(sizeFactor: animation, child: child),
       ),
       child: child,
     );
@@ -640,7 +651,7 @@ class _RowPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      height: 80,
+      height: 66,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(14),

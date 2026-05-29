@@ -27,12 +27,10 @@ class ConnectionsSettingsMenu extends StatelessWidget {
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 220),
       transitionBuilder: (context, animation, _, child) {
-        final offset = Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        );
+        final offset =
+            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
         return Align(
           alignment: Alignment.centerRight,
           child: SlideTransition(position: offset, child: child),
@@ -51,8 +49,7 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final width =
-        MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
+    final width = MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -86,6 +83,24 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                               '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加 mihomo 与设备负载。',
                           child: _RefreshChips(prefs: prefs),
                         ),
+                        SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                          title: const Text('显示进程图标'),
+                          subtitle: const Text('仅本机内核;按连接所属应用显示图标'),
+                          value: prefs.connectionsShowProcessIcon,
+                          onChanged: prefs.setConnectionsShowProcessIcon,
+                        ),
+                        SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                          title: const Text('显示应用名称'),
+                          subtitle: const Text('用解析到的应用名替代原始进程名'),
+                          value: prefs.connectionsShowAppName,
+                          onChanged: prefs.setConnectionsShowAppName,
+                        ),
                       ],
                     ),
                   ),
@@ -109,10 +124,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
       child: Row(
         children: [
-          Text(
-            '连接设置',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text('连接设置', style: Theme.of(context).textTheme.titleLarge),
           const Spacer(),
           IconButton(
             tooltip: '关闭',
@@ -126,11 +138,7 @@ class _Header extends StatelessWidget {
 }
 
 class _SettingsBlock extends StatelessWidget {
-  const _SettingsBlock({
-    required this.label,
-    required this.child,
-    this.hint,
-  });
+  const _SettingsBlock({required this.label, required this.child, this.hint});
 
   final String label;
   final Widget child;
@@ -143,28 +151,21 @@ class _SettingsBlock extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text(label, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 10),
           child,
           if (hint != null) ...[
             const SizedBox(height: 8),
-            Text(
-              hint!,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(hint!, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),

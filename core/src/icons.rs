@@ -7,13 +7,14 @@
 //! Initialized once from Dart with the platform's cache directory; paths
 //! and config live in a single global [`State`].
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use reqwest::Client;
 use tokio::fs;
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::error::MihomoError;
 
@@ -26,6 +27,9 @@ struct State {
     /// URLs currently being refetched in the background, so we don't
     /// fan out multiple parallel refreshes for the same icon.
     inflight: Mutex<HashSet<String>>,
+    /// Per-URL locks that serialize first-time (cache-miss) downloads, so a
+    /// burst of nodes sharing one group icon results in a single fetch.
+    miss_locks: Mutex<HashMap<String, Arc<AsyncMutex<()>>>>,
 }
 
 static STATE: OnceLock<State> = OnceLock::new();
@@ -49,6 +53,7 @@ pub fn init(cache_dir: PathBuf) -> Result<(), MihomoError> {
         dir,
         client,
         inflight: Mutex::new(HashSet::new()),
+        miss_locks: Mutex::new(HashMap::new()),
     });
     Ok(())
 }
@@ -84,13 +89,45 @@ pub async fn fetch(url: String) -> Result<Vec<u8>, MihomoError> {
         return Ok(bytes);
     }
 
-    // Miss — must succeed.
-    let bytes = download(&state.client, &url).await?;
-    if let Err(error) = write_atomic(&path, &bytes).await {
+    // Miss — coalesce concurrent first-time fetches for the same URL so a
+    // group's many nodes don't each hit the network.
+    let lock = miss_lock_for(state, &url);
+    let _guard = lock.lock().await;
+
+    // Another waiter may have populated the cache while we waited.
+    if let Some((bytes, _)) = read_with_age(&path).await {
+        release_miss_lock(state, &url);
+        return Ok(bytes);
+    }
+
+    let result = download(&state.client, &url).await;
+    if let Ok(bytes) = &result
+        && let Err(error) = write_atomic(&path, bytes).await
+    {
         // Don't fail the read just because we couldn't persist.
         tracing_warn(&format!("icon cache write failed for {url}: {error}"));
     }
-    Ok(bytes)
+    drop(_guard);
+    release_miss_lock(state, &url);
+    result
+}
+
+fn miss_lock_for(state: &State, url: &str) -> Arc<AsyncMutex<()>> {
+    let mut map = state.miss_locks.lock().expect("icon miss_locks poisoned");
+    map.entry(url.to_string())
+        .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+        .clone()
+}
+
+fn release_miss_lock(state: &State, url: &str) {
+    let mut map = state.miss_locks.lock().expect("icon miss_locks poisoned");
+    // Drop the entry only when we hold the last reference besides the map's,
+    // so a still-waiting task keeps the same lock instance.
+    if let Some(lock) = map.get(url)
+        && Arc::strong_count(lock) <= 2
+    {
+        map.remove(url);
+    }
 }
 
 async fn read_with_age(path: &Path) -> Option<(Vec<u8>, Duration)> {

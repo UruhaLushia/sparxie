@@ -8,10 +8,12 @@ import 'error_format.dart';
 import 'rust_api.dart' as rust;
 import 'session/connections.dart';
 import 'session/logs.dart';
+import 'session/process_icons.dart';
 import 'session/proxies.dart';
 
 export 'session/connections.dart';
 export 'session/logs.dart';
+export 'session/process_icons.dart';
 export 'session/proxies.dart';
 
 class MihomoSession {
@@ -35,6 +37,7 @@ class MihomoSession {
   Timer? _logsRetry;
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
+  bool _iconsWarmed = false;
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
@@ -82,6 +85,9 @@ class MihomoSession {
   /// here so the WebSocket is alive even when the user is on another tab.
   final LogBuffer logs = LogBuffer();
 
+  /// Resolved local-process icons. Only meaningful when [isLocalBackend].
+  final ProcessIconCache processIcons = ProcessIconCache();
+
   final ProxiesNotifier proxies = ProxiesNotifier();
 
   /// Raw `version` field from `/version`. Empty until first poll succeeds.
@@ -102,6 +108,16 @@ class MihomoSession {
 
   Controller? get activeController => _activeKey;
   rust.MihomoTarget? get target => _target;
+
+  /// True when the active controller's host is this machine — process-icon
+  /// resolution only makes sense for a local mihomo (the executable paths
+  /// in `/connections` refer to processes on the backend's host).
+  bool get isLocalBackend {
+    final c = _activeKey;
+    if (c == null) return false;
+    final host = Uri.tryParse(c.baseUrl)?.host.toLowerCase() ?? '';
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+  }
 
   void setConnectionsInterval(int ms) {
     if (ms <= 0 || ms == _connectionsIntervalMs) return;
@@ -153,10 +169,12 @@ class MihomoSession {
     connections.reset();
     connectionsTotals.value = ConnectionsTotals.zero;
     logs.reset();
+    processIcons.reset();
     proxies.reset();
     versionString.value = '';
     isCmfa.value = false;
     connectionsPaused.value = false;
+    _iconsWarmed = false;
     if (_target == null) {
       error.value = '请先在“后端”中添加一个 mihomo 实例';
       return;
@@ -255,10 +273,23 @@ class MihomoSession {
       final raw = await rust.proxies(target: t, groupsOnly: false);
       if (!identical(_activeKey, controller)) return;
       proxies.apply(raw);
+      if (!_iconsWarmed) {
+        _iconsWarmed = true;
+        _warmIconCache();
+      }
     } catch (e) {
       if (identical(_activeKey, controller)) error.value = formatError(e);
     } finally {
       _proxiesRefreshing = false;
+    }
+  }
+
+  // Kick off background downloads for every group/node icon right after the
+  // first proxy list lands, so the disk cache is warm before the user
+  // scrolls to them. Fire-and-forget; failures are non-fatal.
+  void _warmIconCache() {
+    for (final url in proxies.iconUrls()) {
+      unawaited(rust.fetchIcon(url: url).then((_) {}, onError: (_) {}));
     }
   }
 
@@ -372,6 +403,7 @@ class MihomoSession {
     connectionsTotals.dispose();
     connections.dispose();
     logs.dispose();
+    processIcons.dispose();
     versionString.dispose();
     isCmfa.dispose();
     connectionsPaused.dispose();

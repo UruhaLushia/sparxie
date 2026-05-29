@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'rust_icon_image.dart';
+
 /// Circular proxy avatar — image when [icon] is non-empty, otherwise a
 /// color-tinted letter chip derived from [name].
 class ProxyAvatar extends StatelessWidget {
@@ -24,19 +26,22 @@ class ProxyAvatar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: hasIcon
-            ? Image.network(
-                icon,
+            ? Image(
+                image: ResizeImage(
+                  RustIconImage(icon),
+                  width: cachePx,
+                  height: cachePx,
+                ),
                 fit: BoxFit.cover,
                 width: _size,
                 height: _size,
-                cacheWidth: cachePx,
-                cacheHeight: cachePx,
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.medium,
                 errorBuilder: (_, _, _) => _LetterChip(name: name, color: color),
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : _LetterChip(name: name, color: color),
+                frameBuilder: (_, child, frame, wasSync) {
+                  if (wasSync || frame != null) return child;
+                  return _LetterChip(name: name, color: color);
+                },
               )
             : _LetterChip(name: name, color: color),
       ),
