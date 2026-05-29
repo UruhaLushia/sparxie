@@ -190,6 +190,7 @@ class MihomoSession {
         : rust.MihomoTarget(
             baseUrl: next.baseUrl,
             secret: next.secret.isEmpty ? null : next.secret,
+            allowInsecure: next.allowInsecure,
           );
     _resubscribeAll();
   }

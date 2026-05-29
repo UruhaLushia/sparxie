@@ -58,6 +58,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
     return rust.MihomoTarget(
       baseUrl: c.baseUrl,
       secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
     );
   }
 

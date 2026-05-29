@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -5,7 +6,8 @@ use reqwest::{Client, Method, Url};
 use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream, connect_async,
+    Connector, MaybeTlsStream, WebSocketStream, connect_async,
+    connect_async_tls_with_config,
     tungstenite::{client::IntoClientRequest, http::HeaderValue, protocol::Message},
 };
 
@@ -16,22 +18,30 @@ pub struct MihomoClient {
     pub base: Url,
     pub secret: Option<String>,
     pub http: Client,
+    /// Skip TLS certificate validation (self-signed / mismatched-host https).
+    allow_insecure: bool,
 }
 
 pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 impl MihomoClient {
-    pub fn new(base_url: &str, secret: Option<String>) -> Result<Self, MihomoError> {
+    pub fn new(
+        base_url: &str,
+        secret: Option<String>,
+        allow_insecure: bool,
+    ) -> Result<Self, MihomoError> {
         let base =
             Url::parse(base_url).map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
         let http = Client::builder()
             .timeout(Duration::from_secs(15))
+            .danger_accept_invalid_certs(allow_insecure)
             .build()
             .map_err(|e| MihomoError::Other(format!("client build: {e}")))?;
         Ok(Self {
             base,
             secret,
             http,
+            allow_insecure,
         })
     }
 
@@ -131,9 +141,20 @@ impl MihomoClient {
             request.headers_mut().insert("authorization", value);
         }
 
-        let (stream, response) = connect_async(request)
+        let (stream, response) = if self.allow_insecure {
+            connect_async_tls_with_config(
+                request,
+                None,
+                false,
+                Some(insecure_ws_connector()),
+            )
             .await
-            .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?;
+            .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?
+        } else {
+            connect_async(request)
+                .await
+                .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?
+        };
         if !response.status().is_informational() && !response.status().is_success() {
             return Err(MihomoError::Upstream {
                 status: response.status().as_u16(),
@@ -141,6 +162,70 @@ impl MihomoClient {
             });
         }
         Ok(stream)
+    }
+}
+
+/// A rustls connector that accepts any server certificate. Used only when a
+/// backend is explicitly marked insecure.
+fn insecure_ws_connector() -> Connector {
+    // Pin the ring provider explicitly — relying on the process-default
+    // provider is fragile when multiple crates pull rustls in.
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("ring provider supports default protocol versions")
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(NoCertVerify))
+        .with_no_client_auth();
+    Connector::Rustls(Arc::new(config))
+}
+
+#[derive(Debug)]
+struct NoCertVerify;
+
+impl rustls::client::danger::ServerCertVerifier for NoCertVerify {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        use rustls::SignatureScheme as S;
+        vec![
+            S::RSA_PKCS1_SHA256,
+            S::RSA_PKCS1_SHA384,
+            S::RSA_PKCS1_SHA512,
+            S::ECDSA_NISTP256_SHA256,
+            S::ECDSA_NISTP384_SHA384,
+            S::ED25519,
+            S::RSA_PSS_SHA256,
+            S::RSA_PSS_SHA384,
+            S::RSA_PSS_SHA512,
+        ]
     }
 }
 

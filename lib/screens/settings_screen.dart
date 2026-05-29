@@ -535,6 +535,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
         name: result.name,
         baseUrl: result.baseUrl,
         secret: result.secret,
+        allowInsecure: result.allowInsecure,
       );
     } else {
       await widget.store.update(
@@ -542,6 +543,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
         name: result.name,
         baseUrl: result.baseUrl,
         secret: result.secret,
+        allowInsecure: result.allowInsecure,
       );
     }
   }
@@ -630,10 +632,12 @@ class _EditResult {
     required this.name,
     required this.baseUrl,
     required this.secret,
+    required this.allowInsecure,
   });
   final String name;
   final String baseUrl;
   final String secret;
+  final bool allowInsecure;
 }
 
 class _EditDialog extends StatefulWidget {
@@ -648,6 +652,7 @@ class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
   late final TextEditingController _secret;
+  late bool _allowInsecure;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -659,6 +664,9 @@ class _EditDialogState extends State<_EditDialog> {
       text: c?.baseUrl ?? 'http://127.0.0.1:9090',
     );
     _secret = TextEditingController(text: c?.secret ?? '');
+    _allowInsecure = c?.allowInsecure ?? false;
+    // Re-render the https-only switch as the URL scheme changes.
+    _baseUrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -715,6 +723,16 @@ class _EditDialogState extends State<_EditDialog> {
               ),
               obscureText: true,
             ),
+            if (_isHttps) ...[
+              const SizedBox(height: 4),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('跳过证书验证'),
+                subtitle: const Text('用于自签名 / 域名不匹配的 https 后端'),
+                value: _allowInsecure,
+                onChanged: (v) => setState(() => _allowInsecure = v),
+              ),
+            ],
           ],
         ),
       ),
@@ -732,6 +750,7 @@ class _EditDialogState extends State<_EditDialog> {
                 name: _name.text.trim(),
                 baseUrl: _baseUrl.text.trim(),
                 secret: _secret.text.trim(),
+                allowInsecure: _isHttps && _allowInsecure,
               ),
             );
           },
@@ -740,4 +759,7 @@ class _EditDialogState extends State<_EditDialog> {
       ],
     );
   }
+
+  bool get _isHttps =>
+      Uri.tryParse(_baseUrl.text.trim())?.isScheme('https') ?? false;
 }

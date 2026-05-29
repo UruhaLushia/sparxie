@@ -61,6 +61,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     return rust.MihomoTarget(
       baseUrl: c.baseUrl,
       secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
     );
   }
 

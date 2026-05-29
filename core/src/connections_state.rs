@@ -405,7 +405,7 @@ async fn stream_once(
     interval_ms: u32,
     slot: &TargetSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone())?;
+    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
     let path = format!("connections?interval={interval_ms}");
     let mut ws = client.open_ws(&path).await?;
     let mut first = true;
