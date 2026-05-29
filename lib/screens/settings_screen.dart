@@ -94,7 +94,10 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.build_outlined,
               title: '核心操作',
               subtitle: '重载 / 重启 / 升级、清空缓存',
-              onTap: () => _push(context, CoreActionsScreen(store: store)),
+              onTap: () => _push(
+                context,
+                CoreActionsScreen(store: store, session: session),
+              ),
             ),
           if (showRules)
             _Tile(
