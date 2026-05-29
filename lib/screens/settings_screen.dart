@@ -9,6 +9,7 @@ import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
 import '../widgets/section_panel.dart';
+import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
 import 'resources_screen.dart';
 
@@ -84,6 +85,16 @@ class SettingsScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                        const Divider(height: 1),
+                        _Tile(
+                          icon: Icons.build_outlined,
+                          title: '核心操作',
+                          subtitle: '重载 / 重启 / 升级、清空缓存',
+                          onTap: () => _push(
+                            context,
+                            CoreActionsScreen(store: store),
+                          ),
+                        ),
                         if (showResources) ...[
                           const Divider(height: 1),
                           _Tile(
