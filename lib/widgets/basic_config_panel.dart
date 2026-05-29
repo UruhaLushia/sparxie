@@ -154,12 +154,6 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             ),
             const SizedBox(height: 16),
           ],
-          _LogSection(
-            configs: c,
-            saving: _saving,
-            onChange: (level) => _patch('log-level', {'log-level': level}),
-          ),
-          const SizedBox(height: 16),
           _SwitchSection(configs: c, saving: _saving, onPatch: _patch),
           const SizedBox(height: 16),
           _PortsSection(configs: c, saving: _saving, onPatch: _patch),
@@ -219,50 +213,6 @@ class _ModeSection extends StatelessWidget {
   };
 }
 
-class _LogSection extends StatelessWidget {
-  const _LogSection({
-    required this.configs,
-    required this.saving,
-    required this.onChange,
-  });
-  final Map<String, dynamic> configs;
-  final String? saving;
-  final ValueChanged<String> onChange;
-
-  static const _levels = ['silent', 'error', 'warning', 'info', 'debug'];
-
-  @override
-  Widget build(BuildContext context) {
-    final current =
-        (configs['log-level'] ?? 'info').toString().toLowerCase();
-    return SectionPanel(
-      title: '日志级别',
-      icon: Icons.terminal,
-      child: Wrap(
-        spacing: 8,
-        children: [
-          for (final l in _levels)
-            ChoiceChip(
-              label: Text(l),
-              selected: current == l,
-              onSelected: saving == 'log-level' || current == l
-                  ? null
-                  : (_) => onChange(l),
-            ),
-          if (saving == 'log-level')
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SwitchSection extends StatelessWidget {
   const _SwitchSection({
     required this.configs,
@@ -275,11 +225,31 @@ class _SwitchSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tun = configs['tun'];
+    final tunEnabled = tun is Map && tun['enable'] == true;
+    final logLevel = (configs['log-level'] ?? 'info').toString().toLowerCase();
     return SectionPanel(
       title: '通用',
       icon: Icons.tune,
       child: Column(
         children: [
+          _LogLevelRow(
+            current: logLevel,
+            busy: saving == 'log-level',
+            onChange: (v) => onPatch('log-level', {'log-level': v}),
+          ),
+          if (tun is Map)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('TUN'),
+              subtitle: saving == 'tun' ? const Text('保存中…') : null,
+              value: tunEnabled,
+              onChanged: saving == 'tun'
+                  ? null
+                  : (v) => onPatch('tun', {
+                      'tun': {'enable': v},
+                    }),
+            ),
           _switchTile(
             label: '允许局域网连接',
             valueKey: 'allow-lan',
@@ -289,11 +259,6 @@ class _SwitchSection extends StatelessWidget {
             label: 'IPv6',
             valueKey: 'ipv6',
             current: configs['ipv6'] == true,
-          ),
-          _switchTile(
-            label: '嗅探 (sniffing)',
-            valueKey: 'sniffing',
-            current: configs['sniffing'] == true,
           ),
           _switchTile(
             label: 'TCP 并发',
@@ -419,6 +384,55 @@ class _PortsSectionState extends State<_PortsSection> {
               : const Text('应用'),
         ),
       ],
+    );
+  }
+}
+
+class _LogLevelRow extends StatelessWidget {
+  const _LogLevelRow({
+    required this.current,
+    required this.busy,
+    required this.onChange,
+  });
+
+  final String current;
+  final bool busy;
+  final ValueChanged<String> onChange;
+
+  static const _levels = ['silent', 'error', 'warning', 'info', 'debug'];
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _levels.contains(current) ? current : 'info';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Expanded(child: Text('日志级别')),
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          DropdownButton<String>(
+            value: value,
+            borderRadius: BorderRadius.circular(8),
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final l in _levels)
+                DropdownMenuItem(value: l, child: Text(l)),
+            ],
+            onChanged: busy
+                ? null
+                : (v) {
+                    if (v != null && v != current) onChange(v);
+                  },
+          ),
+        ],
+      ),
     );
   }
 }
