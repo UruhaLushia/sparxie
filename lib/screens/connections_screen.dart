@@ -38,6 +38,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     return rust.MihomoTarget(
       baseUrl: c.baseUrl,
       secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
     );
   }
 

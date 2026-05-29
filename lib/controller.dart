@@ -8,6 +8,7 @@ class Controller {
     required this.name,
     required this.baseUrl,
     this.secret = '',
+    this.allowInsecure = false,
   });
 
   final String id;
@@ -15,12 +16,21 @@ class Controller {
   final String baseUrl;
   final String secret;
 
-  Controller copyWith({String? name, String? baseUrl, String? secret}) {
+  /// Skip TLS certificate validation for https/wss backends.
+  final bool allowInsecure;
+
+  Controller copyWith({
+    String? name,
+    String? baseUrl,
+    String? secret,
+    bool? allowInsecure,
+  }) {
     return Controller(
       id: id,
       name: name ?? this.name,
       baseUrl: baseUrl ?? this.baseUrl,
       secret: secret ?? this.secret,
+      allowInsecure: allowInsecure ?? this.allowInsecure,
     );
   }
 
@@ -29,6 +39,7 @@ class Controller {
     'name': name,
     'baseUrl': baseUrl,
     'secret': secret,
+    'allowInsecure': allowInsecure,
   };
 
   factory Controller.fromJson(Map<String, dynamic> json) => Controller(
@@ -36,6 +47,7 @@ class Controller {
     name: json['name'] as String? ?? '',
     baseUrl: json['baseUrl'] as String? ?? '',
     secret: json['secret'] as String? ?? '',
+    allowInsecure: json['allowInsecure'] as bool? ?? false,
   );
 }
 
@@ -105,12 +117,14 @@ class ControllerStore extends ChangeNotifier {
     required String name,
     required String baseUrl,
     String secret = '',
+    bool allowInsecure = false,
   }) async {
     final controller = Controller(
       id: _newId(),
       name: name,
       baseUrl: baseUrl,
       secret: secret,
+      allowInsecure: allowInsecure,
     );
     _controllers = [..._controllers, controller];
     _activeId ??= controller.id;
@@ -124,11 +138,17 @@ class ControllerStore extends ChangeNotifier {
     String? name,
     String? baseUrl,
     String? secret,
+    bool? allowInsecure,
   }) async {
     _controllers = _controllers
         .map(
           (c) => c.id == id
-              ? c.copyWith(name: name, baseUrl: baseUrl, secret: secret)
+              ? c.copyWith(
+                  name: name,
+                  baseUrl: baseUrl,
+                  secret: secret,
+                  allowInsecure: allowInsecure,
+                )
               : c,
         )
         .toList();

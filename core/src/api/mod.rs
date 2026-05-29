@@ -55,11 +55,13 @@ pub use version::*;
 pub struct MihomoTarget {
     pub base_url: String,
     pub secret: Option<String>,
+    /// Skip TLS cert validation for https/wss (self-signed backends).
+    pub allow_insecure: bool,
 }
 
 impl MihomoTarget {
     pub(crate) fn client(&self) -> Result<MihomoClient, MihomoError> {
-        MihomoClient::new(&self.base_url, self.secret.clone())
+        MihomoClient::new(&self.base_url, self.secret.clone(), self.allow_insecure)
     }
 }
 

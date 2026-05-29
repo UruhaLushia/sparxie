@@ -107,7 +107,7 @@ async fn stream_once(
     level: &str,
     slot: &LogSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone())?;
+    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
     let path = format!("logs?level={level}&format=structured");
     let mut ws = client.open_ws(&path).await?;
     while let Some(text) = read_ws_text(&mut ws).await? {

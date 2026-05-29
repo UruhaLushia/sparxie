@@ -144,6 +144,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     return rust.MihomoTarget(
       baseUrl: c.baseUrl,
       secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
     );
   }
 
@@ -280,6 +281,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     return rust.MihomoTarget(
       baseUrl: c.baseUrl,
       secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
     );
   }
 

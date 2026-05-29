@@ -133,7 +133,7 @@ async fn stream_once<T: Sample>(
     path: &str,
     key: &str,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone())?;
+    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
     let mut ws = client.open_ws(path).await?;
     while let Some(text) = read_ws_text(&mut ws).await? {
         let trimmed = text.trim();
