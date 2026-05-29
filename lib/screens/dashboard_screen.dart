@@ -31,6 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     widget.store.addListener(_onStore);
     widget.session.traffic.addListener(_onTraffic);
+    widget.session.memory.addListener(_onMemory);
     widget.session.connectionsTotals.addListener(_onConnTotals);
     widget.session.error.addListener(_onSessionError);
     widget.session.versionString.addListener(_onVersion);
@@ -41,6 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     widget.store.removeListener(_onStore);
     widget.session.traffic.removeListener(_onTraffic);
+    widget.session.memory.removeListener(_onMemory);
     widget.session.connectionsTotals.removeListener(_onConnTotals);
     widget.session.error.removeListener(_onSessionError);
     widget.session.versionString.removeListener(_onVersion);
@@ -61,9 +63,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _history.pushTraffic(_toDouble(t.up), _toDouble(t.down));
   }
 
+  void _onMemory() {
+    _history.pushMemory(_toDouble(widget.session.memory.value.inuse));
+  }
+
   void _onConnTotals() {
-    final c = widget.session.connectionsTotals.value;
-    _history.pushConnections(c.count.toDouble());
+    // The connection count is shown in the card label; repaint on change.
+    if (mounted) setState(() {});
   }
 
   void _onSessionError() {
@@ -191,9 +197,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       value: '$count',
       unit: '',
       footer: '内存使用 ${formatBytes(mem.inuse)}',
-      samples: _history.connSnapshot,
+      samples: _history.memSnapshot,
       color: const Color(0xff10b981),
-      formatY: (v) => v.round().toString(),
+      formatY: (v) => formatBytes(BigInt.from(v.round())),
       labelDot: true,
     );
   }
@@ -470,11 +476,11 @@ class _SparkHistory extends ChangeNotifier {
   final int capacity;
   final List<double> _up = [];
   final List<double> _down = [];
-  final List<double> _conn = [];
+  final List<double> _mem = [];
 
   List<double> get upSnapshot => List<double>.unmodifiable(_up);
   List<double> get downSnapshot => List<double>.unmodifiable(_down);
-  List<double> get connSnapshot => List<double>.unmodifiable(_conn);
+  List<double> get memSnapshot => List<double>.unmodifiable(_mem);
 
   void pushTraffic(double up, double down) {
     _push(_up, up);
@@ -482,16 +488,16 @@ class _SparkHistory extends ChangeNotifier {
     notifyListeners();
   }
 
-  void pushConnections(double count) {
-    _push(_conn, count);
+  void pushMemory(double inuse) {
+    _push(_mem, inuse);
     notifyListeners();
   }
 
   void reset() {
-    if (_up.isEmpty && _down.isEmpty && _conn.isEmpty) return;
+    if (_up.isEmpty && _down.isEmpty && _mem.isEmpty) return;
     _up.clear();
     _down.clear();
-    _conn.clear();
+    _mem.clear();
     notifyListeners();
   }
 
