@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../session.dart';
@@ -27,6 +30,11 @@ class ConnectionGroupHeader extends StatelessWidget {
   final bool showIcon;
   final bool showAppName;
 
+  String get _key {
+    final isAndroid = !kIsWeb && Platform.isAndroid;
+    return isAndroid ? summary.process : summary.processPath;
+  }
+
   String _title(String? appName) {
     if (appName != null && appName.isNotEmpty) return appName;
     final label = summary.label.replaceAll(RegExp(r'\.exe$'), '');
@@ -38,8 +46,9 @@ class ConnectionGroupHeader extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final cache = processIcons;
     final wantIcon = showIcon && cache != null;
-    final wantName = showAppName && cache != null && summary.process.isNotEmpty;
-    if (wantName) cache.requestName(summary.process);
+    final nameKey = _key;
+    final wantName = showAppName && cache != null && nameKey.isNotEmpty;
+    if (wantName) cache.requestName(nameKey);
 
     return ColoredBox(
       color: scheme.surface,
@@ -80,7 +89,7 @@ class ConnectionGroupHeader extends StatelessWidget {
                                 listenable: cache,
                                 builder: (_, _) => _titleText(
                                   context,
-                                  _title(cache.nameFor(summary.process)),
+                                  _title(cache.nameFor(nameKey)),
                                 ),
                               )
                             : _titleText(context, _title(null)),
