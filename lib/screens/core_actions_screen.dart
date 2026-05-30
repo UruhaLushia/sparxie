@@ -11,7 +11,8 @@ import '../widgets/section_panel.dart';
 /// active backend with per-row busy state and a SnackBar result.
 ///
 /// CMFA builds bake the config into the app and disable mihomo's `/configs`
-/// reload/restart/upgrade endpoints, so those rows are disabled there.
+/// reload/restart/upgrade/geo endpoints, so the whole 配置与核心 section is
+/// hidden there — only the cache flushes remain.
 class CoreActionsScreen extends StatefulWidget {
   const CoreActionsScreen({
     super.key,
@@ -106,54 +107,57 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SectionPanel(
-                      title: '配置与核心',
-                      icon: Icons.build_outlined,
-                      child: Column(
-                        children: [
-                          _action(
-                            icon: Icons.refresh,
-                            title: '重载配置',
-                            subtitle: '重新加载当前配置文件',
-                            id: 'reload',
-                            success: '已重载配置',
-                            run: (t) =>
-                                rust.reloadConfigs(target: t, force: false),
-                            disabled: isCmfa,
-                          ),
-                          _action(
-                            icon: Icons.travel_explore,
-                            title: '更新 GeoData',
-                            subtitle: '刷新 GeoIP / GeoSite 数据库',
-                            id: 'geo',
-                            success: 'GeoData 已更新',
-                            run: (t) => rust.updateGeo(target: t),
-                          ),
-                          _action(
-                            icon: Icons.restart_alt,
-                            title: '重启核心',
-                            subtitle: '重新启动 mihomo 核心',
-                            id: 'restart',
-                            success: '核心已重启',
-                            run: (t) => rust.restartCore(target: t),
-                            confirm: '确定重启核心？',
-                            disabled: isCmfa,
-                          ),
-                          _action(
-                            icon: Icons.upgrade,
-                            title: '升级核心',
-                            subtitle: '下载并替换核心二进制',
-                            id: 'upgrade',
-                            success: '核心升级已触发',
-                            run: (t) =>
-                                rust.upgradeCore(target: t, force: false),
-                            confirm: '确定升级核心？这会下载并替换核心二进制。',
-                            disabled: isCmfa,
-                          ),
-                        ],
+                    // CMFA builds bake in the config and disable mihomo's
+                    // /configs reload/restart/upgrade/geo endpoints, so the
+                    // whole section is hidden there — only the cache flushes
+                    // below remain usable.
+                    if (!isCmfa) ...[
+                      SectionPanel(
+                        title: '配置与核心',
+                        icon: Icons.build_outlined,
+                        child: Column(
+                          children: [
+                            _action(
+                              icon: Icons.refresh,
+                              title: '重载配置',
+                              subtitle: '重新加载当前配置文件',
+                              id: 'reload',
+                              success: '已重载配置',
+                              run: (t) =>
+                                  rust.reloadConfigs(target: t, force: false),
+                            ),
+                            _action(
+                              icon: Icons.travel_explore,
+                              title: '更新 GeoData',
+                              subtitle: '刷新 GeoIP / GeoSite 数据库',
+                              id: 'geo',
+                              success: 'GeoData 已更新',
+                              run: (t) => rust.updateGeo(target: t),
+                            ),
+                            _action(
+                              icon: Icons.restart_alt,
+                              title: '重启核心',
+                              subtitle: '重新启动 mihomo 核心',
+                              id: 'restart',
+                              success: '核心已重启',
+                              run: (t) => rust.restartCore(target: t),
+                              confirm: '确定重启核心？',
+                            ),
+                            _action(
+                              icon: Icons.upgrade,
+                              title: '升级核心',
+                              subtitle: '下载并替换核心二进制',
+                              id: 'upgrade',
+                              success: '核心升级已触发',
+                              run: (t) =>
+                                  rust.upgradeCore(target: t, force: false),
+                              confirm: '确定升级核心？这会下载并替换核心二进制。',
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+                    ],
                     SectionPanel(
                       title: '缓存',
                       icon: Icons.cached,
@@ -196,18 +200,16 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
     required String success,
     required Future<void> Function(rust.MihomoTarget target) run,
     String? confirm,
-    bool disabled = false,
   }) {
     final busy = _running == id;
-    // Lock all rows while any action runs so two can't overlap; `disabled`
-    // additionally greys out actions the backend doesn't support (CMFA).
-    final enabled = !disabled && _running == null;
+    // Lock all rows while any action runs so two can't overlap.
+    final enabled = _running == null;
     return ListTile(
       contentPadding: EdgeInsets.zero,
       enabled: enabled,
       leading: Icon(icon),
       title: Text(title),
-      subtitle: Text(disabled ? 'CMFA 不支持此操作' : subtitle),
+      subtitle: Text(subtitle),
       trailing: busy
           ? const SizedBox.square(
               dimension: 20,
