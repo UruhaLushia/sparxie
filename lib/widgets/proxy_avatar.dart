@@ -17,10 +17,12 @@ class ProxyAvatar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = _colorFor(name, scheme);
     final hasIcon = icon.isNotEmpty;
-    // Decode at display size — most upstream icons are 256+ px, decoding at
-    // native res on every cache miss is a measurable hit.
+    // Decode with 2x headroom over the display size (capped at the ~256px
+    // source) so the downscale has mip levels to resample from. Decoding
+    // straight to display res aliases edges in one harsh step (jagged); the
+    // cap keeps a huge source from wasting memory.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cachePx = (_size * dpr).round();
+    final cachePx = (_size * dpr * 2).round().clamp(1, 256);
     return SizedBox.square(
       dimension: _size,
       child: ClipRRect(
@@ -36,7 +38,7 @@ class ProxyAvatar extends StatelessWidget {
                 width: _size,
                 height: _size,
                 gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
+                filterQuality: FilterQuality.high,
                 errorBuilder: (_, _, _) => _LetterChip(name: name, color: color),
                 frameBuilder: (_, child, frame, wasSync) {
                   if (wasSync || frame != null) return child;
