@@ -34,6 +34,7 @@ class ConnectionTag extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.onSecondaryContainer,
+                  height: 1.1,
                 ),
           ),
         ),
@@ -50,6 +51,7 @@ class ConnectionTag extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.onSurfaceVariant,
+                  height: 1.1,
                 ),
           ),
         ),
@@ -75,6 +77,7 @@ class ConnectionTag extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: accent,
+                      height: 1.1,
                     ),
               ),
             ],

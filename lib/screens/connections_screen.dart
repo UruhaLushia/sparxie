@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
@@ -497,7 +499,16 @@ class _ConnectionsList extends StatefulWidget {
 
 class _ConnectionsListState extends State<_ConnectionsList> {
   static const Duration _animDuration = Duration(milliseconds: 200);
-  static const double _rowHeight = 82; // tile content + bottom padding + slack
+  // Base row height at text-scale 1.0. The card sizes to its content (~70px
+  // from the tile's padding); this slot adds the inter-card gap on top, so
+  // the spacing is `_baseRowHeight - cardHeight` ≈ 12px. The tile clamps its
+  // text line heights so CJK metrics stay within the slot. Scaled by the
+  // system font factor below.
+  static const double _baseRowHeight = 72;
+
+  // Effective row height for the current text scale; kept in sync with the
+  // value handed to ListView.itemExtent so the scroll-window math agrees.
+  double _rowHeight = _baseRowHeight;
 
   final ScrollController _scrollController = ScrollController();
   // Coalesce ensureWindow calls during fast scrolls — one call per frame.
@@ -574,6 +585,14 @@ class _ConnectionsListState extends State<_ConnectionsList> {
 
   @override
   Widget build(BuildContext context) {
+    // Scale the row slot by the system font factor. Only the tile's two text
+    // lines grow with it; the icon and fixed paddings don't, so scale just
+    // that portion to avoid both overflow (too short) and sparse rows.
+    const fixedPart = 36.0; // icon vertical slack + paddings that don't scale
+    const textPart = _baseRowHeight - fixedPart;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    _rowHeight = fixedPart + textPart * math.max(1.0, textScale);
+
     final total = _totalCount();
     if (total == 0) {
       return Center(
