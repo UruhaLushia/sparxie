@@ -87,9 +87,9 @@ class ConnectionTile extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.fromLTRB(
             wantIcon ? 10 : 14,
-            compact ? 6 : 8,
+            compact ? 7 : 10,
             8,
-            compact ? 6 : 8,
+            compact ? 7 : 10,
           ),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
@@ -123,17 +123,21 @@ class ConnectionTile extends StatelessWidget {
                                   listenable: cache,
                                   builder: (context, _) => Text(
                                     _titleFor(cache.nameFor(iconKey)),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                    style: Theme.of(context).textTheme.titleSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.1,
+                                        ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 )
                               : Text(
                                   _titleFor(null),
                                   style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.1,
+                                      ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                         ),
@@ -142,23 +146,29 @@ class ConnectionTile extends StatelessWidget {
                           Text(
                             timeText,
                             style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: scheme.onSurfaceVariant),
+                                ?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  height: 1.1,
+                                ),
                           ),
                         ],
                         IconButton(
                           tooltip: '关闭',
                           onPressed: onClose,
-                          icon: const Icon(Icons.close, size: 20),
+                          icon: const Icon(Icons.close, size: 18),
                           visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
+                            minWidth: 28,
+                            minHeight: 28,
                           ),
                           padding: EdgeInsets.zero,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
