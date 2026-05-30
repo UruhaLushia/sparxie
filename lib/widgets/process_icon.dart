@@ -46,22 +46,16 @@ class ProcessIcon extends StatelessWidget {
     return ListenableBuilder(
       listenable: cache,
       builder: (context, _) {
-        final bytes = cache.iconFor(key);
-        final dpr = MediaQuery.devicePixelRatioOf(context);
-        final decodePx = (size * dpr * 2).round().clamp(1, 256);
+        final image = cache.iconFor(key);
         return SizedBox.square(
           dimension: size,
-          child: bytes != null
-              ? Image.memory(
-                  bytes,
-                  fit: BoxFit.contain,
+          child: image != null
+              ? RawImage(
+                  image: image,
                   width: size,
                   height: size,
-                  cacheWidth: decodePx,
-                  cacheHeight: decodePx,
-                  gaplessPlayback: true,
+                  fit: BoxFit.contain,
                   filterQuality: FilterQuality.high,
-                  errorBuilder: (_, _, _) => _DefaultIcon(asset: fallback),
                 )
               : _DefaultIcon(asset: fallback),
         );

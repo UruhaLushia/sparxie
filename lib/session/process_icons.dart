@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,11 @@ import '../rust_api.dart' as rust;
 class ProcessIconCache extends ChangeNotifier {
   static const _channel = MethodChannel('zip.atri.sparxie/process_icons');
 
-  final Map<String, Uint8List> _icons = {};
+  // Decoded, display-ready images. On Windows the source PNGs come from
+  // DrawIconEx, which leaves the RGB premultiplied by alpha — encoded as
+  // straight alpha that darkens every anti-aliased edge (the "fringe"). We
+  // un-premultiply on decode so edges render clean.
+  final Map<String, ui.Image> _images = {};
   final Set<String> _missing = {};
   final Set<String> _requested = {};
 
@@ -23,7 +28,10 @@ class ProcessIconCache extends ChangeNotifier {
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
-  Uint8List? iconFor(String key) => _icons[key];
+  // Windows HICONs come back premultiplied; nothing else does.
+  static bool get _needsUnpremultiply => !kIsWeb && Platform.isWindows;
+
+  ui.Image? iconFor(String key) => _images[key];
 
   bool isMissing(String key) => _missing.contains(key);
 
@@ -31,7 +39,7 @@ class ProcessIconCache extends ChangeNotifier {
 
   void request(String key) {
     if (key.isEmpty) return;
-    if (_icons.containsKey(key) ||
+    if (_images.containsKey(key) ||
         _missing.contains(key) ||
         _requested.contains(key)) {
       return;
@@ -85,13 +93,61 @@ class ProcessIconCache extends ChangeNotifier {
   }
 
   void _complete(String key, Uint8List? bytes) {
-    _requested.remove(key);
-    if (bytes != null && bytes.isNotEmpty) {
-      _icons[key] = bytes;
-    } else {
+    if (bytes == null || bytes.isEmpty) {
+      _requested.remove(key);
       _missing.add(key);
+      notifyListeners();
+      return;
     }
-    notifyListeners();
+    _decode(bytes).then((image) {
+      _requested.remove(key);
+      if (image != null) {
+        _images[key] = image;
+      } else {
+        _missing.add(key);
+      }
+      notifyListeners();
+    });
+  }
+
+  /// Decode PNG bytes to a [ui.Image], un-premultiplying on Windows so
+  /// DrawIconEx's premultiplied output doesn't darken anti-aliased edges.
+  Future<ui.Image?> _decode(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final src = frame.image;
+      if (!_needsUnpremultiply) return src;
+
+      final data = await src.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      if (data == null) return src;
+      final px = data.buffer.asUint8List();
+      var touched = false;
+      for (var i = 0; i < px.length; i += 4) {
+        final a = px[i + 3];
+        if (a == 0 || a == 255) continue;
+        touched = true;
+        px[i] = ((px[i] * 255 + a ~/ 2) ~/ a).clamp(0, 255);
+        px[i + 1] = ((px[i + 1] * 255 + a ~/ 2) ~/ a).clamp(0, 255);
+        px[i + 2] = ((px[i + 2] * 255 + a ~/ 2) ~/ a).clamp(0, 255);
+      }
+      if (!touched) return src;
+
+      final descriptor = ui.ImageDescriptor.raw(
+        await ui.ImmutableBuffer.fromUint8List(px),
+        width: src.width,
+        height: src.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final fixedCodec = await descriptor.instantiateCodec();
+      final fixedFrame = await fixedCodec.getNextFrame();
+      src.dispose();
+      return fixedFrame.image;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _completeName(String key, String? name) {
@@ -122,7 +178,10 @@ class ProcessIconCache extends ChangeNotifier {
   /// Drop every resolved icon/name as well — used when the backing cache is
   /// wiped, so tiles re-resolve instead of showing now-stale entries.
   void clearAll() {
-    _icons.clear();
+    for (final image in _images.values) {
+      image.dispose();
+    }
+    _images.clear();
     _names.clear();
     _missing.clear();
     _requested.clear();
@@ -133,7 +192,10 @@ class ProcessIconCache extends ChangeNotifier {
 
   @override
   void dispose() {
-    _icons.clear();
+    for (final image in _images.values) {
+      image.dispose();
+    }
+    _images.clear();
     _missing.clear();
     _requested.clear();
     _names.clear();
