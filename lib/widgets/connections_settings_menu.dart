@@ -105,8 +105,8 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 20,
                           ),
-                          title: const Text('进程归类'),
-                          subtitle: const Text('活动连接按进程分组'),
+                          title: const Text('来源归类'),
+                          subtitle: const Text('活动连接按来源分组'),
                           value: prefs.connectionsGroupByProcess,
                           onChanged: prefs.setConnectionsGroupByProcess,
                         ),

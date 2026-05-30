@@ -142,11 +142,17 @@ fn conn_in_group(conn: &Value, group: &str) -> bool {
             .and_then(Value::as_str)
             .unwrap_or("")
     };
-    let process = field("process");
-    let key = if process.is_empty() {
-        field("sourceIP")
+    // Mirror connections_state::group_key — inner connections form their own
+    // group keyed by a sentinel, else process name, else source IP.
+    let key = if field("type").eq_ignore_ascii_case("inner") {
+        "\u{0}inner"
     } else {
-        process
+        let process = field("process");
+        if process.is_empty() {
+            field("sourceIP")
+        } else {
+            process
+        }
     };
     key == group
 }

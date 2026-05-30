@@ -17,15 +17,15 @@ class ConnectionDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final source = '${row.sourceIp}:${row.sourcePort}';
     final dest = '${row.destinationIp}:${row.destinationPort}';
-    final inbound = '${row.inboundIp}:${row.inboundPort}';
     final bytes = row.bytes.value;
     final entries = <(String, String)>[
       ('主机', row.host),
       ('网络', row.network.isEmpty ? '-' : row.network),
-      ('协议', row.connType.isEmpty ? '-' : row.connType),
+      ('类型', row.connType.isEmpty ? '-' : row.connType),
       ('来源', source),
       ('目标', dest),
-      ('入站 IP', inbound),
+      ('入站 IP', row.inboundIp.isEmpty ? '-' : row.inboundIp),
+      ('入站端口', row.inboundPort == 0 ? '-' : '${row.inboundPort}'),
       if (row.inboundName.isNotEmpty) ('入站名称', row.inboundName),
       ('DNS 模式', row.dnsMode.isEmpty ? '-' : row.dnsMode),
       if (row.sniffHost.isNotEmpty) ('嗅探主机', row.sniffHost),
