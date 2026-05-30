@@ -195,9 +195,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         const _Dest(icon: Icons.lan_outlined, label: '连接'),
       if (showOnStandardWide && !isCmfa)
         const _Dest(icon: Icons.memory_outlined, label: '内核配置'),
+      const _Dest(icon: Icons.terminal, label: '日志'),
       if (showOnStandardWide)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
-      const _Dest(icon: Icons.terminal, label: '日志'),
       if (showOnStandardWide)
         const _Dest(icon: Icons.build_outlined, label: '核心操作'),
       if (showOnStandardWide) const _Dest(icon: Icons.rule, label: '分流规则'),
@@ -488,12 +488,19 @@ class _SideRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 84,
+    // Absorb a landscape left display cutout into the rail's own left padding
+    // so the nav column keeps its full content width (centered) instead of
+    // being squeezed — which shifted icons right and truncated labels.
+    final leftInset = MediaQuery.paddingOf(context).left;
+    return Container(
+      width: 84 + leftInset,
+      padding: EdgeInsets.only(left: leftInset),
       child: SafeArea(
+        left: false,
         right: false,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var i = 0; i < destinations.length; i++)
               SizedBox(
@@ -531,33 +538,40 @@ class _SideRailItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
+    // Selected state and the press ripple share one rounded-rect shape over
+    // the whole item, so the ripple no longer splashes past an icon-only pill.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: InkWell(
-        onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Material(
+        color: selected ? scheme.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: selected ? scheme.secondaryContainer : null,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Icon(icon, size: 22, color: fg),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(icon, size: 22, color: fg),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: fg,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: fg,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
