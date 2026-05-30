@@ -10,51 +10,38 @@ env:
   FRB_VERSION: '2.12.0'
 
 jobs:
+  setup:
+    name: setup matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - id: gen
+        shell: bash
+        run: |
+          base='[
+            {"os":"ubuntu-latest","label":"android","kind":"android"},
+            {"os":"ubuntu-latest","label":"linux-x86_64","kind":"linux","arch":"x86_64","rust_target":"x86_64-unknown-linux-gnu"},
+            {"os":"ubuntu-24.04-arm","label":"linux-arm64","kind":"linux","arch":"arm64","rust_target":"aarch64-unknown-linux-gnu"},
+            {"os":"windows-latest","label":"windows-x86_64","kind":"windows","arch":"x86_64","rust_target":"x86_64-pc-windows-msvc"},
+            {"os":"windows-11-arm","label":"windows-arm64","kind":"windows","arch":"arm64","rust_target":"aarch64-pc-windows-msvc"},
+            {"os":"macos-26","label":"macos-arm64","kind":"macos","arch":"arm64","rust_target":"aarch64-apple-darwin"}
+          ]'
+          # The macOS x86_64 Intel runner is slow, so build it only for tagged
+          # releases — not for workflow_dispatch pre-releases.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            base=$(jq -c '. + [{"os":"macos-26-intel","label":"macos-x86_64","kind":"macos","arch":"x86_64","rust_target":"x86_64-apple-darwin"}]' <<<"$base")
+          fi
+          echo "matrix=$(jq -c . <<<"$base")" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.label }}
+    needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            label: android
-            kind: android
-
-          - os: ubuntu-latest
-            label: linux-x86_64
-            kind: linux
-            arch: x86_64
-            rust_target: x86_64-unknown-linux-gnu
-
-          - os: ubuntu-24.04-arm
-            label: linux-arm64
-            kind: linux
-            arch: arm64
-            rust_target: aarch64-unknown-linux-gnu
-
-          - os: windows-latest
-            label: windows-x86_64
-            kind: windows
-            arch: x86_64
-            rust_target: x86_64-pc-windows-msvc
-
-          - os: windows-11-arm
-            label: windows-arm64
-            kind: windows
-            arch: arm64
-            rust_target: aarch64-pc-windows-msvc
-
-          - os: macos-26
-            label: macos-arm64
-            kind: macos
-            arch: arm64
-            rust_target: aarch64-apple-darwin
-          - os: macos-26-intel
-            label: macos-x86_64
-            kind: macos
-            arch: x86_64
-            rust_target: x86_64-apple-darwin
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v5
