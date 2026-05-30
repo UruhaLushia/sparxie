@@ -94,10 +94,27 @@ async fn stream_loop(
     key: String,
     slot: Arc<LogSlot>,
 ) {
+    // Capture the target's stop generation; bail if Dart stops it (a dead
+    // upstream produces no frames, so the sink-failure path never fires).
+    let base = crate::stream_stop::base_key(&target);
+    let start_gen = crate::stream_stop::generation(&base);
     loop {
-        if let Err(error) = stream_once(&target, &level, &slot).await {
+        // Re-check under the slots lock before removing, so a subscriber that
+        // attaches just as the stream ends isn't orphaned.
+        {
+            let mut map = slots().lock().await;
+            if slot.sender.receiver_count() == 0
+                || crate::stream_stop::generation(&base) != start_gen
+            {
+                map.remove(&key);
+                return;
+            }
+        }
+        if let Err(error) = stream_once(&target, &level, &base, start_gen, &slot).await {
             eprintln!("[mihomo_backend] logs stream {key}: {error}");
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            // Wake early if a stop arrives during the retry backoff.
+            let mut ticks = crate::stream_stop::ticks();
+            let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
         }
     }
 }
@@ -105,12 +122,33 @@ async fn stream_loop(
 async fn stream_once(
     target: &MihomoTarget,
     level: &str,
+    base: &str,
+    start_gen: u64,
     slot: &LogSlot,
 ) -> Result<(), MihomoError> {
     let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
     let path = format!("logs?level={level}&format=structured");
     let mut ws = client.open_ws(&path).await?;
-    while let Some(text) = read_ws_text(&mut ws).await? {
+    let mut ticks = crate::stream_stop::ticks();
+    loop {
+        // Tear down promptly on either signal: the last subscriber dropping
+        // (live switch — `closed()`) or an explicit Dart stop (dead upstream —
+        // the stop tick). Logs can stay silent for minutes, so neither a
+        // read-driven nor frame-driven check would fire on its own here.
+        let text = tokio::select! {
+            biased;
+            _ = slot.sender.closed() => return Ok(()),
+            _ = ticks.changed() => {
+                if crate::stream_stop::generation(base) != start_gen {
+                    return Ok(());
+                }
+                continue;
+            }
+            read = read_ws_text(&mut ws) => match read? {
+                Some(t) => t,
+                None => return Ok(()),
+            },
+        };
         let trimmed = text.trim();
         if trimmed.is_empty() {
             continue;
@@ -118,12 +156,13 @@ async fn stream_once(
         let Ok(entry): Result<LogEntry, _> = serde_json::from_str(trimmed) else {
             continue;
         };
-        let mut buf = slot.buffer.lock().expect("logs buffer poisoned");
-        if buf.len() >= LOGS_CAP {
-            buf.pop_front();
+        {
+            let mut buf = slot.buffer.lock().expect("logs buffer poisoned");
+            if buf.len() >= LOGS_CAP {
+                buf.pop_front();
+            }
+            buf.push_back(entry.clone());
         }
-        buf.push_back(entry.clone());
         let _ = slot.sender.send(entry);
     }
-    Ok(())
 }

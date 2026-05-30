@@ -9,6 +9,7 @@ mod icons;
 mod logs_state;
 mod process_icons;
 mod regex_util;
+mod stream_stop;
 mod traffic;
 
 pub mod api;

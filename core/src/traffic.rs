@@ -111,18 +111,27 @@ async fn stream_loop<T: Sample>(
     path: String,
     key: String,
 ) {
+    // Capture the target's stop generation; bail if Dart stops it (a dead
+    // upstream produces no frames, so the sink-failure path never fires).
+    let base = crate::stream_stop::base_key(&target);
+    let start_gen = crate::stream_stop::generation(&base);
     loop {
-        let listeners = {
-            let map = registry.map.lock().await;
-            map.get(&key).map(|tx| tx.receiver_count()).unwrap_or(0)
-        };
-        if listeners == 0 {
-            registry.map.lock().await.remove(&key);
-            return;
+        // Re-check under the registry lock before removing, so a subscriber
+        // that attaches just as the stream ends isn't orphaned.
+        {
+            let mut map = registry.map.lock().await;
+            let listeners = map.get(&key).map(|tx| tx.receiver_count()).unwrap_or(0);
+            if listeners == 0 || crate::stream_stop::generation(&base) != start_gen {
+                map.remove(&key);
+                return;
+            }
         }
-        if let Err(error) = stream_once::<T>(registry, &target, &path, &key).await {
+        if let Err(error) = stream_once::<T>(registry, &target, &path, &key, &base, start_gen).await
+        {
             eprintln!("[mihomo_backend] {path} stream {key}: {error}");
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            // Wake early if a stop arrives during the retry backoff.
+            let mut ticks = crate::stream_stop::ticks();
+            let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
         }
     }
 }
@@ -132,22 +141,47 @@ async fn stream_once<T: Sample>(
     target: &MihomoTarget,
     path: &str,
     key: &str,
+    base: &str,
+    start_gen: u64,
 ) -> Result<(), MihomoError> {
     let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
     let mut ws = client.open_ws(path).await?;
-    while let Some(text) = read_ws_text(&mut ws).await? {
+    // Hold a sender clone so we can await `closed()` (fires when the last
+    // receiver drops) without locking the registry on every frame.
+    let tx = {
+        let map = registry.map.lock().await;
+        match map.get(key) {
+            Some(tx) => tx.clone(),
+            None => return Ok(()),
+        }
+    };
+    let mut ticks = crate::stream_stop::ticks();
+    loop {
+        // Tear down promptly on either signal: the last subscriber dropping
+        // (live switch — `closed()`) or an explicit Dart stop (dead upstream —
+        // the stop tick, since no frame would arrive to fail a sink send).
+        let text = tokio::select! {
+            biased;
+            _ = tx.closed() => return Ok(()),
+            _ = ticks.changed() => {
+                if crate::stream_stop::generation(base) != start_gen {
+                    return Ok(());
+                }
+                continue;
+            }
+            read = read_ws_text(&mut ws) => match read? {
+                Some(t) => t,
+                None => return Ok(()),
+            },
+        };
         let trimmed = text.trim();
         if trimmed.is_empty() {
             continue;
         }
         if let Some(sample) = T::parse(trimmed) {
-            let map = registry.map.lock().await;
-            if let Some(tx) = map.get(key) {
-                let _ = tx.send(sample);
-            }
+            let _ = tx.send(sample);
         }
     }
-    Ok(())
 }
 
 pub async fn traffic_subscribe(

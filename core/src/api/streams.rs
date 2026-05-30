@@ -159,3 +159,13 @@ pub async fn set_connections_sort(
 pub async fn clear_closed_connections(target: MihomoTarget, interval_ms: u32) {
     clear_closed(target, interval_ms).await
 }
+
+/// Signal every background stream (traffic/memory/connections/logs) for
+/// `target` to tear down its upstream WebSocket now. Dart calls this when
+/// switching away from or removing a backend: frb won't abort the Rust stream
+/// task on subscription-cancel, and a dead upstream emits no frame to trip the
+/// sink-closed path, so without this the old loops would retry the dead
+/// backend forever.
+pub fn stop_target_streams(target: MihomoTarget) {
+    crate::stream_stop::stop(&target);
+}

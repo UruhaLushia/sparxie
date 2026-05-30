@@ -191,6 +191,10 @@ class MihomoSession {
   void _onStoreChange() {
     final next = store.active;
     if (identical(next, _activeKey)) return;
+    // frb won't abort the old backend's Rust stream tasks when we cancel the
+    // Dart subscriptions below; tell the backend to tear them down explicitly
+    // so a dead/unreachable old controller doesn't keep retrying forever.
+    final previous = _target;
     _activeKey = next;
     _target = next == null
         ? null
@@ -199,6 +203,11 @@ class MihomoSession {
             secret: next.secret.isEmpty ? null : next.secret,
             allowInsecure: next.allowInsecure,
           );
+    if (previous != null) {
+      unawaited(
+        rust.stopTargetStreams(target: previous).catchError((_) {}),
+      );
+    }
     _resubscribeAll();
   }
 
