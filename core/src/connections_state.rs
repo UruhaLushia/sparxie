@@ -256,17 +256,42 @@ fn slice(rows: Vec<Connection>, offset: u32, limit: u32) -> Vec<Connection> {
     rows[start..end].to_vec()
 }
 
-/// Grouping key for an active connection: its process name, or the source
-/// IP when no process is reported (e.g. remote / non-local backends).
+/// Stable key + display label for mihomo's internally-generated connections
+/// (DNS hijack, internal probes, etc.). These carry no source address or
+/// process, so they'd otherwise collapse into one empty-key group.
+const INNER_KEY: &str = "\u{0}inner";
+const INNER_LABEL: &str = "内部连接";
+
+/// True for connections mihomo generates itself (`metadata.type == "Inner"`),
+/// which lack source IP / process info.
+fn is_inner(conn: &Connection) -> bool {
+    conn.conn_type.eq_ignore_ascii_case("inner")
+}
+
+/// Grouping key for an active connection ("来源归类"): a dedicated bucket for
+/// inner connections, else the process name, else the source IP.
 fn group_key(conn: &Connection) -> String {
-    if !conn.process.is_empty() {
+    if is_inner(conn) {
+        INNER_KEY.to_string()
+    } else if !conn.process.is_empty() {
         conn.process.clone()
     } else {
         conn.source_ip.clone()
     }
 }
 
-/// Aggregate active connections into per-process groups, ordered by `sort`.
+/// Display label for the group `conn` belongs to.
+fn group_label(conn: &Connection) -> String {
+    if is_inner(conn) {
+        INNER_LABEL.to_string()
+    } else if !conn.process.is_empty() {
+        conn.process.clone()
+    } else {
+        conn.source_ip.clone()
+    }
+}
+
+/// Aggregate active connections into source groups, ordered by `sort`.
 /// The per-target connection sort key orders connections *within* a group,
 /// independent of how the groups themselves are ordered here.
 pub async fn fetch_groups(
@@ -288,14 +313,23 @@ pub async fn fetch_groups(
         let gkey = group_key(conn);
         let group = groups.entry(gkey.clone()).or_insert_with(|| ConnectionGroup {
             key: gkey,
-            label: if conn.process.is_empty() {
-                conn.source_ip.clone()
+            label: group_label(conn),
+            // Inner connections have no owning process / source address.
+            process: if is_inner(conn) {
+                String::new()
             } else {
                 conn.process.clone()
             },
-            process: conn.process.clone(),
-            process_path: conn.process_path.clone(),
-            source_ip: conn.source_ip.clone(),
+            process_path: if is_inner(conn) {
+                String::new()
+            } else {
+                conn.process_path.clone()
+            },
+            source_ip: if is_inner(conn) {
+                String::new()
+            } else {
+                conn.source_ip.clone()
+            },
             ..Default::default()
         });
         group.count += 1;
@@ -594,4 +628,42 @@ fn take_u32(value: &Value, key: &str) -> u32 {
         return s.parse::<u32>().unwrap_or(0);
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn conn(meta: serde_json::Value) -> Connection {
+        parse_connection(&json!({ "id": "x", "metadata": meta }))
+    }
+
+    #[test]
+    fn inner_connections_group_under_inner_sentinel() {
+        // mihomo inner connections: type "Inner", no source/process.
+        let c = conn(json!({ "type": "Inner", "host": "dns.google" }));
+        assert!(is_inner(&c));
+        assert_eq!(group_key(&c), INNER_KEY);
+        assert_eq!(group_label(&c), INNER_LABEL);
+    }
+
+    #[test]
+    fn process_connections_group_by_process() {
+        let c = conn(json!({
+            "type": "HTTP",
+            "sourceIP": "127.0.0.1",
+            "process": "firefox",
+        }));
+        assert!(!is_inner(&c));
+        assert_eq!(group_key(&c), "firefox");
+        assert_eq!(group_label(&c), "firefox");
+    }
+
+    #[test]
+    fn processless_connections_group_by_source_ip() {
+        let c = conn(json!({ "type": "HTTP", "sourceIP": "10.0.0.5" }));
+        assert_eq!(group_key(&c), "10.0.0.5");
+        assert_eq!(group_label(&c), "10.0.0.5");
+    }
 }

@@ -786,7 +786,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('关闭进程连接'),
+        title: const Text('关闭来源连接'),
         content: Text('将关闭「${g.label}」的 $count 条连接'),
         actions: [
           TextButton(
