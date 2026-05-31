@@ -11,6 +11,7 @@ mod process_icons;
 mod regex_util;
 mod stream_stop;
 mod traffic;
+mod utils;
 
 pub mod api;
 

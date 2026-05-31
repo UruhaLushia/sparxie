@@ -18,10 +18,7 @@ pub async fn configs(target: MihomoTarget) -> Result<String, MihomoError> {
 /// `find-process-mode`, `skip-auth-prefixes`, `lan-allowed-ips`,
 /// `lan-disallowed-ips`, `tun`, `tuic-server`, `ss-config`, `vmess-config`,
 /// `tcptun-config`, `udptun-config`).
-pub async fn patch_configs(
-    target: MihomoTarget,
-    body_json: String,
-) -> Result<(), MihomoError> {
+pub async fn patch_configs(target: MihomoTarget, body_json: String) -> Result<(), MihomoError> {
     let body: Value = serde_json::from_str(&body_json)?;
     target
         .client()?

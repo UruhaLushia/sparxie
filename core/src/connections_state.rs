@@ -187,12 +187,7 @@ pub async fn subscribe(
     Ok(rx)
 }
 
-pub async fn set_sort(
-    target: MihomoTarget,
-    interval_ms: u32,
-    sort: ConnectionsSort,
-    asc: bool,
-) {
+pub async fn set_sort(target: MihomoTarget, interval_ms: u32, sort: ConnectionsSort, asc: bool) {
     let interval = if interval_ms == 0 { 1000 } else { interval_ms };
     let key = target_key(&target, interval);
     let map = slots().lock().await;
@@ -243,8 +238,7 @@ pub async fn fetch_window(
         ConnectionsListKind::Closed => {
             // Closed buffer is back = newest; for stable indexing we walk
             // from newest to oldest.
-            let rows: Vec<Connection> =
-                state.closed.iter().rev().cloned().collect();
+            let rows: Vec<Connection> = state.closed.iter().rev().cloned().collect();
             slice(rows, offset, limit)
         }
     }
@@ -311,27 +305,29 @@ pub async fn fetch_groups(
     let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
     for conn in state.active.values() {
         let gkey = group_key(conn);
-        let group = groups.entry(gkey.clone()).or_insert_with(|| ConnectionGroup {
-            key: gkey,
-            label: group_label(conn),
-            // Inner connections have no owning process / source address.
-            process: if is_inner(conn) {
-                String::new()
-            } else {
-                conn.process.clone()
-            },
-            process_path: if is_inner(conn) {
-                String::new()
-            } else {
-                conn.process_path.clone()
-            },
-            source_ip: if is_inner(conn) {
-                String::new()
-            } else {
-                conn.source_ip.clone()
-            },
-            ..Default::default()
-        });
+        let group = groups
+            .entry(gkey.clone())
+            .or_insert_with(|| ConnectionGroup {
+                key: gkey,
+                label: group_label(conn),
+                // Inner connections have no owning process / source address.
+                process: if is_inner(conn) {
+                    String::new()
+                } else {
+                    conn.process.clone()
+                },
+                process_path: if is_inner(conn) {
+                    String::new()
+                } else {
+                    conn.process_path.clone()
+                },
+                source_ip: if is_inner(conn) {
+                    String::new()
+                } else {
+                    conn.source_ip.clone()
+                },
+                ..Default::default()
+            });
         group.count += 1;
         group.upload = group.upload.saturating_add(conn.upload);
         group.download = group.download.saturating_add(conn.download);
@@ -351,17 +347,13 @@ pub async fn fetch_groups(
 fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSort, asc: bool) {
     match sort {
         ConnectionGroupSort::Name => {
-            rows.sort_by(|a, b| {
-                cmp_str(&a.label.to_lowercase(), &b.label.to_lowercase(), asc)
-            })
+            rows.sort_by(|a, b| cmp_str(&a.label.to_lowercase(), &b.label.to_lowercase(), asc))
         }
         ConnectionGroupSort::Count => {
             rows.sort_by(|a, b| cmp_u64(a.count as u64, b.count as u64, asc))
         }
         ConnectionGroupSort::Upload => rows.sort_by(|a, b| cmp_u64(a.upload, b.upload, asc)),
-        ConnectionGroupSort::Download => {
-            rows.sort_by(|a, b| cmp_u64(a.download, b.download, asc))
-        }
+        ConnectionGroupSort::Download => rows.sort_by(|a, b| cmp_u64(a.download, b.download, asc)),
         ConnectionGroupSort::UploadSpeed => {
             rows.sort_by(|a, b| cmp_u64(a.upload_speed, b.upload_speed, asc))
         }
@@ -401,18 +393,14 @@ fn sort_rows(rows: &mut [Connection], sort: ConnectionsSort, asc: bool) {
     match sort {
         ConnectionsSort::Time => rows.sort_by(|a, b| cmp_str(&a.start, &b.start, asc)),
         ConnectionsSort::Upload => rows.sort_by(|a, b| cmp_u64(a.upload, b.upload, asc)),
-        ConnectionsSort::Download => {
-            rows.sort_by(|a, b| cmp_u64(a.download, b.download, asc))
-        }
+        ConnectionsSort::Download => rows.sort_by(|a, b| cmp_u64(a.download, b.download, asc)),
         ConnectionsSort::UploadSpeed => {
             rows.sort_by(|a, b| cmp_u64(a.upload_speed, b.upload_speed, asc))
         }
         ConnectionsSort::DownloadSpeed => {
             rows.sort_by(|a, b| cmp_u64(a.download_speed, b.download_speed, asc))
         }
-        ConnectionsSort::Process => {
-            rows.sort_by(|a, b| cmp_str(&a.process, &b.process, asc))
-        }
+        ConnectionsSort::Process => rows.sort_by(|a, b| cmp_str(&a.process, &b.process, asc)),
     }
 }
 
@@ -454,7 +442,11 @@ async fn stream_once(
     start_gen: u64,
     slot: &TargetSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
+    let client = MihomoClient::new(
+        &target.base_url,
+        target.secret.clone(),
+        target.allow_insecure,
+    )?;
     let path = format!("connections?interval={interval_ms}");
     let mut ws = client.open_ws(&path).await?;
     let mut first = true;

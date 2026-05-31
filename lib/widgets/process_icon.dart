@@ -39,14 +39,17 @@ class ProcessIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final key = _key;
-    cache.request(key);
+    final targetSize = _isAndroid
+        ? null
+        : (size * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 256);
+    cache.request(key, size: targetSize);
     final fallback = key.isEmpty
         ? 'assets/process_icons/device.png'
         : _defaultAppAsset;
     return ListenableBuilder(
       listenable: cache,
       builder: (context, _) {
-        final image = cache.iconFor(key);
+        final image = cache.iconFor(key, size: targetSize);
         return SizedBox.square(
           dimension: size,
           child: image != null

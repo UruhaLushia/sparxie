@@ -11,10 +11,6 @@ pub async fn dns_query(
     record_type: Option<String>,
 ) -> Result<String, MihomoError> {
     let ty = record_type.as_deref().unwrap_or("A");
-    let path = format!(
-        "dns/query?name={}&type={}",
-        urlencode(&name),
-        urlencode(ty)
-    );
+    let path = format!("dns/query?name={}&type={}", urlencode(&name), urlencode(ty));
     Ok(target.client()?.get_json(&path).await?.to_string())
 }

@@ -7,10 +7,7 @@ use super::{MihomoTarget, urlencode};
 
 /// `GET /storage/{key}` — returns a JSON value, or the literal string
 /// `"null"` when the key has never been written.
-pub async fn storage_get(
-    target: MihomoTarget,
-    key: String,
-) -> Result<String, MihomoError> {
+pub async fn storage_get(target: MihomoTarget, key: String) -> Result<String, MihomoError> {
     Ok(target
         .client()?
         .get_json(&format!("storage/{}", urlencode(&key)))
@@ -38,10 +35,7 @@ pub async fn storage_set(
 }
 
 /// `DELETE /storage/{key}` — remove a key (always 204 even if absent).
-pub async fn storage_delete(
-    target: MihomoTarget,
-    key: String,
-) -> Result<(), MihomoError> {
+pub async fn storage_delete(target: MihomoTarget, key: String) -> Result<(), MihomoError> {
     target
         .client()?
         .forward(

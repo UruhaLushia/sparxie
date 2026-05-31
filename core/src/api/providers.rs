@@ -14,10 +14,7 @@ pub async fn proxy_providers(target: MihomoTarget) -> Result<String, MihomoError
         .to_string())
 }
 
-pub async fn proxy_provider_update(
-    target: MihomoTarget,
-    name: String,
-) -> Result<(), MihomoError> {
+pub async fn proxy_provider_update(target: MihomoTarget, name: String) -> Result<(), MihomoError> {
     target
         .client()?
         .forward(
@@ -54,10 +51,7 @@ pub async fn rule_providers(target: MihomoTarget) -> Result<String, MihomoError>
         .to_string())
 }
 
-pub async fn rule_provider_update(
-    target: MihomoTarget,
-    name: String,
-) -> Result<(), MihomoError> {
+pub async fn rule_provider_update(target: MihomoTarget, name: String) -> Result<(), MihomoError> {
     target
         .client()?
         .forward(

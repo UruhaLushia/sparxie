@@ -49,10 +49,7 @@ pub async fn proxies(
     Ok(raw.to_string())
 }
 
-pub async fn proxy_detail(
-    target: MihomoTarget,
-    name: String,
-) -> Result<String, MihomoError> {
+pub async fn proxy_detail(target: MihomoTarget, name: String) -> Result<String, MihomoError> {
     let path = format!("proxies/{}", urlencode(&name));
     Ok(target.client()?.get_json(&path).await?.to_string())
 }
@@ -74,10 +71,7 @@ pub async fn select_proxy(
 }
 
 /// `DELETE /proxies/{name}` — clears the "fixed" selection on a non-Selector group.
-pub async fn unfix_proxy(
-    target: MihomoTarget,
-    name: String,
-) -> Result<(), MihomoError> {
+pub async fn unfix_proxy(target: MihomoTarget, name: String) -> Result<(), MihomoError> {
     target
         .client()?
         .forward(
@@ -111,7 +105,5 @@ pub async fn proxy_delay(
         }
     }
     let v = target.client()?.get_json(&path).await?;
-    Ok(v.get("delay")
-        .and_then(|d| d.as_i64())
-        .unwrap_or_default())
+    Ok(v.get("delay").and_then(|d| d.as_i64()).unwrap_or_default())
 }

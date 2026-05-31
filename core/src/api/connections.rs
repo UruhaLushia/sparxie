@@ -12,10 +12,7 @@ pub async fn connections(target: MihomoTarget) -> Result<String, MihomoError> {
 }
 
 /// `DELETE /connections/{id}` — close a single connection by UUID.
-pub async fn close_connection(
-    target: MihomoTarget,
-    id: String,
-) -> Result<(), MihomoError> {
+pub async fn close_connection(target: MihomoTarget, id: String) -> Result<(), MihomoError> {
     target
         .client()?
         .forward(
