@@ -144,7 +144,11 @@ async fn stream_once<T: Sample>(
     base: &str,
     start_gen: u64,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
+    let client = MihomoClient::new(
+        &target.base_url,
+        target.secret.clone(),
+        target.allow_insecure,
+    )?;
     let mut ws = client.open_ws(path).await?;
     // Hold a sender clone so we can await `closed()` (fires when the last
     // receiver drops) without locking the registry on every frame.
@@ -187,11 +191,23 @@ async fn stream_once<T: Sample>(
 pub async fn traffic_subscribe(
     target: MihomoTarget,
 ) -> Result<broadcast::Receiver<TrafficSample>, MihomoError> {
-    Ok(subscribe(registry_traffic(), target_key(&target), target, "traffic".into()).await)
+    Ok(subscribe(
+        registry_traffic(),
+        target_key(&target),
+        target,
+        "traffic".into(),
+    )
+    .await)
 }
 
 pub async fn memory_subscribe(
     target: MihomoTarget,
 ) -> Result<broadcast::Receiver<MemorySample>, MihomoError> {
-    Ok(subscribe(registry_memory(), target_key(&target), target, "memory".into()).await)
+    Ok(subscribe(
+        registry_memory(),
+        target_key(&target),
+        target,
+        "memory".into(),
+    )
+    .await)
 }

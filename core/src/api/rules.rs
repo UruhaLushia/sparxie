@@ -112,10 +112,7 @@ pub async fn rules_count(target: MihomoTarget) -> u32 {
 
 /// `GET /rules` — fetch the full ruleset, cache it for `target`, apply
 /// `filter`, and return counts. Replaces any previously cached ruleset.
-pub async fn rules_load(
-    target: MihomoTarget,
-    filter: String,
-) -> Result<RulesSummary, MihomoError> {
+pub async fn rules_load(target: MihomoTarget, filter: String) -> Result<RulesSummary, MihomoError> {
     let raw = target.client()?.get_json("rules").await?;
     let mut all = Vec::new();
     if let Some(arr) = raw.get("rules").and_then(Value::as_array) {
@@ -171,10 +168,7 @@ pub async fn rules_window(target: MihomoTarget, offset: u32, limit: u32) -> Vec<
 /// On success the cache is patched so the next window reflects the change
 /// without a reload. mihomo rejects this under `--embed`; treat 404 as a
 /// feature gate, not a bug.
-pub async fn rules_disable(
-    target: MihomoTarget,
-    indices_json: String,
-) -> Result<(), MihomoError> {
+pub async fn rules_disable(target: MihomoTarget, indices_json: String) -> Result<(), MihomoError> {
     let body: Value = serde_json::from_str(&indices_json)?;
     target
         .client()?

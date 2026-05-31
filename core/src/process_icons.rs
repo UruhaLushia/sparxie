@@ -6,15 +6,23 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use tokio::sync::Semaphore;
 
 use crate::cache_db::{self, PROC_ICONS};
 use crate::error::MihomoError;
+#[cfg(not(target_os = "android"))]
+use crate::utils::image::normalize_desktop_icon;
 
 /// Bounds concurrent resolves so a burst of new connections doesn't spawn
 /// dozens of parallel desktop-file scans. Mirrors Sparkle's cap.
 const MAX_CONCURRENT: usize = 5;
+const DEFAULT_ICON_SIZE: u32 = 256;
+
+/// Process icons can change when apps update; keep the disk cache fresh while
+/// still avoiding repeated file-icon extraction during normal use.
+const ICON_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct State {
     sem: Semaphore,
@@ -50,15 +58,32 @@ fn icon_key(key: &str) -> String {
     blake3::hash(key.as_bytes()).to_hex().to_string()
 }
 
+fn sized_icon_key(key: &str, size: u32) -> String {
+    format!("{}@{}", key, icon_size(size))
+}
+
+fn icon_size(size: u32) -> u32 {
+    size.clamp(1, DEFAULT_ICON_SIZE)
+}
+
 async fn db_get_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
-    tokio::task::spawn_blocking(move || cache_db::get_bytes(PROC_ICONS, &icon_key(&key)))
-        .await
-        .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        let now = cache_db::now_secs();
+        let value = cache_db::get_bytes(PROC_ICONS, &icon_key(&key))?;
+        Ok(value.and_then(|raw| {
+            let (created, bytes) = cache_db::unstamp(&raw)?;
+            (created <= now && Duration::from_secs(now - created) < ICON_TTL)
+                .then(|| bytes.to_vec())
+        }))
+    })
+    .await
+    .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
 }
 
 async fn db_put_icon(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
     tokio::task::spawn_blocking(move || {
-        cache_db::put_bytes(PROC_ICONS, &icon_key(&key), &bytes)
+        let value = cache_db::stamp(cache_db::now_secs(), &bytes);
+        cache_db::put_bytes(PROC_ICONS, &icon_key(&key), &value)
     })
     .await
     .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
@@ -82,6 +107,14 @@ pub async fn cached(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
         return Ok(None);
     }
     db_get_icon(key).await
+}
+
+/// Disk-only sized icon lookup; `None` on a miss without resolving.
+pub async fn cached_sized(key: String, size: u32) -> Result<Option<Vec<u8>>, MihomoError> {
+    if key.is_empty() {
+        return Ok(None);
+    }
+    db_get_icon(sized_icon_key(&key, size)).await
 }
 
 /// Persist icon `bytes` resolved outside Rust (Android) into the shared cache.
@@ -150,12 +183,19 @@ pub async fn store_name(key: String, name: String) -> Result<(), MihomoError> {
 /// Resolve `process_path` to icon bytes: cache hit, then negative cache, then
 /// a deduped resolve on the blocking pool.
 pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError> {
+    fetch_sized(process_path, DEFAULT_ICON_SIZE).await
+}
+
+/// Resolve `process_path` to icon bytes at the exact display pixel size.
+pub async fn fetch_sized(process_path: String, size: u32) -> Result<Option<Vec<u8>>, MihomoError> {
     let state = state()?;
     if process_path.is_empty() {
         return Ok(None);
     }
+    let size = icon_size(size);
+    let cache_key = sized_icon_key(&process_path, size);
 
-    if let Some(bytes) = db_get_icon(process_path.clone()).await? {
+    if let Some(bytes) = db_get_icon(cache_key.clone()).await? {
         return Ok(Some(bytes));
     }
     if state
@@ -175,7 +215,7 @@ pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError>
         }
     }
 
-    let result = resolve(state, process_path.clone()).await;
+    let result = resolve(state, process_path.clone(), size, cache_key).await;
 
     if let Ok(mut inflight) = state.inflight.lock() {
         inflight.remove(&process_path);
@@ -186,6 +226,8 @@ pub async fn fetch(process_path: String) -> Result<Option<Vec<u8>>, MihomoError>
 async fn resolve(
     state: &'static State,
     process_path: String,
+    size: u32,
+    cache_key: String,
 ) -> Result<Option<Vec<u8>>, MihomoError> {
     let _permit = state
         .sem
@@ -194,13 +236,13 @@ async fn resolve(
         .map_err(|e| MihomoError::Other(format!("process-icon semaphore closed: {e}")))?;
 
     let path = process_path.clone();
-    let icon = tokio::task::spawn_blocking(move || resolve_icon_bytes(&path))
+    let icon = tokio::task::spawn_blocking(move || resolve_icon_bytes_sized(&path, size))
         .await
         .map_err(|e| MihomoError::Other(format!("process-icon join: {e}")))?;
 
     match icon {
         Some(bytes) if !bytes.is_empty() => {
-            let _ = db_put_icon(process_path, bytes.clone()).await;
+            let _ = db_put_icon(cache_key, bytes.clone()).await;
             Ok(Some(bytes))
         }
         _ => {
@@ -213,16 +255,16 @@ async fn resolve(
 }
 
 #[cfg(not(target_os = "android"))]
-fn resolve_icon_bytes(path: &str) -> Option<Vec<u8>> {
-    // No explicit size — let the platform return its best/native icon (256px
-    // jumbo on Windows). The UI downscales at the display layer; forcing a
-    // small size here produced blurry icons on high-DPI screens.
-    file_icon::file_to_buf(path).ok()
+fn resolve_icon_bytes_sized(path: &str, size: u32) -> Option<Vec<u8>> {
+    // No explicit size — `file-icon` already returns a large/native icon by
+    // default. Normalize before caching, matching Sparkle's renderer-side
+    // `cropAndPadTransparent` without repeating that work in Flutter.
+    let bytes = file_icon::file_to_buf(path).ok()?;
+    normalize_desktop_icon(&bytes, size).or(Some(bytes))
 }
 
-// Android resolves icons via PackageManager, so `file-icon` is absent here.
 #[cfg(target_os = "android")]
-fn resolve_icon_bytes(_path: &str) -> Option<Vec<u8>> {
+fn resolve_icon_bytes_sized(_path: &str, _size: u32) -> Option<Vec<u8>> {
     None
 }
 

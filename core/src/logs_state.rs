@@ -88,12 +88,7 @@ pub async fn clear(target: MihomoTarget, level: &str) {
     }
 }
 
-async fn stream_loop(
-    target: MihomoTarget,
-    level: String,
-    key: String,
-    slot: Arc<LogSlot>,
-) {
+async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc<LogSlot>) {
     // Capture the target's stop generation; bail if Dart stops it (a dead
     // upstream produces no frames, so the sink-failure path never fires).
     let base = crate::stream_stop::base_key(&target);
@@ -126,7 +121,11 @@ async fn stream_once(
     start_gen: u64,
     slot: &LogSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(&target.base_url, target.secret.clone(), target.allow_insecure)?;
+    let client = MihomoClient::new(
+        &target.base_url,
+        target.secret.clone(),
+        target.allow_insecure,
+    )?;
     let path = format!("logs?level={level}&format=structured");
     let mut ws = client.open_ws(&path).await?;
     let mut ticks = crate::stream_stop::ticks();

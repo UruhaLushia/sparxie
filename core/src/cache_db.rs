@@ -18,10 +18,8 @@ use redb::{Database, ReadableTable, TableDefinition};
 use crate::error::MihomoError;
 
 pub const ICONS: TableDefinition<'_, &str, &[u8]> = TableDefinition::new("icons");
-pub const PROC_ICONS: TableDefinition<'_, &str, &[u8]> =
-    TableDefinition::new("proc_icons");
-pub const PROC_NAMES: TableDefinition<'_, &str, &str> =
-    TableDefinition::new("proc_names");
+pub const PROC_ICONS: TableDefinition<'_, &str, &[u8]> = TableDefinition::new("proc_icons");
+pub const PROC_NAMES: TableDefinition<'_, &str, &str> = TableDefinition::new("proc_names");
 
 static DB: OnceLock<Database> = OnceLock::new();
 

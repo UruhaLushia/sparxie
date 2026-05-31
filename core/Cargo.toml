@@ -42,3 +42,4 @@ url = "2.5"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 file-icon = { git = "https://github.com/UruhaLushia/file-icon-rs", rev = "1a70444f17e47e0e7755f67a5e91a4c0664c78fe" }
 fontdb = "0.23"
+png = "0.18.1"

@@ -48,17 +48,20 @@ impl Transport {
             if path.is_empty() {
                 return Err(MihomoError::InvalidUrl("empty unix socket path".into()));
             }
-            return Ok(Self::Unix { path: path.to_string() });
+            return Ok(Self::Unix {
+                path: path.to_string(),
+            });
         }
         if let Some(rest) = trimmed.strip_prefix("pipe:") {
             let name = rest.strip_prefix("//").unwrap_or(rest);
             if name.is_empty() {
                 return Err(MihomoError::InvalidUrl("empty pipe name".into()));
             }
-            return Ok(Self::Pipe { name: name.to_string() });
+            return Ok(Self::Pipe {
+                name: name.to_string(),
+            });
         }
-        let base =
-            Url::parse(trimmed).map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
+        let base = Url::parse(trimmed).map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
         Ok(Self::Tcp { base })
     }
 
@@ -99,10 +102,7 @@ impl WsStream {
         }
     }
 
-    async fn send(
-        &mut self,
-        msg: Message,
-    ) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+    async fn send(&mut self, msg: Message) -> Result<(), tokio_tungstenite::tungstenite::Error> {
         match self {
             Self::Tcp(s) => s.send(msg).await,
             Self::Ipc(s) => s.send(msg).await,
@@ -175,8 +175,7 @@ impl MihomoClient {
             Transport::Tcp { .. } => {
                 let req = self.auth(self.http().get(self.tcp_url(path)?));
                 let bytes = send_tcp(req).await?;
-                serde_json::from_slice(&bytes)
-                    .map_err(|e| MihomoError::InvalidJson(e.to_string()))
+                serde_json::from_slice(&bytes).map_err(|e| MihomoError::InvalidJson(e.to_string()))
             }
             _ => self.ipc_request(Method::GET, path, None).await,
         }
@@ -202,7 +201,9 @@ impl MihomoClient {
     }
 
     fn http(&self) -> &Client {
-        self.http.as_ref().expect("tcp client present for tcp transport")
+        self.http
+            .as_ref()
+            .expect("tcp client present for tcp transport")
     }
 
     /// One HTTP/1.1 request over an IPC transport (unix/pipe). No auth — local
@@ -287,9 +288,7 @@ impl MihomoClient {
             Transport::Pipe { .. } => Err(MihomoError::Other(
                 "named pipes are only supported on Windows".into(),
             )),
-            Transport::Tcp { .. } => {
-                Err(MihomoError::Other("connect_ipc on tcp transport".into()))
-            }
+            Transport::Tcp { .. } => Err(MihomoError::Other("connect_ipc on tcp transport".into())),
         }
     }
 
@@ -476,6 +475,3 @@ pub async fn read_ws_text(stream: &mut WsStream) -> Result<Option<String>, Mihom
     }
     Ok(None)
 }
-
-
-

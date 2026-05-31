@@ -19,12 +19,24 @@ pub async fn fetch_icon(url: String) -> Result<Vec<u8>, MihomoError> {
     icons::fetch(url).await
 }
 
-pub async fn fetch_process_icon(path: String) -> Result<Option<Vec<u8>>, MihomoError> {
-    process_icons::fetch(path).await
+pub async fn fetch_process_icon(
+    path: String,
+    size: Option<u32>,
+) -> Result<Option<Vec<u8>>, MihomoError> {
+    match size {
+        Some(size) => process_icons::fetch_sized(path, size).await,
+        None => process_icons::fetch(path).await,
+    }
 }
 
-pub async fn cached_process_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
-    process_icons::cached(key).await
+pub async fn cached_process_icon(
+    key: String,
+    size: Option<u32>,
+) -> Result<Option<Vec<u8>>, MihomoError> {
+    match size {
+        Some(size) => process_icons::cached_sized(key, size).await,
+        None => process_icons::cached(key).await,
+    }
 }
 
 pub async fn store_process_icon(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
