@@ -1,15 +1,15 @@
 //! System UI-font enumeration for the desktop font picker.
 //!
 //! Pure-Rust `fontdb` scans the platform's font directories (no FreeType /
-//! Fontconfig C deps), so this cross-compiles cleanly and is excluded from
-//! the Android build entirely — mobile uses the system font.
+//! Fontconfig C deps), so this cross-compiles cleanly on desktop and is
+//! excluded from mobile builds entirely.
 
-/// Distinct installed font family names, sorted. Empty on Android.
+/// Distinct installed font family names, sorted. Empty on mobile.
 pub fn list_families() -> Vec<String> {
     families()
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn families() -> Vec<String> {
     use std::collections::BTreeSet;
 
@@ -31,7 +31,7 @@ fn families() -> Vec<String> {
     names.into_iter().collect()
 }
 
-#[cfg(target_os = "android")]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn families() -> Vec<String> {
     Vec::new()
 }
