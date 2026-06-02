@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use super::ordering::{sort_groups, sort_rows};
-use super::types::{Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsSort};
+use super::ordering::sort_groups;
+use super::types::{Connection, ConnectionGroup, ConnectionGroupSort};
 
 /// Stable key + display label for mihomo's internally-generated connections
 /// (DNS hijack, internal probes, etc.). These carry no source address or
@@ -21,8 +21,8 @@ where
     for conn in connections {
         let gkey = group_key(conn);
         let group = groups
-            .entry(gkey.clone())
-            .or_insert_with(|| initial_group(conn, gkey));
+            .entry(gkey)
+            .or_insert_with_key(|key| initial_group(conn, key.clone()));
         group.count += 1;
         group.upload = group.upload.saturating_add(conn.upload);
         group.download = group.download.saturating_add(conn.download);
@@ -39,24 +39,33 @@ where
     rows
 }
 
-pub(super) fn group_connections<'a, I>(
-    connections: I,
+pub(super) fn group_connections_by_order(
+    active: &HashMap<String, Connection>,
+    sorted_ids: &[String],
     group: &str,
-    sort: ConnectionsSort,
-    asc: bool,
     limit: u32,
-) -> Vec<Connection>
-where
-    I: IntoIterator<Item = &'a Connection>,
-{
-    let mut rows: Vec<Connection> = connections
-        .into_iter()
-        .filter(|c| group_key(c) == group)
-        .cloned()
-        .collect();
-    sort_rows(&mut rows, sort, asc);
-    rows.truncate(limit as usize);
+) -> Vec<Connection> {
+    let mut rows = Vec::new();
+    for id in sorted_ids {
+        if rows.len() >= limit as usize {
+            break;
+        }
+        let Some(conn) = active.get(id).filter(|conn| conn_in_group(conn, group)) else {
+            continue;
+        };
+        rows.push(conn.clone());
+    }
     rows
+}
+
+fn conn_in_group(conn: &Connection, group: &str) -> bool {
+    if is_inner(conn) {
+        group == INNER_KEY
+    } else if !conn.process.is_empty() {
+        conn.process == group
+    } else {
+        conn.source_ip == group
+    }
 }
 
 fn initial_group(conn: &Connection, key: String) -> ConnectionGroup {

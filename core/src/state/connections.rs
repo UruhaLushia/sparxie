@@ -18,8 +18,8 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use crate::MihomoError;
 use crate::api::MihomoTarget;
 
-use groups::{active_groups, group_connections};
-use ordering::{slice, sort_rows};
+use groups::{active_groups, group_connections_by_order};
+use ordering::sort_rows;
 use stream::stream_loop;
 pub use types::*;
 
@@ -29,6 +29,12 @@ pub(super) struct State {
     pub(super) closed: VecDeque<Connection>,
     sort: ConnectionsSort,
     asc: bool,
+    active_version: u64,
+    sorted_active_ids: Vec<String>,
+    sorted_active_version: u64,
+    sorted_active_sort: ConnectionsSort,
+    sorted_active_asc: bool,
+    sorted_active_valid: bool,
 }
 
 pub(super) struct TargetSlot {
@@ -114,17 +120,26 @@ pub async fn fetch_window(
     let Some(slot) = map.get(&key) else {
         return Vec::new();
     };
-    let state = slot.state.lock().expect("connections state poisoned");
+    let mut state = slot.state.lock().expect("connections state poisoned");
     match kind {
         ConnectionsListKind::Active => {
-            let mut rows: Vec<Connection> = state.active.values().cloned().collect();
-            sort_rows(&mut rows, state.sort, state.asc);
-            slice(rows, offset, limit)
+            ensure_sorted_active_ids(&mut state);
+            state
+                .sorted_active_ids
+                .iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .filter_map(|id| state.active.get(id).cloned())
+                .collect()
         }
-        ConnectionsListKind::Closed => {
-            let rows: Vec<Connection> = state.closed.iter().rev().cloned().collect();
-            slice(rows, offset, limit)
-        }
+        ConnectionsListKind::Closed => state
+            .closed
+            .iter()
+            .rev()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .cloned()
+            .collect(),
     }
 }
 
@@ -158,6 +173,29 @@ pub async fn fetch_group_connections(
     let Some(slot) = map.get(&key) else {
         return Vec::new();
     };
-    let state = slot.state.lock().expect("connections state poisoned");
-    group_connections(state.active.values(), &group, state.sort, state.asc, limit)
+    let mut state = slot.state.lock().expect("connections state poisoned");
+    ensure_sorted_active_ids(&mut state);
+    group_connections_by_order(&state.active, &state.sorted_active_ids, &group, limit)
+}
+
+fn ensure_sorted_active_ids(state: &mut State) {
+    if state.sorted_active_valid
+        && state.sorted_active_version == state.active_version
+        && state.sorted_active_sort == state.sort
+        && state.sorted_active_asc == state.asc
+    {
+        return;
+    }
+
+    let mut rows: Vec<&Connection> = state.active.values().collect();
+    sort_rows(&mut rows, state.sort, state.asc);
+    state.sorted_active_ids.clear();
+    state.sorted_active_ids.reserve(rows.len());
+    state
+        .sorted_active_ids
+        .extend(rows.into_iter().map(|conn| conn.id.clone()));
+    state.sorted_active_version = state.active_version;
+    state.sorted_active_sort = state.sort;
+    state.sorted_active_asc = state.asc;
+    state.sorted_active_valid = true;
 }

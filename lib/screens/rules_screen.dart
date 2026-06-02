@@ -23,10 +23,8 @@ class RulesScreen extends StatefulWidget {
 }
 
 class _RulesScreenState extends State<RulesScreen> {
-  // Visible viewport is ~12 rows; keep ~120 around it so short scrolls don't
-  // hit the backend.
-  static const int _windowSize = 120;
-  static const int _edgeMargin = 30;
+  static const int _windowOverscan = 5;
+  static const int _windowRefetchMargin = 2;
   static const double _rowHeight = 86;
   static const Duration _filterDebounce = Duration(milliseconds: 200);
 
@@ -42,6 +40,7 @@ class _RulesScreenState extends State<RulesScreen> {
   int _filtered = 0;
 
   int _offset = 0;
+  int _limit = 0;
   final List<rust.RuleEntry> _window = <rust.RuleEntry>[];
   bool _scheduled = false;
 
@@ -88,6 +87,7 @@ class _RulesScreenState extends State<RulesScreen> {
 
   void _resetWindow() {
     _offset = 0;
+    _limit = 0;
     _window.clear();
     _total = 0;
     _filtered = 0;
@@ -108,11 +108,15 @@ class _RulesScreenState extends State<RulesScreen> {
       _total = summary.total;
       _filtered = summary.filtered;
       _offset = 0;
-      await _fetchWindow(0);
+      _limit = _initialLimit();
+      await _fetchWindow(_offset, _limit);
     } catch (e) {
       if (mounted) setState(() => _error = formatError(e));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        _scheduleEnsureWindow();
+      }
     }
   }
 
@@ -134,8 +138,10 @@ class _RulesScreenState extends State<RulesScreen> {
       _total = summary.total;
       _filtered = summary.filtered;
       _offset = 0;
+      _limit = _initialLimit();
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
-      await _fetchWindow(0);
+      await _fetchWindow(_offset, _limit);
+      _scheduleEnsureWindow();
     } catch (_) {
       // Filter failures are non-fatal; the list just stays as-is.
     }
@@ -150,36 +156,67 @@ class _RulesScreenState extends State<RulesScreen> {
     });
   }
 
+  void _scheduleEnsureWindow() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _ensureWindow();
+    });
+  }
+
   void _ensureWindow() {
     if (!_scrollController.hasClients || _filtered == 0) return;
     final pos = _scrollController.position;
-    final centerPx = pos.pixels + pos.viewportDimension / 2;
-    final centerIndex = (centerPx / _rowHeight).floor().clamp(0, 1 << 30);
-    final localCenter = centerIndex - _offset;
-    final near =
-        localCenter < _edgeMargin || localCenter > _windowSize - _edgeMargin;
-    if (!near) return;
-    final desired = (centerIndex - _windowSize ~/ 2).clamp(
-      0,
-      (_filtered - _windowSize).clamp(0, _filtered),
-    );
-    if (desired == _offset) return;
-    _offset = desired;
-    _fetchWindow(desired);
+    final firstIndex = (pos.pixels / _rowHeight).floor();
+    final lastIndex =
+        ((pos.pixels + pos.viewportDimension) / _rowHeight).ceil() - 1;
+    final safeFirst = firstIndex.clamp(0, _filtered - 1).toInt();
+    final safeLast = lastIndex.clamp(safeFirst, _filtered - 1).toInt();
+    final desiredOffset = (safeFirst - _windowOverscan)
+        .clamp(0, _filtered)
+        .toInt();
+    final end = (safeLast + 1 + _windowOverscan).clamp(0, _filtered).toInt();
+    final desiredLimit = end - desiredOffset;
+    final cachedEnd = _offset + _limit;
+    final covered =
+        _window.isNotEmpty &&
+        safeFirst >= _offset + _windowRefetchMargin &&
+        safeLast < cachedEnd - _windowRefetchMargin;
+    final unchanged =
+        desiredOffset == _offset &&
+        desiredLimit == _limit &&
+        _window.isNotEmpty;
+    if (covered || unchanged) {
+      return;
+    }
+    _offset = desiredOffset;
+    _limit = desiredLimit;
+    _fetchWindow(desiredOffset, desiredLimit);
   }
 
-  Future<void> _fetchWindow(int offset) async {
+  int _initialLimit() {
+    if (!_scrollController.hasClients) {
+      return (_windowOverscan + 1).clamp(0, _filtered).toInt();
+    }
+    final visibleRows =
+        (_scrollController.position.viewportDimension / _rowHeight).ceil();
+    return (visibleRows + _windowOverscan * 2).clamp(0, _filtered).toInt();
+  }
+
+  Future<void> _fetchWindow(int offset, int limit) async {
     final target = _target();
-    if (target == null) return;
+    if (target == null || limit <= 0) {
+      if (mounted) setState(() => _window.clear());
+      return;
+    }
     try {
       final rows = await rust.rulesWindow(
         target: target,
         offset: offset,
-        limit: _windowSize,
+        limit: limit,
       );
       if (!mounted ||
           !identical(widget.store.active, _activeKey) ||
-          offset != _offset) {
+          offset != _offset ||
+          limit != _limit) {
         return;
       }
       setState(() {
@@ -347,9 +384,7 @@ class _RuleTile extends StatelessWidget {
 
   double? get _hitRate {
     final total = rule.hitCount + rule.missCount;
-    return total > BigInt.zero
-        ? rule.hitCount / total * 100
-        : null;
+    return total > BigInt.zero ? rule.hitCount / total * 100 : null;
   }
 
   @override

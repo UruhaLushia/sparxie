@@ -138,6 +138,7 @@ fn apply_snapshot(
             state.closed.push_back(row);
         }
     }
+    state.active_version = state.active_version.wrapping_add(1);
 
     ConnectionsFrame {
         active_count: state.active.len() as u32,

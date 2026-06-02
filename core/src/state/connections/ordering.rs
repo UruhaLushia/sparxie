@@ -1,11 +1,5 @@
 use super::types::{Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsSort};
 
-pub(super) fn slice(rows: Vec<Connection>, offset: u32, limit: u32) -> Vec<Connection> {
-    let start = (offset as usize).min(rows.len());
-    let end = start.saturating_add(limit as usize).min(rows.len());
-    rows[start..end].to_vec()
-}
-
 pub(super) fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSort, asc: bool) {
     match sort {
         ConnectionGroupSort::Name => {
@@ -25,7 +19,7 @@ pub(super) fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSor
     }
 }
 
-pub(super) fn sort_rows(rows: &mut [Connection], sort: ConnectionsSort, asc: bool) {
+pub(super) fn sort_rows(rows: &mut [&Connection], sort: ConnectionsSort, asc: bool) {
     match sort {
         ConnectionsSort::Time => rows.sort_by(|a, b| cmp_str(&a.start, &b.start, asc)),
         ConnectionsSort::Upload => rows.sort_by(|a, b| cmp_u64(a.upload, b.upload, asc)),
