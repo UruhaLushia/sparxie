@@ -1,6 +1,6 @@
 use reqwest::Method;
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::MihomoTarget;
 

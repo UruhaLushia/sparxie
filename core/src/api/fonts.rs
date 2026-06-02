@@ -1,6 +1,6 @@
 //! Font enumeration exposed to Dart.
 
-use crate::fonts;
+use crate::assets::fonts;
 
 /// Distinct installed UI font family names, sorted. Empty on Android (which
 /// uses the system font). Runs on the blocking pool — scanning the font

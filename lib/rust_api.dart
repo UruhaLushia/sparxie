@@ -3,10 +3,10 @@
 library;
 
 export 'src/rust/api.dart' show MihomoTarget;
-export 'src/rust/error.dart';
-export 'src/rust/logs_state.dart' show LogEntry;
-export 'src/rust/traffic.dart' show MemorySample, TrafficSample;
-export 'src/rust/connections_state.dart'
+export 'src/rust/utils/error.dart';
+export 'src/rust/state/logs.dart' show LogEntry;
+export 'src/rust/state/traffic.dart' show MemorySample, TrafficSample;
+export 'src/rust/state/connections/types.dart'
     show
         Connection,
         ConnectionGroup,
@@ -25,6 +25,8 @@ export 'src/rust/api/groups.dart';
 export 'src/rust/api/icons.dart';
 export 'src/rust/api/providers.dart';
 export 'src/rust/api/proxies.dart';
+export 'src/rust/api/proxies/catalog.dart';
+export 'src/rust/api/proxies/delay.dart';
 export 'src/rust/api/rules.dart';
 export 'src/rust/api/storage.dart';
 export 'src/rust/api/streams.dart';

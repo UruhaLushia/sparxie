@@ -1,16 +1,16 @@
 //! Icon caches exposed to Dart.
 //!
 //! All three caches — remote proxy-group icons, local-process icons, and
-//! process names — live in one shared redb database ([`crate::cache_db`]).
+//! process names — live in one shared redb database ([`crate::cache::db`]).
 //! `init_cache` opens it; the per-subsystem inits set up in-memory state.
 
-use crate::error::MihomoError;
-use crate::{cache_db, icons, process_icons};
+use crate::MihomoError;
+use crate::cache::{db, icons, process_icons};
 
 /// Open the shared cache database and initialize both icon subsystems.
 /// Idempotent; the path is fixed on first call.
 pub fn init_cache(cache_dir: String) -> Result<(), MihomoError> {
-    cache_db::init(std::path::PathBuf::from(cache_dir))?;
+    db::init(std::path::PathBuf::from(cache_dir))?;
     icons::init()?;
     process_icons::init()
 }
@@ -61,7 +61,7 @@ pub fn reset_process_icon_misses() {
 
 /// Total size of the on-disk cache in bytes (keys + values across tables).
 pub async fn icon_cache_size() -> Result<u64, MihomoError> {
-    tokio::task::spawn_blocking(cache_db::total_size)
+    tokio::task::spawn_blocking(db::total_size)
         .await
         .map_err(|e| MihomoError::Other(format!("cache size join: {e}")))?
 }
@@ -69,7 +69,7 @@ pub async fn icon_cache_size() -> Result<u64, MihomoError> {
 /// Wipe every cached icon and name, then drop the in-memory resolve state so
 /// fresh lookups don't surface stale negatives.
 pub async fn clear_icon_cache() -> Result<(), MihomoError> {
-    tokio::task::spawn_blocking(cache_db::clear_all)
+    tokio::task::spawn_blocking(db::clear_all)
         .await
         .map_err(|e| MihomoError::Other(format!("cache clear join: {e}")))??;
     process_icons::clear_memory();

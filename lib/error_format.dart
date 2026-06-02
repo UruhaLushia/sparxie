@@ -1,4 +1,4 @@
-import 'src/rust/error.dart';
+import 'src/rust/utils/error.dart';
 
 /// Friendly Chinese formatter for the FFI error type. With this extension in
 /// scope, `'$e'` and `e.message` produce a readable string instead of the

@@ -155,18 +155,19 @@ fn crop_and_pad_transparent(src: &RgbaImage, size: u32) -> Option<RgbaImage> {
         pixels: vec![0; (size * size * 4) as usize],
     };
 
-    resample_bilinear(
-        src,
-        left,
-        top,
-        crop_width,
-        crop_height,
-        &mut out,
-        offset_x,
-        offset_y,
-        draw_width,
-        draw_height,
-    );
+    let src_rect = Rect {
+        x: left,
+        y: top,
+        width: crop_width,
+        height: crop_height,
+    };
+    let dst_rect = Rect {
+        x: offset_x,
+        y: offset_y,
+        width: draw_width,
+        height: draw_height,
+    };
+    resample_bilinear(src, src_rect, &mut out, dst_rect);
     Some(out)
 }
 
@@ -174,37 +175,40 @@ fn scaled_border(size: u32) -> u32 {
     ((size * DEFAULT_ICON_BORDER + DEFAULT_ICON_SIZE / 2) / DEFAULT_ICON_SIZE).min(size / 3)
 }
 
-fn resample_bilinear(
-    src: &RgbaImage,
-    src_x: u32,
-    src_y: u32,
-    src_width: u32,
-    src_height: u32,
-    dst: &mut RgbaImage,
-    dst_x: u32,
-    dst_y: u32,
-    dst_width: u32,
-    dst_height: u32,
-) {
-    for dy in 0..dst_height {
-        let sy = src_y as f32 + (dy as f32 + 0.5) * src_height as f32 / dst_height as f32 - 0.5;
+#[derive(Clone, Copy)]
+struct Rect {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+fn resample_bilinear(src: &RgbaImage, src_rect: Rect, dst: &mut RgbaImage, dst_rect: Rect) {
+    for dy in 0..dst_rect.height {
+        let sy = src_rect.y as f32
+            + (dy as f32 + 0.5) * src_rect.height as f32 / dst_rect.height as f32
+            - 0.5;
         let y0 = sy
             .floor()
-            .clamp(src_y as f32, (src_y + src_height - 1) as f32) as u32;
-        let y1 = (y0 + 1).min(src_y + src_height - 1);
+            .clamp(src_rect.y as f32, (src_rect.y + src_rect.height - 1) as f32)
+            as u32;
+        let y1 = (y0 + 1).min(src_rect.y + src_rect.height - 1);
         let wy = sy - sy.floor();
 
-        for dx in 0..dst_width {
-            let sx = src_x as f32 + (dx as f32 + 0.5) * src_width as f32 / dst_width as f32 - 0.5;
+        for dx in 0..dst_rect.width {
+            let sx = src_rect.x as f32
+                + (dx as f32 + 0.5) * src_rect.width as f32 / dst_rect.width as f32
+                - 0.5;
             let x0 = sx
                 .floor()
-                .clamp(src_x as f32, (src_x + src_width - 1) as f32) as u32;
-            let x1 = (x0 + 1).min(src_x + src_width - 1);
+                .clamp(src_rect.x as f32, (src_rect.x + src_rect.width - 1) as f32)
+                as u32;
+            let x1 = (x0 + 1).min(src_rect.x + src_rect.width - 1);
             let wx = sx - sx.floor();
 
             let sample =
                 blend4_premultiplied(src, x0, y0, x1, y1, wx.clamp(0.0, 1.0), wy.clamp(0.0, 1.0));
-            let offset = (((dst_y + dy) * dst.width + dst_x + dx) * 4) as usize;
+            let offset = (((dst_rect.y + dy) * dst.width + dst_rect.x + dx) * 4) as usize;
             dst.pixels[offset..offset + 4].copy_from_slice(&sample);
         }
     }

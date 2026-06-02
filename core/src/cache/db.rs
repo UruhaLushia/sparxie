@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use redb::{Database, ReadableTable, TableDefinition};
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 pub const ICONS: TableDefinition<'_, &str, &[u8]> = TableDefinition::new("icons");
 pub const PROC_ICONS: TableDefinition<'_, &str, &[u8]> = TableDefinition::new("proc_icons");

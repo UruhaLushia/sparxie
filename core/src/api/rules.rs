@@ -17,7 +17,7 @@ use std::sync::{Mutex, OnceLock};
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::MihomoTarget;
 
@@ -182,10 +182,10 @@ pub async fn rules_disable(target: MihomoTarget, indices_json: String) -> Result
         let mut guard = cache().lock().expect("rules cache poisoned");
         if let Some(c) = guard.as_mut().filter(|c| c.key == key) {
             for (idx, disabled) in obj {
-                if let (Ok(i), Some(d)) = (idx.parse::<usize>(), disabled.as_bool()) {
-                    if let Some(entry) = c.all.get_mut(i) {
-                        entry.disabled = d;
-                    }
+                if let (Ok(i), Some(d)) = (idx.parse::<usize>(), disabled.as_bool())
+                    && let Some(entry) = c.all.get_mut(i)
+                {
+                    entry.disabled = d;
                 }
             }
         }

@@ -1,18 +1,18 @@
 use futures_util::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::connections_state::{
+use crate::state::connections::{
     clear_closed, fetch_group_connections, fetch_groups, fetch_window, set_sort, subscribe,
 };
 // Re-export the wire types so frb scanning `crate::api::*` discovers them
 // alongside the functions that use them (otherwise they'd be treated as
-// opaque). They live in `connections_state` for organizational reasons but
+// opaque). They live in `state::connections` for organizational reasons but
 // the Dart-facing surface is here.
-pub use crate::connections_state::{
+use crate::MihomoError;
+pub use crate::state::connections::{
     Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame, ConnectionsListKind,
     ConnectionsSort, ConnectionsTotals,
 };
-use crate::error::MihomoError;
 // `StreamSink<T>` is emitted into `frb_generated.rs` by the
 // `frb_generated_boilerplate_io!()` / `_web!()` macros — that variant exposes
 // the `add(value: T)` method we need here. A generic helper that takes
@@ -20,9 +20,9 @@ use crate::error::MihomoError;
 // `T: 'static` but the inherent method only exists on the generated alias for
 // concrete `T`s, so each call site below inlines its own loop.
 use crate::frb_generated::StreamSink;
-pub use crate::logs_state::LogEntry;
-use crate::logs_state::{clear as logs_clear, subscribe as logs_subscribe};
-use crate::traffic::{MemorySample, TrafficSample, memory_subscribe, traffic_subscribe};
+pub use crate::state::logs::LogEntry;
+use crate::state::logs::{clear as logs_clear, subscribe as logs_subscribe};
+use crate::state::traffic::{MemorySample, TrafficSample, memory_subscribe, traffic_subscribe};
 
 use super::MihomoTarget;
 
@@ -167,5 +167,5 @@ pub async fn clear_closed_connections(target: MihomoTarget, interval_ms: u32) {
 /// sink-closed path, so without this the old loops would retry the dead
 /// backend forever.
 pub fn stop_target_streams(target: MihomoTarget) {
-    crate::stream_stop::stop(&target);
+    crate::state::stop::stop(&target);
 }

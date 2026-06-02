@@ -2,7 +2,7 @@
 //! Android resolves through its PackageManager (Kotlin) and persists the
 //! result here via [`store`] / [`store_name`], so the .so omits `file-icon`.
 //!
-//! Bytes and names live in the shared redb database ([`crate::cache_db`]).
+//! Bytes and names live in the shared redb database ([`crate::cache::db`]).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use tokio::sync::Semaphore;
 
-use crate::cache_db::{self, PROC_ICONS};
-use crate::error::MihomoError;
+use crate::MihomoError;
+use crate::cache::db::{self, PROC_ICONS};
 #[cfg(not(target_os = "android"))]
 use crate::utils::image::normalize_desktop_icon;
 
@@ -37,7 +37,7 @@ struct State {
 static STATE: OnceLock<State> = OnceLock::new();
 
 /// Initialize the in-memory resolve state. The shared cache DB is opened
-/// separately via [`cache_db::init`]. Idempotent.
+/// separately via [`db::init`]. Idempotent.
 pub fn init() -> Result<(), MihomoError> {
     let _ = STATE.set(State {
         sem: Semaphore::new(MAX_CONCURRENT),
@@ -68,10 +68,10 @@ fn icon_size(size: u32) -> u32 {
 
 async fn db_get_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
     tokio::task::spawn_blocking(move || {
-        let now = cache_db::now_secs();
-        let value = cache_db::get_bytes(PROC_ICONS, &icon_key(&key))?;
+        let now = db::now_secs();
+        let value = db::get_bytes(PROC_ICONS, &icon_key(&key))?;
         Ok(value.and_then(|raw| {
-            let (created, bytes) = cache_db::unstamp(&raw)?;
+            let (created, bytes) = db::unstamp(&raw)?;
             (created <= now && Duration::from_secs(now - created) < ICON_TTL)
                 .then(|| bytes.to_vec())
         }))
@@ -82,21 +82,21 @@ async fn db_get_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
 
 async fn db_put_icon(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
     tokio::task::spawn_blocking(move || {
-        let value = cache_db::stamp(cache_db::now_secs(), &bytes);
-        cache_db::put_bytes(PROC_ICONS, &icon_key(&key), &value)
+        let value = db::stamp(db::now_secs(), &bytes);
+        db::put_bytes(PROC_ICONS, &icon_key(&key), &value)
     })
     .await
     .map_err(|e| MihomoError::Other(format!("proc-icon join: {e}")))?
 }
 
 async fn db_get_name(key: String) -> Result<Option<String>, MihomoError> {
-    tokio::task::spawn_blocking(move || cache_db::get_str(&icon_key(&key)))
+    tokio::task::spawn_blocking(move || db::get_str(&icon_key(&key)))
         .await
         .map_err(|e| MihomoError::Other(format!("proc-name join: {e}")))?
 }
 
 async fn db_put_name(key: String, value: String) -> Result<(), MihomoError> {
-    tokio::task::spawn_blocking(move || cache_db::put_str(&icon_key(&key), &value))
+    tokio::task::spawn_blocking(move || db::put_str(&icon_key(&key), &value))
         .await
         .map_err(|e| MihomoError::Other(format!("proc-name join: {e}")))?
 }

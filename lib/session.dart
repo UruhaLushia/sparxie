@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
 import 'controller.dart';
@@ -41,6 +39,9 @@ class MihomoSession {
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
+  bool _includeHiddenProxyGroups = false;
+  String _proxyCatalogFilter = '';
+  rust.ProxyMemberSort _proxyMemberSort = rust.ProxyMemberSort.original;
   String _logsLevel = 'info';
 
   final ValueNotifier<rust.TrafficSample> traffic = ValueNotifier(
@@ -169,6 +170,37 @@ class MihomoSession {
     _restartProxiesPoll();
   }
 
+  void setIncludeHiddenProxyGroups(bool value) {
+    setProxyCatalogOptions(includeHidden: value);
+  }
+
+  void setProxyCatalogOptions({
+    bool? includeHidden,
+    String? filter,
+    rust.ProxyMemberSort? memberSort,
+  }) {
+    var changed = false;
+    if (includeHidden != null && includeHidden != _includeHiddenProxyGroups) {
+      _includeHiddenProxyGroups = includeHidden;
+      changed = true;
+    }
+    if (filter != null) {
+      final next = filter.trim();
+      if (next != _proxyCatalogFilter) {
+        _proxyCatalogFilter = next;
+        changed = true;
+      }
+    }
+    if (memberSort != null && memberSort != _proxyMemberSort) {
+      _proxyMemberSort = memberSort;
+      changed = true;
+    }
+    if (!changed) return;
+    proxies.reset();
+    _iconsWarmed = false;
+    unawaited(_refreshProxies());
+  }
+
   String get logsLevel => _logsLevel;
 
   void setLogsLevel(String level) {
@@ -204,9 +236,7 @@ class MihomoSession {
             allowInsecure: next.allowInsecure,
           );
     if (previous != null) {
-      unawaited(
-        rust.stopTargetStreams(target: previous).catchError((_) {}),
-      );
+      unawaited(rust.stopTargetStreams(target: previous).catchError((_) {}));
     }
     _resubscribeAll();
   }
@@ -298,17 +328,10 @@ class MihomoSession {
     final controller = _activeKey;
     if (t == null) return;
     try {
-      final raw = await rust.version(target: t);
+      final info = await rust.versionInfo(target: t);
       if (!identical(_activeKey, controller)) return;
-      String version = '';
-      try {
-        final json = jsonDecode(raw);
-        if (json is Map && json['version'] is String) {
-          version = json['version'] as String;
-        }
-      } catch (_) {}
-      versionString.value = version;
-      isCmfa.value = version.toLowerCase().contains('cmfa');
+      versionString.value = info.version;
+      isCmfa.value = info.isCmfa;
     } catch (_) {
       // Non-critical; absent version just means CMFA features default to false.
     }
@@ -333,26 +356,42 @@ class MihomoSession {
     final controller = _activeKey;
     if (t == null || _proxiesRefreshing) return;
     _proxiesRefreshing = true;
+    var refreshAgain = false;
     try {
-      final raw = await rust.proxies(target: t, groupsOnly: false);
+      final includeHidden = _includeHiddenProxyGroups;
+      final filter = _proxyCatalogFilter;
+      final memberSort = _proxyMemberSort;
+      final catalog = await rust.proxyCatalog(
+        target: t,
+        includeHidden: includeHidden,
+        filter: filter,
+        memberSort: memberSort,
+      );
       if (!identical(_activeKey, controller)) return;
-      proxies.apply(raw);
+      if (includeHidden != _includeHiddenProxyGroups ||
+          filter != _proxyCatalogFilter ||
+          memberSort != _proxyMemberSort) {
+        refreshAgain = true;
+        return;
+      }
+      proxies.applyCatalog(catalog);
       if (!_iconsWarmed) {
         _iconsWarmed = true;
-        _warmIconCache();
+        _warmIconCache(catalog.iconUrls);
       }
     } catch (e) {
       if (identical(_activeKey, controller)) error.value = formatError(e);
     } finally {
       _proxiesRefreshing = false;
+      if (refreshAgain) unawaited(_refreshProxies());
     }
   }
 
   // Kick off background downloads for every group/node icon right after the
   // first proxy list lands, so the disk cache is warm before the user
   // scrolls to them. Fire-and-forget; failures are non-fatal.
-  void _warmIconCache() {
-    for (final url in proxies.iconUrls()) {
+  void _warmIconCache(Iterable<String> urls) {
+    for (final url in urls) {
       unawaited(rust.fetchIcon(url: url).then((_) {}, onError: (_) {}));
     }
   }

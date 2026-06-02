@@ -25,12 +25,10 @@ class ProxiesSettingsMenu extends StatelessWidget {
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 220),
       transitionBuilder: (context, animation, _, child) {
-        final offset = Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        );
+        final offset =
+            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
         return Align(
           alignment: Alignment.centerRight,
           child: SlideTransition(position: offset, child: child),
@@ -49,8 +47,7 @@ class _ProxiesSettingsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final width =
-        MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
+    final width = MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -87,6 +84,20 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                           trailing: _SortSegmented(prefs: prefs),
                         ),
                         _SettingsRow(
+                          label: '显示代理组图标',
+                          trailing: Switch(
+                            value: prefs.proxiesShowGroupIcons,
+                            onChanged: prefs.setProxiesShowGroupIcons,
+                          ),
+                        ),
+                        _SettingsRow(
+                          label: '显示隐藏代理组',
+                          trailing: Switch(
+                            value: prefs.proxiesShowHiddenGroups,
+                            onChanged: prefs.setProxiesShowHiddenGroups,
+                          ),
+                        ),
+                        _SettingsRow(
                           label: '切换节点时断开连接',
                           trailing: Switch(
                             value: prefs.autoCloseOnSwitch,
@@ -103,6 +114,15 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                           label: '测试地址来源',
                           trailing: _ScopeSegmented(prefs: prefs),
                         ),
+                        _SettingsRow(
+                          label: '使用策略组 API 测速',
+                          trailing: Switch(
+                            value: prefs.delayTestUseGroupApi,
+                            onChanged: prefs.setDelayTestUseGroupApi,
+                          ),
+                        ),
+                        if (!prefs.delayTestUseGroupApi)
+                          _DelayTestConcurrencyRow(prefs: prefs),
                         _DelayTestTimeoutRow(prefs: prefs),
                       ],
                     ),
@@ -127,10 +147,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
       child: Row(
         children: [
-          Text(
-            '代理组设置',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text('代理组设置', style: Theme.of(context).textTheme.titleLarge),
           const Spacer(),
           IconButton(
             tooltip: '关闭',
@@ -156,20 +173,16 @@ class _SettingsRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
+            child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
           ),
           const SizedBox(width: 12),
           trailing,
@@ -308,20 +321,16 @@ class _DelayTestUrlRowState extends State<_DelayTestUrlRow> {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '延迟测试地址',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('延迟测试地址', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           TextField(
             controller: _ctl,
@@ -331,8 +340,89 @@ class _DelayTestUrlRowState extends State<_DelayTestUrlRow> {
               hintText: 'https://www.gstatic.com/generate_204',
             ),
             onSubmitted: widget.prefs.setDelayTestUrl,
-            onEditingComplete: () =>
-                widget.prefs.setDelayTestUrl(_ctl.text),
+            onEditingComplete: () => widget.prefs.setDelayTestUrl(_ctl.text),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DelayTestConcurrencyRow extends StatefulWidget {
+  const _DelayTestConcurrencyRow({required this.prefs});
+  final AppPrefs prefs;
+
+  @override
+  State<_DelayTestConcurrencyRow> createState() =>
+      _DelayTestConcurrencyRowState();
+}
+
+class _DelayTestConcurrencyRowState extends State<_DelayTestConcurrencyRow> {
+  late final TextEditingController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = TextEditingController(
+      text: widget.prefs.delayTestConcurrency.toString(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _DelayTestConcurrencyRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final value = widget.prefs.delayTestConcurrency.toString();
+    if (value != _ctl.text) _ctl.text = value;
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final value =
+        int.tryParse(_ctl.text.trim()) ?? AppPrefs.defaultDelayTestConcurrency;
+    widget.prefs.setDelayTestConcurrency(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '延迟测试并发数量',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 96,
+            child: TextField(
+              controller: _ctl,
+              textAlign: TextAlign.end,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                hintText: '50',
+              ),
+              onSubmitted: (_) => _commit(),
+              onEditingComplete: _commit,
+            ),
           ),
         ],
       ),
@@ -349,7 +439,9 @@ class _DelayTestTimeoutRow extends StatelessWidget {
   String _label(int ms) {
     if (ms < 1000) return '${ms}ms';
     final s = ms / 1000;
-    return s == s.roundToDouble() ? '${s.toInt()}s' : '${s.toStringAsFixed(1)}s';
+    return s == s.roundToDouble()
+        ? '${s.toInt()}s'
+        : '${s.toStringAsFixed(1)}s';
   }
 
   @override
@@ -360,10 +452,7 @@ class _DelayTestTimeoutRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '延迟测试超时时间',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('延迟测试超时时间', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,

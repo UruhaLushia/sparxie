@@ -83,11 +83,15 @@ class AppPrefs extends ChangeNotifier {
   static const _kConnectionsRefreshMs = 'connectionsRefreshMs';
   static const _kProxiesSort = 'proxiesSort';
   static const _kProxiesColumns = 'proxiesColumns';
+  static const _kProxiesShowGroupIcons = 'proxiesShowGroupIcons';
+  static const _kProxiesShowHiddenGroups = 'proxiesShowHiddenGroups';
   static const _kNavLayout = 'navLayout';
   static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
   static const _kDelayTestUrl = 'delayTestUrl';
   static const _kDelayTestTimeoutMs = 'delayTestTimeoutMs';
   static const _kDelayTestScope = 'delayTestScope';
+  static const _kDelayTestUseGroupApi = 'delayTestUseGroupApi';
+  static const _kDelayTestConcurrency = 'delayTestConcurrency';
   static const _kCloseMode = 'closeMode';
   static const _kConnectionsSort = 'connectionsSort';
   static const _kConnectionsSortAsc = 'connectionsSortAsc';
@@ -103,12 +107,16 @@ class AppPrefs extends ChangeNotifier {
 
   /// `0` means "auto" — pick a column count from the viewport width.
   static const defaultProxiesColumns = 0;
+  static const defaultProxiesShowGroupIcons = true;
+  static const defaultProxiesShowHiddenGroups = false;
 
   static const defaultNavLayout = NavLayout.cards;
   static const defaultAutoCloseOnSwitch = true;
   static const defaultDelayTestUrl = 'https://www.gstatic.com/generate_204';
   static const defaultDelayTestTimeoutMs = 5000;
   static const defaultDelayTestScope = DelayTestScope.group;
+  static const defaultDelayTestUseGroupApi = false;
+  static const defaultDelayTestConcurrency = 50;
   static const defaultCloseMode = CloseMode.all;
   static const defaultConnectionsSort = ConnectionsSort.time;
   // Newest connections first when sorting by time.
@@ -171,6 +179,22 @@ class AppPrefs extends ChangeNotifier {
     _put(_kProxiesColumns, clamped);
   }
 
+  bool get proxiesShowGroupIcons =>
+      _bool(_kProxiesShowGroupIcons, defaultProxiesShowGroupIcons);
+
+  Future<void> setProxiesShowGroupIcons(bool value) async {
+    if (value == proxiesShowGroupIcons) return;
+    _put(_kProxiesShowGroupIcons, value);
+  }
+
+  bool get proxiesShowHiddenGroups =>
+      _bool(_kProxiesShowHiddenGroups, defaultProxiesShowHiddenGroups);
+
+  Future<void> setProxiesShowHiddenGroups(bool value) async {
+    if (value == proxiesShowHiddenGroups) return;
+    _put(_kProxiesShowHiddenGroups, value);
+  }
+
   NavLayout get navLayout =>
       _decodeNavLayout(_str(_kNavLayout, defaultNavLayout.name));
 
@@ -218,6 +242,23 @@ class AppPrefs extends ChangeNotifier {
     _put(_kDelayTestScope, value.name);
   }
 
+  bool get delayTestUseGroupApi =>
+      _bool(_kDelayTestUseGroupApi, defaultDelayTestUseGroupApi);
+
+  Future<void> setDelayTestUseGroupApi(bool value) async {
+    if (value == delayTestUseGroupApi) return;
+    _put(_kDelayTestUseGroupApi, value);
+  }
+
+  int get delayTestConcurrency =>
+      _int(_kDelayTestConcurrency, defaultDelayTestConcurrency);
+
+  Future<void> setDelayTestConcurrency(int value) async {
+    final clamped = value.clamp(1, 512);
+    if (clamped == delayTestConcurrency) return;
+    _put(_kDelayTestConcurrency, clamped);
+  }
+
   CloseMode get closeMode =>
       _decodeCloseMode(_str(_kCloseMode, defaultCloseMode.name));
 
@@ -226,8 +267,9 @@ class AppPrefs extends ChangeNotifier {
     _put(_kCloseMode, value.name);
   }
 
-  ConnectionsSort get connectionsSort =>
-      _decodeConnectionsSort(_str(_kConnectionsSort, defaultConnectionsSort.name));
+  ConnectionsSort get connectionsSort => _decodeConnectionsSort(
+    _str(_kConnectionsSort, defaultConnectionsSort.name),
+  );
 
   Future<void> setConnectionsSort(ConnectionsSort value) async {
     if (value == connectionsSort) return;

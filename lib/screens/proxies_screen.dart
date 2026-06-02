@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
@@ -36,6 +34,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   @override
   void initState() {
     super.initState();
+    _syncProxyCatalogOptions();
     widget.prefs.addListener(_onPrefs);
   }
 
@@ -46,8 +45,23 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   }
 
   void _onPrefs() {
+    _syncProxyCatalogOptions();
     if (mounted) setState(() {});
   }
+
+  void _syncProxyCatalogOptions() {
+    widget.session.setProxyCatalogOptions(
+      includeHidden: widget.prefs.proxiesShowHiddenGroups,
+      filter: _filter,
+      memberSort: _memberSort(widget.prefs.proxiesSort),
+    );
+  }
+
+  static rust.ProxyMemberSort _memberSort(ProxiesSort sort) => switch (sort) {
+    ProxiesSort.original => rust.ProxyMemberSort.original,
+    ProxiesSort.name => rust.ProxyMemberSort.name,
+    ProxiesSort.delay => rust.ProxyMemberSort.delay,
+  };
 
   void _toggle(String name) {
     setState(() {
@@ -94,19 +108,18 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
           case CloseMode.all:
             unawaited(rust.closeAllConnections(target: target));
           case CloseMode.group:
-            unawaited(rust.closeConnectionsByChain(
-              target: target,
-              chain: group.name,
-            ));
+            unawaited(
+              rust.closeConnectionsByChain(target: target, chain: group.name),
+            );
         }
       }
       unawaited(widget.session.refreshProxies());
     } catch (e) {
       widget.session.proxies.setNowOptimistic(group.name, previous);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('切换失败:$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('切换失败:$e')));
       }
     }
   }
@@ -119,9 +132,9 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       unawaited(widget.session.refreshProxies());
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('取消固定失败:$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('取消固定失败:$e')));
       }
     }
   }
@@ -129,42 +142,55 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   Future<void> _testGroup(ProxyGroup group) async {
     final target = _target();
     if (target == null || _testingGroup.contains(group.name)) return;
+    final testUrl = _resolveTestUrl(group);
     setState(() => _testingGroup.add(group.name));
     try {
-      final raw = await rust.groupDelay(
-        target: target,
-        group: group.name,
-        testUrl: _resolveTestUrl(group),
-        timeoutMs: widget.prefs.delayTestTimeoutMs,
-      );
-      final map = jsonDecode(raw);
-      if (map is Map<String, dynamic>) {
-        widget.session.proxies.applyGroupDelay(group.name, map);
-      } else if (map is Map) {
-        widget.session.proxies.applyGroupDelay(
-          group.name,
-          map.map((k, v) => MapEntry(k.toString(), v)),
+      if (widget.prefs.delayTestUseGroupApi) {
+        final delays = await rust.groupDelay(
+          target: target,
+          group: group.name,
+          testUrl: testUrl,
+          timeoutMs: widget.prefs.delayTestTimeoutMs,
         );
+        widget.session.proxies.applyGroupDelay(delays);
+      } else {
+        await _testNodesBatch(target, group.all, testUrl);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('测速失败:$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('测速失败:$e')));
       }
     } finally {
       if (mounted) setState(() => _testingGroup.remove(group.name));
     }
   }
 
-  Future<void> _testNode(String name) async {
+  Future<void> _testNodesBatch(
+    rust.MihomoTarget target,
+    List<String> names,
+    String testUrl,
+  ) async {
+    if (names.isEmpty) return;
+    final delays = await rust.proxyBatchDelay(
+      target: target,
+      names: names,
+      testUrl: testUrl,
+      timeoutMs: widget.prefs.delayTestTimeoutMs,
+      concurrency: widget.prefs.delayTestConcurrency,
+    );
+    widget.session.proxies.applyProxyDelay(delays);
+  }
+
+  Future<void> _testNode(ProxyGroup group, String name) async {
     final target = _target();
     if (target == null) return;
     try {
       final ms = await rust.proxyDelay(
         target: target,
         name: name,
-        testUrl: widget.prefs.delayTestUrl,
+        testUrl: _resolveTestUrl(group),
         timeoutMs: widget.prefs.delayTestTimeoutMs,
       );
       widget.session.proxies.applyNodeDelay(name, ms.toInt());
@@ -188,7 +214,10 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                 context: context,
                 builder: (_) => _SearchDialog(initial: _filter),
               );
-              if (result != null) setState(() => _filter = result);
+              if (result != null) {
+                setState(() => _filter = result);
+                _syncProxyCatalogOptions();
+              }
             },
           ),
           IconButton(
@@ -216,7 +245,10 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => setState(() => _filter = ''),
+                      onPressed: () {
+                        setState(() => _filter = '');
+                        _syncProxyCatalogOptions();
+                      },
                       child: const Text('清除'),
                     ),
                   ],
@@ -243,9 +275,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                       Expanded(
                         child: Text(
                           err,
-                          style: TextStyle(
-                            color: colorScheme.onErrorContainer,
-                          ),
+                          style: TextStyle(color: colorScheme.onErrorContainer),
                         ),
                       ),
                     ],
@@ -257,7 +287,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
               child: _ProxiesBody(
                 session: widget.session,
                 prefs: widget.prefs,
-                filter: _filter,
                 testingGroups: _testingGroup,
                 expanded: _expanded,
                 onToggle: _toggle,
@@ -277,7 +306,6 @@ class _ProxiesBody extends StatefulWidget {
   const _ProxiesBody({
     required this.session,
     required this.prefs,
-    required this.filter,
     required this.testingGroups,
     required this.expanded,
     required this.onToggle,
@@ -288,20 +316,19 @@ class _ProxiesBody extends StatefulWidget {
 
   final MihomoSession session;
   final AppPrefs prefs;
-  final String filter;
   final Set<String> testingGroups;
   final Set<String> expanded;
   final ValueChanged<String> onToggle;
   final void Function(ProxyGroup, String) onSelect;
   final void Function(ProxyGroup) onTestGroup;
-  final void Function(String) onTestNode;
+  final void Function(ProxyGroup, String) onTestNode;
 
   @override
   State<_ProxiesBody> createState() => _ProxiesBodyState();
 }
 
 class _ProxiesBodyState extends State<_ProxiesBody> {
-  late List<ProxyGroup> _filtered;
+  late List<ProxyGroup> _groups;
 
   @override
   void initState() {
@@ -313,10 +340,10 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   @override
   void didUpdateWidget(covariant _ProxiesBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filter != widget.filter) _recompute();
     if (oldWidget.session != widget.session) {
       oldWidget.session.proxies.removeListener(_recompute);
       widget.session.proxies.addListener(_recompute);
+      _recompute();
     }
   }
 
@@ -327,21 +354,14 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   void _recompute() {
-    final all = widget.session.proxies.groups;
-    final filter = widget.filter.toLowerCase();
-    final next = filter.isEmpty
-        ? List<ProxyGroup>.unmodifiable(all)
-        : List<ProxyGroup>.unmodifiable(
-            all.where((g) =>
-                g.name.toLowerCase().contains(filter) ||
-                g.all.any((n) => n.toLowerCase().contains(filter))),
-          );
-    setState(() => _filtered = next);
+    setState(() {
+      _groups = List<ProxyGroup>.unmodifiable(widget.session.proxies.groups);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_filtered.isEmpty) {
+    if (_groups.isEmpty) {
       return Center(
         child: Text(
           widget.session.proxies.groups.isEmpty ? '暂无代理组' : '没有匹配的项',
@@ -352,11 +372,10 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cols = _resolveColumns(constraints.maxWidth);
-        final sort = widget.prefs.proxiesSort;
         return CustomScrollView(
           slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            for (final group in _filtered)
+            for (final group in _groups)
               MultiSliver(
                 pushPinnedChildren: true,
                 children: [
@@ -364,6 +383,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                     child: RepaintBoundary(
                       child: ProxyGroupHeader(
                         group: group,
+                        showIcon: widget.prefs.proxiesShowGroupIcons,
                         testing: widget.testingGroups.contains(group.name),
                         expanded: widget.expanded.contains(group.name),
                         onToggle: () => widget.onToggle(group.name),
@@ -374,42 +394,31 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                   // SliverGrid virtualizes — only viewport-intersecting tiles
                   // build, so a 200-node group expands instantly.
                   if (widget.expanded.contains(group.name))
-                    Builder(
-                      builder: (_) {
-                        final ordered = _sortMembers(
-                          group.all,
-                          sort,
-                          widget.session.proxies,
-                        );
-                        return SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                          sliver: SliverGrid.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: cols,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              mainAxisExtent: 60,
-                            ),
-                            itemCount: ordered.length,
-                            itemBuilder: (context, index) {
-                              final name = ordered[index];
-                              final node =
-                                  widget.session.proxies.nodeByName(name);
-                              return ProxyNodeTile(
-                                key: ValueKey('${group.name}::$name'),
-                                name: name,
-                                type: node?.type ?? 'unknown',
-                                delay: node?.delay,
-                                nowListenable: group.now,
-                                fixedListenable: group.fixed,
-                                onSelect: () => widget.onSelect(group, name),
-                                onTestDelay: () => widget.onTestNode(name),
-                              );
-                            },
-                          ),
-                        );
-                      },
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                      sliver: SliverGrid.builder(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: cols,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          mainAxisExtent: 60,
+                        ),
+                        itemCount: group.all.length,
+                        itemBuilder: (context, index) {
+                          final name = group.all[index];
+                          final node = widget.session.proxies.nodeByName(name);
+                          return ProxyNodeTile(
+                            key: ValueKey('${group.name}::$name'),
+                            name: name,
+                            type: node?.type ?? 'unknown',
+                            delay: node?.delay,
+                            nowListenable: group.now,
+                            fixedListenable: group.fixed,
+                            onSelect: () => widget.onSelect(group, name),
+                            onTestDelay: () => widget.onTestNode(group, name),
+                          );
+                        },
+                      ),
                     ),
                 ],
               ),
@@ -427,37 +436,6 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     if (width >= 800) return 3;
     if (width >= 520) return 2;
     return 1;
-  }
-
-  static List<String> _sortMembers(
-    List<String> names,
-    ProxiesSort sort,
-    ProxiesNotifier notifier,
-  ) {
-    switch (sort) {
-      case ProxiesSort.original:
-        return names;
-      case ProxiesSort.name:
-        final sorted = List<String>.from(names)
-          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        return sorted;
-      case ProxiesSort.delay:
-        // Untested sinks to bottom, timeout above it, real ms ascending.
-        int score(String n) {
-          final d = notifier.nodeByName(n)?.delay.value ?? -1;
-          if (d < 0) return 1 << 30;
-          if (d == 0) return (1 << 30) - 1;
-          return d;
-        }
-
-        final sorted = List<String>.from(names)
-          ..sort((a, b) {
-            final cmp = score(a).compareTo(score(b));
-            if (cmp != 0) return cmp;
-            return a.toLowerCase().compareTo(b.toLowerCase());
-          });
-        return sorted;
-    }
   }
 }
 
