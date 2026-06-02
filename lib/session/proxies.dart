@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../rust_api.dart' as rust;
 
@@ -108,15 +107,14 @@ class ProxiesNotifier extends ChangeNotifier {
   }
 
   void releaseGroupMembers(String groupName) {
-    _groupsById[groupName]?._clearMembers();
+    final group = _groupsById[groupName];
+    if (group != null && group._clearMembers()) group._notifyMembers();
   }
 
   void releaseAllGroupMembers() {
-    var changed = false;
     for (final group in _groupsById.values) {
-      if (group._clearMembers()) changed = true;
+      if (group._clearMembers()) group._notifyMembers();
     }
-    if (changed) notifyListeners();
   }
 
   ProxyMemberWindowRequest? memberWindowRequest(
@@ -136,7 +134,7 @@ class ProxiesNotifier extends ChangeNotifier {
     final group = _groupsById[groupName];
     if (group == null) return;
     if (group._membersHash != membersHash) return;
-    if (group._setMemberWindow(offset, entries)) notifyListeners();
+    if (group._setMemberWindow(offset, entries)) group._notifyMembers();
   }
 
   void _setVisibleDelay(String name, int delay) {
@@ -194,13 +192,12 @@ class ProxyGroup {
        _testUrl = testUrl, // ignore: prefer_initializing_formals
        // ignore: prefer_initializing_formals
        now = ValueNotifier<String>(now),
-       fixed = ValueNotifier<String>(fixed);
+       fixed = ValueNotifier<String>(fixed),
+       _membersVersion = ValueNotifier<int>(0);
 
   static const int _memberWindowMin = 96;
   static const int _memberWindowOverscan = 32;
   static const int _memberRefetchMargin = 16;
-  static const Duration _memberRetireDelay = Duration(milliseconds: 250);
-
   final String name;
   String _type;
   String _icon;
@@ -209,9 +206,11 @@ class ProxyGroup {
   int _membersHash;
   int _memberOffset = 0;
   List<ProxyMember> _members = const <ProxyMember>[];
+  final ValueNotifier<int> _membersVersion;
 
   String get type => _type;
   String get icon => _icon;
+  ValueListenable<int> get membersVersion => _membersVersion;
 
   /// Per-group `tester`/`testUrl` configured in mihomo (empty when absent).
   String get testUrl => _testUrl;
@@ -262,6 +261,7 @@ class ProxyGroup {
   void _dispose() {
     now.dispose();
     fixed.dispose();
+    _membersVersion.dispose();
     for (final member in _members) {
       member._dispose();
     }
@@ -306,10 +306,25 @@ class ProxyGroup {
       }
       return typeChanged;
     }
-    final next = entries.map(ProxyMember._fromRust).toList(growable: false);
-    _retireMembers(_members);
+
+    final oldByName = <String, ProxyMember>{};
+    for (final member in _members) {
+      oldByName[member.name] = member;
+    }
+    final next = <ProxyMember>[];
+    for (final entry in entries) {
+      final reused = oldByName.remove(entry.name);
+      if (reused == null) {
+        next.add(ProxyMember._fromRust(entry));
+      } else {
+        reused._setType(entry.proxyType);
+        reused._setDelay(entry.delay);
+        next.add(reused);
+      }
+    }
+    _retireMembers(oldByName.values);
     _memberOffset = offset;
-    _members = next;
+    _members = List<ProxyMember>.unmodifiable(next);
     return true;
   }
 
@@ -344,9 +359,13 @@ class ProxyGroup {
     return true;
   }
 
-  void _retireMembers(List<ProxyMember> members) {
+  void _notifyMembers() {
+    _membersVersion.value++;
+  }
+
+  void _retireMembers(Iterable<ProxyMember> members) {
     if (members.isEmpty) return;
-    Future<void>.delayed(_memberRetireDelay, () {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
       for (final member in members) {
         member._dispose();
       }
@@ -375,6 +394,7 @@ class ProxyMember {
 
   /// -1 = untested, 0 = timeout, >0 = ms.
   final ValueNotifier<int> delay;
+  bool _disposed = false;
 
   bool _setType(String value) {
     if (_type == value) return false;
@@ -386,5 +406,9 @@ class ProxyMember {
     if (delay.value != value) delay.value = value;
   }
 
-  void _dispose() => delay.dispose();
+  void _dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    delay.dispose();
+  }
 }

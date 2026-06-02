@@ -309,7 +309,11 @@ class ConnectionListNotifier extends ChangeNotifier {
   int _activeCount = 0;
   int _closedCount = 0;
 
+  ConnectionsTab _visibleTab = ConnectionsTab.active;
   Timer? _refetchTimer;
+  bool _refetching = false;
+  bool _refetchAgain = false;
+  bool _pendingRefetchForce = false;
 
   // Grouped (by-process) mode state.
   bool _grouped = false;
@@ -324,6 +328,11 @@ class ConnectionListNotifier extends ChangeNotifier {
   final Map<String, LinkedHashMap<String, ConnectionRow>> _groupMemberRows =
       <String, LinkedHashMap<String, ConnectionRow>>{};
   Timer? _groupsTimer;
+  bool _refreshingGroups = false;
+  bool _refreshGroupsAgain = false;
+  bool _pendingGroupsForce = false;
+  final Set<String> _fetchingGroupMembers = <String>{};
+  final Set<String> _queuedGroupMembers = <String>{};
 
   bool get grouped => _grouped;
   List<ConnectionGroupSummary> get groups =>
@@ -409,15 +418,20 @@ class ConnectionListNotifier extends ChangeNotifier {
     _closedCount = frame.closedCount;
     if (_activeCount == 0) _clearWindow(ConnectionsTab.active);
     if (_closedCount == 0) _clearWindow(ConnectionsTab.closed);
-    // Re-pull the current window so volatile counters and any row that
-    // entered/exited within the current viewport stay fresh.
-    _scheduleRefetch();
-    if (_grouped) _scheduleGroupsRefresh(force: frame.isInitial);
-    if (shapeChanged) notifyListeners();
+    if (hasListeners) {
+      // Re-pull only the current view; inactive tabs will fetch on switch.
+      if (_grouped) {
+        _scheduleGroupsRefresh(force: frame.isInitial);
+      } else {
+        _scheduleRefetch();
+      }
+      if (shapeChanged) notifyListeners();
+    }
   }
 
   /// Ensure the cached rows cover `[firstIndex, lastIndex]`, plus overscan.
   void ensureWindow(ConnectionsTab tab, int firstIndex, int lastIndex) {
+    _visibleTab = tab;
     final total = tab == ConnectionsTab.active ? _activeCount : _closedCount;
     if (total == 0) {
       _clearWindow(tab);
@@ -453,13 +467,73 @@ class ConnectionListNotifier extends ChangeNotifier {
   }
 
   void _scheduleRefetch({bool force = false}) {
+    _pendingRefetchForce |= force;
+    if (_refetching) {
+      _refetchAgain = true;
+      return;
+    }
     _refetchTimer?.cancel();
-    _refetchTimer = Timer(_refetchDebounce, () => _refetch(force: force));
+    _refetchTimer = Timer(_refetchDebounce, () {
+      _refetchTimer = null;
+      final force = _pendingRefetchForce;
+      _pendingRefetchForce = false;
+      unawaited(_runRefetch(force: force));
+    });
   }
 
   void _scheduleGroupsRefresh({bool force = false}) {
+    _pendingGroupsForce |= force;
+    if (_refreshingGroups) {
+      _refreshGroupsAgain = true;
+      return;
+    }
     _groupsTimer?.cancel();
-    _groupsTimer = Timer(_refetchDebounce, () => _refreshGroups(force: force));
+    _groupsTimer = Timer(_refetchDebounce, () {
+      _groupsTimer = null;
+      final force = _pendingGroupsForce;
+      _pendingGroupsForce = false;
+      unawaited(_runGroupsRefresh(force: force));
+    });
+  }
+
+  Future<void> _runRefetch({required bool force}) async {
+    if (_refetching) {
+      _pendingRefetchForce |= force;
+      _refetchAgain = true;
+      return;
+    }
+    _refetching = true;
+    try {
+      await _refetch(force: force);
+    } finally {
+      _refetching = false;
+      if (_refetchAgain) {
+        _refetchAgain = false;
+        final force = _pendingRefetchForce;
+        _pendingRefetchForce = false;
+        _scheduleRefetch(force: force);
+      }
+    }
+  }
+
+  Future<void> _runGroupsRefresh({required bool force}) async {
+    if (_refreshingGroups) {
+      _pendingGroupsForce |= force;
+      _refreshGroupsAgain = true;
+      return;
+    }
+    _refreshingGroups = true;
+    try {
+      await _refreshGroups(force: force);
+    } finally {
+      _refreshingGroups = false;
+      if (_refreshGroupsAgain) {
+        _refreshGroupsAgain = false;
+        final force = _pendingGroupsForce;
+        _pendingGroupsForce = false;
+        _scheduleGroupsRefresh(force: force);
+      }
+    }
   }
 
   Future<void> _refreshGroups({required bool force}) async {
@@ -512,6 +586,22 @@ class ConnectionListNotifier extends ChangeNotifier {
   }
 
   Future<void> _refetchGroupMembers(String groupKey) async {
+    if (!_fetchingGroupMembers.add(groupKey)) {
+      _queuedGroupMembers.add(groupKey);
+      return;
+    }
+    try {
+      await _loadGroupMembers(groupKey);
+    } finally {
+      _fetchingGroupMembers.remove(groupKey);
+      if (_queuedGroupMembers.remove(groupKey) &&
+          _expandedGroups.contains(groupKey)) {
+        unawaited(_refetchGroupMembers(groupKey));
+      }
+    }
+  }
+
+  Future<void> _loadGroupMembers(String groupKey) async {
     final fetcher = groupMembersFetcher;
     if (fetcher == null || !_expandedGroups.contains(groupKey)) return;
     final List<rust.Connection> rows;
@@ -571,10 +661,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   Future<void> _refetch({required bool force}) async {
     final fetcher = windowFetcher;
     if (fetcher == null) return;
-    await Future.wait([
-      _refetchTab(ConnectionsTab.active, fetcher, force: force),
-      _refetchTab(ConnectionsTab.closed, fetcher, force: force),
-    ]);
+    await _refetchTab(_visibleTab, fetcher, force: force);
   }
 
   Future<void> _refetchTab(
@@ -693,6 +780,12 @@ class ConnectionListNotifier extends ChangeNotifier {
     _activeCount = 0;
     _closedCount = 0;
     _refetchTimer?.cancel();
+    _groupsTimer?.cancel();
+    _pendingRefetchForce = false;
+    _pendingGroupsForce = false;
+    _refetchAgain = false;
+    _refreshGroupsAgain = false;
+    _queuedGroupMembers.clear();
     _disposeGroups();
     if (_grouped) _scheduleGroupsRefresh(force: true);
     notifyListeners();

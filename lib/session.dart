@@ -28,7 +28,7 @@ class MihomoSession {
   StreamSubscription<rust.TrafficSample>? _trafficSub;
   StreamSubscription<rust.MemorySample>? _memorySub;
   StreamSubscription<rust.ConnectionsFrame>? _connSub;
-  StreamSubscription<rust.LogEntry>? _logsSub;
+  StreamSubscription<List<rust.LogEntry>>? _logsSub;
   Timer? _trafficRetry;
   Timer? _memoryRetry;
   Timer? _connRetry;
@@ -37,6 +37,7 @@ class MihomoSession {
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
   final Set<String> _proxyMemberLoads = <String>{};
+  final Map<String, _QueuedProxyMemberLoad> _queuedProxyMemberLoads = {};
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
@@ -199,6 +200,7 @@ class MihomoSession {
     }
     if (!catalogChanged && !sortChanged) return;
     _proxyMemberLoads.clear();
+    _queuedProxyMemberLoads.clear();
     if (catalogChanged) {
       proxies.reset();
       _iconsWarmed = false;
@@ -229,16 +231,36 @@ class MihomoSession {
     final request = proxies.memberWindowRequest(group, firstIndex, lastIndex);
     if (request == null) return;
     final loadKey = '$group|$_proxyMemberSort';
+    if (_proxyMemberLoads.contains(loadKey)) {
+      _queuedProxyMemberLoads[loadKey] = _QueuedProxyMemberLoad(
+        target: t,
+        group: group,
+        firstIndex: firstIndex,
+        lastIndex: lastIndex,
+        sort: _proxyMemberSort,
+      );
+      return;
+    }
+    await _loadProxyMemberWindow(loadKey, t, group, request, _proxyMemberSort);
+  }
+
+  Future<void> _loadProxyMemberWindow(
+    String loadKey,
+    rust.MihomoTarget target,
+    String group,
+    ProxyMemberWindowRequest request,
+    rust.ProxyMemberSort sort,
+  ) async {
     if (!_proxyMemberLoads.add(loadKey)) return;
     try {
       final entries = await rust.proxyGroupMembers(
-        target: t,
+        target: target,
         group: group,
         offset: request.offset,
         limit: request.limit,
-        memberSort: _proxyMemberSort,
+        memberSort: sort,
       );
-      if (_target == t) {
+      if (identical(_target, target) && sort == _proxyMemberSort) {
         proxies.applyGroupMembers(
           group,
           request.membersHash,
@@ -250,7 +272,32 @@ class MihomoSession {
       // The next visible tile build will retry.
     } finally {
       _proxyMemberLoads.remove(loadKey);
+      _drainQueuedProxyMemberLoad(loadKey);
     }
+  }
+
+  void _drainQueuedProxyMemberLoad(String loadKey) {
+    final queued = _queuedProxyMemberLoads.remove(loadKey);
+    if (queued == null ||
+        !identical(_target, queued.target) ||
+        queued.sort != _proxyMemberSort) {
+      return;
+    }
+    final nextRequest = proxies.memberWindowRequest(
+      queued.group,
+      queued.firstIndex,
+      queued.lastIndex,
+    );
+    if (nextRequest == null) return;
+    unawaited(
+      _loadProxyMemberWindow(
+        loadKey,
+        queued.target,
+        queued.group,
+        nextRequest,
+        queued.sort,
+      ),
+    );
   }
 
   /// Mobile OSes silently kill backgrounded sockets — Dart still sees the
@@ -291,6 +338,7 @@ class MihomoSession {
     processIcons.reset();
     proxies.reset();
     _proxyMemberLoads.clear();
+    _queuedProxyMemberLoads.clear();
     versionString.value = '';
     isCmfa.value = false;
     connectionsPaused.value = false;
@@ -331,6 +379,7 @@ class MihomoSession {
     _logsRetry = null;
     _proxiesPoll = null;
     _proxyMemberLoads.clear();
+    _queuedProxyMemberLoads.clear();
   }
 
   void _restartConnections() {
@@ -498,9 +547,9 @@ class MihomoSession {
     _logsSub = rust
         .logsStream(target: t, level: _logsLevel)
         .listen(
-          (entry) {
+          (entries) {
             if (!identical(_activeKey, controller)) return;
-            logs.add(entry);
+            logs.addAll(entries);
           },
           onError: (Object e) => _scheduleRetry(_RetryKind.logs, e),
           cancelOnError: true,
@@ -563,3 +612,19 @@ class MihomoSession {
 }
 
 enum _RetryKind { traffic, memory, connections, logs }
+
+class _QueuedProxyMemberLoad {
+  const _QueuedProxyMemberLoad({
+    required this.target,
+    required this.group,
+    required this.firstIndex,
+    required this.lastIndex,
+    required this.sort,
+  });
+
+  final rust.MihomoTarget target;
+  final String group;
+  final int firstIndex;
+  final int lastIndex;
+  final rust.ProxyMemberSort sort;
+}

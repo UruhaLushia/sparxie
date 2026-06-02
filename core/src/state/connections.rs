@@ -62,6 +62,12 @@ fn target_key(target: &MihomoTarget, interval_ms: u32) -> String {
     )
 }
 
+async fn slot_for(target: &MihomoTarget, interval_ms: u32) -> Option<Arc<TargetSlot>> {
+    let interval = interval_or_default(interval_ms);
+    let key = target_key(target, interval);
+    slots().lock().await.get(&key).cloned()
+}
+
 pub async fn subscribe(
     target: MihomoTarget,
     interval_ms: u32,
@@ -84,26 +90,22 @@ pub async fn subscribe(
 }
 
 pub async fn set_sort(target: MihomoTarget, interval_ms: u32, sort: ConnectionsSort, asc: bool) {
-    let interval = interval_or_default(interval_ms);
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    if let Some(slot) = map.get(&key) {
-        let mut state = slot.state.lock().expect("connections state poisoned");
-        state.sort = sort;
-        state.asc = asc;
-    }
+    let Some(slot) = slot_for(&target, interval_ms).await else {
+        return;
+    };
+    let mut state = slot.state.lock().expect("connections state poisoned");
+    state.sort = sort;
+    state.asc = asc;
 }
 
 /// Drop the entire closed-connections FIFO for the given target/interval slot.
 /// The next stream frame will report `closed_count = 0`.
 pub async fn clear_closed(target: MihomoTarget, interval_ms: u32) {
-    let interval = interval_or_default(interval_ms);
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    if let Some(slot) = map.get(&key) {
-        let mut state = slot.state.lock().expect("connections state poisoned");
-        state.closed.clear();
-    }
+    let Some(slot) = slot_for(&target, interval_ms).await else {
+        return;
+    };
+    let mut state = slot.state.lock().expect("connections state poisoned");
+    state.closed.clear();
 }
 
 /// Slice the sorted list (active or closed) at `[offset, offset + limit)`.
@@ -114,10 +116,7 @@ pub async fn fetch_window(
     offset: u32,
     limit: u32,
 ) -> Vec<Connection> {
-    let interval = interval_or_default(interval_ms);
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    let Some(slot) = map.get(&key) else {
+    let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
     let mut state = slot.state.lock().expect("connections state poisoned");
@@ -150,10 +149,7 @@ pub async fn fetch_groups(
     sort: ConnectionGroupSort,
     asc: bool,
 ) -> Vec<ConnectionGroup> {
-    let interval = interval_or_default(interval_ms);
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    let Some(slot) = map.get(&key) else {
+    let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
     let state = slot.state.lock().expect("connections state poisoned");
@@ -167,10 +163,7 @@ pub async fn fetch_group_connections(
     group: String,
     limit: u32,
 ) -> Vec<Connection> {
-    let interval = interval_or_default(interval_ms);
-    let key = target_key(&target, interval);
-    let map = slots().lock().await;
-    let Some(slot) = map.get(&key) else {
+    let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
     let mut state = slot.state.lock().expect("connections state poisoned");

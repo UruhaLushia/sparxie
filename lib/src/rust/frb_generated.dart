@@ -206,7 +206,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiIconsInitCache({required String cacheDir});
 
-  Stream<LogEntry> crateApiStreamsLogsStream({
+  Stream<List<LogEntry>> crateApiStreamsLogsStream({
     required MihomoTarget target,
     required String level,
   });
@@ -1337,11 +1337,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_cache", argNames: ["cacheDir"]);
 
   @override
-  Stream<LogEntry> crateApiStreamsLogsStream({
+  Stream<List<LogEntry>> crateApiStreamsLogsStream({
     required MihomoTarget target,
     required String level,
   }) {
-    final sink = RustStreamSink<LogEntry>();
+    final sink = RustStreamSink<List<LogEntry>>();
     unawaited(
       handler.executeNormal(
         NormalTask(
@@ -1349,7 +1349,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             final serializer = SseSerializer(generalizedFrbRustBinding);
             sse_encode_box_autoadd_mihomo_target(target, serializer);
             sse_encode_String(level, serializer);
-            sse_encode_StreamSink_log_entry_Sse(sink, serializer);
+            sse_encode_StreamSink_list_log_entry_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
@@ -3099,7 +3099,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<LogEntry> dco_decode_StreamSink_log_entry_Sse(dynamic raw) {
+  RustStreamSink<List<LogEntry>> dco_decode_StreamSink_list_log_entry_Sse(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
   }
@@ -3293,6 +3295,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<GroupDelayEntry> dco_decode_list_group_delay_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_group_delay_entry).toList();
+  }
+
+  @protected
+  List<LogEntry> dco_decode_list_log_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_log_entry).toList();
   }
 
   @protected
@@ -3621,7 +3629,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<LogEntry> sse_decode_StreamSink_log_entry_Sse(
+  RustStreamSink<List<LogEntry>> sse_decode_StreamSink_list_log_entry_Sse(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -3884,6 +3892,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <GroupDelayEntry>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_group_delay_entry(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<LogEntry> sse_decode_list_log_entry(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <LogEntry>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_log_entry(deserializer));
     }
     return ans_;
   }
@@ -4292,15 +4312,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_StreamSink_log_entry_Sse(
-    RustStreamSink<LogEntry> self,
+  void sse_encode_StreamSink_list_log_entry_Sse(
+    RustStreamSink<List<LogEntry>> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(
       self.setupAndSerialize(
         codec: SseCodec(
-          decodeSuccessData: sse_decode_log_entry,
+          decodeSuccessData: sse_decode_list_log_entry,
           decodeErrorData: sse_decode_AnyhowException,
         ),
       ),
@@ -4534,6 +4554,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_group_delay_entry(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_log_entry(
+    List<LogEntry> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_log_entry(item, serializer);
     }
   }
 

@@ -11,7 +11,7 @@ use crate::client::{MihomoClient, read_ws_text};
 use super::TargetSlot;
 use super::parse::parse_connection;
 use super::slots;
-use super::types::{CLOSED_CAP, ConnectionsFrame, ConnectionsTotals};
+use super::types::{CLOSED_CAP, Connection, ConnectionsFrame, ConnectionsSort, ConnectionsTotals};
 
 pub(super) async fn stream_loop(
     target: MihomoTarget,
@@ -105,19 +105,26 @@ fn apply_snapshot(
     let dt_secs = (interval_ms as f64 / 1000.0).max(0.05);
     let mut state = slot.state.lock().expect("connections state poisoned");
     let mut current_ids = HashSet::with_capacity(state.active.len());
+    let mut order_dirty = is_initial || sort_needs_live_resort(state.sort);
 
     if let Some(arr) = raw.get("connections").and_then(|v| v.as_array()) {
         for item in arr {
             let mut conn = parse_connection(item);
-            if let Some(prev) = state.active.get(&conn.id) {
+            let id = conn.id.clone();
+            if let Some(prev) = state.active.get(&id) {
                 conn.upload_speed =
                     (((conn.upload.saturating_sub(prev.upload)) as f64) / dt_secs).round() as u64;
                 conn.download_speed = (((conn.download.saturating_sub(prev.download)) as f64)
                     / dt_secs)
                     .round() as u64;
+                if stable_sort_key_changed(prev, &conn, state.sort) {
+                    order_dirty = true;
+                }
+            } else {
+                order_dirty = true;
             }
-            current_ids.insert(conn.id.clone());
-            state.active.insert(conn.id.clone(), conn);
+            current_ids.insert(id.clone());
+            state.active.insert(id, conn);
         }
     }
 
@@ -127,6 +134,9 @@ fn apply_snapshot(
         .filter(|id| !current_ids.contains(*id))
         .cloned()
         .collect();
+    if !removed_ids.is_empty() {
+        order_dirty = true;
+    }
     for id in removed_ids {
         if let Some(mut row) = state.active.remove(&id) {
             row.is_closed = true;
@@ -138,7 +148,9 @@ fn apply_snapshot(
             state.closed.push_back(row);
         }
     }
-    state.active_version = state.active_version.wrapping_add(1);
+    if order_dirty {
+        state.active_version = state.active_version.wrapping_add(1);
+    }
 
     ConnectionsFrame {
         active_count: state.active.len() as u32,
@@ -149,5 +161,26 @@ fn apply_snapshot(
             memory,
         },
         is_initial,
+    }
+}
+
+fn sort_needs_live_resort(sort: ConnectionsSort) -> bool {
+    matches!(
+        sort,
+        ConnectionsSort::Upload
+            | ConnectionsSort::Download
+            | ConnectionsSort::UploadSpeed
+            | ConnectionsSort::DownloadSpeed
+    )
+}
+
+fn stable_sort_key_changed(prev: &Connection, next: &Connection, sort: ConnectionsSort) -> bool {
+    match sort {
+        ConnectionsSort::Time => prev.start != next.start,
+        ConnectionsSort::Process => prev.process != next.process,
+        ConnectionsSort::Upload
+        | ConnectionsSort::Download
+        | ConnectionsSort::UploadSpeed
+        | ConnectionsSort::DownloadSpeed => false,
     }
 }
