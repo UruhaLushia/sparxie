@@ -25,7 +25,8 @@ jobs:
             {"os":"ubuntu-24.04-arm","label":"linux-arm64","kind":"linux","arch":"arm64","rust_target":"aarch64-unknown-linux-gnu"},
             {"os":"windows-latest","label":"windows-x86_64","kind":"windows","arch":"x86_64","rust_target":"x86_64-pc-windows-msvc"},
             {"os":"windows-11-arm","label":"windows-arm64","kind":"windows","arch":"arm64","rust_target":"aarch64-pc-windows-msvc"},
-            {"os":"macos-26","label":"macos-arm64","kind":"macos","arch":"arm64","rust_target":"aarch64-apple-darwin"}
+            {"os":"macos-26","label":"macos-arm64","kind":"macos","arch":"arm64","rust_target":"aarch64-apple-darwin"},
+            {"os":"macos-26","label":"ios","kind":"ios","rust_target":"aarch64-apple-ios"}
           ]'
           # The macOS x86_64 Intel runner is slow, so build it only for tagged
           # releases — not for workflow_dispatch pre-releases.
@@ -309,6 +310,10 @@ jobs:
           mkdir -p out
           ditto -c -k --sequesterRsrc --keepParent "$APP" out/sparxie-macos-${{ matrix.arch }}.zip
 
+      - name: iOS — unsigned IPA
+        if: matrix.kind == 'ios'
+        run: OUTPUT_DIR=out ./scripts/build-ios-ipa.sh
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.label }}
@@ -326,7 +331,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.apk' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
           ls -la release/
       - uses: softprops/action-gh-release@v2
         with:
@@ -346,7 +351,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.apk' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
 
       - name: Delete current release assets
         uses: 8Mi-Tech/delete-release-assets-action@main

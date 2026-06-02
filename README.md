@@ -10,7 +10,7 @@
 | Linux(x86_64 / arm64) | ✅ |
 | Windows(x86_64 / arm64) | ✅ |
 | macOS(Apple Silicon / Intel) | ✅ |
-| iOS | 暂未配置签名，需自行 build |
+| iOS | ✅ 未签名 IPA，供 SideStore 等工具自签 |
 | Web | 不支持 (依赖 dart:ffi) |
 
 ## 架构
@@ -39,3 +39,13 @@ flutter run -d <device>
 ```
 
 Android 还需 `cargo install cargo-ndk` + `./scripts/build-android.sh` 编 cdylib 到 jniLibs。
+
+## iOS unsigned IPA
+
+项目不配置开发者证书，也不用于 App Store 分发。iOS 产物是未签名 IPA，适合交给 SideStore 等工具重新签名后安装。
+
+```bash
+./scripts/build-ios-ipa.sh
+```
+
+产物输出到 `build/ios/ipa/sparxie-ios.ipa`。脚本会用命令行构建 Rust iOS staticlib 和 Flutter iOS app，并用 `--no-codesign` 打包。

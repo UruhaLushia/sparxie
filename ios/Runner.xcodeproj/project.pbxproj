@@ -152,6 +152,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
+				C3F04A2E2CF51A0000010001 /* Build Rust Core */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -235,6 +236,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		C3F04A2E2CF51A0000010001 /* Build Rust Core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${SRCROOT}/../core/Cargo.toml",
+				"${SRCROOT}/../core/Cargo.lock",
+				"${SRCROOT}/../core/src",
+			);
+			name = "Build Rust Core";
+			outputPaths = (
+				"${SRCROOT}/../core/target/${IOS_RUST_TARGET}/${RUST_CORE_PROFILE_DIR}/libsparxie.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nIOS_RUST_TARGET=\"${IOS_RUST_TARGET:-aarch64-apple-ios}\"\nRUST_CORE_PROFILE_DIR=\"${RUST_CORE_PROFILE_DIR:-release}\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"cargo not found; install Rust before building iOS\" >&2\n  exit 1\nfi\nif command -v rustup >/dev/null 2>&1; then\n  rustup target add \"$IOS_RUST_TARGET\"\nfi\nCARGO_FLAGS=\"\"\nif [ \"$RUST_CORE_PROFILE_DIR\" != \"debug\" ]; then\n  CARGO_FLAGS=\"--release\"\nfi\ncd \"$SRCROOT/../core\"\ncargo build $CARGO_FLAGS --target \"$IOS_RUST_TARGET\"\n";
+		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -376,14 +396,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEAD_CODE_STRIPPING = NO;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				"IOS_RUST_TARGET[sdk=iphoneos*]" = "aarch64-apple-ios";
+				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = zip.atri.sparxie;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUST_CORE_PROFILE_DIR = release;
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -555,14 +585,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEAD_CODE_STRIPPING = NO;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				"IOS_RUST_TARGET[sdk=iphoneos*]" = "aarch64-apple-ios";
+				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = zip.atri.sparxie;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUST_CORE_PROFILE_DIR = debug;
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -577,14 +617,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEAD_CODE_STRIPPING = NO;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				"IOS_RUST_TARGET[sdk=iphoneos*]" = "aarch64-apple-ios";
+				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = zip.atri.sparxie;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUST_CORE_PROFILE_DIR = release;
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
