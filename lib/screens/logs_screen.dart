@@ -28,6 +28,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Timer? _flushTimer;
 
   String _filter = '';
+  List<rust.LogEntry> _visibleEntries = const <rust.LogEntry>[];
   bool _follow = true;
 
   @override
@@ -35,6 +36,7 @@ class _LogsScreenState extends State<LogsScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
     widget.session.logs.addListener(_onLogs);
+    _recomputeVisibleEntries();
   }
 
   @override
@@ -48,8 +50,17 @@ class _LogsScreenState extends State<LogsScreen> {
 
   void _onLogs() {
     if (!mounted) return;
+    _recomputeVisibleEntries();
     setState(() {});
     _scheduleAutoScroll();
+  }
+
+  void _setFilter(String value) {
+    final next = value.trim();
+    if (next == _filter) return;
+    _filter = next;
+    _recomputeVisibleEntries();
+    setState(() {});
   }
 
   void _onScroll() {
@@ -91,11 +102,14 @@ class _LogsScreenState extends State<LogsScreen> {
     widget.session.clearLogs();
   }
 
-  List<rust.LogEntry> _visibleEntries() {
+  void _recomputeVisibleEntries() {
     final all = widget.session.logs.entries;
-    if (_filter.isEmpty) return all.toList(growable: false);
+    if (_filter.isEmpty) {
+      _visibleEntries = all;
+      return;
+    }
     final f = _filter.toLowerCase();
-    return all
+    _visibleEntries = all
         .where(
           (e) =>
               e.message.toLowerCase().contains(f) ||
@@ -142,7 +156,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    onChanged: (v) => setState(() => _filter = v.trim()),
+                    onChanged: _setFilter,
                   ),
                   const SizedBox(height: 8),
                   SingleChildScrollView(
@@ -194,7 +208,7 @@ class _LogsScreenState extends State<LogsScreen> {
             Expanded(
               child: Builder(
                 builder: (_) {
-                  final entries = _visibleEntries();
+                  final entries = _visibleEntries;
                   if (entries.isEmpty) {
                     return Center(
                       child: Text(
@@ -258,9 +272,9 @@ class _LogTile extends StatelessWidget {
               entry.level.isEmpty ? 'log' : entry.level,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: badgeFg,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: badgeFg,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -272,15 +286,15 @@ class _LogTile extends StatelessWidget {
                   Text(
                     ts,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 SelectableText(
                   entry.message,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontFamily: 'monospace',
-                        height: 1.35,
-                      ),
+                    fontFamily: 'monospace',
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
@@ -297,16 +311,10 @@ class _LogTile extends StatelessWidget {
         return (scheme.onErrorContainer, scheme.errorContainer);
       case 'warning':
       case 'warn':
-        return (
-          scheme.onTertiaryContainer,
-          scheme.tertiaryContainer,
-        );
+        return (scheme.onTertiaryContainer, scheme.tertiaryContainer);
       case 'debug':
       case 'trace':
-        return (
-          scheme.onSecondaryContainer,
-          scheme.secondaryContainer,
-        );
+        return (scheme.onSecondaryContainer, scheme.secondaryContainer);
       case 'info':
       default:
         return (scheme.onPrimaryContainer, scheme.primaryContainer);

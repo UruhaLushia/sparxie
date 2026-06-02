@@ -1158,7 +1158,7 @@ fn wire__crate__api__streams__logs_stream_impl(
             let api_target = <crate::api::MihomoTarget>::sse_decode(&mut deserializer);
             let api_level = <String>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
-                crate::state::logs::LogEntry,
+                Vec<crate::state::logs::LogEntry>,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -3153,7 +3153,7 @@ impl SseDecode
 }
 
 impl SseDecode
-    for StreamSink<crate::state::logs::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<Vec<crate::state::logs::LogEntry>, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3445,6 +3445,18 @@ impl SseDecode for Vec<crate::api::groups::GroupDelayEntry> {
             ans_.push(<crate::api::groups::GroupDelayEntry>::sse_decode(
                 deserializer,
             ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::state::logs::LogEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::state::logs::LogEntry>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -4702,7 +4714,7 @@ impl SseEncode
 }
 
 impl SseEncode
-    for StreamSink<crate::state::logs::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<Vec<crate::state::logs::LogEntry>, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4931,6 +4943,16 @@ impl SseEncode for Vec<crate::api::groups::GroupDelayEntry> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::groups::GroupDelayEntry>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::state::logs::LogEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::state::logs::LogEntry>::sse_encode(item, serializer);
         }
     }
 }

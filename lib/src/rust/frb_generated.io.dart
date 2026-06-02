@@ -47,7 +47,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<LogEntry> dco_decode_StreamSink_log_entry_Sse(dynamic raw);
+  RustStreamSink<List<LogEntry>> dco_decode_StreamSink_list_log_entry_Sse(
+    dynamic raw,
+  );
 
   @protected
   RustStreamSink<MemorySample> dco_decode_StreamSink_memory_sample_Sse(
@@ -112,6 +114,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<GroupDelayEntry> dco_decode_list_group_delay_entry(dynamic raw);
+
+  @protected
+  List<LogEntry> dco_decode_list_log_entry(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -215,7 +220,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<LogEntry> sse_decode_StreamSink_log_entry_Sse(
+  RustStreamSink<List<LogEntry>> sse_decode_StreamSink_list_log_entry_Sse(
     SseDeserializer deserializer,
   );
 
@@ -292,6 +297,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<GroupDelayEntry> sse_decode_list_group_delay_entry(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<LogEntry> sse_decode_list_log_entry(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -413,8 +421,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_log_entry_Sse(
-    RustStreamSink<LogEntry> self,
+  void sse_encode_StreamSink_list_log_entry_Sse(
+    RustStreamSink<List<LogEntry>> self,
     SseSerializer serializer,
   );
 
@@ -516,6 +524,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<GroupDelayEntry> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_log_entry(List<LogEntry> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);

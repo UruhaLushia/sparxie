@@ -93,16 +93,12 @@ pub(super) fn member_entries(
         let Some(group) = groups.get_mut(group_name) else {
             return Vec::new();
         };
-        let ids = group
-            .member_ids(member_sort, names, nodes)
+        let ids = group.member_ids(member_sort, names, nodes);
+        let start = (offset as usize).min(ids.len());
+        let end = start.saturating_add(limit as usize).min(ids.len());
+        ids[start..end]
             .iter()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .copied()
-            .collect::<Vec<_>>();
-
-        ids.into_iter()
-            .map(|id| member_entry(id, names, nodes))
+            .map(|id| member_entry(*id, names, nodes))
             .collect()
     })
     .unwrap_or_default()

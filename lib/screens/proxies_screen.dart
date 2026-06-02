@@ -324,6 +324,8 @@ class _ProxiesBody extends StatefulWidget {
 
 class _ProxiesBodyState extends State<_ProxiesBody> {
   late List<ProxyGroup> _groups;
+  final Map<String, _PendingMemberRange> _pendingMemberLoads = {};
+  bool _memberLoadScheduled = false;
 
   @override
   void initState() {
@@ -345,7 +347,40 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   @override
   void dispose() {
     widget.session.proxies.removeListener(_recompute);
+    _pendingMemberLoads.clear();
     super.dispose();
+  }
+
+  void _queueMemberLoad(String group, int index) {
+    final pending = _pendingMemberLoads[group];
+    if (pending == null) {
+      _pendingMemberLoads[group] = _PendingMemberRange(index);
+    } else {
+      pending.include(index);
+    }
+    if (_memberLoadScheduled) return;
+    _memberLoadScheduled = true;
+    scheduleMicrotask(_flushMemberLoads);
+  }
+
+  void _flushMemberLoads() {
+    _memberLoadScheduled = false;
+    if (!mounted) {
+      _pendingMemberLoads.clear();
+      return;
+    }
+    final pending = Map<String, _PendingMemberRange>.of(_pendingMemberLoads);
+    _pendingMemberLoads.clear();
+    for (final entry in pending.entries) {
+      final range = entry.value;
+      unawaited(
+        widget.session.ensureProxyGroupMembers(
+          entry.key,
+          range.first,
+          range.last,
+        ),
+      );
+    }
   }
 
   void _recompute() {
@@ -389,40 +424,39 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                   // SliverGrid virtualizes — only viewport-intersecting tiles
                   // build, so a 200-node group expands instantly.
                   if (widget.expanded.contains(group.name))
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                      sliver: SliverGrid.builder(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                          mainAxisExtent: 60,
-                        ),
-                        itemCount: group.memberCount,
-                        itemBuilder: (context, index) {
-                          final member = group.memberAt(index);
-                          if (member == null) {
-                            unawaited(
-                              widget.session.ensureProxyGroupMembers(
-                                group.name,
-                                index,
-                                index,
+                    ValueListenableBuilder<int>(
+                      valueListenable: group.membersVersion,
+                      builder: (_, _, _) => SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                        sliver: SliverGrid.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: cols,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
+                                mainAxisExtent: 60,
                               ),
+                          itemCount: group.memberCount,
+                          itemBuilder: (context, index) {
+                            final member = group.memberAt(index);
+                            if (member == null) {
+                              _queueMemberLoad(group.name, index);
+                              return const _ProxyNodePlaceholder();
+                            }
+                            return ProxyNodeTile(
+                              key: ValueKey('${group.name}::${member.name}'),
+                              name: member.name,
+                              type: member.type,
+                              delay: member.delay,
+                              nowListenable: group.now,
+                              fixedListenable: group.fixed,
+                              onSelect: () =>
+                                  widget.onSelect(group, member.name),
+                              onTestDelay: () =>
+                                  widget.onTestNode(group, member.name),
                             );
-                            return const _ProxyNodePlaceholder();
-                          }
-                          return ProxyNodeTile(
-                            key: ValueKey('${group.name}::${member.name}'),
-                            name: member.name,
-                            type: member.type,
-                            delay: member.delay,
-                            nowListenable: group.now,
-                            fixedListenable: group.fixed,
-                            onSelect: () => widget.onSelect(group, member.name),
-                            onTestDelay: () =>
-                                widget.onTestNode(group, member.name),
-                          );
-                        },
+                          },
+                        ),
                       ),
                     ),
                 ],
@@ -441,6 +475,18 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     if (width >= 800) return 3;
     if (width >= 520) return 2;
     return 1;
+  }
+}
+
+class _PendingMemberRange {
+  _PendingMemberRange(int index) : first = index, last = index;
+
+  int first;
+  int last;
+
+  void include(int index) {
+    if (index < first) first = index;
+    if (index > last) last = index;
   }
 }
 

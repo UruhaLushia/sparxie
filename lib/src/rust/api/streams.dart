@@ -21,11 +21,10 @@ Stream<MemorySample> memoryStream({required MihomoTarget target}) =>
 
 /// Subscribe to mihomo's `/logs?level=&format=structured` feed.
 ///
-/// The stream first replays up to `LOGS_CAP` cached entries (so the UI
-/// shows context immediately on (re)subscribe), then continues with live
-/// deltas. Snapshot + stream are taken under the same lock, so no entries
-/// are dropped or duplicated across the boundary.
-Stream<LogEntry> logsStream({
+/// The stream first replays up to `LOGS_CAP` cached entries as one batch, then
+/// continues with small live batches. Snapshot + stream are taken under the
+/// same lock, so no entries are dropped or duplicated across the boundary.
+Stream<List<LogEntry>> logsStream({
   required MihomoTarget target,
   required String level,
 }) => RustLib.instance.api.crateApiStreamsLogsStream(

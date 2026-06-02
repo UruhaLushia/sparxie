@@ -1,10 +1,10 @@
+use std::cmp::Reverse;
+
 use super::types::{Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsSort};
 
 pub(super) fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSort, asc: bool) {
     match sort {
-        ConnectionGroupSort::Name => {
-            rows.sort_by(|a, b| cmp_str(&a.label.to_lowercase(), &b.label.to_lowercase(), asc))
-        }
+        ConnectionGroupSort::Name => sort_groups_by_name(rows, asc),
         ConnectionGroupSort::Count => {
             rows.sort_by(|a, b| cmp_u64(a.count as u64, b.count as u64, asc))
         }
@@ -16,6 +16,14 @@ pub(super) fn sort_groups(rows: &mut [ConnectionGroup], sort: ConnectionGroupSor
         ConnectionGroupSort::DownloadSpeed => {
             rows.sort_by(|a, b| cmp_u64(a.download_speed, b.download_speed, asc))
         }
+    }
+}
+
+fn sort_groups_by_name(rows: &mut [ConnectionGroup], asc: bool) {
+    if asc {
+        rows.sort_by_cached_key(|row| row.label.to_lowercase());
+    } else {
+        rows.sort_by_cached_key(|row| Reverse(row.label.to_lowercase()));
     }
 }
 

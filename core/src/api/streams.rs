@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use futures_util::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -60,26 +62,39 @@ pub async fn memory_stream(
 
 /// Subscribe to mihomo's `/logs?level=&format=structured` feed.
 ///
-/// The stream first replays up to `LOGS_CAP` cached entries (so the UI
-/// shows context immediately on (re)subscribe), then continues with live
-/// deltas. Snapshot + stream are taken under the same lock, so no entries
-/// are dropped or duplicated across the boundary.
+/// The stream first replays up to `LOGS_CAP` cached entries as one batch, then
+/// continues with small live batches. Snapshot + stream are taken under the
+/// same lock, so no entries are dropped or duplicated across the boundary.
 pub async fn logs_stream(
     target: MihomoTarget,
     level: String,
-    sink: StreamSink<LogEntry>,
+    sink: StreamSink<Vec<LogEntry>>,
 ) -> Result<(), MihomoError> {
     let (snapshot, rx) = logs_subscribe(target, &level).await?;
-    for entry in snapshot {
-        if sink.add(entry).is_err() {
-            return Ok(());
-        }
+    if !snapshot.is_empty() && sink.add(snapshot).is_err() {
+        return Ok(());
     }
+
     let mut stream = BroadcastStream::new(rx);
     while let Some(item) = stream.next().await {
         let Ok(sample) = item else { continue };
-        if sink.add(sample).is_err() {
-            break;
+        let mut batch = vec![sample];
+        loop {
+            if batch.len() >= 64 {
+                break;
+            }
+            match tokio::time::timeout(Duration::from_millis(50), stream.next()).await {
+                Ok(Some(Ok(sample))) => batch.push(sample),
+                Ok(Some(Err(_))) => continue,
+                Ok(None) => {
+                    let _ = sink.add(batch);
+                    return Ok(());
+                }
+                Err(_) => break,
+            }
+        }
+        if sink.add(batch).is_err() {
+            return Ok(());
         }
     }
     Ok(())
