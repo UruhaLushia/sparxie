@@ -128,7 +128,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ProxyGroupEntry> dco_decode_list_proxy_group_entry(dynamic raw);
 
   @protected
-  List<ProxyNodeEntry> dco_decode_list_proxy_node_entry(dynamic raw);
+  List<ProxyMemberEntry> dco_decode_list_proxy_member_entry(dynamic raw);
 
   @protected
   List<ProxyProviderEntry> dco_decode_list_proxy_provider_entry(dynamic raw);
@@ -170,10 +170,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProxyGroupEntry dco_decode_proxy_group_entry(dynamic raw);
 
   @protected
-  ProxyMemberSort dco_decode_proxy_member_sort(dynamic raw);
+  ProxyMemberEntry dco_decode_proxy_member_entry(dynamic raw);
 
   @protected
-  ProxyNodeEntry dco_decode_proxy_node_entry(dynamic raw);
+  ProxyMemberSort dco_decode_proxy_member_sort(dynamic raw);
 
   @protected
   ProxyProviderEntry dco_decode_proxy_provider_entry(dynamic raw);
@@ -312,7 +312,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<ProxyNodeEntry> sse_decode_list_proxy_node_entry(
+  List<ProxyMemberEntry> sse_decode_list_proxy_member_entry(
     SseDeserializer deserializer,
   );
 
@@ -360,10 +360,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProxyGroupEntry sse_decode_proxy_group_entry(SseDeserializer deserializer);
 
   @protected
-  ProxyMemberSort sse_decode_proxy_member_sort(SseDeserializer deserializer);
+  ProxyMemberEntry sse_decode_proxy_member_entry(SseDeserializer deserializer);
 
   @protected
-  ProxyNodeEntry sse_decode_proxy_node_entry(SseDeserializer deserializer);
+  ProxyMemberSort sse_decode_proxy_member_sort(SseDeserializer deserializer);
 
   @protected
   ProxyProviderEntry sse_decode_proxy_provider_entry(
@@ -541,8 +541,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_proxy_node_entry(
-    List<ProxyNodeEntry> self,
+  void sse_encode_list_proxy_member_entry(
+    List<ProxyMemberEntry> self,
     SseSerializer serializer,
   );
 
@@ -604,14 +604,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_proxy_member_sort(
-    ProxyMemberSort self,
+  void sse_encode_proxy_member_entry(
+    ProxyMemberEntry self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_proxy_node_entry(
-    ProxyNodeEntry self,
+  void sse_encode_proxy_member_sort(
+    ProxyMemberSort self,
     SseSerializer serializer,
   );
 

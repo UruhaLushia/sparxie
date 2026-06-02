@@ -8,40 +8,49 @@ import '../../frb_generated.dart';
 import '../../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `delay_of`, `delay_score`, `history_delay`, `proxy_group_matches`, `push_icon`, `sort_members`
+// These functions are ignored because they are not marked as `pub`: `cached_group_member_names`, `group_order`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Structured proxy + group catalog. Rust parses mihomo's `/proxies`, applies
-/// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), and returns
-/// the node/group index Dart needs.
+/// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), caches full
+/// group members in Rust, and returns only group summaries to Dart.
 Future<ProxyCatalog> proxyCatalog({
   required MihomoTarget target,
   required bool includeHidden,
   required String filter,
-  required ProxyMemberSort memberSort,
 }) => RustLib.instance.api.crateApiProxiesCatalogProxyCatalog(
   target: target,
   includeHidden: includeHidden,
   filter: filter,
+);
+
+/// Windowed members for one proxy group. The full member list stays in Rust so
+/// very large groups do not cross the bridge on every catalog refresh.
+Future<List<ProxyMemberEntry>> proxyGroupMembers({
+  required MihomoTarget target,
+  required String group,
+  required int offset,
+  required int limit,
+  required ProxyMemberSort memberSort,
+}) => RustLib.instance.api.crateApiProxiesCatalogProxyGroupMembers(
+  target: target,
+  group: group,
+  offset: offset,
+  limit: limit,
   memberSort: memberSort,
 );
 
 class ProxyCatalog {
   final List<ProxyGroupEntry> groups;
-  final List<ProxyNodeEntry> nodes;
   final List<String> iconUrls;
 
-  const ProxyCatalog({
-    required this.groups,
-    required this.nodes,
-    required this.iconUrls,
-  });
+  const ProxyCatalog({required this.groups, required this.iconUrls});
 
   static Future<ProxyCatalog> default_() =>
       RustLib.instance.api.crateApiProxiesCatalogProxyCatalogDefault();
 
   @override
-  int get hashCode => groups.hashCode ^ nodes.hashCode ^ iconUrls.hashCode;
+  int get hashCode => groups.hashCode ^ iconUrls.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -49,7 +58,6 @@ class ProxyCatalog {
       other is ProxyCatalog &&
           runtimeType == other.runtimeType &&
           groups == other.groups &&
-          nodes == other.nodes &&
           iconUrls == other.iconUrls;
 }
 
@@ -57,7 +65,8 @@ class ProxyGroupEntry {
   final String name;
   final String proxyType;
   final String icon;
-  final List<String> all;
+  final int memberCount;
+  final int membersHash;
   final String now;
   final String testUrl;
   final String fixed;
@@ -66,7 +75,8 @@ class ProxyGroupEntry {
     required this.name,
     required this.proxyType,
     required this.icon,
-    required this.all,
+    required this.memberCount,
+    required this.membersHash,
     required this.now,
     required this.testUrl,
     required this.fixed,
@@ -80,7 +90,8 @@ class ProxyGroupEntry {
       name.hashCode ^
       proxyType.hashCode ^
       icon.hashCode ^
-      all.hashCode ^
+      memberCount.hashCode ^
+      membersHash.hashCode ^
       now.hashCode ^
       testUrl.hashCode ^
       fixed.hashCode;
@@ -93,10 +104,38 @@ class ProxyGroupEntry {
           name == other.name &&
           proxyType == other.proxyType &&
           icon == other.icon &&
-          all == other.all &&
+          memberCount == other.memberCount &&
+          membersHash == other.membersHash &&
           now == other.now &&
           testUrl == other.testUrl &&
           fixed == other.fixed;
+}
+
+class ProxyMemberEntry {
+  final String name;
+  final String proxyType;
+  final int delay;
+
+  const ProxyMemberEntry({
+    required this.name,
+    required this.proxyType,
+    required this.delay,
+  });
+
+  static Future<ProxyMemberEntry> default_() =>
+      RustLib.instance.api.crateApiProxiesCatalogProxyMemberEntryDefault();
+
+  @override
+  int get hashCode => name.hashCode ^ proxyType.hashCode ^ delay.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyMemberEntry &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          proxyType == other.proxyType &&
+          delay == other.delay;
 }
 
 enum ProxyMemberSort {
@@ -106,35 +145,4 @@ enum ProxyMemberSort {
 
   static Future<ProxyMemberSort> default_() =>
       RustLib.instance.api.crateApiProxiesCatalogProxyMemberSortDefault();
-}
-
-class ProxyNodeEntry {
-  final String name;
-  final String proxyType;
-  final String icon;
-  final int delay;
-
-  const ProxyNodeEntry({
-    required this.name,
-    required this.proxyType,
-    required this.icon,
-    required this.delay,
-  });
-
-  static Future<ProxyNodeEntry> default_() =>
-      RustLib.instance.api.crateApiProxiesCatalogProxyNodeEntryDefault();
-
-  @override
-  int get hashCode =>
-      name.hashCode ^ proxyType.hashCode ^ icon.hashCode ^ delay.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ProxyNodeEntry &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          proxyType == other.proxyType &&
-          icon == other.icon &&
-          delay == other.delay;
 }

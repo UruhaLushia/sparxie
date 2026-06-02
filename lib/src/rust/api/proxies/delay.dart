@@ -46,6 +46,24 @@ Future<List<ProxyDelayEntry>> proxyBatchDelay({
   concurrency: concurrency,
 );
 
+/// Batch delay test for every cached member of one group. The member list stays
+/// in Rust; Dart only receives the delay results.
+Future<List<ProxyDelayEntry>> proxyGroupBatchDelay({
+  required MihomoTarget target,
+  required String group,
+  required String testUrl,
+  required int timeoutMs,
+  String? expectedStatus,
+  required int concurrency,
+}) => RustLib.instance.api.crateApiProxiesDelayProxyGroupBatchDelay(
+  target: target,
+  group: group,
+  testUrl: testUrl,
+  timeoutMs: timeoutMs,
+  expectedStatus: expectedStatus,
+  concurrency: concurrency,
+);
+
 class ProxyDelayEntry {
   final String name;
   final int delay;

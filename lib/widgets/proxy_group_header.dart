@@ -86,7 +86,7 @@ class ProxyGroupHeader extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        '${group.all.length}',
+                        '${group.memberCount}',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),

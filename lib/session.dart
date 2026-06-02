@@ -36,6 +36,7 @@ class MihomoSession {
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
+  final Set<String> _proxyMemberLoads = <String>{};
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
@@ -179,26 +180,32 @@ class MihomoSession {
     String? filter,
     rust.ProxyMemberSort? memberSort,
   }) {
-    var changed = false;
+    var catalogChanged = false;
+    var sortChanged = false;
     if (includeHidden != null && includeHidden != _includeHiddenProxyGroups) {
       _includeHiddenProxyGroups = includeHidden;
-      changed = true;
+      catalogChanged = true;
     }
     if (filter != null) {
       final next = filter.trim();
       if (next != _proxyCatalogFilter) {
         _proxyCatalogFilter = next;
-        changed = true;
+        catalogChanged = true;
       }
     }
     if (memberSort != null && memberSort != _proxyMemberSort) {
       _proxyMemberSort = memberSort;
-      changed = true;
+      sortChanged = true;
     }
-    if (!changed) return;
-    proxies.reset();
-    _iconsWarmed = false;
-    unawaited(_refreshProxies());
+    if (!catalogChanged && !sortChanged) return;
+    _proxyMemberLoads.clear();
+    if (catalogChanged) {
+      proxies.reset();
+      _iconsWarmed = false;
+      unawaited(_refreshProxies());
+    } else {
+      proxies.releaseAllGroupMembers();
+    }
   }
 
   String get logsLevel => _logsLevel;
@@ -211,6 +218,40 @@ class MihomoSession {
   }
 
   Future<void> refreshProxies() => _refreshProxies();
+
+  Future<void> ensureProxyGroupMembers(
+    String group,
+    int firstIndex,
+    int lastIndex,
+  ) async {
+    final t = _target;
+    if (t == null) return;
+    final request = proxies.memberWindowRequest(group, firstIndex, lastIndex);
+    if (request == null) return;
+    final loadKey = '$group|$_proxyMemberSort';
+    if (!_proxyMemberLoads.add(loadKey)) return;
+    try {
+      final entries = await rust.proxyGroupMembers(
+        target: t,
+        group: group,
+        offset: request.offset,
+        limit: request.limit,
+        memberSort: _proxyMemberSort,
+      );
+      if (_target == t) {
+        proxies.applyGroupMembers(
+          group,
+          request.membersHash,
+          request.offset,
+          entries,
+        );
+      }
+    } catch (_) {
+      // The next visible tile build will retry.
+    } finally {
+      _proxyMemberLoads.remove(loadKey);
+    }
+  }
 
   /// Mobile OSes silently kill backgrounded sockets — Dart still sees the
   /// stream as healthy but no events arrive. Call this on resume to break
@@ -249,6 +290,7 @@ class MihomoSession {
     logs.reset();
     processIcons.reset();
     proxies.reset();
+    _proxyMemberLoads.clear();
     versionString.value = '';
     isCmfa.value = false;
     connectionsPaused.value = false;
@@ -288,6 +330,7 @@ class MihomoSession {
     _connRetry = null;
     _logsRetry = null;
     _proxiesPoll = null;
+    _proxyMemberLoads.clear();
   }
 
   void _restartConnections() {
@@ -360,17 +403,14 @@ class MihomoSession {
     try {
       final includeHidden = _includeHiddenProxyGroups;
       final filter = _proxyCatalogFilter;
-      final memberSort = _proxyMemberSort;
       final catalog = await rust.proxyCatalog(
         target: t,
         includeHidden: includeHidden,
         filter: filter,
-        memberSort: memberSort,
       );
       if (!identical(_activeKey, controller)) return;
       if (includeHidden != _includeHiddenProxyGroups ||
-          filter != _proxyCatalogFilter ||
-          memberSort != _proxyMemberSort) {
+          filter != _proxyCatalogFilter) {
         refreshAgain = true;
         return;
       }

@@ -17,13 +17,6 @@ pub(super) fn field_or(value: &Value, key: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_string())
 }
 
-pub(super) fn string_list(value: Option<&Value>) -> Vec<String> {
-    value
-        .and_then(Value::as_array)
-        .map(|items| items.iter().map(value_to_string).collect())
-        .unwrap_or_default()
-}
-
 pub(super) fn value_to_i32(value: &Value) -> i32 {
     if let Some(n) = value.as_i64() {
         return n as i32;
