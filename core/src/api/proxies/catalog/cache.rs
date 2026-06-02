@@ -117,18 +117,6 @@ pub(super) fn member_entries(
     .flatten()
 }
 
-pub(super) fn member_entries_for_ids(
-    mut ids: Vec<usize>,
-    member_sort: ProxyMemberSort,
-    names: &[String],
-    nodes: &[Option<CachedNode>],
-) -> Vec<ProxyMemberEntry> {
-    sort_members_uncached(&mut ids, member_sort, names, nodes);
-    ids.into_iter()
-        .map(|id| member_entry(id, names, nodes))
-        .collect()
-}
-
 pub(super) fn member_names(target: &MihomoTarget, group_name: &str) -> Vec<String> {
     with_catalog(target, |catalog| {
         let CachedCatalog {
@@ -200,28 +188,6 @@ fn sort_members(
                 delay_score(delay_of(nodes, *a))
                     .cmp(&delay_score(delay_of(nodes, *b)))
                     .then_with(|| lower_name(lower_names, *a).cmp(lower_name(lower_names, *b)))
-            });
-        }
-    }
-}
-
-fn sort_members_uncached(
-    member_ids: &mut [usize],
-    sort: ProxyMemberSort,
-    names: &[String],
-    nodes: &[Option<CachedNode>],
-) {
-    match sort {
-        ProxyMemberSort::Original => {}
-        ProxyMemberSort::Name => {
-            member_ids.sort_by_cached_key(|id| names.get(*id).map(|name| name.to_lowercase()))
-        }
-        ProxyMemberSort::Delay => {
-            member_ids.sort_by_cached_key(|id| {
-                (
-                    delay_score(delay_of(nodes, *id)),
-                    names.get(*id).map(|name| name.to_lowercase()),
-                )
             });
         }
     }

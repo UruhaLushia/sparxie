@@ -1374,8 +1374,6 @@ fn wire__crate__api__proxies__catalog__proxy_catalog_impl(
             let api_target = <crate::api::MihomoTarget>::sse_decode(&mut deserializer);
             let api_include_hidden = <bool>::sse_decode(&mut deserializer);
             let api_filter = <String>::sse_decode(&mut deserializer);
-            let api_member_sort =
-                <crate::api::proxies::catalog::ProxyMemberSort>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::utils::error::MihomoError>(
@@ -1384,7 +1382,6 @@ fn wire__crate__api__proxies__catalog__proxy_catalog_impl(
                             api_target,
                             api_include_hidden,
                             api_filter,
-                            api_member_sort,
                         )
                         .await?;
                         Ok(output_ok)
@@ -3707,8 +3704,6 @@ impl SseDecode for crate::api::proxies::catalog::ProxyGroupEntry {
         let mut var_icon = <String>::sse_decode(deserializer);
         let mut var_memberCount = <u32>::sse_decode(deserializer);
         let mut var_membersHash = <u32>::sse_decode(deserializer);
-        let mut var_initialMembers =
-            <Vec<crate::api::proxies::catalog::ProxyMemberEntry>>::sse_decode(deserializer);
         let mut var_now = <String>::sse_decode(deserializer);
         let mut var_testUrl = <String>::sse_decode(deserializer);
         let mut var_fixed = <String>::sse_decode(deserializer);
@@ -3718,7 +3713,6 @@ impl SseDecode for crate::api::proxies::catalog::ProxyGroupEntry {
             icon: var_icon,
             member_count: var_memberCount,
             members_hash: var_membersHash,
-            initial_members: var_initialMembers,
             now: var_now,
             test_url: var_testUrl,
             fixed: var_fixed,
@@ -4498,7 +4492,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::proxies::catalog::ProxyGroupE
             self.icon.into_into_dart().into_dart(),
             self.member_count.into_into_dart().into_dart(),
             self.members_hash.into_into_dart().into_dart(),
-            self.initial_members.into_into_dart().into_dart(),
             self.now.into_into_dart().into_dart(),
             self.test_url.into_into_dart().into_dart(),
             self.fixed.into_into_dart().into_dart(),
@@ -5151,10 +5144,6 @@ impl SseEncode for crate::api::proxies::catalog::ProxyGroupEntry {
         <String>::sse_encode(self.icon, serializer);
         <u32>::sse_encode(self.member_count, serializer);
         <u32>::sse_encode(self.members_hash, serializer);
-        <Vec<crate::api::proxies::catalog::ProxyMemberEntry>>::sse_encode(
-            self.initial_members,
-            serializer,
-        );
         <String>::sse_encode(self.now, serializer);
         <String>::sse_encode(self.test_url, serializer);
         <String>::sse_encode(self.fixed, serializer);

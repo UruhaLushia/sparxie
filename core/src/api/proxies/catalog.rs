@@ -35,7 +35,6 @@ pub struct ProxyGroupEntry {
     pub icon: String,
     pub member_count: u32,
     pub members_hash: u32,
-    pub initial_members: Vec<ProxyMemberEntry>,
     pub now: String,
     pub test_url: String,
     pub fixed: String,
@@ -55,14 +54,11 @@ pub async fn proxy_catalog(
     target: MihomoTarget,
     include_hidden: bool,
     filter: String,
-    member_sort: ProxyMemberSort,
 ) -> Result<ProxyCatalog, MihomoError> {
     let raw = target.client()?.get_json("proxies").await?;
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
         return Ok(ProxyCatalog::default());
     };
-
-    const INITIAL_MEMBERS_LIMIT: usize = 32;
 
     let mut groups = Vec::new();
     let mut cached_groups = HashMap::new();
@@ -101,11 +97,6 @@ pub async fn proxy_catalog(
         let (members, members_hash) = intern_member_list(all, &mut name_ids);
         let icon = field_or(data, "icon", "");
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
-        let initial_member_ids = if member_count <= INITIAL_MEMBERS_LIMIT {
-            members.clone()
-        } else {
-            Vec::new()
-        };
         cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
             position,
@@ -115,12 +106,10 @@ pub async fn proxy_catalog(
                 icon,
                 member_count: member_count.min(u32::MAX as usize) as u32,
                 members_hash,
-                initial_members: Vec::new(),
                 now: field_or(data, "now", ""),
                 test_url: first_field(data, &["testUrl", "tester"]),
                 fixed: field_or(data, "fixed", ""),
             },
-            initial_member_ids,
         ));
     }
 
@@ -133,8 +122,7 @@ pub async fn proxy_catalog(
                 .collect()
         })
         .unwrap_or_default();
-    groups
-        .sort_by(|(a_pos, a, _), (b_pos, b, _)| group_order(a_pos, a, b_pos, b, &group_positions));
+    groups.sort_by(|(a_pos, a), (b_pos, b)| group_order(a_pos, a, b_pos, b, &group_positions));
 
     let mut names = vec![String::new(); name_ids.len()];
     for (name, id) in name_ids {
@@ -147,17 +135,6 @@ pub async fn proxy_catalog(
             delay: history_delay(data.get("history")),
         }));
     }
-    for (_, group, initial_member_ids) in &mut groups {
-        if initial_member_ids.is_empty() {
-            continue;
-        }
-        group.initial_members = cache::member_entries_for_ids(
-            std::mem::take(initial_member_ids),
-            member_sort,
-            &names,
-            &nodes,
-        );
-    }
     cache::replace_catalog(
         &target,
         CachedCatalog {
@@ -169,7 +146,7 @@ pub async fn proxy_catalog(
     );
 
     Ok(ProxyCatalog {
-        groups: groups.into_iter().map(|(_, group, _)| group).collect(),
+        groups: groups.into_iter().map(|(_, group)| group).collect(),
         icon_urls,
     })
 }
@@ -184,12 +161,12 @@ pub async fn proxy_group_members(
     member_sort: ProxyMemberSort,
 ) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new(), member_sort).await?;
+        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
     if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
         return Ok(entries);
     }
-    let _ = proxy_catalog(target.clone(), true, String::new(), member_sort).await?;
+    let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     Ok(cache::member_entries(&target, &group, offset, limit, member_sort).unwrap_or_default())
 }
 
@@ -198,13 +175,7 @@ pub(crate) async fn cached_group_member_names(
     group: String,
 ) -> Result<Vec<String>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(
-            target.clone(),
-            true,
-            String::new(),
-            ProxyMemberSort::Original,
-        )
-        .await?;
+        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
     Ok(cache::member_names(&target, &group))
 }
