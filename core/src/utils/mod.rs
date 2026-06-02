@@ -1,4 +1,4 @@
 pub(crate) mod error;
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(crate) mod image;
 pub(crate) mod regex;

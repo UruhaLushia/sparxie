@@ -1,6 +1,6 @@
 //! Local-process icon + name cache. Desktop resolves via `file-icon`;
 //! Android resolves through its PackageManager (Kotlin) and persists the
-//! result here via [`store`] / [`store_name`], so the .so omits `file-icon`.
+//! result here via [`store`] / [`store_name`]. iOS skips process metadata.
 //!
 //! Bytes and names live in the shared redb database ([`crate::cache::db`]).
 
@@ -12,7 +12,7 @@ use tokio::sync::Semaphore;
 
 use crate::MihomoError;
 use crate::cache::db::{self, PROC_ICONS};
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::utils::image::normalize_desktop_icon;
 
 /// Bounds concurrent resolves so a burst of new connections doesn't spawn
@@ -254,7 +254,7 @@ async fn resolve(
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn resolve_icon_bytes_sized(path: &str, size: u32) -> Option<Vec<u8>> {
     // No explicit size — `file-icon` already returns a large/native icon by
     // default. Normalize before caching, matching Sparkle's renderer-side
@@ -263,19 +263,19 @@ fn resolve_icon_bytes_sized(path: &str, size: u32) -> Option<Vec<u8>> {
     normalize_desktop_icon(&bytes, size).or(Some(bytes))
 }
 
-#[cfg(target_os = "android")]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn resolve_icon_bytes_sized(_path: &str, _size: u32) -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn resolve_app_name(path: &str) -> Option<String> {
     file_icon::get_app_name_with_options(path, file_icon::FileIconOptions::default())
         .ok()
         .filter(|name| !name.is_empty())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn resolve_app_name(_path: &str) -> Option<String> {
     None
 }

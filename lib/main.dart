@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    as frb;
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
@@ -32,7 +34,7 @@ Future<void> main() async {
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
   await WindowState.bind(config);
-  await RustLib.init();
+  await _initRust();
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
@@ -50,6 +52,17 @@ Future<void> main() async {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
   });
   runApp(MihomoControllerApp(store: store, prefs: prefs, session: session));
+}
+
+Future<void> _initRust() {
+  return RustLib.init(
+    externalLibrary: Platform.isIOS
+        ? frb.ExternalLibrary.process(
+            iKnowHowToUseIt: true,
+            debugInfo: 'Rust core is statically linked into Runner',
+          )
+        : null,
+  );
 }
 
 String? _resolveFontFamily(String userPick) {
