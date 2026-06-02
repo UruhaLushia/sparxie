@@ -301,8 +301,11 @@ jobs:
           (cd core && cargo build --release --target ${{ matrix.rust_target }})
           flutter build macos --release
           APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
-          mkdir -p "$APP/Contents/Frameworks"
-          cp core/target/${{ matrix.rust_target }}/release/libsparxie.dylib "$APP/Contents/Frameworks/"
+          ./scripts/package-macos-rust-framework.sh \
+            core/target/${{ matrix.rust_target }}/release/libsparxie.dylib \
+            "$APP"
+          test -x "$APP/Contents/Frameworks/sparxie.framework/sparxie"
+          codesign --verify --deep --strict --verbose=4 "$APP"
           mkdir -p out
           ditto -c -k --sequesterRsrc --keepParent "$APP" out/sparxie-macos-${{ matrix.arch }}.zip
 
