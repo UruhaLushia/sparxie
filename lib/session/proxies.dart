@@ -1,57 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../rust_api.dart' as rust;
 
 /// Proxy group + node catalog. Polls Rust's structured `/proxies` catalog.
 ///
-/// Each [ProxyGroup] / [ProxyNode] is created once per name and reused across
-/// polls. The notifier fires only on shape changes (group set or member list);
-/// `now` and per-node `delay` flow through their own [ValueNotifier]s.
+/// Each [ProxyGroup] is created once per name and reused across polls. Group
+/// members are windowed: Rust keeps the full list, Dart only holds the current
+/// visible slice for expanded groups.
 class ProxiesNotifier extends ChangeNotifier {
   final Map<String, ProxyGroup> _groupsById = <String, ProxyGroup>{};
-  final Map<String, ProxyNode> _nodesById = <String, ProxyNode>{};
   List<ProxyGroup> _orderedGroups = const <ProxyGroup>[];
 
   List<ProxyGroup> get groups => _orderedGroups;
 
-  ProxyNode? nodeByName(String name) => _nodesById[name];
-
   void reset() {
-    if (_groupsById.isEmpty && _nodesById.isEmpty) return;
+    if (_groupsById.isEmpty) return;
     for (final g in _groupsById.values) {
       g._dispose();
     }
-    for (final n in _nodesById.values) {
-      n._dispose();
-    }
     _groupsById.clear();
-    _nodesById.clear();
     _orderedGroups = const <ProxyGroup>[];
     notifyListeners();
   }
 
   void applyCatalog(rust.ProxyCatalog catalog) {
     var shapeChanged = false;
-    final seenNodes = <String>{};
     final seenGroups = <String>{};
-
-    for (final entry in catalog.nodes) {
-      final name = entry.name;
-      seenNodes.add(name);
-      final existing = _nodesById[name];
-      if (existing == null) {
-        _nodesById[name] = ProxyNode._(
-          name: name,
-          type: entry.proxyType,
-          icon: entry.icon,
-          initialDelay: entry.delay,
-        );
-      } else {
-        existing._setDelay(entry.delay);
-        if (existing.type != entry.proxyType) existing._type = entry.proxyType;
-        if (existing.icon != entry.icon) existing._icon = entry.icon;
-      }
-    }
 
     for (final entry in catalog.groups) {
       final name = entry.name;
@@ -62,7 +38,8 @@ class ProxiesNotifier extends ChangeNotifier {
           name: name,
           type: entry.proxyType,
           icon: entry.icon,
-          all: entry.all,
+          memberCount: entry.memberCount,
+          membersHash: entry.membersHash,
           now: entry.now,
           testUrl: entry.testUrl,
           fixed: entry.fixed,
@@ -72,7 +49,9 @@ class ProxiesNotifier extends ChangeNotifier {
       } else {
         if (existing._type != entry.proxyType) existing._type = entry.proxyType;
         if (existing._icon != entry.icon) existing._icon = entry.icon;
-        if (existing._setMembers(entry.all)) shapeChanged = true;
+        if (existing._setMemberShape(entry.memberCount, entry.membersHash)) {
+          shapeChanged = true;
+        }
         existing._setNow(entry.now);
         existing._setTestUrl(entry.testUrl);
         existing._setFixed(entry.fixed);
@@ -86,17 +65,6 @@ class ProxiesNotifier extends ChangeNotifier {
     for (final name in removedGroupNames) {
       _groupsById.remove(name)?._dispose();
       shapeChanged = true;
-    }
-
-    final removedNodeNames = <String>[];
-    for (final key in _nodesById.keys) {
-      if (!seenNodes.contains(key)) removedNodeNames.add(key);
-    }
-    // Don't dispose evicted nodes. A still-mounted ValueListenableBuilder may
-    // hold a reference and a microtask-deferred dispose still races the build
-    // phase. Cost is negligible — a name string + a single int notifier.
-    for (final name in removedNodeNames) {
-      _nodesById.remove(name);
     }
 
     final ordered = <ProxyGroup>[];
@@ -120,23 +88,68 @@ class ProxiesNotifier extends ChangeNotifier {
 
   /// Push delays from `/group/<name>/delay` into per-node notifiers.
   void applyGroupDelay(List<rust.GroupDelayEntry> delays) {
+    final delayByName = <String, int>{};
     for (final entry in delays) {
-      final node = _nodesById[entry.name];
-      if (node == null) continue;
-      node._setDelay(entry.delay);
+      delayByName[entry.name] = entry.delay;
     }
+    _applyVisibleDelays(delayByName);
   }
 
   void applyProxyDelay(List<rust.ProxyDelayEntry> delays) {
+    final delayByName = <String, int>{};
     for (final entry in delays) {
-      final node = _nodesById[entry.name];
-      if (node == null) continue;
-      node._setDelay(entry.delay);
+      delayByName[entry.name] = entry.delay;
     }
+    _applyVisibleDelays(delayByName);
   }
 
   void applyNodeDelay(String nodeName, int delayMs) {
-    _nodesById[nodeName]?._setDelay(delayMs);
+    _setVisibleDelay(nodeName, delayMs);
+  }
+
+  void releaseGroupMembers(String groupName) {
+    _groupsById[groupName]?._clearMembers();
+  }
+
+  void releaseAllGroupMembers() {
+    var changed = false;
+    for (final group in _groupsById.values) {
+      if (group._clearMembers()) changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  ProxyMemberWindowRequest? memberWindowRequest(
+    String groupName,
+    int firstIndex,
+    int lastIndex,
+  ) {
+    return _groupsById[groupName]?._windowRequest(firstIndex, lastIndex);
+  }
+
+  void applyGroupMembers(
+    String groupName,
+    int membersHash,
+    int offset,
+    List<rust.ProxyMemberEntry> entries,
+  ) {
+    final group = _groupsById[groupName];
+    if (group == null) return;
+    if (group._membersHash != membersHash) return;
+    if (group._setMemberWindow(offset, entries)) notifyListeners();
+  }
+
+  void _setVisibleDelay(String name, int delay) {
+    for (final group in _groupsById.values) {
+      group._setVisibleDelay(name, delay);
+    }
+  }
+
+  void _applyVisibleDelays(Map<String, int> delayByName) {
+    if (delayByName.isEmpty) return;
+    for (final group in _groupsById.values) {
+      group._applyVisibleDelays(delayByName);
+    }
   }
 
   static bool _sameGroupOrder(List<ProxyGroup> a, List<ProxyGroup> b) {
@@ -153,13 +166,16 @@ class ProxiesNotifier extends ChangeNotifier {
     for (final g in _groupsById.values) {
       g._dispose();
     }
-    for (final n in _nodesById.values) {
-      n._dispose();
-    }
     _groupsById.clear();
-    _nodesById.clear();
     super.dispose();
   }
+}
+
+class ProxyMemberWindowRequest {
+  const ProxyMemberWindowRequest(this.offset, this.limit, this.membersHash);
+  final int offset;
+  final int limit;
+  final int membersHash;
 }
 
 /// One proxy group. `now` and the member list are mutable observables.
@@ -168,30 +184,38 @@ class ProxyGroup {
     required this.name,
     required String type,
     required String icon,
-    required List<String> all,
+    required this._memberCount,
+    required this._membersHash,
     required String now,
     required String testUrl,
     required String fixed,
   }) : _type = type, // ignore: prefer_initializing_formals
        _icon = icon, // ignore: prefer_initializing_formals
        _testUrl = testUrl, // ignore: prefer_initializing_formals
-       _all = List<String>.unmodifiable(all),
        // ignore: prefer_initializing_formals
        now = ValueNotifier<String>(now),
        fixed = ValueNotifier<String>(fixed);
+
+  static const int _memberWindowMin = 96;
+  static const int _memberWindowOverscan = 32;
+  static const int _memberRefetchMargin = 16;
+  static const Duration _memberRetireDelay = Duration(milliseconds: 250);
 
   final String name;
   String _type;
   String _icon;
   String _testUrl;
-  List<String> _all;
+  int _memberCount;
+  int _membersHash;
+  int _memberOffset = 0;
+  List<ProxyMember> _members = const <ProxyMember>[];
 
   String get type => _type;
   String get icon => _icon;
 
   /// Per-group `tester`/`testUrl` configured in mihomo (empty when absent).
   String get testUrl => _testUrl;
-  List<String> get all => _all;
+  int get memberCount => _memberCount;
 
   final ValueNotifier<String> now;
 
@@ -200,10 +224,27 @@ class ProxyGroup {
   /// whole list.
   final ValueNotifier<String> fixed;
 
-  bool _setMembers(List<String> next) {
-    if (_listEquals(_all, next)) return false;
-    _all = List<String>.unmodifiable(next);
-    return true;
+  ProxyMember? memberAt(int index) {
+    final local = index - _memberOffset;
+    if (local < 0 || local >= _members.length) return null;
+    return _members[local];
+  }
+
+  bool _setMemberShape(int count, int hash) {
+    var changed = false;
+    if (_memberCount != count) {
+      _memberCount = count;
+      changed = true;
+    }
+    if (_membersHash != hash) {
+      _membersHash = hash;
+      _clearMembers();
+      return true;
+    }
+    if (_memberOffset >= count && _clearMembers()) {
+      changed = true;
+    }
+    return changed;
   }
 
   void _setNow(String value) {
@@ -221,37 +262,125 @@ class ProxyGroup {
   void _dispose() {
     now.dispose();
     fixed.dispose();
+    for (final member in _members) {
+      member._dispose();
+    }
   }
 
-  static bool _listEquals(List<String> a, List<String> b) {
-    if (identical(a, b)) return true;
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
+  ProxyMemberWindowRequest? _windowRequest(int firstIndex, int lastIndex) {
+    if (_memberCount <= 0) return null;
+    final first = firstIndex.clamp(0, _memberCount - 1);
+    final last = lastIndex.clamp(first, _memberCount - 1);
+    final cachedEnd = _memberOffset + _members.length;
+    if (_members.isNotEmpty &&
+        first >= _memberOffset + _memberRefetchMargin &&
+        last < cachedEnd - _memberRefetchMargin) {
+      return null;
+    }
+    final visible = last - first + 1;
+    final limit = (visible + _memberWindowOverscan * 2)
+        .clamp(_memberWindowMin, _memberCount)
+        .toInt();
+    final center = (first + last) ~/ 2;
+    final maxOffset = (_memberCount - limit).clamp(0, _memberCount).toInt();
+    final offset = (center - limit ~/ 2).clamp(0, maxOffset).toInt();
+    if (_members.isNotEmpty &&
+        offset == _memberOffset &&
+        limit == _members.length) {
+      return null;
+    }
+    return ProxyMemberWindowRequest(offset, limit, _membersHash);
+  }
+
+  bool _setMemberWindow(int offset, List<rust.ProxyMemberEntry> entries) {
+    final same =
+        offset == _memberOffset &&
+        _members.length == entries.length &&
+        _sameMemberEntries(_members, entries);
+    if (same) {
+      var typeChanged = false;
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        if (_members[i]._setType(entry.proxyType)) typeChanged = true;
+        _members[i]._setDelay(entry.delay);
+      }
+      return typeChanged;
+    }
+    final next = entries.map(ProxyMember._fromRust).toList(growable: false);
+    _retireMembers(_members);
+    _memberOffset = offset;
+    _members = next;
+    return true;
+  }
+
+  void _setVisibleDelay(String name, int delay) {
+    for (final member in _members) {
+      if (member.name == name) member._setDelay(delay);
+    }
+  }
+
+  void _applyVisibleDelays(Map<String, int> delayByName) {
+    for (final member in _members) {
+      final delay = delayByName[member.name];
+      if (delay != null) member._setDelay(delay);
+    }
+  }
+
+  static bool _sameMemberEntries(
+    List<ProxyMember> members,
+    List<rust.ProxyMemberEntry> entries,
+  ) {
+    for (var i = 0; i < members.length; i++) {
+      if (members[i].name != entries[i].name) return false;
     }
     return true;
+  }
+
+  bool _clearMembers() {
+    _memberOffset = 0;
+    if (_members.isEmpty) return false;
+    _retireMembers(_members);
+    _members = const <ProxyMember>[];
+    return true;
+  }
+
+  void _retireMembers(List<ProxyMember> members) {
+    if (members.isEmpty) return;
+    Future<void>.delayed(_memberRetireDelay, () {
+      for (final member in members) {
+        member._dispose();
+      }
+    });
   }
 }
 
 /// One selectable node. Subscribers repaint when [delay] changes.
-class ProxyNode {
-  ProxyNode._({
+class ProxyMember {
+  ProxyMember._({
     required this.name,
     required String type,
-    required String icon,
     required int initialDelay,
   }) : _type = type, // ignore: prefer_initializing_formals
-       _icon = icon, // ignore: prefer_initializing_formals
        delay = ValueNotifier<int>(initialDelay);
+
+  factory ProxyMember._fromRust(rust.ProxyMemberEntry entry) => ProxyMember._(
+    name: entry.name,
+    type: entry.proxyType,
+    initialDelay: entry.delay,
+  );
 
   final String name;
   String _type;
-  String _icon;
   String get type => _type;
-  String get icon => _icon;
 
   /// -1 = untested, 0 = timeout, >0 = ms.
   final ValueNotifier<int> delay;
+
+  bool _setType(String value) {
+    if (_type == value) return false;
+    _type = value;
+    return true;
+  }
 
   void _setDelay(int value) {
     if (delay.value != value) delay.value = value;

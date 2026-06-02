@@ -5,7 +5,13 @@ use serde_json::Value;
 use crate::MihomoError;
 use crate::api::MihomoTarget;
 
-use super::value::{field_or, first_field, string_list, value_to_i32};
+use super::value::{field_or, first_field, value_to_string};
+
+use cache::{CachedCatalog, CachedGroup, CachedNode};
+use parse::{history_delay, intern_member_list, member_count, proxy_group_matches, push_icon};
+
+mod cache;
+mod parse;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ProxyMemberSort {
@@ -18,7 +24,6 @@ pub enum ProxyMemberSort {
 #[derive(Clone, Debug, Default)]
 pub struct ProxyCatalog {
     pub groups: Vec<ProxyGroupEntry>,
-    pub nodes: Vec<ProxyNodeEntry>,
     pub icon_urls: Vec<String>,
 }
 
@@ -27,91 +32,75 @@ pub struct ProxyGroupEntry {
     pub name: String,
     pub proxy_type: String,
     pub icon: String,
-    pub all: Vec<String>,
+    pub member_count: u32,
+    pub members_hash: u32,
     pub now: String,
     pub test_url: String,
     pub fixed: String,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ProxyNodeEntry {
+pub struct ProxyMemberEntry {
     pub name: String,
     pub proxy_type: String,
-    pub icon: String,
     pub delay: i32,
 }
 
 /// Structured proxy + group catalog. Rust parses mihomo's `/proxies`, applies
-/// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), and returns
-/// the node/group index Dart needs.
+/// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), caches full
+/// group members in Rust, and returns only group summaries to Dart.
 pub async fn proxy_catalog(
     target: MihomoTarget,
     include_hidden: bool,
     filter: String,
-    member_sort: ProxyMemberSort,
 ) -> Result<ProxyCatalog, MihomoError> {
     let raw = target.client()?.get_json("proxies").await?;
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
         return Ok(ProxyCatalog::default());
     };
 
-    let mut nodes = Vec::with_capacity(proxies.len());
     let mut groups = Vec::new();
+    let mut cached_groups = HashMap::new();
+    let mut name_ids = HashMap::new();
+    let mut needed_nodes = HashSet::new();
     let mut icon_urls = Vec::new();
     let mut seen_icons = HashSet::new();
 
-    for (name, data) in proxies {
-        let proxy_type = field_or(data, "type", "Proxy");
-        let icon = field_or(data, "icon", "");
-        push_icon(&mut icon_urls, &mut seen_icons, &icon);
-        nodes.push(ProxyNodeEntry {
-            name: name.clone(),
-            proxy_type,
-            icon,
-            delay: history_delay(data.get("history")),
-        });
-    }
-
-    let node_delays = if member_sort == ProxyMemberSort::Delay {
-        Some(
-            nodes
-                .iter()
-                .map(|node| (node.name.as_str(), node.delay))
-                .collect::<HashMap<_, _>>(),
-        )
-    } else {
-        None
-    };
     let filter = filter.trim().to_lowercase();
     // Group order comes from the upstream GLOBAL list; member sorting should
     // only affect the displayed members inside each group.
     let global_all = proxies
         .get("GLOBAL")
-        .map(|data| string_list(data.get("all")))
+        .and_then(|data| data.get("all"))
+        .and_then(Value::as_array)
         .filter(|all| !all.is_empty());
 
     for (position, (name, data)) in proxies.iter().enumerate() {
-        let mut all = string_list(data.get("all"));
-        if all.is_empty() {
+        let all = data.get("all");
+        let member_count = member_count(all);
+        if member_count == 0 {
             continue;
         }
         let hidden = data.get("hidden").and_then(Value::as_bool).unwrap_or(false);
         if hidden && !include_hidden {
             continue;
         }
-        if !proxy_group_matches(name, &all, &filter) {
+        if !proxy_group_matches(name, all, &filter) {
             continue;
         }
-        sort_members(&mut all, member_sort, node_delays.as_ref());
+
+        let (members, members_hash) = intern_member_list(all, &mut name_ids, &mut needed_nodes);
         let icon = field_or(data, "icon", "");
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
+        cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
             position,
             ProxyGroupEntry {
                 name: name.clone(),
                 proxy_type: field_or(data, "type", "Selector"),
                 icon,
-                all,
+                member_count: member_count.min(u32::MAX as usize) as u32,
+                members_hash,
                 now: field_or(data, "now", ""),
                 test_url: first_field(data, &["testUrl", "tester"]),
                 fixed: field_or(data, "fixed", ""),
@@ -119,93 +108,103 @@ pub async fn proxy_catalog(
         ));
     }
 
-    let group_positions: HashMap<&str, usize> = global_all
-        .as_ref()
+    let group_positions: HashMap<String, usize> = global_all
         .map(|names| {
             names
                 .iter()
                 .enumerate()
-                .map(|(i, name)| (name.as_str(), i))
+                .map(|(i, name)| (value_to_string(name), i))
                 .collect()
         })
         .unwrap_or_default();
+    groups.sort_by(|(a_pos, a), (b_pos, b)| group_order(a_pos, a, b_pos, b, &group_positions));
 
-    groups.sort_by(|(a_pos, a), (b_pos, b)| {
-        let a_is_global = a.name == "GLOBAL";
-        let b_is_global = b.name == "GLOBAL";
-        match (a_is_global, b_is_global) {
-            (true, true) => return a_pos.cmp(b_pos),
-            (true, false) => return std::cmp::Ordering::Greater,
-            (false, true) => return std::cmp::Ordering::Less,
-            (false, false) => {}
-        }
-
-        let ai = group_positions.get(a.name.as_str()).copied();
-        let bi = group_positions.get(b.name.as_str()).copied();
-        match (ai, bi) {
-            (Some(ai), Some(bi)) => ai.cmp(&bi).then(a_pos.cmp(b_pos)),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => a_pos.cmp(b_pos),
-        }
-    });
+    let mut names = vec![String::new(); name_ids.len()];
+    for (name, id) in name_ids {
+        names[id] = name;
+    }
+    let mut nodes = HashMap::with_capacity(needed_nodes.len());
+    for id in needed_nodes {
+        let Some(name) = names.get(id) else {
+            continue;
+        };
+        let Some(data) = proxies.get(name) else {
+            continue;
+        };
+        nodes.insert(
+            id,
+            CachedNode {
+                proxy_type: field_or(data, "type", "Proxy"),
+                delay: history_delay(data.get("history")),
+            },
+        );
+    }
+    cache::replace_catalog(
+        &target,
+        CachedCatalog {
+            names,
+            nodes,
+            groups: cached_groups,
+        },
+    );
 
     Ok(ProxyCatalog {
         groups: groups.into_iter().map(|(_, group)| group).collect(),
-        nodes,
         icon_urls,
     })
 }
 
-fn proxy_group_matches(name: &str, members: &[String], filter: &str) -> bool {
-    filter.is_empty()
-        || name.to_lowercase().contains(filter)
-        || members
-            .iter()
-            .any(|member| member.to_lowercase().contains(filter))
-}
-
-fn sort_members(names: &mut [String], sort: ProxyMemberSort, delays: Option<&HashMap<&str, i32>>) {
-    match sort {
-        ProxyMemberSort::Original => {}
-        ProxyMemberSort::Name => names.sort_by_cached_key(|name| name.to_lowercase()),
-        ProxyMemberSort::Delay => {
-            let Some(delays) = delays else {
-                return;
-            };
-            names.sort_by_cached_key(|name| {
-                (delay_score(delay_of(delays, name)), name.to_lowercase())
-            });
-        }
+/// Windowed members for one proxy group. The full member list stays in Rust so
+/// very large groups do not cross the bridge on every catalog refresh.
+pub async fn proxy_group_members(
+    target: MihomoTarget,
+    group: String,
+    offset: u32,
+    limit: u32,
+    member_sort: ProxyMemberSort,
+) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
+    if !cache::has_catalog(&target) {
+        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
+    Ok(cache::member_entries(
+        &target,
+        &group,
+        offset,
+        limit,
+        member_sort,
+    ))
 }
 
-fn delay_of(delays: &HashMap<&str, i32>, name: &str) -> i32 {
-    delays.get(name).copied().unwrap_or(-1)
-}
-
-fn delay_score(delay: i32) -> i32 {
-    if delay < 0 {
-        1 << 30
-    } else if delay == 0 {
-        (1 << 30) - 1
-    } else {
-        delay
+pub(crate) async fn cached_group_member_names(
+    target: MihomoTarget,
+    group: String,
+) -> Result<Vec<String>, MihomoError> {
+    if !cache::has_catalog(&target) {
+        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
+    Ok(cache::member_names(&target, &group))
 }
 
-fn push_icon(icon_urls: &mut Vec<String>, seen: &mut HashSet<String>, icon: &str) {
-    if !icon.is_empty() && seen.insert(icon.to_string()) {
-        icon_urls.push(icon.to_string());
+fn group_order(
+    a_pos: &usize,
+    a: &ProxyGroupEntry,
+    b_pos: &usize,
+    b: &ProxyGroupEntry,
+    group_positions: &HashMap<String, usize>,
+) -> std::cmp::Ordering {
+    match (a.name == "GLOBAL", b.name == "GLOBAL") {
+        (true, true) => return a_pos.cmp(b_pos),
+        (true, false) => return std::cmp::Ordering::Greater,
+        (false, true) => return std::cmp::Ordering::Less,
+        (false, false) => {}
     }
-}
 
-fn history_delay(value: Option<&Value>) -> i32 {
-    let Some(items) = value.and_then(Value::as_array) else {
-        return -1;
-    };
-    let Some(last) = items.last() else {
-        return -1;
-    };
-    last.get("delay").map(value_to_i32).unwrap_or_default()
+    let ai = group_positions.get(a.name.as_str()).copied();
+    let bi = group_positions.get(b.name.as_str()).copied();
+    match (ai, bi) {
+        (Some(ai), Some(bi)) => ai.cmp(&bi).then(a_pos.cmp(b_pos)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a_pos.cmp(b_pos),
+    }
 }

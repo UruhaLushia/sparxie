@@ -4,6 +4,7 @@ use crate::MihomoError;
 use crate::api::{MihomoTarget, urlencode};
 use crate::client::MihomoClient;
 
+use super::catalog::cached_group_member_names;
 use super::value::value_to_i32;
 
 #[derive(Clone, Debug, Default)]
@@ -64,6 +65,28 @@ pub async fn proxy_batch_delay(
         .await;
     out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
+}
+
+/// Batch delay test for every cached member of one group. The member list stays
+/// in Rust; Dart only receives the delay results.
+pub async fn proxy_group_batch_delay(
+    target: MihomoTarget,
+    group: String,
+    test_url: String,
+    timeout_ms: u32,
+    expected_status: Option<String>,
+    concurrency: u32,
+) -> Result<Vec<ProxyDelayEntry>, MihomoError> {
+    let names = cached_group_member_names(target.clone(), group).await?;
+    proxy_batch_delay(
+        target,
+        names,
+        test_url,
+        timeout_ms,
+        expected_status,
+        concurrency,
+    )
+    .await
 }
 
 async fn proxy_delay_with_client(

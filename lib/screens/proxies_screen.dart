@@ -65,7 +65,11 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
 
   void _toggle(String name) {
     setState(() {
-      if (!_expanded.remove(name)) _expanded.add(name);
+      if (_expanded.remove(name)) {
+        widget.session.proxies.releaseGroupMembers(name);
+      } else {
+        _expanded.add(name);
+      }
     });
   }
 
@@ -154,7 +158,14 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         );
         widget.session.proxies.applyGroupDelay(delays);
       } else {
-        await _testNodesBatch(target, group.all, testUrl);
+        final delays = await rust.proxyGroupBatchDelay(
+          target: target,
+          group: group.name,
+          testUrl: testUrl,
+          timeoutMs: widget.prefs.delayTestTimeoutMs,
+          concurrency: widget.prefs.delayTestConcurrency,
+        );
+        widget.session.proxies.applyProxyDelay(delays);
       }
     } catch (e) {
       if (mounted) {
@@ -165,22 +176,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     } finally {
       if (mounted) setState(() => _testingGroup.remove(group.name));
     }
-  }
-
-  Future<void> _testNodesBatch(
-    rust.MihomoTarget target,
-    List<String> names,
-    String testUrl,
-  ) async {
-    if (names.isEmpty) return;
-    final delays = await rust.proxyBatchDelay(
-      target: target,
-      names: names,
-      testUrl: testUrl,
-      timeoutMs: widget.prefs.delayTestTimeoutMs,
-      concurrency: widget.prefs.delayTestConcurrency,
-    );
-    widget.session.proxies.applyProxyDelay(delays);
   }
 
   Future<void> _testNode(ProxyGroup group, String name) async {
@@ -403,19 +398,29 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                           crossAxisSpacing: 8,
                           mainAxisExtent: 60,
                         ),
-                        itemCount: group.all.length,
+                        itemCount: group.memberCount,
                         itemBuilder: (context, index) {
-                          final name = group.all[index];
-                          final node = widget.session.proxies.nodeByName(name);
+                          final member = group.memberAt(index);
+                          if (member == null) {
+                            unawaited(
+                              widget.session.ensureProxyGroupMembers(
+                                group.name,
+                                index,
+                                index,
+                              ),
+                            );
+                            return const _ProxyNodePlaceholder();
+                          }
                           return ProxyNodeTile(
-                            key: ValueKey('${group.name}::$name'),
-                            name: name,
-                            type: node?.type ?? 'unknown',
-                            delay: node?.delay,
+                            key: ValueKey('${group.name}::${member.name}'),
+                            name: member.name,
+                            type: member.type,
+                            delay: member.delay,
                             nowListenable: group.now,
                             fixedListenable: group.fixed,
-                            onSelect: () => widget.onSelect(group, name),
-                            onTestDelay: () => widget.onTestNode(group, name),
+                            onSelect: () => widget.onSelect(group, member.name),
+                            onTestDelay: () =>
+                                widget.onTestNode(group, member.name),
                           );
                         },
                       ),
@@ -436,6 +441,22 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     if (width >= 800) return 3;
     if (width >= 520) return 2;
     return 1;
+  }
+}
+
+class _ProxyNodePlaceholder extends StatelessWidget {
+  const _ProxyNodePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+      ),
+    );
   }
 }
 
