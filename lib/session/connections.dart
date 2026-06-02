@@ -132,6 +132,7 @@ class ConnectionRow {
   /// the rest of the row chrome doesn't repaint each tick.
   final ValueNotifier<RowBytes> bytes;
   final ValueNotifier<RowSpeeds> speeds;
+  bool _disposed = false;
 
   String get activeProxy => chains.isEmpty ? '' : chains.first;
   String get chainsLabel => chains.reversed.join(' → ');
@@ -186,6 +187,13 @@ class ConnectionRow {
       initialBytes: RowBytes(c.upload, c.download),
       initialSpeeds: RowSpeeds(c.uploadSpeed, c.downloadSpeed),
     );
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    bytes.dispose();
+    speeds.dispose();
   }
 }
 
@@ -254,13 +262,12 @@ typedef GroupsFetcher =
 typedef GroupMembersFetcher =
     Future<List<rust.Connection>> Function(String groupKey, int limit);
 
-/// Virtual paging: Rust holds the full sorted list, Dart only ever holds a
-/// sliding window of `_windowSize` rows around the visible viewport.
+/// Virtual paging: Rust holds the full sorted list, Dart only ever holds the
+/// visible rows plus a small overscan around the viewport.
 ///
-/// The screen calls [ensureWindow] with the index it's currently scrolling
-/// near; the notifier centers a new window on it (clamped to bounds) and
-/// pulls fresh row data from Rust. Per-row volatile counters are patched
-/// in place so individual tiles repaint without rebuilding the list.
+/// The screen calls [ensureWindow] with its visible index range; the notifier
+/// pulls that range plus overscan from Rust. Per-row volatile counters are
+/// patched in place so individual tiles repaint without rebuilding the list.
 class ConnectionListNotifier extends ChangeNotifier {
   ConnectionListNotifier({
     this.windowFetcher,
@@ -272,24 +279,20 @@ class ConnectionListNotifier extends ChangeNotifier {
   GroupsFetcher? groupsFetcher;
   GroupMembersFetcher? groupMembersFetcher;
 
-  /// Cap on member rows held per expanded group — matches the flat list's
-  /// window budget so grouped mode never balloons Dart's row count. An
-  /// expanded group shows its top-N by the active sort key; the header's
-  /// count still reflects the true total (counted in Rust).
+  /// Cap on member rows held per expanded group. An expanded group shows its
+  /// top-N by the active sort key; the header still reflects the true total.
   static const int _groupMemberCap = 100;
 
-  /// Visible viewport accommodates ~12 rows; we keep ~120 around it so
-  /// short scrolls don't trigger fetches.
-  static const int _windowSize = 120;
-
-  /// Re-center when the user has scrolled to within this many rows of
-  /// either edge of the current window.
-  static const int _edgeMargin = 30;
+  /// Keep only five rows above and below the actual viewport in Dart memory.
+  static const int _windowOverscan = 5;
+  static const int _windowRefetchMargin = 2;
 
   static const Duration _refetchDebounce = Duration(milliseconds: 50);
+  static const Duration _rowRetireDelay = Duration(milliseconds: 250);
 
   // Active window state.
   int _activeOffset = 0;
+  int _activeLimit = 0;
   // ordered ids in the active window
   final List<String> _activeWindowIds = <String>[];
   // id → row, keyed within the window so we can patch volatile counters
@@ -298,6 +301,7 @@ class ConnectionListNotifier extends ChangeNotifier {
       LinkedHashMap<String, ConnectionRow>();
 
   int _closedOffset = 0;
+  int _closedLimit = 0;
   final List<String> _closedWindowIds = <String>[];
   final LinkedHashMap<String, ConnectionRow> _closedRows =
       LinkedHashMap<String, ConnectionRow>();
@@ -366,7 +370,7 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   int get activeCount => _activeCount;
   int get closedCount => _closedCount;
-  int get windowSize => _windowSize;
+  int get windowOverscan => _windowOverscan;
 
   int activeWindowOffset() => _activeOffset;
   int closedWindowOffset() => _closedOffset;
@@ -388,9 +392,11 @@ class ConnectionListNotifier extends ChangeNotifier {
   /// Apply a stream frame (counts only — no row data here).
   void applyFrame(rust.ConnectionsFrame frame) {
     if (frame.isInitial) {
+      _retireRows(_activeRows.values);
       _activeWindowIds.clear();
       _activeRows.clear();
       _activeOffset = 0;
+      _retireRows(_closedRows.values);
       _closedWindowIds.clear();
       _closedRows.clear();
       _closedOffset = 0;
@@ -401,6 +407,8 @@ class ConnectionListNotifier extends ChangeNotifier {
         frame.isInitial;
     _activeCount = frame.activeCount;
     _closedCount = frame.closedCount;
+    if (_activeCount == 0) _clearWindow(ConnectionsTab.active);
+    if (_closedCount == 0) _clearWindow(ConnectionsTab.closed);
     // Re-pull the current window so volatile counters and any row that
     // entered/exited within the current viewport stay fresh.
     _scheduleRefetch();
@@ -408,26 +416,38 @@ class ConnectionListNotifier extends ChangeNotifier {
     if (shapeChanged) notifyListeners();
   }
 
-  /// Ensure the window covers index `centerIndex`. If the index is too
-  /// close to the window edges (or outside it), shift the window so the
-  /// index is centered, clamped to the list bounds, and fetch.
-  void ensureWindow(ConnectionsTab tab, int centerIndex) {
+  /// Ensure the cached rows cover `[firstIndex, lastIndex]`, plus overscan.
+  void ensureWindow(ConnectionsTab tab, int firstIndex, int lastIndex) {
     final total = tab == ConnectionsTab.active ? _activeCount : _closedCount;
-    if (total == 0) return;
+    if (total == 0) {
+      _clearWindow(tab);
+      return;
+    }
+    final safeFirst = firstIndex.clamp(0, total - 1).toInt();
+    final safeLast = lastIndex.clamp(safeFirst, total - 1).toInt();
+    final desiredOffset = (safeFirst - _windowOverscan).clamp(0, total).toInt();
+    final end = (safeLast + 1 + _windowOverscan).clamp(0, total).toInt();
+    final desiredLimit = end - desiredOffset;
     final offset = tab == ConnectionsTab.active ? _activeOffset : _closedOffset;
-    final localCenter = centerIndex - offset;
-    final near =
-        localCenter < _edgeMargin || localCenter > _windowSize - _edgeMargin;
-    if (!near) return;
-    final desiredOffset = (centerIndex - _windowSize ~/ 2).clamp(
-      0,
-      (total - _windowSize).clamp(0, total),
-    );
-    if (desiredOffset == offset) return;
+    final limit = tab == ConnectionsTab.active ? _activeLimit : _closedLimit;
+    final ids = tab == ConnectionsTab.active
+        ? _activeWindowIds
+        : _closedWindowIds;
+    final cachedEnd = offset + limit;
+    final covered =
+        ids.isNotEmpty &&
+        safeFirst >= offset + _windowRefetchMargin &&
+        safeLast < cachedEnd - _windowRefetchMargin;
+    if (covered ||
+        (desiredOffset == offset && desiredLimit == limit && ids.isNotEmpty)) {
+      return;
+    }
     if (tab == ConnectionsTab.active) {
       _activeOffset = desiredOffset;
+      _activeLimit = desiredLimit;
     } else {
       _closedOffset = desiredOffset;
+      _closedLimit = desiredLimit;
     }
     _scheduleRefetch(force: true);
   }
@@ -506,12 +526,11 @@ class ConnectionListNotifier extends ChangeNotifier {
       groupKey,
       () => LinkedHashMap<String, ConnectionRow>(),
     );
-    final newIds = rows.map((c) => c.id).toList(growable: false);
-    final newIdSet = newIds.toSet();
+    final newIds = <String>[];
     final prev = _groupMemberIds[groupKey] ?? const <String>[];
-    final orderChanged = !_listEq(prev, newIds);
 
     for (final c in rows) {
+      newIds.add(c.id);
       final existing = rowMap[c.id];
       if (existing != null) {
         final bytes = RowBytes(c.upload, c.download);
@@ -522,7 +541,8 @@ class ConnectionListNotifier extends ChangeNotifier {
         rowMap[c.id] = ConnectionRow.fromConnection(c);
       }
     }
-    rowMap.removeWhere((id, _) => !newIdSet.contains(id));
+    final orderChanged = !_listEq(prev, newIds);
+    _retainRows(rowMap, newIds);
     _groupMemberIds[groupKey] = newIds;
     if (orderChanged) notifyListeners();
   }
@@ -530,10 +550,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   void _disposeGroupMembers(String groupKey) {
     final rows = _groupMemberRows.remove(groupKey);
     if (rows != null) {
-      for (final row in rows.values) {
-        row.bytes.dispose();
-        row.speeds.dispose();
-      }
+      _retireRows(rows.values);
     }
     _groupMemberIds.remove(groupKey);
   }
@@ -566,17 +583,16 @@ class ConnectionListNotifier extends ChangeNotifier {
     required bool force,
   }) async {
     final total = tab == ConnectionsTab.active ? _activeCount : _closedCount;
-    if (total == 0) return;
-    final offset = tab == ConnectionsTab.active ? _activeOffset : _closedOffset;
-    final ids = tab == ConnectionsTab.active
-        ? _activeWindowIds
-        : _closedWindowIds;
-    if (!force && ids.isEmpty) {
-      // First-time load is treated as forced.
+    if (total == 0) {
+      _clearWindow(tab);
+      return;
     }
+    final offset = tab == ConnectionsTab.active ? _activeOffset : _closedOffset;
+    final limit = tab == ConnectionsTab.active ? _activeLimit : _closedLimit;
+    if (limit <= 0) return;
     try {
-      final rows = await fetcher(tab, offset, _windowSize);
-      _applyWindow(tab, offset, rows);
+      final rows = await fetcher(tab, offset, limit);
+      _applyWindow(tab, offset, limit, rows);
     } catch (_) {
       // Silent — next frame retriggers.
     }
@@ -585,26 +601,31 @@ class ConnectionListNotifier extends ChangeNotifier {
   void _applyWindow(
     ConnectionsTab tab,
     int expectedOffset,
+    int expectedLimit,
     List<rust.Connection> rows,
   ) {
     // Stale response from a window that's since shifted? Drop it.
     final currentOffset = tab == ConnectionsTab.active
         ? _activeOffset
         : _closedOffset;
-    if (expectedOffset != currentOffset) return;
+    final currentLimit = tab == ConnectionsTab.active
+        ? _activeLimit
+        : _closedLimit;
+    if (expectedOffset != currentOffset || expectedLimit != currentLimit) {
+      return;
+    }
 
     final ids = tab == ConnectionsTab.active
         ? _activeWindowIds
         : _closedWindowIds;
     final rowMap = tab == ConnectionsTab.active ? _activeRows : _closedRows;
 
-    final newIds = rows.map((c) => c.id).toList(growable: false);
-    final newIdSet = newIds.toSet();
-    final orderChanged = !_listEq(ids, newIds);
+    final newIds = <String>[];
 
     // Patch existing rows in place (volatile counters), and insert
     // brand-new ones.
     for (final c in rows) {
+      newIds.add(c.id);
       final existing = rowMap[c.id];
       if (existing != null) {
         final bytes = RowBytes(c.upload, c.download);
@@ -616,8 +637,9 @@ class ConnectionListNotifier extends ChangeNotifier {
       }
     }
     // Drop rows that left the window.
-    rowMap.removeWhere((id, _) => !newIdSet.contains(id));
+    _retainRows(rowMap, newIds);
 
+    final orderChanged = !_listEq(ids, newIds);
     if (orderChanged) {
       ids
         ..clear()
@@ -630,12 +652,16 @@ class ConnectionListNotifier extends ChangeNotifier {
   /// frame plus refetch will rebuild authoritative state.
   void optimisticRemove(String id) {
     var changed = false;
-    if (_activeRows.remove(id) != null) {
+    final active = _activeRows.remove(id);
+    if (active != null) {
+      _retireRow(active);
       _activeWindowIds.remove(id);
       if (_activeCount > 0) _activeCount--;
       changed = true;
     }
-    if (_closedRows.remove(id) != null) {
+    final closed = _closedRows.remove(id);
+    if (closed != null) {
+      _retireRow(closed);
       _closedWindowIds.remove(id);
       if (_closedCount > 0) _closedCount--;
       changed = true;
@@ -647,10 +673,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   /// to `clearClosedConnections` so the next frame agrees.
   void clearClosedOptimistic() {
     if (_closedCount == 0 && _closedRows.isEmpty) return;
-    for (final row in _closedRows.values) {
-      row.bytes.dispose();
-      row.speeds.dispose();
-    }
+    _retireRows(_closedRows.values);
     _closedRows.clear();
     _closedWindowIds.clear();
     _closedOffset = 0;
@@ -659,9 +682,11 @@ class ConnectionListNotifier extends ChangeNotifier {
   }
 
   void reset() {
+    _retireRows(_activeRows.values);
     _activeWindowIds.clear();
     _activeRows.clear();
     _activeOffset = 0;
+    _retireRows(_closedRows.values);
     _closedWindowIds.clear();
     _closedRows.clear();
     _closedOffset = 0;
@@ -682,17 +707,56 @@ class ConnectionListNotifier extends ChangeNotifier {
     return true;
   }
 
+  void _retainRows(
+    LinkedHashMap<String, ConnectionRow> rowMap,
+    List<String> keepIds,
+  ) {
+    final retired = <ConnectionRow>[];
+    rowMap.removeWhere((id, row) {
+      final remove = !keepIds.contains(id);
+      if (remove) retired.add(row);
+      return remove;
+    });
+    _retireRows(retired);
+  }
+
+  void _clearWindow(ConnectionsTab tab) {
+    final ids = tab == ConnectionsTab.active
+        ? _activeWindowIds
+        : _closedWindowIds;
+    final rows = tab == ConnectionsTab.active ? _activeRows : _closedRows;
+    if (ids.isEmpty && rows.isEmpty) return;
+    _retireRows(rows.values);
+    ids.clear();
+    rows.clear();
+    if (tab == ConnectionsTab.active) {
+      _activeOffset = 0;
+      _activeLimit = 0;
+    } else {
+      _closedOffset = 0;
+      _closedLimit = 0;
+    }
+  }
+
+  void _retireRows(Iterable<ConnectionRow> rows) {
+    for (final row in rows.toList(growable: false)) {
+      _retireRow(row);
+    }
+  }
+
+  void _retireRow(ConnectionRow row) {
+    Timer(_rowRetireDelay, row.dispose);
+  }
+
   @override
   void dispose() {
     _refetchTimer?.cancel();
     _groupsTimer?.cancel();
     for (final row in _activeRows.values) {
-      row.bytes.dispose();
-      row.speeds.dispose();
+      row.dispose();
     }
     for (final row in _closedRows.values) {
-      row.bytes.dispose();
-      row.speeds.dispose();
+      row.dispose();
     }
     _activeRows.clear();
     _closedRows.clear();

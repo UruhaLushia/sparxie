@@ -72,10 +72,16 @@ pub async fn proxy_catalog(
         });
     }
 
-    let node_delays = nodes
-        .iter()
-        .map(|node| (node.name.as_str(), node.delay))
-        .collect::<HashMap<_, _>>();
+    let node_delays = if member_sort == ProxyMemberSort::Delay {
+        Some(
+            nodes
+                .iter()
+                .map(|node| (node.name.as_str(), node.delay))
+                .collect::<HashMap<_, _>>(),
+        )
+    } else {
+        None
+    };
     let filter = filter.trim().to_lowercase();
     // Group order comes from the upstream GLOBAL list; member sorting should
     // only affect the displayed members inside each group.
@@ -96,7 +102,7 @@ pub async fn proxy_catalog(
         if !proxy_group_matches(name, &all, &filter) {
             continue;
         }
-        sort_members(&mut all, member_sort, &node_delays);
+        sort_members(&mut all, member_sort, node_delays.as_ref());
         let icon = field_or(data, "icon", "");
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
         groups.push((
@@ -159,12 +165,18 @@ fn proxy_group_matches(name: &str, members: &[String], filter: &str) -> bool {
             .any(|member| member.to_lowercase().contains(filter))
 }
 
-fn sort_members(names: &mut [String], sort: ProxyMemberSort, delays: &HashMap<&str, i32>) {
+fn sort_members(names: &mut [String], sort: ProxyMemberSort, delays: Option<&HashMap<&str, i32>>) {
     match sort {
         ProxyMemberSort::Original => {}
         ProxyMemberSort::Name => names.sort_by_cached_key(|name| name.to_lowercase()),
-        ProxyMemberSort::Delay => names
-            .sort_by_cached_key(|name| (delay_score(delay_of(delays, name)), name.to_lowercase())),
+        ProxyMemberSort::Delay => {
+            let Some(delays) = delays else {
+                return;
+            };
+            names.sort_by_cached_key(|name| {
+                (delay_score(delay_of(delays, name)), name.to_lowercase())
+            });
+        }
     }
 }
 

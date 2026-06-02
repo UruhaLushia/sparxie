@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
@@ -13,24 +15,38 @@ import '../rust_api.dart' as rust;
 /// MethodChannel (PackageManager), then persists through Rust's disk cache.
 class ProcessIconCache extends ChangeNotifier {
   static const _channel = MethodChannel('zip.atri.sparxie/process_icons');
+  static const _maxImages = 160;
+  static const _maxNames = 512;
+  static const _maxMisses = 512;
+  static const _imageRetireDelay = Duration(milliseconds: 500);
 
   // Decoded, display-ready images. Desktop icons are normalized before they
   // enter Rust's disk cache; Android icons are already suitable as-is.
-  final Map<String, ui.Image> _images = {};
+  final LinkedHashMap<String, ui.Image> _images =
+      LinkedHashMap<String, ui.Image>();
   final Set<String> _missing = {};
   final Set<String> _requested = {};
 
-  final Map<String, String> _names = {};
+  final LinkedHashMap<String, String> _names = LinkedHashMap<String, String>();
   final Set<String> _nameMissing = {};
   final Set<String> _nameRequested = {};
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
-  ui.Image? iconFor(String key, {int? size}) => _images[_imageKey(key, size)];
+  ui.Image? iconFor(String key, {int? size}) {
+    final imageKey = _imageKey(key, size);
+    final image = _images.remove(imageKey);
+    if (image != null) _images[imageKey] = image;
+    return image;
+  }
 
   bool isMissing(String key) => _missing.contains(key);
 
-  String? nameFor(String key) => _names[key];
+  String? nameFor(String key) {
+    final name = _names.remove(key);
+    if (name != null) _names[key] = name;
+    return name;
+  }
 
   void request(String key, {int? size}) {
     if (key.isEmpty) return;
@@ -95,16 +111,19 @@ class ProcessIconCache extends ChangeNotifier {
   void _complete(String key, Uint8List? bytes) {
     if (bytes == null || bytes.isEmpty) {
       _requested.remove(key);
-      _missing.add(key);
+      _remember(_missing, key, _maxMisses);
       notifyListeners();
       return;
     }
     _decode(bytes).then((image) {
       _requested.remove(key);
       if (image != null) {
+        final previous = _images.remove(key);
+        if (previous != null) _retireImage(previous);
         _images[key] = image;
+        _trimImages();
       } else {
-        _missing.add(key);
+        _remember(_missing, key, _maxMisses);
       }
       notifyListeners();
     });
@@ -124,11 +143,39 @@ class ProcessIconCache extends ChangeNotifier {
   void _completeName(String key, String? name) {
     _nameRequested.remove(key);
     if (name != null && name.isNotEmpty) {
+      _names.remove(key);
       _names[key] = name;
+      _trimNames();
     } else {
-      _nameMissing.add(key);
+      _remember(_nameMissing, key, _maxMisses);
     }
     notifyListeners();
+  }
+
+  void _trimImages() {
+    while (_images.length > _maxImages) {
+      final oldest = _images.keys.first;
+      final image = _images.remove(oldest);
+      if (image != null) _retireImage(image);
+    }
+  }
+
+  void _trimNames() {
+    while (_names.length > _maxNames) {
+      _names.remove(_names.keys.first);
+    }
+  }
+
+  void _remember(Set<String> set, String key, int cap) {
+    set.remove(key);
+    set.add(key);
+    while (set.length > cap) {
+      set.remove(set.first);
+    }
+  }
+
+  void _retireImage(ui.Image image) {
+    Timer(_imageRetireDelay, image.dispose);
   }
 
   void reset() {

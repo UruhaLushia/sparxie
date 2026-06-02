@@ -566,14 +566,14 @@ class _ConnectionsListState extends State<_ConnectionsList> {
     });
   }
 
-  /// Compute the list index near the scroll viewport's center and ask the
-  /// notifier to make sure the cached window covers it.
+  /// Ask the notifier to cache only the visible range plus a small overscan.
   void _ensureWindow() {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
-    final centerPx = pos.pixels + pos.viewportDimension / 2;
-    final centerIndex = (centerPx / _rowHeight).floor().clamp(0, 1 << 30);
-    widget.session.connections.ensureWindow(widget.tab, centerIndex);
+    final firstIndex = (pos.pixels / _rowHeight).floor();
+    final lastIndex =
+        ((pos.pixels + pos.viewportDimension) / _rowHeight).ceil() - 1;
+    widget.session.connections.ensureWindow(widget.tab, firstIndex, lastIndex);
   }
 
   int _totalCount() {

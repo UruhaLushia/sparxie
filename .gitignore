@@ -48,13 +48,5 @@ app.*.map.json
 /core/target/
 /android/app/src/main/jniLibs
 
-# flutter_rust_bridge generated bindings are committed. They are required by
-# normal `cargo build` / `flutter build` unless codegen is run first.
-
-# build_runner generated sources (freezed, json_serializable, etc.)
-*.freezed.dart
-*.g.dart
-!/lib/src/rust/**/*.freezed.dart
-
 # VS Code Dart extension scratch
 /devtools_options.yaml
