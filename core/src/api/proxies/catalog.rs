@@ -125,6 +125,15 @@ pub async fn proxy_catalog(
         .unwrap_or_default();
 
     groups.sort_by(|(a_pos, a), (b_pos, b)| {
+        let a_is_global = a.name == "GLOBAL";
+        let b_is_global = b.name == "GLOBAL";
+        match (a_is_global, b_is_global) {
+            (true, true) => return a_pos.cmp(b_pos),
+            (true, false) => return std::cmp::Ordering::Greater,
+            (false, true) => return std::cmp::Ordering::Less,
+            (false, false) => {}
+        }
+
         let ai = group_positions.get(a.name.as_str()).copied();
         let bi = group_positions.get(b.name.as_str()).copied();
         match (ai, bi) {
