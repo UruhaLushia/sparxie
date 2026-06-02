@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
@@ -5,7 +6,7 @@ use serde_json::Value;
 use crate::MihomoError;
 use crate::api::MihomoTarget;
 
-use super::value::{field_or, first_field, value_to_string};
+use super::value::{field_or, first_field};
 
 use cache::{CachedCatalog, CachedGroup, CachedNode};
 use parse::{history_delay, intern_member_list, member_count, proxy_group_matches, push_icon};
@@ -34,6 +35,7 @@ pub struct ProxyGroupEntry {
     pub icon: String,
     pub member_count: u32,
     pub members_hash: u32,
+    pub initial_members: Vec<ProxyMemberEntry>,
     pub now: String,
     pub test_url: String,
     pub fixed: String,
@@ -53,20 +55,27 @@ pub async fn proxy_catalog(
     target: MihomoTarget,
     include_hidden: bool,
     filter: String,
+    member_sort: ProxyMemberSort,
 ) -> Result<ProxyCatalog, MihomoError> {
     let raw = target.client()?.get_json("proxies").await?;
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
         return Ok(ProxyCatalog::default());
     };
 
+    const INITIAL_MEMBERS_LIMIT: usize = 32;
+
     let mut groups = Vec::new();
     let mut cached_groups = HashMap::new();
     let mut name_ids = HashMap::new();
-    let mut needed_nodes = HashSet::new();
     let mut icon_urls = Vec::new();
     let mut seen_icons = HashSet::new();
 
-    let filter = filter.trim().to_lowercase();
+    let filter = filter.trim();
+    let filter = if filter.is_ascii() {
+        Cow::Borrowed(filter)
+    } else {
+        Cow::Owned(filter.to_lowercase())
+    };
     // Group order comes from the upstream GLOBAL list; member sorting should
     // only affect the displayed members inside each group.
     let global_all = proxies
@@ -85,13 +94,18 @@ pub async fn proxy_catalog(
         if hidden && !include_hidden {
             continue;
         }
-        if !proxy_group_matches(name, all, &filter) {
+        if !proxy_group_matches(name, all, filter.as_ref()) {
             continue;
         }
 
-        let (members, members_hash) = intern_member_list(all, &mut name_ids, &mut needed_nodes);
+        let (members, members_hash) = intern_member_list(all, &mut name_ids);
         let icon = field_or(data, "icon", "");
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
+        let initial_member_ids = if member_count <= INITIAL_MEMBERS_LIMIT {
+            members.clone()
+        } else {
+            Vec::new()
+        };
         cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
             position,
@@ -101,55 +115,61 @@ pub async fn proxy_catalog(
                 icon,
                 member_count: member_count.min(u32::MAX as usize) as u32,
                 members_hash,
+                initial_members: Vec::new(),
                 now: field_or(data, "now", ""),
                 test_url: first_field(data, &["testUrl", "tester"]),
                 fixed: field_or(data, "fixed", ""),
             },
+            initial_member_ids,
         ));
     }
 
-    let group_positions: HashMap<String, usize> = global_all
+    let group_positions: HashMap<&str, usize> = global_all
         .map(|names| {
             names
                 .iter()
                 .enumerate()
-                .map(|(i, name)| (value_to_string(name), i))
+                .filter_map(|(i, name)| name.as_str().map(|name| (name, i)))
                 .collect()
         })
         .unwrap_or_default();
-    groups.sort_by(|(a_pos, a), (b_pos, b)| group_order(a_pos, a, b_pos, b, &group_positions));
+    groups
+        .sort_by(|(a_pos, a, _), (b_pos, b, _)| group_order(a_pos, a, b_pos, b, &group_positions));
 
     let mut names = vec![String::new(); name_ids.len()];
     for (name, id) in name_ids {
         names[id] = name;
     }
-    let mut nodes = HashMap::with_capacity(needed_nodes.len());
-    for id in needed_nodes {
-        let Some(name) = names.get(id) else {
+    let mut nodes = Vec::with_capacity(names.len());
+    for name in &names {
+        nodes.push(proxies.get(name).map(|data| CachedNode {
+            proxy_type: field_or(data, "type", "Proxy"),
+            delay: history_delay(data.get("history")),
+        }));
+    }
+    for (_, group, initial_member_ids) in &mut groups {
+        if initial_member_ids.is_empty() {
             continue;
-        };
-        let Some(data) = proxies.get(name) else {
-            continue;
-        };
-        nodes.insert(
-            id,
-            CachedNode {
-                proxy_type: field_or(data, "type", "Proxy"),
-                delay: history_delay(data.get("history")),
-            },
+        }
+        group.initial_members = cache::member_entries_for_ids(
+            std::mem::take(initial_member_ids),
+            member_sort,
+            &names,
+            &nodes,
         );
     }
     cache::replace_catalog(
         &target,
         CachedCatalog {
             names,
+            lower_names: None,
             nodes,
             groups: cached_groups,
         },
     );
 
     Ok(ProxyCatalog {
-        groups: groups.into_iter().map(|(_, group)| group).collect(),
+        groups: groups.into_iter().map(|(_, group, _)| group).collect(),
         icon_urls,
     })
 }
@@ -164,15 +184,13 @@ pub async fn proxy_group_members(
     member_sort: ProxyMemberSort,
 ) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+        let _ = proxy_catalog(target.clone(), true, String::new(), member_sort).await?;
     }
-    Ok(cache::member_entries(
-        &target,
-        &group,
-        offset,
-        limit,
-        member_sort,
-    ))
+    if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
+        return Ok(entries);
+    }
+    let _ = proxy_catalog(target.clone(), true, String::new(), member_sort).await?;
+    Ok(cache::member_entries(&target, &group, offset, limit, member_sort).unwrap_or_default())
 }
 
 pub(crate) async fn cached_group_member_names(
@@ -180,7 +198,13 @@ pub(crate) async fn cached_group_member_names(
     group: String,
 ) -> Result<Vec<String>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+        let _ = proxy_catalog(
+            target.clone(),
+            true,
+            String::new(),
+            ProxyMemberSort::Original,
+        )
+        .await?;
     }
     Ok(cache::member_names(&target, &group))
 }
@@ -190,7 +214,7 @@ fn group_order(
     a: &ProxyGroupEntry,
     b_pos: &usize,
     b: &ProxyGroupEntry,
-    group_positions: &HashMap<String, usize>,
+    group_positions: &HashMap<&str, usize>,
 ) -> std::cmp::Ordering {
     match (a.name == "GLOBAL", b.name == "GLOBAL") {
         (true, true) => return a_pos.cmp(b_pos),

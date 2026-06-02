@@ -49,7 +49,7 @@ val resolvedVersionCode = buildDate * 100 + gitCommitCount()
 
 android {
     namespace = "zip.atri.sparxie"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "29.0.14206865"
 
     compileOptions {
@@ -80,6 +80,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+
         release {
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")

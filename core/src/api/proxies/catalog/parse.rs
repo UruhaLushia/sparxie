@@ -14,7 +14,6 @@ pub(super) fn member_count(value: Option<&Value>) -> usize {
 pub(super) fn intern_member_list(
     value: Option<&Value>,
     name_ids: &mut HashMap<String, usize>,
-    needed_nodes: &mut HashSet<usize>,
 ) -> (Vec<usize>, u32) {
     let Some(items) = value.and_then(Value::as_array) else {
         return (Vec::new(), FNV_OFFSET);
@@ -30,14 +29,13 @@ pub(super) fn intern_member_list(
             hash_member_name(&mut hash, &name);
             intern_owned_name(name, name_ids)
         };
-        needed_nodes.insert(id);
         members.push(id);
     }
     (members, hash)
 }
 
 pub(super) fn proxy_group_matches(name: &str, members: Option<&Value>, filter: &str) -> bool {
-    if filter.is_empty() || name.to_lowercase().contains(filter) {
+    if filter.is_empty() || contains_filter(name, filter) {
         return true;
     }
     members
@@ -93,6 +91,19 @@ fn hash_member_name(hash: &mut u32, name: &str) {
 fn value_matches(value: &Value, filter: &str) -> bool {
     value
         .as_str()
-        .map(|s| s.to_lowercase().contains(filter))
-        .unwrap_or_else(|| value_to_string(value).to_lowercase().contains(filter))
+        .map(|s| contains_filter(s, filter))
+        .unwrap_or_else(|| contains_filter(&value_to_string(value), filter))
+}
+
+fn contains_filter(value: &str, filter: &str) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
+    if value.is_ascii() && filter.is_ascii() {
+        return value
+            .as_bytes()
+            .windows(filter.len())
+            .any(|window| window.eq_ignore_ascii_case(filter.as_bytes()));
+    }
+    value.to_lowercase().contains(filter)
 }
