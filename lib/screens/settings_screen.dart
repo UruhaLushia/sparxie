@@ -252,6 +252,9 @@ class AppSettingsPanel extends StatelessWidget {
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
+        final showFontSettings =
+            !kIsWeb &&
+            (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
         return SectionPanel(
           title: '应用',
           icon: Icons.app_settings_alt_outlined,
@@ -283,8 +286,10 @@ class AppSettingsPanel extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const Divider(height: 24),
-              _FontRow(prefs: prefs),
-              const Divider(height: 24),
+              if (showFontSettings) ...[
+                _FontRow(prefs: prefs),
+                const Divider(height: 24),
+              ],
               _CacheRow(session: session),
             ],
           ),
