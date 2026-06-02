@@ -9,9 +9,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
+use crate::MihomoError;
 use crate::api::MihomoTarget;
 use crate::client::{MihomoClient, read_ws_text};
-use crate::error::MihomoError;
 
 pub const LOGS_CAP: usize = 500;
 
@@ -91,15 +91,15 @@ pub async fn clear(target: MihomoTarget, level: &str) {
 async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc<LogSlot>) {
     // Capture the target's stop generation; bail if Dart stops it (a dead
     // upstream produces no frames, so the sink-failure path never fires).
-    let base = crate::stream_stop::base_key(&target);
-    let start_gen = crate::stream_stop::generation(&base);
+    let base = crate::state::stop::base_key(&target);
+    let start_gen = crate::state::stop::generation(&base);
     loop {
         // Re-check under the slots lock before removing, so a subscriber that
         // attaches just as the stream ends isn't orphaned.
         {
             let mut map = slots().lock().await;
             if slot.sender.receiver_count() == 0
-                || crate::stream_stop::generation(&base) != start_gen
+                || crate::state::stop::generation(&base) != start_gen
             {
                 map.remove(&key);
                 return;
@@ -108,7 +108,7 @@ async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc
         if let Err(error) = stream_once(&target, &level, &base, start_gen, &slot).await {
             eprintln!("[mihomo_backend] logs stream {key}: {error}");
             // Wake early if a stop arrives during the retry backoff.
-            let mut ticks = crate::stream_stop::ticks();
+            let mut ticks = crate::state::stop::ticks();
             let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
         }
     }
@@ -128,7 +128,7 @@ async fn stream_once(
     )?;
     let path = format!("logs?level={level}&format=structured");
     let mut ws = client.open_ws(&path).await?;
-    let mut ticks = crate::stream_stop::ticks();
+    let mut ticks = crate::state::stop::ticks();
     loop {
         // Tear down promptly on either signal: the last subscriber dropping
         // (live switch — `closed()`) or an explicit Dart stop (dead upstream —
@@ -138,7 +138,7 @@ async fn stream_once(
             biased;
             _ = slot.sender.closed() => return Ok(()),
             _ = ticks.changed() => {
-                if crate::stream_stop::generation(base) != start_gen {
+                if crate::state::stop::generation(base) != start_gen {
                     return Ok(());
                 }
                 continue;

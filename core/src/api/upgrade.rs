@@ -1,6 +1,6 @@
 use reqwest::Method;
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::{MihomoTarget, urlencode};
 
@@ -14,10 +14,10 @@ pub async fn upgrade_core(
 ) -> Result<(), MihomoError> {
     let mut path = String::from("upgrade");
     let mut params = Vec::new();
-    if let Some(channel) = channel {
-        if !channel.is_empty() {
-            params.push(format!("channel={}", urlencode(&channel)));
-        }
+    if let Some(channel) = channel
+        && !channel.is_empty()
+    {
+        params.push(format!("channel={}", urlencode(&channel)));
     }
     if force {
         params.push("force=true".into());

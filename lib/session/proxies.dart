@@ -1,10 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 
-import '../utils.dart';
+import '../rust_api.dart' as rust;
 
-/// Proxy group + node catalog. Polls `/proxies` (no upstream WS).
+/// Proxy group + node catalog. Polls Rust's structured `/proxies` catalog.
 ///
 /// Each [ProxyGroup] / [ProxyNode] is created once per name and reused across
 /// polls. The notifier fires only on shape changes (group set or member list);
@@ -17,19 +15,6 @@ class ProxiesNotifier extends ChangeNotifier {
   List<ProxyGroup> get groups => _orderedGroups;
 
   ProxyNode? nodeByName(String name) => _nodesById[name];
-
-  /// Every distinct non-empty icon URL across groups and nodes — used to
-  /// warm the icon cache as soon as the proxy list lands.
-  Set<String> iconUrls() {
-    final urls = <String>{};
-    for (final n in _nodesById.values) {
-      if (n.icon.isNotEmpty) urls.add(n.icon);
-    }
-    for (final g in _groupsById.values) {
-      if (g.icon.isNotEmpty) urls.add(g.icon);
-    }
-    return urls;
-  }
 
   void reset() {
     if (_groupsById.isEmpty && _nodesById.isEmpty) return;
@@ -45,79 +30,52 @@ class ProxiesNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  void apply(String rawJson) {
-    final root = jsonDecode(rawJson) as Map<String, dynamic>;
-    final proxies = asMap(root['proxies']);
-
+  void applyCatalog(rust.ProxyCatalog catalog) {
     var shapeChanged = false;
-
     final seenNodes = <String>{};
     final seenGroups = <String>{};
-    // mihomo's `/proxies` keys are sorted by UTF-8 byte order; the user's
-    // config order lives in `GLOBAL.all`.
-    final orderedGroupNames = <String>[];
-    List<String>? globalAll;
 
-    // Register every proxy as a node so a parent group's `all` entry
-    // resolves type + delay even when the member is itself a group or a
-    // built-in like DIRECT / REJECT.
-    for (final entry in proxies.entries) {
-      final name = entry.key;
-      final data = asMap(entry.value);
+    for (final entry in catalog.nodes) {
+      final name = entry.name;
       seenNodes.add(name);
       final existing = _nodesById[name];
-      final delay = _historyDelay(data['history']);
-      final type = data['type']?.toString() ?? 'Proxy';
-      final icon = data['icon']?.toString() ?? '';
       if (existing == null) {
         _nodesById[name] = ProxyNode._(
           name: name,
-          type: type,
-          icon: icon,
-          initialDelay: delay,
+          type: entry.proxyType,
+          icon: entry.icon,
+          initialDelay: entry.delay,
         );
       } else {
-        existing._setDelay(delay);
-        if (existing.type != type) existing._type = type;
-        if (existing.icon != icon) existing._icon = icon;
+        existing._setDelay(entry.delay);
+        if (existing.type != entry.proxyType) existing._type = entry.proxyType;
+        if (existing.icon != entry.icon) existing._icon = entry.icon;
       }
     }
 
-    for (final entry in proxies.entries) {
-      final name = entry.key;
-      final data = asMap(entry.value);
-      final all = asStringList(data['all']);
-      if (all.isEmpty) continue;
+    for (final entry in catalog.groups) {
+      final name = entry.name;
       seenGroups.add(name);
-      orderedGroupNames.add(name);
-      if (name == 'GLOBAL') globalAll = all;
-      final type = data['type']?.toString() ?? 'Selector';
-      final now = data['now']?.toString() ?? '';
-      final icon = data['icon']?.toString() ?? '';
-      // mihomo uses both `testUrl` and `tester` in different versions/forks.
-      final testUrl = (data['testUrl'] ?? data['tester'] ?? '').toString();
-      // `fixed` is the name of the pinned member, or empty/absent.
-      final fixed = data['fixed']?.toString() ?? '';
       final existing = _groupsById[name];
       if (existing == null) {
         final group = ProxyGroup._(
           name: name,
-          type: type,
-          icon: icon,
-          all: all,
-          now: now,
-          testUrl: testUrl,
-          fixed: fixed,
+          type: entry.proxyType,
+          icon: entry.icon,
+          all: entry.all,
+          now: entry.now,
+          testUrl: entry.testUrl,
+          fixed: entry.fixed,
         );
         _groupsById[name] = group;
         shapeChanged = true;
       } else {
-        if (existing._type != type) existing._type = type;
-        if (existing._icon != icon) existing._icon = icon;
-        if (existing._setMembers(all)) shapeChanged = true;
-        existing._setNow(now);
-        existing._setTestUrl(testUrl);
-        existing._setFixed(fixed);
+        if (existing._type != entry.proxyType) existing._type = entry.proxyType;
+        if (existing._icon != entry.icon) existing._icon = entry.icon;
+        if (existing._setMembers(entry.all)) shapeChanged = true;
+        existing._setNow(entry.now);
+        existing._setTestUrl(entry.testUrl);
+        existing._setFixed(entry.fixed);
       }
     }
 
@@ -141,28 +99,12 @@ class ProxiesNotifier extends ChangeNotifier {
       _nodesById.remove(name);
     }
 
-    if (shapeChanged) {
-      // Hide GLOBAL (it duplicates every other group) and sort the rest by
-      // GLOBAL.all index. Groups missing from GLOBAL.all sink to the bottom.
-      final sortIndex = <String, int>{
-        if (globalAll != null)
-          for (var i = 0; i < globalAll.length; i++) globalAll[i]: i,
-      };
-
-      final ordered = <ProxyGroup>[];
-      for (final name in orderedGroupNames) {
-        if (name == 'GLOBAL') continue;
-        final g = _groupsById[name];
-        if (g != null) ordered.add(g);
-      }
-      ordered.sort((a, b) {
-        final ai = sortIndex[a.name];
-        final bi = sortIndex[b.name];
-        if (ai == null && bi == null) return 0;
-        if (ai == null) return 1;
-        if (bi == null) return -1;
-        return ai - bi;
-      });
+    final ordered = <ProxyGroup>[];
+    for (final entry in catalog.groups) {
+      final group = _groupsById[entry.name];
+      if (group != null) ordered.add(group);
+    }
+    if (shapeChanged || !_sameGroupOrder(_orderedGroups, ordered)) {
       _orderedGroups = List<ProxyGroup>.unmodifiable(ordered);
       notifyListeners();
     }
@@ -177,11 +119,19 @@ class ProxiesNotifier extends ChangeNotifier {
   }
 
   /// Push delays from `/group/<name>/delay` into per-node notifiers.
-  void applyGroupDelay(String groupName, Map<String, dynamic> delays) {
-    for (final entry in delays.entries) {
-      final node = _nodesById[entry.key];
+  void applyGroupDelay(List<rust.GroupDelayEntry> delays) {
+    for (final entry in delays) {
+      final node = _nodesById[entry.name];
       if (node == null) continue;
-      node._setDelay(asInt(entry.value));
+      node._setDelay(entry.delay);
+    }
+  }
+
+  void applyProxyDelay(List<rust.ProxyDelayEntry> delays) {
+    for (final entry in delays) {
+      final node = _nodesById[entry.name];
+      if (node == null) continue;
+      node._setDelay(entry.delay);
     }
   }
 
@@ -189,10 +139,13 @@ class ProxiesNotifier extends ChangeNotifier {
     _nodesById[nodeName]?._setDelay(delayMs);
   }
 
-  static int _historyDelay(Object? raw) {
-    if (raw is! List || raw.isEmpty) return -1;
-    final last = asMap(raw.last);
-    return asInt(last['delay']);
+  static bool _sameGroupOrder(List<ProxyGroup> a, List<ProxyGroup> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].name != b[i].name) return false;
+    }
+    return true;
   }
 
   @override
@@ -219,13 +172,13 @@ class ProxyGroup {
     required String now,
     required String testUrl,
     required String fixed,
-  })  : _type = type, // ignore: prefer_initializing_formals
-        _icon = icon, // ignore: prefer_initializing_formals
-        _testUrl = testUrl, // ignore: prefer_initializing_formals
-        _all = List<String>.unmodifiable(all),
-        // ignore: prefer_initializing_formals
-        now = ValueNotifier<String>(now),
-        fixed = ValueNotifier<String>(fixed);
+  }) : _type = type, // ignore: prefer_initializing_formals
+       _icon = icon, // ignore: prefer_initializing_formals
+       _testUrl = testUrl, // ignore: prefer_initializing_formals
+       _all = List<String>.unmodifiable(all),
+       // ignore: prefer_initializing_formals
+       now = ValueNotifier<String>(now),
+       fixed = ValueNotifier<String>(fixed);
 
   final String name;
   String _type;
@@ -287,9 +240,9 @@ class ProxyNode {
     required String type,
     required String icon,
     required int initialDelay,
-  })  : _type = type, // ignore: prefer_initializing_formals
-        _icon = icon, // ignore: prefer_initializing_formals
-        delay = ValueNotifier<int>(initialDelay);
+  }) : _type = type, // ignore: prefer_initializing_formals
+       _icon = icon, // ignore: prefer_initializing_formals
+       delay = ValueNotifier<int>(initialDelay);
 
   final String name;
   String _type;

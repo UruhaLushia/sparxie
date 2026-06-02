@@ -1,8 +1,15 @@
+pub(crate) mod catalog;
+pub(crate) mod delay;
+mod value;
+
+pub use catalog::*;
+pub use delay::*;
+
 use reqwest::Method;
 use serde_json::json;
 
-use crate::error::MihomoError;
-use crate::regex_util;
+use crate::MihomoError;
+use crate::utils::regex;
 
 use super::{MihomoTarget, urlencode};
 
@@ -15,23 +22,23 @@ pub async fn proxies(
     groups_only: bool,
 ) -> Result<String, MihomoError> {
     let mut raw = target.client()?.get_json("proxies").await?;
-    let name_re = regex_util::compile(name_pattern.as_deref())?;
-    let type_re = regex_util::compile(type_pattern.as_deref())?;
+    let name_re = regex::compile(name_pattern.as_deref())?;
+    let type_re = regex::compile(type_pattern.as_deref())?;
     if let Some(map) = raw.get_mut("proxies").and_then(|v| v.as_object_mut()) {
         map.retain(|key, value| {
-            if let Some(re) = &name_re {
-                if !re.is_match(key) {
-                    return false;
-                }
+            if let Some(re) = &name_re
+                && !re.is_match(key)
+            {
+                return false;
             }
             let ty = value
                 .get("type")
                 .and_then(|t| t.as_str())
                 .unwrap_or_default();
-            if let Some(re) = &type_re {
-                if !re.is_match(ty) {
-                    return false;
-                }
+            if let Some(re) = &type_re
+                && !re.is_match(ty)
+            {
+                return false;
             }
             if groups_only {
                 let has_all = value
@@ -81,29 +88,4 @@ pub async fn unfix_proxy(target: MihomoTarget, name: String) -> Result<(), Mihom
         )
         .await?;
     Ok(())
-}
-
-/// `GET /proxies/{name}/delay` — returns the measured delay in ms, or `0` if
-/// upstream returned non-success without an HTTP body. `expected_status`
-/// follows mihomo's range syntax, e.g. `"200/204/301-302"`.
-pub async fn proxy_delay(
-    target: MihomoTarget,
-    name: String,
-    test_url: String,
-    timeout_ms: u32,
-    expected_status: Option<String>,
-) -> Result<i64, MihomoError> {
-    let mut path = format!(
-        "proxies/{}/delay?url={}&timeout={}",
-        urlencode(&name),
-        urlencode(&test_url),
-        timeout_ms,
-    );
-    if let Some(expected) = expected_status {
-        if !expected.is_empty() {
-            path.push_str(&format!("&expected={}", urlencode(&expected)));
-        }
-    }
-    let v = target.client()?.get_json(&path).await?;
-    Ok(v.get("delay").and_then(|d| d.as_i64()).unwrap_or_default())
 }

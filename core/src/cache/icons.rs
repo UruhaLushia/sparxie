@@ -1,6 +1,6 @@
 //! Remote proxy-group icon cache with stale-while-revalidate semantics.
 //!
-//! Backed by the shared redb database ([`crate::cache_db`]). Entries are
+//! Backed by the shared redb database ([`crate::cache::db`]). Entries are
 //! stamped with their fetch time; reads return cached bytes immediately and
 //! spawn a background refetch once an entry is older than [`TTL`]. Misses
 //! fetch synchronously, coalescing concurrent first-time fetches per URL.
@@ -12,8 +12,8 @@ use std::time::Duration;
 use reqwest::Client;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::cache_db::{self, ICONS};
-use crate::error::MihomoError;
+use crate::MihomoError;
+use crate::cache::db::{self, ICONS};
 
 /// 1 day; entries older than this trigger a background refetch.
 pub const TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -31,7 +31,7 @@ struct State {
 static STATE: OnceLock<State> = OnceLock::new();
 
 /// Initialize the HTTP client. The shared cache DB is opened separately via
-/// [`cache_db::init`]. Idempotent.
+/// [`db::init`]. Idempotent.
 pub fn init() -> Result<(), MihomoError> {
     if STATE.get().is_some() {
         return Ok(());
@@ -66,7 +66,7 @@ pub async fn fetch(url: String) -> Result<Vec<u8>, MihomoError> {
     let key = key_for(&url);
 
     if let Some((created, bytes)) = read_entry(&key).await? {
-        if cache_db::age(created) >= TTL {
+        if db::age(created) >= TTL {
             spawn_refetch(state, url.clone(), key.clone());
         }
         return Ok(bytes);
@@ -92,15 +92,15 @@ pub async fn fetch(url: String) -> Result<Vec<u8>, MihomoError> {
 
 async fn read_entry(key: &str) -> Result<Option<(u64, Vec<u8>)>, MihomoError> {
     let key = key.to_string();
-    let raw = tokio::task::spawn_blocking(move || cache_db::get_bytes(ICONS, &key))
+    let raw = tokio::task::spawn_blocking(move || db::get_bytes(ICONS, &key))
         .await
         .map_err(|e| MihomoError::Other(format!("icon cache join: {e}")))??;
-    Ok(raw.and_then(|v| cache_db::unstamp(&v).map(|(s, b)| (s, b.to_vec()))))
+    Ok(raw.and_then(|v| db::unstamp(&v).map(|(s, b)| (s, b.to_vec()))))
 }
 
 async fn store_entry(key: String, bytes: Vec<u8>) -> Result<(), MihomoError> {
-    let value = cache_db::stamp(cache_db::now_secs(), &bytes);
-    tokio::task::spawn_blocking(move || cache_db::put_bytes(ICONS, &key, &value))
+    let value = db::stamp(db::now_secs(), &bytes);
+    tokio::task::spawn_blocking(move || db::put_bytes(ICONS, &key, &value))
         .await
         .map_err(|e| MihomoError::Other(format!("icon cache join: {e}")))?
 }

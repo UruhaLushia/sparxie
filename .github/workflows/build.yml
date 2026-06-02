@@ -34,6 +34,41 @@ jobs:
           fi
           echo "matrix=$(jq -c . <<<"$base")" >> "$GITHUB_OUTPUT"
 
+  generated-bindings:
+    name: verify generated bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          pub-cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Install frb_codegen
+        run: cargo install --locked flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+
+      - name: Regenerate FFI bindings
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Check generated bindings are committed
+        shell: bash
+        run: |
+          git diff --exit-code -- core/src/frb_generated.rs lib/src/rust
+
   build:
     name: ${{ matrix.label }}
     needs: setup
@@ -83,15 +118,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
-
-      - name: Cache cargo-installed binaries
-        id: cargo-bin-cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/bin/flutter_rust_bridge_codegen*
-            ~/.cargo/bin/cargo-expand*
-          key: cargo-bin-${{ runner.os }}-${{ runner.arch }}-frb-${{ env.FRB_VERSION }}-v2
 
       - name: Cache pub
         uses: actions/cache@v5
@@ -143,18 +169,8 @@ jobs:
         with:
           tool: cargo-ndk
 
-      - name: Install frb_codegen
-        if: steps.cargo-bin-cache.outputs.cache-hit != 'true'
-        run: cargo install --locked flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
-
-      - name: Generate FFI bindings
-        run: flutter_rust_bridge_codegen generate
-
       - name: Fetch Flutter deps
         run: flutter pub get
-
-      - name: Run build_runner (freezed)
-        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Android — cross-compile cdylib for all ABIs
         if: matrix.kind == 'android'
@@ -293,7 +309,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    needs: [build, generated-bindings]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
@@ -311,7 +327,7 @@ jobs:
 
   pre-release:
     if: github.event_name == 'workflow_dispatch'
-    needs: [build]
+    needs: [build, generated-bindings]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

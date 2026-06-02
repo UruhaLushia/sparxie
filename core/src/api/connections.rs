@@ -2,7 +2,7 @@ use futures_util::{StreamExt, stream::FuturesUnordered};
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::{MihomoTarget, urlencode};
 
@@ -43,41 +43,7 @@ pub async fn close_connections_by_chain(
     target: MihomoTarget,
     chain: String,
 ) -> Result<u32, MihomoError> {
-    let client = target.client()?;
-    let snapshot = client.get_json("connections").await?;
-    let Some(rows) = snapshot.get("connections").and_then(Value::as_array) else {
-        return Ok(0);
-    };
-
-    let ids: Vec<String> = rows
-        .iter()
-        .filter(|conn| conn_uses_chain(conn, &chain))
-        .filter_map(|conn| conn.get("id").and_then(Value::as_str).map(str::to_owned))
-        .collect();
-    if ids.is_empty() {
-        return Ok(0);
-    }
-
-    let mut tasks = FuturesUnordered::new();
-    for id in &ids {
-        let target = target.clone();
-        let id = id.clone();
-        tasks.push(async move {
-            target
-                .client()
-                .ok()?
-                .forward(
-                    Method::DELETE,
-                    &format!("connections/{}", urlencode(&id)),
-                    None,
-                )
-                .await
-                .ok()
-        });
-    }
-    while tasks.next().await.is_some() {}
-
-    Ok(ids.len() as u32)
+    close_connections_matching(target, |conn| conn_uses_chain(conn, &chain)).await
 }
 
 fn conn_uses_chain(conn: &Value, chain: &str) -> bool {
@@ -95,6 +61,16 @@ pub async fn close_connections_by_group(
     target: MihomoTarget,
     group: String,
 ) -> Result<u32, MihomoError> {
+    close_connections_matching(target, |conn| conn_in_group(conn, &group)).await
+}
+
+async fn close_connections_matching<F>(
+    target: MihomoTarget,
+    mut matches: F,
+) -> Result<u32, MihomoError>
+where
+    F: FnMut(&Value) -> bool,
+{
     let client = target.client()?;
     let snapshot = client.get_json("connections").await?;
     let Some(rows) = snapshot.get("connections").and_then(Value::as_array) else {
@@ -103,7 +79,7 @@ pub async fn close_connections_by_group(
 
     let ids: Vec<String> = rows
         .iter()
-        .filter(|conn| conn_in_group(conn, &group))
+        .filter(|conn| matches(conn))
         .filter_map(|conn| conn.get("id").and_then(Value::as_str).map(str::to_owned))
         .collect();
     if ids.is_empty() {
@@ -112,19 +88,10 @@ pub async fn close_connections_by_group(
 
     let mut tasks = FuturesUnordered::new();
     for id in &ids {
-        let target = target.clone();
-        let id = id.clone();
+        let client = &client;
+        let path = format!("connections/{}", urlencode(id));
         tasks.push(async move {
-            target
-                .client()
-                .ok()?
-                .forward(
-                    Method::DELETE,
-                    &format!("connections/{}", urlencode(&id)),
-                    None,
-                )
-                .await
-                .ok()
+            let _ = client.forward(Method::DELETE, &path, None).await;
         });
     }
     while tasks.next().await.is_some() {}

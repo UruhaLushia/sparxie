@@ -1,13 +1,23 @@
 use reqwest::Method;
 use serde_json::{Value, json};
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::MihomoTarget;
 
 /// `GET /configs` — full general config snapshot.
 pub async fn configs(target: MihomoTarget) -> Result<String, MihomoError> {
     Ok(target.client()?.get_json("configs").await?.to_string())
+}
+
+/// `GET /configs` — return only outbound mode, normalized for the launcher.
+pub async fn config_mode(target: MihomoTarget) -> Result<String, MihomoError> {
+    let raw = target.client()?.get_json("configs").await?;
+    Ok(raw
+        .get("mode")
+        .map(value_to_string)
+        .unwrap_or_else(|| "rule".to_string())
+        .to_lowercase())
 }
 
 /// `PATCH /configs` — pass-through. The full schema lives in mihomo's
@@ -58,4 +68,14 @@ pub async fn update_geo(target: MihomoTarget) -> Result<(), MihomoError> {
         .forward(Method::POST, "configs/geo", None)
         .await?;
     Ok(())
+}
+
+fn value_to_string(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
 }

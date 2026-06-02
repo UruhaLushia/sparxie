@@ -5,10 +5,10 @@
 //! at most one upstream connection per (target, path) and fan out via a
 //! tokio broadcast channel. Idle channels self-prune.
 //!
-//! `/connections` lives in [`crate::connections_state`] (frame post-processing
-//! + paginated row fetching), and `/logs` in [`crate::logs_state`] (ring
-//! buffer + replay-on-subscribe). Those two endpoints carry too much state
-//! to fit this generic broadcast pattern.
+//! `/connections` lives in [`crate::state::connections`] (frame post-processing
+//! + paginated row fetching), and `/logs` in [`crate::state::logs`] (ring
+//!   buffer + replay-on-subscribe). Those two endpoints carry too much state
+//!   to fit this generic broadcast pattern.
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -18,9 +18,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, broadcast};
 
+use crate::MihomoError;
 use crate::api::MihomoTarget;
 use crate::client::{MihomoClient, read_ws_text};
-use crate::error::MihomoError;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TrafficSample {
@@ -113,15 +113,15 @@ async fn stream_loop<T: Sample>(
 ) {
     // Capture the target's stop generation; bail if Dart stops it (a dead
     // upstream produces no frames, so the sink-failure path never fires).
-    let base = crate::stream_stop::base_key(&target);
-    let start_gen = crate::stream_stop::generation(&base);
+    let base = crate::state::stop::base_key(&target);
+    let start_gen = crate::state::stop::generation(&base);
     loop {
         // Re-check under the registry lock before removing, so a subscriber
         // that attaches just as the stream ends isn't orphaned.
         {
             let mut map = registry.map.lock().await;
             let listeners = map.get(&key).map(|tx| tx.receiver_count()).unwrap_or(0);
-            if listeners == 0 || crate::stream_stop::generation(&base) != start_gen {
+            if listeners == 0 || crate::state::stop::generation(&base) != start_gen {
                 map.remove(&key);
                 return;
             }
@@ -130,7 +130,7 @@ async fn stream_loop<T: Sample>(
         {
             eprintln!("[mihomo_backend] {path} stream {key}: {error}");
             // Wake early if a stop arrives during the retry backoff.
-            let mut ticks = crate::stream_stop::ticks();
+            let mut ticks = crate::state::stop::ticks();
             let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
         }
     }
@@ -159,7 +159,7 @@ async fn stream_once<T: Sample>(
             None => return Ok(()),
         }
     };
-    let mut ticks = crate::stream_stop::ticks();
+    let mut ticks = crate::state::stop::ticks();
     loop {
         // Tear down promptly on either signal: the last subscriber dropping
         // (live switch — `closed()`) or an explicit Dart stop (dead upstream —
@@ -168,7 +168,7 @@ async fn stream_once<T: Sample>(
             biased;
             _ = tx.closed() => return Ok(()),
             _ = ticks.changed() => {
-                if crate::stream_stop::generation(base) != start_gen {
+                if crate::state::stop::generation(base) != start_gen {
                     return Ok(());
                 }
                 continue;

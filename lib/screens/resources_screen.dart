@@ -1,19 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
-import '../utils.dart';
 import '../widgets/section_panel.dart';
 
 class ResourcesScreen extends StatefulWidget {
-  const ResourcesScreen({
-    super.key,
-    required this.store,
-    this.compact = false,
-  });
+  const ResourcesScreen({super.key, required this.store, this.compact = false});
 
   final ctl.ControllerStore store;
 
@@ -96,11 +89,24 @@ class _ProxyProvider {
     required this.vehicleType,
     required this.proxies,
     required this.updatedAt,
+    required this.updatable,
   });
+
+  factory _ProxyProvider.fromRust(rust.ProxyProviderEntry entry) {
+    return _ProxyProvider(
+      name: entry.name,
+      vehicleType: entry.vehicleType,
+      proxies: entry.proxies,
+      updatedAt: _parseDateTime(entry.updatedAt),
+      updatable: entry.updatable,
+    );
+  }
+
   final String name;
   final String vehicleType;
   final int proxies;
   final DateTime? updatedAt;
+  final bool updatable;
 }
 
 class _RuleProvider {
@@ -111,14 +117,32 @@ class _RuleProvider {
     required this.format,
     required this.ruleCount,
     required this.updatedAt,
+    required this.updatable,
   });
+
+  factory _RuleProvider.fromRust(rust.RuleProviderEntry entry) {
+    return _RuleProvider(
+      name: entry.name,
+      vehicleType: entry.vehicleType,
+      behavior: entry.behavior,
+      format: entry.format,
+      ruleCount: entry.ruleCount,
+      updatedAt: _parseDateTime(entry.updatedAt),
+      updatable: entry.updatable,
+    );
+  }
+
   final String name;
   final String vehicleType;
   final String behavior;
   final String format;
   final int ruleCount;
   final DateTime? updatedAt;
+  final bool updatable;
 }
+
+DateTime? _parseDateTime(String value) =>
+    value.isEmpty ? null : DateTime.tryParse(value);
 
 class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   bool _loading = false;
@@ -162,22 +186,8 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       _error = null;
     });
     try {
-      final raw = await rust.proxyProviders(target: target);
-      final root = jsonDecode(raw) as Map<String, dynamic>;
-      final providers = asMap(root['providers']);
-      final list = <_ProxyProvider>[];
-      providers.forEach((name, value) {
-        final data = asMap(value);
-        // Hide the auto-generated "Compatible" provider that wraps inline proxies.
-        if (data['vehicleType']?.toString().toLowerCase() == 'compatible') return;
-        list.add(_ProxyProvider(
-          name: name,
-          vehicleType: data['vehicleType']?.toString() ?? '',
-          proxies: (data['proxies'] is List) ? (data['proxies'] as List).length : 0,
-          updatedAt: DateTime.tryParse(data['updatedAt']?.toString() ?? ''),
-        ));
-      });
-      list.sort((a, b) => a.name.compareTo(b.name));
+      final entries = await rust.proxyProviderCatalog(target: target);
+      final list = entries.map(_ProxyProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
     } catch (e) {
@@ -207,7 +217,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
 
   Future<void> _updateAll() async {
     for (final p in _items) {
-      if (p.vehicleType.toLowerCase() == 'http') {
+      if (p.updatable) {
         await _update(p);
       }
     }
@@ -221,7 +231,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_items.any((p) => p.vehicleType.toLowerCase() == 'http'))
+          if (_items.any((p) => p.updatable))
             IconButton(
               tooltip: '更新全部',
               onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
@@ -299,22 +309,8 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       _error = null;
     });
     try {
-      final raw = await rust.ruleProviders(target: target);
-      final root = jsonDecode(raw) as Map<String, dynamic>;
-      final providers = asMap(root['providers']);
-      final list = <_RuleProvider>[];
-      providers.forEach((name, value) {
-        final data = asMap(value);
-        list.add(_RuleProvider(
-          name: name,
-          vehicleType: data['vehicleType']?.toString() ?? '',
-          behavior: data['behavior']?.toString() ?? '',
-          format: data['format']?.toString() ?? '',
-          ruleCount: asInt(data['ruleCount']),
-          updatedAt: DateTime.tryParse(data['updatedAt']?.toString() ?? ''),
-        ));
-      });
-      list.sort((a, b) => a.name.compareTo(b.name));
+      final entries = await rust.ruleProviderCatalog(target: target);
+      final list = entries.map(_RuleProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
     } catch (e) {
@@ -344,7 +340,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
 
   Future<void> _updateAll() async {
     for (final p in _items) {
-      if (p.vehicleType.toLowerCase() == 'http') {
+      if (p.updatable) {
         await _update(p);
       }
     }
@@ -358,7 +354,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_items.any((p) => p.vehicleType.toLowerCase() == 'http'))
+          if (_items.any((p) => p.updatable))
             IconButton(
               tooltip: '更新全部',
               onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
@@ -442,10 +438,12 @@ class _ProviderBody extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
         child: Center(
-          child: Text(emptyText,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  )),
+          child: Text(
+            emptyText,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+          ),
         ),
       );
     }
@@ -481,9 +479,8 @@ class _ProxyProviderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final updatable = provider.vehicleType.toLowerCase() == 'http';
-    final updated =
-        provider.updatedAt == null ? '' : _ago(provider.updatedAt!);
+    final updatable = provider.updatable;
+    final updated = provider.updatedAt == null ? '' : _ago(provider.updatedAt!);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -494,9 +491,9 @@ class _ProxyProviderTile extends StatelessWidget {
             children: [
               Text(
                 provider.name,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
@@ -506,9 +503,9 @@ class _ProxyProviderTile extends StatelessWidget {
                   '${provider.proxies} 个节点',
                   if (updated.isNotEmpty) updated,
                 ].join('  ·  '),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -543,9 +540,8 @@ class _RuleProviderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final updatable = provider.vehicleType.toLowerCase() == 'http';
-    final updated =
-        provider.updatedAt == null ? '' : _ago(provider.updatedAt!);
+    final updatable = provider.updatable;
+    final updated = provider.updatedAt == null ? '' : _ago(provider.updatedAt!);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -556,9 +552,9 @@ class _RuleProviderTile extends StatelessWidget {
             children: [
               Text(
                 provider.name,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
@@ -570,9 +566,9 @@ class _RuleProviderTile extends StatelessWidget {
                   '${provider.ruleCount} 条',
                   if (updated.isNotEmpty) updated,
                 ].join('  ·  '),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                 overflow: TextOverflow.ellipsis,
               ),
             ],

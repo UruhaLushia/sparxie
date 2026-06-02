@@ -8,6 +8,7 @@ class ProxyGroupHeader extends StatelessWidget {
   const ProxyGroupHeader({
     super.key,
     required this.group,
+    required this.showIcon,
     required this.testing,
     required this.expanded,
     required this.onToggle,
@@ -15,6 +16,7 @@ class ProxyGroupHeader extends StatelessWidget {
   });
 
   final ProxyGroup group;
+  final bool showIcon;
   final bool testing;
   final bool expanded;
   final VoidCallback onToggle;
@@ -47,8 +49,10 @@ class ProxyGroupHeader extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
                 child: Row(
                   children: [
-                    ProxyAvatar(name: group.name, icon: group.icon),
-                    const SizedBox(width: 12),
+                    if (showIcon) ...[
+                      ProxyAvatar(name: group.name, icon: group.icon),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: ValueListenableBuilder<String>(
                         valueListenable: group.now,
@@ -58,17 +62,13 @@ class ProxyGroupHeader extends StatelessWidget {
                           children: [
                             Text(
                               group.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
+                              style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w600),
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               '${group.type}  ·  ${now.isEmpty ? '-' : now}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -88,8 +88,8 @@ class ProxyGroupHeader extends StatelessWidget {
                       child: Text(
                         '${group.all.length}',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
                     IconButton(

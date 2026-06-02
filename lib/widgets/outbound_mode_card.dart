@@ -60,11 +60,9 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
     final target = _target();
     if (target == null) return;
     try {
-      final raw = await rust.configs(target: target);
+      final mode = await rust.configMode(target: target);
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final m = (json['mode'] ?? 'rule').toString().toLowerCase();
-      setState(() => _mode = m);
+      setState(() => _mode = mode);
     } catch (_) {
       // Silent; the basic-config screen surfaces detailed errors.
     }
@@ -87,9 +85,9 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _mode = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('切换出站模式失败:${formatError(e)}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('切换出站模式失败:${formatError(e)}')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -130,9 +128,7 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
                     // Disable all segments while a switch is in flight to
                     // prevent the user from racing two patches against each
                     // other (and getting an out-of-order final state).
-                    onTap: mode == null || _saving
-                        ? null
-                        : () => _setMode(key),
+                    onTap: mode == null || _saving ? null : () => _setMode(key),
                   ),
                 ),
             ],
@@ -187,13 +183,11 @@ class _Segment extends StatelessWidget {
                   : Text(
                       label,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: selected
-                                ? scheme.onPrimary
-                                : scheme.onSurface,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
+                        color: selected ? scheme.onPrimary : scheme.onSurface,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
                     ),
             ),
           ),

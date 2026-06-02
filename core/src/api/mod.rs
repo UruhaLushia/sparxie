@@ -12,8 +12,8 @@
 
 use flutter_rust_bridge::frb;
 
+use crate::MihomoError;
 use crate::client::MihomoClient;
-use crate::error::MihomoError;
 
 // frb's generated code references `crate::api::<endpoint>::<fn>` directly,
 // so each sub-module needs to be `pub`. The flat re-exports below remain so

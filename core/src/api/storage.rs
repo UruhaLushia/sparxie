@@ -1,7 +1,7 @@
 use reqwest::Method;
 use serde_json::Value;
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
 use super::{MihomoTarget, urlencode};
 

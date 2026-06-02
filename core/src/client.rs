@@ -1,74 +1,28 @@
-use std::sync::Arc;
+mod insecure_tls;
+mod transport;
+mod ws;
+
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use reqwest::{Client, Method, Url};
 use serde_json::Value;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpStream;
 use tokio_tungstenite::{
-    Connector, MaybeTlsStream, WebSocketStream, client_async, connect_async,
-    connect_async_tls_with_config,
+    client_async, connect_async, connect_async_tls_with_config,
     tungstenite::{
         client::IntoClientRequest,
         http::{HeaderValue, Uri},
-        protocol::Message,
     },
 };
 
-use crate::error::MihomoError;
+use crate::MihomoError;
 
-/// Where a backend lives. `http`/`https` go over TCP via reqwest; `unix` and
-/// `pipe` are local IPC transports spoken with hyper directly.
-#[derive(Clone, Debug)]
-enum Transport {
-    /// http(s) — `base` is the parsed TCP URL.
-    Tcp { base: Url },
-    /// Unix domain socket at `path`.
-    Unix {
-        #[cfg_attr(not(unix), allow(dead_code))]
-        path: String,
-    },
-    /// Windows named pipe at `name` (e.g. `\\.\pipe\mihomo`).
-    Pipe {
-        #[cfg_attr(not(windows), allow(dead_code))]
-        name: String,
-    },
-}
-
-impl Transport {
-    fn parse(base_url: &str) -> Result<Self, MihomoError> {
-        let trimmed = base_url.trim();
-        if let Some(rest) = trimmed.strip_prefix("unix:") {
-            // Optional `//` authority marker after the scheme; a real socket
-            // path keeps its own leading slash (`unix:///run/x` → `/run/x`).
-            let path = rest.strip_prefix("//").unwrap_or(rest);
-            if path.is_empty() {
-                return Err(MihomoError::InvalidUrl("empty unix socket path".into()));
-            }
-            return Ok(Self::Unix {
-                path: path.to_string(),
-            });
-        }
-        if let Some(rest) = trimmed.strip_prefix("pipe:") {
-            let name = rest.strip_prefix("//").unwrap_or(rest);
-            if name.is_empty() {
-                return Err(MihomoError::InvalidUrl("empty pipe name".into()));
-            }
-            return Ok(Self::Pipe {
-                name: name.to_string(),
-            });
-        }
-        let base = Url::parse(trimmed).map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
-        Ok(Self::Tcp { base })
-    }
-
-    fn is_tcp(&self) -> bool {
-        matches!(self, Self::Tcp { .. })
-    }
-}
+use insecure_tls::insecure_ws_connector;
+pub use transport::AsyncStream;
+use transport::Transport;
+use ws::check_ws_response;
+pub use ws::{WsStream, read_ws_text};
 
 /// Internal mihomo controller client. Held only on the Rust side; Dart never
 /// sees it. TCP backends use reqwest; IPC backends use hyper over a raw stream.
@@ -77,37 +31,6 @@ pub struct MihomoClient {
     pub secret: Option<String>,
     http: Option<Client>,
     allow_insecure: bool,
-}
-
-/// Boxed transport stream so the IPC WebSocket covers Unix sockets and named
-/// pipes with one type.
-pub trait AsyncStream: AsyncRead + AsyncWrite + Unpin + Send {}
-impl<T: AsyncRead + AsyncWrite + Unpin + Send> AsyncStream for T {}
-
-/// A WebSocket over either a TCP(-TLS) transport or a boxed IPC stream.
-/// `connect_async` and `client_async` return different concrete stream types,
-/// so we unify them here and delegate the read/send used by [`read_ws_text`].
-pub enum WsStream {
-    Tcp(WebSocketStream<MaybeTlsStream<TcpStream>>),
-    Ipc(WebSocketStream<Box<dyn AsyncStream>>),
-}
-
-impl WsStream {
-    async fn next_message(
-        &mut self,
-    ) -> Option<Result<Message, tokio_tungstenite::tungstenite::Error>> {
-        match self {
-            Self::Tcp(s) => s.next().await,
-            Self::Ipc(s) => s.next().await,
-        }
-    }
-
-    async fn send(&mut self, msg: Message) -> Result<(), tokio_tungstenite::tungstenite::Error> {
-        match self {
-            Self::Tcp(s) => s.send(msg).await,
-            Self::Ipc(s) => s.send(msg).await,
-        }
-    }
 }
 
 impl MihomoClient {
@@ -145,7 +68,7 @@ impl MihomoClient {
             .map_err(|e| MihomoError::InvalidUrl(e.to_string()))
     }
 
-    /// http(s)://host/<path> → ws(s)://host/<path>, preserving query string.
+    /// http(s)://host/<path> -> ws(s)://host/<path>, preserving query string.
     fn ws_url(&self, path: &str) -> Result<Url, MihomoError> {
         let mut url = self.tcp_url(path)?;
         let new_scheme = match url.scheme() {
@@ -206,7 +129,7 @@ impl MihomoClient {
             .expect("tcp client present for tcp transport")
     }
 
-    /// One HTTP/1.1 request over an IPC transport (unix/pipe). No auth — local
+    /// One HTTP/1.1 request over an IPC transport (unix/pipe). No auth: local
     /// IPC backends run without a secret.
     async fn ipc_request(
         &self,
@@ -227,9 +150,7 @@ impl MihomoClient {
             .parse()
             .map_err(|e| MihomoError::InvalidUrl(format!("ipc uri: {e}")))?;
         let has_body = body.is_some();
-        let body_bytes = body
-            .map(|b| Bytes::from(b.to_string()))
-            .unwrap_or_else(Bytes::new);
+        let body_bytes = body.map(|b| Bytes::from(b.to_string())).unwrap_or_default();
         let mut builder = hyper::Request::builder()
             .method(method)
             .uri(uri)
@@ -331,13 +252,11 @@ impl MihomoClient {
                 .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?
         };
         check_ws_response(&response)?;
-        Ok(WsStream::Tcp(stream))
+        Ok(WsStream::Tcp(Box::new(stream)))
     }
 
     async fn open_ws_ipc(&self, path: &str) -> Result<WsStream, MihomoError> {
         let stream = self.connect_ipc().await?;
-        // A dummy authority is fine — the stream is already the IPC socket;
-        // tungstenite fills in Host + all Sec-WebSocket-* handshake headers.
         let request = format!("ws://localhost/{}", path.trim_start_matches('/'))
             .into_client_request()
             .map_err(|e| MihomoError::InvalidUrl(format!("ipc ws request: {e}")))?;
@@ -346,20 +265,8 @@ impl MihomoClient {
             .await
             .map_err(|e| MihomoError::Other(format!("ipc websocket connect: {e}")))?;
         check_ws_response(&response)?;
-        Ok(WsStream::Ipc(stream))
+        Ok(WsStream::Ipc(Box::new(stream)))
     }
-}
-
-fn check_ws_response<T>(
-    response: &tokio_tungstenite::tungstenite::http::Response<T>,
-) -> Result<(), MihomoError> {
-    if !response.status().is_informational() && !response.status().is_success() {
-        return Err(MihomoError::Upstream {
-            status: response.status().as_u16(),
-            body: format!("ws handshake returned {}", response.status()),
-        });
-    }
-    Ok(())
 }
 
 /// Send a TCP request, mapping a non-2xx status to [`MihomoError::Upstream`],
@@ -387,91 +294,4 @@ fn parse_body_or_ok(bytes: &[u8]) -> Value {
         return serde_json::json!({"ok": true});
     }
     serde_json::from_slice(bytes).unwrap_or_else(|_| serde_json::json!({"ok": true}))
-}
-
-/// A rustls connector that accepts any server certificate. Used only when a
-/// backend is explicitly marked insecure.
-fn insecure_ws_connector() -> Connector {
-    // Pin the ring provider explicitly — relying on the process-default
-    // provider is fragile when multiple crates pull rustls in.
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let config = rustls::ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()
-        .expect("ring provider supports default protocol versions")
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(NoCertVerify))
-        .with_no_client_auth();
-    Connector::Rustls(Arc::new(config))
-}
-
-#[derive(Debug)]
-struct NoCertVerify;
-
-impl rustls::client::danger::ServerCertVerifier for NoCertVerify {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        use rustls::SignatureScheme as S;
-        vec![
-            S::RSA_PKCS1_SHA256,
-            S::RSA_PKCS1_SHA384,
-            S::RSA_PKCS1_SHA512,
-            S::ECDSA_NISTP256_SHA256,
-            S::ECDSA_NISTP384_SHA384,
-            S::ED25519,
-            S::RSA_PSS_SHA256,
-            S::RSA_PSS_SHA384,
-            S::RSA_PSS_SHA512,
-        ]
-    }
-}
-
-/// Read the next JSON line from a websocket stream, ignoring pings & binary frames.
-pub async fn read_ws_text(stream: &mut WsStream) -> Result<Option<String>, MihomoError> {
-    while let Some(item) = stream.next_message().await {
-        let msg = item.map_err(|e| MihomoError::Other(format!("ws read: {e}")))?;
-        match msg {
-            Message::Text(text) => return Ok(Some(text.to_string())),
-            Message::Binary(bytes) => {
-                if let Ok(text) = std::str::from_utf8(&bytes) {
-                    return Ok(Some(text.to_owned()));
-                }
-            }
-            Message::Ping(payload) => {
-                if let Err(e) = stream.send(Message::Pong(payload)).await {
-                    return Err(MihomoError::Other(format!("ws pong: {e}")));
-                }
-            }
-            Message::Close(_) => return Ok(None),
-            Message::Pong(_) | Message::Frame(_) => {}
-        }
-    }
-    Ok(None)
 }
