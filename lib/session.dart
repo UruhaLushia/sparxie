@@ -456,17 +456,14 @@ class MihomoSession {
     try {
       final includeHidden = _includeHiddenProxyGroups;
       final filter = _proxyCatalogFilter;
-      final memberSort = _proxyMemberSort;
       final catalog = await rust.proxyCatalog(
         target: t,
         includeHidden: includeHidden,
         filter: filter,
-        memberSort: memberSort,
       );
       if (!identical(_activeKey, controller)) return;
       if (includeHidden != _includeHiddenProxyGroups ||
-          filter != _proxyCatalogFilter ||
-          memberSort != _proxyMemberSort) {
+          filter != _proxyCatalogFilter) {
         refreshAgain = true;
         return;
       }

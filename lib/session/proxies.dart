@@ -46,9 +46,6 @@ class ProxiesNotifier extends ChangeNotifier {
         );
         _groupsById[name] = group;
         ordered.add(group);
-        if (entry.initialMembers.isNotEmpty) {
-          group._setMemberWindow(0, entry.initialMembers);
-        }
         shapeChanged = true;
       } else {
         if (existing._type != entry.proxyType) {
@@ -65,10 +62,6 @@ class ProxiesNotifier extends ChangeNotifier {
         existing._setNow(entry.now);
         existing._setTestUrl(entry.testUrl);
         existing._setFixed(entry.fixed);
-        if (entry.initialMembers.isNotEmpty &&
-            existing._setMemberWindow(0, entry.initialMembers)) {
-          existing._notifyMembers();
-        }
         ordered.add(existing);
       }
     }
@@ -289,9 +282,9 @@ class ProxyGroup {
       return null;
     }
     final visible = last - first + 1;
-    final limit = (visible + _memberWindowOverscan * 2)
-        .clamp(_memberWindowMin, _memberCount)
-        .toInt();
+    var limit = visible + _memberWindowOverscan * 2;
+    if (limit < _memberWindowMin) limit = _memberWindowMin;
+    if (limit > _memberCount) limit = _memberCount;
     final center = (first + last) ~/ 2;
     final maxOffset = (_memberCount - limit).clamp(0, _memberCount).toInt();
     final offset = (center - limit ~/ 2).clamp(0, maxOffset).toInt();

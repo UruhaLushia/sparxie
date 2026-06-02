@@ -18,12 +18,10 @@ Future<ProxyCatalog> proxyCatalog({
   required MihomoTarget target,
   required bool includeHidden,
   required String filter,
-  required ProxyMemberSort memberSort,
 }) => RustLib.instance.api.crateApiProxiesCatalogProxyCatalog(
   target: target,
   includeHidden: includeHidden,
   filter: filter,
-  memberSort: memberSort,
 );
 
 /// Windowed members for one proxy group. The full member list stays in Rust so
@@ -69,7 +67,6 @@ class ProxyGroupEntry {
   final String icon;
   final int memberCount;
   final int membersHash;
-  final List<ProxyMemberEntry> initialMembers;
   final String now;
   final String testUrl;
   final String fixed;
@@ -80,7 +77,6 @@ class ProxyGroupEntry {
     required this.icon,
     required this.memberCount,
     required this.membersHash,
-    required this.initialMembers,
     required this.now,
     required this.testUrl,
     required this.fixed,
@@ -96,7 +92,6 @@ class ProxyGroupEntry {
       icon.hashCode ^
       memberCount.hashCode ^
       membersHash.hashCode ^
-      initialMembers.hashCode ^
       now.hashCode ^
       testUrl.hashCode ^
       fixed.hashCode;
@@ -111,7 +106,6 @@ class ProxyGroupEntry {
           icon == other.icon &&
           memberCount == other.memberCount &&
           membersHash == other.membersHash &&
-          initialMembers == other.initialMembers &&
           now == other.now &&
           testUrl == other.testUrl &&
           fixed == other.fixed;
