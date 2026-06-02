@@ -64,6 +64,11 @@ jobs:
       - name: Regenerate FFI bindings
         run: flutter_rust_bridge_codegen generate
 
+      - name: Format generated bindings
+        run: |
+          cargo fmt --manifest-path core/Cargo.toml
+          dart format lib/src/rust
+
       - name: Check generated bindings are committed
         shell: bash
         run: |
