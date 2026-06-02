@@ -240,6 +240,7 @@ abstract class RustLibApi extends BaseApi {
     required MihomoTarget target,
     required bool includeHidden,
     required String filter,
+    required ProxyMemberSort memberSort,
   });
 
   Future<ProxyCatalog> crateApiProxiesCatalogProxyCatalogDefault();
@@ -1548,6 +1549,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required MihomoTarget target,
     required bool includeHidden,
     required String filter,
+    required ProxyMemberSort memberSort,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1556,6 +1558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_box_autoadd_mihomo_target(target, serializer);
           sse_encode_bool(includeHidden, serializer);
           sse_encode_String(filter, serializer);
+          sse_encode_proxy_member_sort(memberSort, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1568,7 +1571,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_mihomo_error,
         ),
         constMeta: kCrateApiProxiesCatalogProxyCatalogConstMeta,
-        argValues: [target, includeHidden, filter],
+        argValues: [target, includeHidden, filter, memberSort],
         apiImpl: this,
       ),
     );
@@ -1577,7 +1580,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiProxiesCatalogProxyCatalogConstMeta =>
       const TaskConstMeta(
         debugName: "proxy_catalog",
-        argNames: ["target", "includeHidden", "filter"],
+        argNames: ["target", "includeHidden", "filter", "memberSort"],
       );
 
   @override
@@ -3462,17 +3465,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProxyGroupEntry dco_decode_proxy_group_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return ProxyGroupEntry(
       name: dco_decode_String(arr[0]),
       proxyType: dco_decode_String(arr[1]),
       icon: dco_decode_String(arr[2]),
       memberCount: dco_decode_u_32(arr[3]),
       membersHash: dco_decode_u_32(arr[4]),
-      now: dco_decode_String(arr[5]),
-      testUrl: dco_decode_String(arr[6]),
-      fixed: dco_decode_String(arr[7]),
+      initialMembers: dco_decode_list_proxy_member_entry(arr[5]),
+      now: dco_decode_String(arr[6]),
+      testUrl: dco_decode_String(arr[7]),
+      fixed: dco_decode_String(arr[8]),
     );
   }
 
@@ -4125,6 +4129,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_icon = sse_decode_String(deserializer);
     var var_memberCount = sse_decode_u_32(deserializer);
     var var_membersHash = sse_decode_u_32(deserializer);
+    var var_initialMembers = sse_decode_list_proxy_member_entry(deserializer);
     var var_now = sse_decode_String(deserializer);
     var var_testUrl = sse_decode_String(deserializer);
     var var_fixed = sse_decode_String(deserializer);
@@ -4134,6 +4139,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       icon: var_icon,
       memberCount: var_memberCount,
       membersHash: var_membersHash,
+      initialMembers: var_initialMembers,
       now: var_now,
       testUrl: var_testUrl,
       fixed: var_fixed,
@@ -4777,6 +4783,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.icon, serializer);
     sse_encode_u_32(self.memberCount, serializer);
     sse_encode_u_32(self.membersHash, serializer);
+    sse_encode_list_proxy_member_entry(self.initialMembers, serializer);
     sse_encode_String(self.now, serializer);
     sse_encode_String(self.testUrl, serializer);
     sse_encode_String(self.fixed, serializer);

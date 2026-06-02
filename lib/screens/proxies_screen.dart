@@ -64,13 +64,16 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   };
 
   void _toggle(String name) {
+    var expanded = false;
     setState(() {
       if (_expanded.remove(name)) {
         widget.session.proxies.releaseGroupMembers(name);
       } else {
         _expanded.add(name);
+        expanded = true;
       }
     });
+    if (expanded) unawaited(widget.session.ensureProxyGroupMembers(name, 0, 0));
   }
 
   rust.MihomoTarget? _target() {
@@ -331,7 +334,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   void initState() {
     super.initState();
     widget.session.proxies.addListener(_recompute);
-    _recompute();
+    _groups = widget.session.proxies.groups;
   }
 
   @override
@@ -384,8 +387,10 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   void _recompute() {
+    final next = widget.session.proxies.groups;
+    if (identical(_groups, next)) return;
     setState(() {
-      _groups = List<ProxyGroup>.unmodifiable(widget.session.proxies.groups);
+      _groups = next;
     });
   }
 

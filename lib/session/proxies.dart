@@ -27,6 +27,7 @@ class ProxiesNotifier extends ChangeNotifier {
   void applyCatalog(rust.ProxyCatalog catalog) {
     var shapeChanged = false;
     final seenGroups = <String>{};
+    final ordered = <ProxyGroup>[];
 
     for (final entry in catalog.groups) {
       final name = entry.name;
@@ -44,16 +45,31 @@ class ProxiesNotifier extends ChangeNotifier {
           fixed: entry.fixed,
         );
         _groupsById[name] = group;
+        ordered.add(group);
+        if (entry.initialMembers.isNotEmpty) {
+          group._setMemberWindow(0, entry.initialMembers);
+        }
         shapeChanged = true;
       } else {
-        if (existing._type != entry.proxyType) existing._type = entry.proxyType;
-        if (existing._icon != entry.icon) existing._icon = entry.icon;
+        if (existing._type != entry.proxyType) {
+          existing._type = entry.proxyType;
+          shapeChanged = true;
+        }
+        if (existing._icon != entry.icon) {
+          existing._icon = entry.icon;
+          shapeChanged = true;
+        }
         if (existing._setMemberShape(entry.memberCount, entry.membersHash)) {
           shapeChanged = true;
         }
         existing._setNow(entry.now);
         existing._setTestUrl(entry.testUrl);
         existing._setFixed(entry.fixed);
+        if (entry.initialMembers.isNotEmpty &&
+            existing._setMemberWindow(0, entry.initialMembers)) {
+          existing._notifyMembers();
+        }
+        ordered.add(existing);
       }
     }
 
@@ -66,11 +82,6 @@ class ProxiesNotifier extends ChangeNotifier {
       shapeChanged = true;
     }
 
-    final ordered = <ProxyGroup>[];
-    for (final entry in catalog.groups) {
-      final group = _groupsById[entry.name];
-      if (group != null) ordered.add(group);
-    }
     if (shapeChanged || !_sameGroupOrder(_orderedGroups, ordered)) {
       _orderedGroups = List<ProxyGroup>.unmodifiable(ordered);
       notifyListeners();
@@ -154,7 +165,7 @@ class ProxiesNotifier extends ChangeNotifier {
     if (identical(a, b)) return true;
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
-      if (a[i].name != b[i].name) return false;
+      if (!identical(a[i], b[i])) return false;
     }
     return true;
   }

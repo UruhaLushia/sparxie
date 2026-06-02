@@ -14,6 +14,8 @@ export 'session/logs.dart';
 export 'session/process_icons.dart';
 export 'session/proxies.dart';
 
+typedef _ProxyMemberLoadKey = (String, rust.ProxyMemberSort);
+
 class MihomoSession {
   MihomoSession(this.store) {
     store.addListener(_onStoreChange);
@@ -36,8 +38,9 @@ class MihomoSession {
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
-  final Set<String> _proxyMemberLoads = <String>{};
-  final Map<String, _QueuedProxyMemberLoad> _queuedProxyMemberLoads = {};
+  final _proxyMemberLoads = <_ProxyMemberLoadKey>{};
+  final _queuedProxyMemberLoads =
+      <_ProxyMemberLoadKey, _QueuedProxyMemberLoad>{};
 
   int _connectionsIntervalMs = 1000;
   int _proxiesIntervalMs = 3000;
@@ -230,7 +233,7 @@ class MihomoSession {
     if (t == null) return;
     final request = proxies.memberWindowRequest(group, firstIndex, lastIndex);
     if (request == null) return;
-    final loadKey = '$group|$_proxyMemberSort';
+    final loadKey = (group, _proxyMemberSort);
     if (_proxyMemberLoads.contains(loadKey)) {
       _queuedProxyMemberLoads[loadKey] = _QueuedProxyMemberLoad(
         target: t,
@@ -245,7 +248,7 @@ class MihomoSession {
   }
 
   Future<void> _loadProxyMemberWindow(
-    String loadKey,
+    _ProxyMemberLoadKey loadKey,
     rust.MihomoTarget target,
     String group,
     ProxyMemberWindowRequest request,
@@ -260,7 +263,7 @@ class MihomoSession {
         limit: request.limit,
         memberSort: sort,
       );
-      if (identical(_target, target) && sort == _proxyMemberSort) {
+      if (_target == target && sort == _proxyMemberSort) {
         proxies.applyGroupMembers(
           group,
           request.membersHash,
@@ -268,7 +271,8 @@ class MihomoSession {
           entries,
         );
       }
-    } catch (_) {
+    } catch (e) {
+      if (_target == target) error.value = formatError(e);
       // The next visible tile build will retry.
     } finally {
       _proxyMemberLoads.remove(loadKey);
@@ -276,10 +280,10 @@ class MihomoSession {
     }
   }
 
-  void _drainQueuedProxyMemberLoad(String loadKey) {
+  void _drainQueuedProxyMemberLoad(_ProxyMemberLoadKey loadKey) {
     final queued = _queuedProxyMemberLoads.remove(loadKey);
     if (queued == null ||
-        !identical(_target, queued.target) ||
+        _target != queued.target ||
         queued.sort != _proxyMemberSort) {
       return;
     }
@@ -452,14 +456,17 @@ class MihomoSession {
     try {
       final includeHidden = _includeHiddenProxyGroups;
       final filter = _proxyCatalogFilter;
+      final memberSort = _proxyMemberSort;
       final catalog = await rust.proxyCatalog(
         target: t,
         includeHidden: includeHidden,
         filter: filter,
+        memberSort: memberSort,
       );
       if (!identical(_activeKey, controller)) return;
       if (includeHidden != _includeHiddenProxyGroups ||
-          filter != _proxyCatalogFilter) {
+          filter != _proxyCatalogFilter ||
+          memberSort != _proxyMemberSort) {
         refreshAgain = true;
         return;
       }
