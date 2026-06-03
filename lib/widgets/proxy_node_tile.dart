@@ -12,6 +12,7 @@ class ProxyNodeTile extends StatelessWidget {
     required this.name,
     required this.type,
     required this.delay,
+    this.selectable = true,
     required this.nowListenable,
     required this.fixedListenable,
     required this.onSelect,
@@ -21,6 +22,7 @@ class ProxyNodeTile extends StatelessWidget {
   final String name;
   final String type;
   final ValueNotifier<int>? delay;
+  final bool selectable;
   final ValueNotifier<String> nowListenable;
   final ValueNotifier<String> fixedListenable;
   final VoidCallback onSelect;
@@ -33,11 +35,11 @@ class ProxyNodeTile extends StatelessWidget {
       child: ValueListenableBuilder<String>(
         valueListenable: nowListenable,
         builder: (_, now, _) {
-          final selected = now == name;
+          final selected = selectable && now == name;
           return ValueListenableBuilder<String>(
             valueListenable: fixedListenable,
             builder: (_, fixed, _) {
-              final isPinned = fixed == name;
+              final isPinned = selectable && fixed == name;
               // Three visual states stack:
               //   none      → surfaceContainerHigh / outlineVariant
               //   selected  → primaryContainer / primary @ 0.5
@@ -70,7 +72,7 @@ class ProxyNodeTile extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    onTap: onSelect,
+                    onTap: selectable ? onSelect : null,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
                       child: Row(
@@ -85,11 +87,7 @@ class ProxyNodeTile extends StatelessWidget {
                                 Row(
                                   children: [
                                     if (isPinned) ...[
-                                      Icon(
-                                        Icons.push_pin,
-                                        size: 13,
-                                        color: fg,
-                                      ),
+                                      Icon(Icons.push_pin, size: 13, color: fg),
                                       const SizedBox(width: 4),
                                     ],
                                     Flexible(
@@ -99,10 +97,9 @@ class ProxyNodeTile extends StatelessWidget {
                                             .textTheme
                                             .bodyMedium
                                             ?.copyWith(
-                                              fontWeight:
-                                                  selected || isPinned
-                                                      ? FontWeight.w600
-                                                      : FontWeight.w500,
+                                              fontWeight: selected || isPinned
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w500,
                                               color: fg,
                                             ),
                                         overflow: TextOverflow.ellipsis,
@@ -113,9 +110,7 @@ class ProxyNodeTile extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   type,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
+                                  style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
                                         color: fg.withValues(alpha: 0.75),
                                       ),

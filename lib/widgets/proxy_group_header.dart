@@ -56,24 +56,29 @@ class ProxyGroupHeader extends StatelessWidget {
                     Expanded(
                       child: ValueListenableBuilder<String>(
                         valueListenable: group.now,
-                        builder: (_, now, _) => Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              group.name,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              '${group.type}  ·  ${now.isEmpty ? '-' : now}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                        builder: (_, now, _) {
+                          final displayNow = group.canSelectMembers
+                              ? (now.isEmpty ? '-' : now)
+                              : '*';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                group.name,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${group.type}  ·  $displayNow',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     Container(

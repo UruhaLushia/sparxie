@@ -97,6 +97,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   }
 
   Future<void> _select(ProxyGroup group, String name) async {
+    if (!group.canSelectMembers) return;
     final target = _target();
     if (target == null) return;
     // Tapping the already-pinned node releases the fix instead of
@@ -492,6 +493,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                               name: member.name,
                               type: member.type,
                               delay: member.delay,
+                              selectable: group.canSelectMembers,
                               nowListenable: group.now,
                               fixedListenable: group.fixed,
                               onSelect: () =>

@@ -231,6 +231,7 @@ class ProxyGroup {
 
   String get type => _type;
   String get icon => _icon;
+  bool get canSelectMembers => _type != 'LoadBalance';
   ValueListenable<int> get membersVersion => _membersVersion;
 
   /// Per-group `tester`/`testUrl` configured in mihomo (empty when absent).
