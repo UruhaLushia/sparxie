@@ -7,6 +7,7 @@ use crate::api::MihomoTarget;
 
 use super::{ProxyMemberEntry, ProxyMemberSort};
 
+#[derive(Clone)]
 #[frb(ignore)]
 pub(super) struct CachedNode {
     pub(super) proxy_type: String,
@@ -68,6 +69,10 @@ impl CachedGroup {
             }
         }
     }
+
+    fn clear_sorted_members(&mut self) {
+        self.sorted_members = None;
+    }
 }
 
 pub(super) fn replace_catalog(target: &MihomoTarget, catalog: CachedCatalog) {
@@ -115,6 +120,56 @@ pub(super) fn member_entries(
         )
     })
     .flatten()
+}
+
+pub(super) fn group_has_missing_nodes(target: &MihomoTarget, group_name: &str) -> bool {
+    with_catalog(target, |catalog| {
+        let CachedCatalog { nodes, groups, .. } = catalog;
+        let Some(group) = groups.get(group_name) else {
+            return false;
+        };
+        group
+            .members
+            .iter()
+            .any(|id| nodes.get(*id).is_none_or(Option::is_none))
+    })
+    .unwrap_or(false)
+}
+
+pub(super) fn merge_nodes(target: &MihomoTarget, incoming: HashMap<String, CachedNode>) {
+    if incoming.is_empty() {
+        return;
+    }
+    let _ = with_catalog(target, |catalog| {
+        let mut changed = false;
+        for (id, name) in catalog.names.iter().enumerate() {
+            let Some(node) = incoming.get(name) else {
+                continue;
+            };
+            if catalog.nodes.get(id).is_some_and(Option::is_none) {
+                catalog.nodes[id] = Some(node.clone());
+                changed = true;
+            }
+        }
+        if changed {
+            for group in catalog.groups.values_mut() {
+                group.clear_sorted_members();
+            }
+        }
+        changed
+    });
+}
+
+pub(super) fn node_details(target: &MihomoTarget) -> HashMap<String, CachedNode> {
+    with_catalog(target, |catalog| {
+        catalog
+            .names
+            .iter()
+            .zip(catalog.nodes.iter())
+            .filter_map(|(name, node)| node.as_ref().map(|node| (name.clone(), node.clone())))
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 pub(super) fn member_names(target: &MihomoTarget, group_name: &str) -> Vec<String> {

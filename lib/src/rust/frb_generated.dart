@@ -194,6 +194,7 @@ abstract class RustLibApi extends BaseApi {
     required String testUrl,
     required int timeoutMs,
     String? expectedStatus,
+    int? concurrency,
   });
 
   Future<GroupDelayEntry> crateApiGroupsGroupDelayEntryDefault();
@@ -1166,6 +1167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String testUrl,
     required int timeoutMs,
     String? expectedStatus,
+    int? concurrency,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1176,6 +1178,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(testUrl, serializer);
           sse_encode_u_32(timeoutMs, serializer);
           sse_encode_opt_String(expectedStatus, serializer);
+          sse_encode_opt_box_autoadd_u_32(concurrency, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1188,7 +1191,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_mihomo_error,
         ),
         constMeta: kCrateApiGroupsGroupDelayConstMeta,
-        argValues: [target, group, testUrl, timeoutMs, expectedStatus],
+        argValues: [
+          target,
+          group,
+          testUrl,
+          timeoutMs,
+          expectedStatus,
+          concurrency,
+        ],
         apiImpl: this,
       ),
     );
@@ -1196,7 +1206,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiGroupsGroupDelayConstMeta => const TaskConstMeta(
     debugName: "group_delay",
-    argNames: ["target", "group", "testUrl", "timeoutMs", "expectedStatus"],
+    argNames: [
+      "target",
+      "group",
+      "testUrl",
+      "timeoutMs",
+      "expectedStatus",
+      "concurrency",
+    ],
   );
 
   @override
@@ -3605,11 +3622,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   VersionInfo dco_decode_version_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return VersionInfo(
       version: dco_decode_String(arr[0]),
       isCmfa: dco_decode_bool(arr[1]),
+      isStash: dco_decode_bool(arr[2]),
+      supportsCoreConfig: dco_decode_bool(arr[3]),
+      supportsCoreActions: dco_decode_bool(arr[4]),
+      supportsCoreManagement: dco_decode_bool(arr[5]),
+      supportsCacheFlush: dco_decode_bool(arr[6]),
+      supportsMemory: dco_decode_bool(arr[7]),
     );
   }
 
@@ -4282,7 +4305,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_version = sse_decode_String(deserializer);
     var var_isCmfa = sse_decode_bool(deserializer);
-    return VersionInfo(version: var_version, isCmfa: var_isCmfa);
+    var var_isStash = sse_decode_bool(deserializer);
+    var var_supportsCoreConfig = sse_decode_bool(deserializer);
+    var var_supportsCoreActions = sse_decode_bool(deserializer);
+    var var_supportsCoreManagement = sse_decode_bool(deserializer);
+    var var_supportsCacheFlush = sse_decode_bool(deserializer);
+    var var_supportsMemory = sse_decode_bool(deserializer);
+    return VersionInfo(
+      version: var_version,
+      isCmfa: var_isCmfa,
+      isStash: var_isStash,
+      supportsCoreConfig: var_supportsCoreConfig,
+      supportsCoreActions: var_supportsCoreActions,
+      supportsCoreManagement: var_supportsCoreManagement,
+      supportsCacheFlush: var_supportsCacheFlush,
+      supportsMemory: var_supportsMemory,
+    );
   }
 
   @protected
@@ -4893,5 +4931,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.version, serializer);
     sse_encode_bool(self.isCmfa, serializer);
+    sse_encode_bool(self.isStash, serializer);
+    sse_encode_bool(self.supportsCoreConfig, serializer);
+    sse_encode_bool(self.supportsCoreActions, serializer);
+    sse_encode_bool(self.supportsCoreManagement, serializer);
+    sse_encode_bool(self.supportsCacheFlush, serializer);
+    sse_encode_bool(self.supportsMemory, serializer);
   }
 }

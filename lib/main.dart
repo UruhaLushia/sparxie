@@ -192,12 +192,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   // 外部资源 lives in the nav grid as a small card on cards mode.
   // On phones the standard nav is also capped at 5 items; 内核配置 and
   // 外部资源 move into the 其他 page.
-  // CMFA builds disable mihomo's `/configs` knobs, so 内核配置 is also
-  // dropped from the standard wide nav when [isCmfa] is true.
   List<_Dest> _destinationsFor(
     NavLayout layout, {
     required bool isCompact,
-    required bool isCmfa,
+    required bool supportsCoreConfig,
+    required bool supportsCoreActions,
   }) {
     final showOnStandardWide = layout == NavLayout.standard && !isCompact;
     return [
@@ -206,12 +205,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       const _Dest(icon: Icons.account_tree_outlined, label: '代理组'),
       if (layout == NavLayout.standard)
         const _Dest(icon: Icons.lan_outlined, label: '连接'),
-      if (showOnStandardWide && !isCmfa)
+      if (showOnStandardWide && supportsCoreConfig)
         const _Dest(icon: Icons.memory_outlined, label: '内核配置'),
       const _Dest(icon: Icons.terminal, label: '日志'),
       if (showOnStandardWide)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
-      if (showOnStandardWide)
+      if (showOnStandardWide && supportsCoreActions)
         const _Dest(icon: Icons.build_outlined, label: '核心操作'),
       if (showOnStandardWide) const _Dest(icon: Icons.rule, label: '分流规则'),
       if (layout == NavLayout.cards)
@@ -249,10 +248,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   // Pages are built lazily and reused per layout, so streams subscribe once.
   // Switching layouts rebuilds the cache because the destination list changes.
   NavLayout? _stackLayout;
+  List<String>? _stackLabels;
   List<Widget>? _stackPages;
   List<Widget> _ensureStackPages(NavLayout layout, List<_Dest> destinations) {
-    if (_stackLayout != layout || _stackPages == null) {
+    final labels = [for (final d in destinations) d.label];
+    if (_stackLayout != layout ||
+        _stackPages == null ||
+        !listEquals(_stackLabels, labels)) {
       _stackLayout = layout;
+      _stackLabels = labels;
       _stackPages = [for (final d in destinations) _buildPage(d)];
       if (_index >= destinations.length) _index = 0;
     }
@@ -269,8 +273,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         }
       },
       child: ListenableBuilder(
-        // Rebuild on prefs (nav layout) and on isCmfa (drops 内核配置 nav).
-        listenable: Listenable.merge([widget.prefs, widget.session.isCmfa]),
+        listenable: Listenable.merge([
+          widget.prefs,
+          widget.session.supportsCoreConfig,
+          widget.session.supportsCoreActions,
+        ]),
         builder: (context, _) {
           final size = MediaQuery.sizeOf(context);
           // `wide` picks rail-vs-bar chrome. In wide standard the rail gets
@@ -282,7 +289,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           final destinations = _destinationsFor(
             widget.prefs.navLayout,
             isCompact: !wide,
-            isCmfa: widget.session.isCmfa.value,
+            supportsCoreConfig: widget.session.supportsCoreConfig.value,
+            supportsCoreActions: widget.session.supportsCoreActions.value,
           );
           if (wide) {
             return cards
@@ -634,13 +642,10 @@ class _NavCardGrid extends StatelessWidget {
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          // CMFA builds disable mihomo's `/configs` mode endpoint, so hide the
-          // launcher control entirely while connected to one. The listener
-          // keeps it cheap — no rebuilds on traffic / proxies updates.
           ValueListenableBuilder<bool>(
-            valueListenable: session.isCmfa,
-            builder: (context, cmfa, child) =>
-                cmfa ? const SizedBox.shrink() : child!,
+            valueListenable: session.supportsCoreConfig,
+            builder: (context, supported, child) =>
+                supported ? child! : const SizedBox.shrink(),
             child: Column(
               children: [
                 OutboundModeCard(store: store),
@@ -649,14 +654,14 @@ class _NavCardGrid extends StatelessWidget {
             ),
           ),
           ValueListenableBuilder<bool>(
-            valueListenable: session.isCmfa,
-            builder: (context, cmfa, _) => Opacity(
-              opacity: cmfa ? 0.5 : 1,
+            valueListenable: session.supportsCoreConfig,
+            builder: (context, supported, _) => Opacity(
+              opacity: supported ? 1 : 0.5,
               child: _StatusHeroCard(
                 store: store,
                 session: session,
                 selected: kernelSelected,
-                onTap: cmfa ? null : onKernelTap,
+                onTap: supported ? onKernelTap : null,
               ),
             ),
           ),

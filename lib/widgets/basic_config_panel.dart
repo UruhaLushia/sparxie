@@ -127,7 +127,10 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_rounded, color: colorScheme.onErrorContainer),
+                Icon(
+                  Icons.warning_rounded,
+                  color: colorScheme.onErrorContainer,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -146,7 +149,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (c != null) ...[
-          if (widget.showOutboundMode) ...[
+          if (widget.showOutboundMode && c.containsKey('mode')) ...[
             _ModeSection(
               configs: c,
               saving: _saving,
@@ -154,12 +157,25 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             ),
             const SizedBox(height: 16),
           ],
-          _SwitchSection(configs: c, saving: _saving, onPatch: _patch),
-          const SizedBox(height: 16),
-          _PortsSection(configs: c, saving: _saving, onPatch: _patch),
+          if (_hasAny(c, const [
+            'log-level',
+            'tun',
+            'allow-lan',
+            'ipv6',
+            'tcp-concurrent',
+          ])) ...[
+            _SwitchSection(configs: c, saving: _saving, onPatch: _patch),
+            const SizedBox(height: 16),
+          ],
+          if (_hasAny(c, const ['port', 'socks-port', 'mixed-port']))
+            _PortsSection(configs: c, saving: _saving, onPatch: _patch),
         ],
       ],
     );
+  }
+
+  bool _hasAny(Map<String, dynamic> configs, Iterable<String> keys) {
+    return keys.any(configs.containsKey);
   }
 }
 
@@ -233,11 +249,12 @@ class _SwitchSection extends StatelessWidget {
       icon: Icons.tune,
       child: Column(
         children: [
-          _LogLevelRow(
-            current: logLevel,
-            busy: saving == 'log-level',
-            onChange: (v) => onPatch('log-level', {'log-level': v}),
-          ),
+          if (configs.containsKey('log-level'))
+            _LogLevelRow(
+              current: logLevel,
+              busy: saving == 'log-level',
+              onChange: (v) => onPatch('log-level', {'log-level': v}),
+            ),
           if (tun is Map)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -250,21 +267,24 @@ class _SwitchSection extends StatelessWidget {
                       'tun': {'enable': v},
                     }),
             ),
-          _switchTile(
-            label: '允许局域网连接',
-            valueKey: 'allow-lan',
-            current: configs['allow-lan'] == true,
-          ),
-          _switchTile(
-            label: 'IPv6',
-            valueKey: 'ipv6',
-            current: configs['ipv6'] == true,
-          ),
-          _switchTile(
-            label: 'TCP 并发',
-            valueKey: 'tcp-concurrent',
-            current: configs['tcp-concurrent'] == true,
-          ),
+          if (configs.containsKey('allow-lan'))
+            _switchTile(
+              label: '允许局域网连接',
+              valueKey: 'allow-lan',
+              current: configs['allow-lan'] == true,
+            ),
+          if (configs.containsKey('ipv6'))
+            _switchTile(
+              label: 'IPv6',
+              valueKey: 'ipv6',
+              current: configs['ipv6'] == true,
+            ),
+          if (configs.containsKey('tcp-concurrent'))
+            _switchTile(
+              label: 'TCP 并发',
+              valueKey: 'tcp-concurrent',
+              current: configs['tcp-concurrent'] == true,
+            ),
         ],
       ),
     );
@@ -334,18 +354,26 @@ class _PortsSectionState extends State<_PortsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    void addRow(Widget row) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(row);
+    }
+
+    if (widget.configs.containsKey('port')) {
+      addRow(_row('HTTP', _http, 'port'));
+    }
+    if (widget.configs.containsKey('socks-port')) {
+      addRow(_row('SOCKS5', _socks, 'socks-port'));
+    }
+    if (widget.configs.containsKey('mixed-port')) {
+      addRow(_row('Mixed', _mixed, 'mixed-port'));
+    }
+
     return SectionPanel(
       title: '入站端口',
       icon: Icons.cable,
-      child: Column(
-        children: [
-          _row('HTTP', _http, 'port'),
-          const SizedBox(height: 8),
-          _row('SOCKS5', _socks, 'socks-port'),
-          const SizedBox(height: 8),
-          _row('Mixed', _mixed, 'mixed-port'),
-        ],
-      ),
+      child: Column(children: rows),
     );
   }
 

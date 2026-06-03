@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
@@ -152,7 +153,7 @@ async fn stream_once(
         if trimmed.is_empty() {
             continue;
         }
-        let Ok(entry): Result<LogEntry, _> = serde_json::from_str(trimmed) else {
+        let Some(entry) = parse_log_entry(trimmed) else {
             continue;
         };
         {
@@ -164,4 +165,25 @@ async fn stream_once(
         }
         let _ = slot.sender.send(entry);
     }
+}
+
+fn parse_log_entry(line: &str) -> Option<LogEntry> {
+    let raw: Value = serde_json::from_str(line).ok()?;
+    let level = first_string(&raw, &["level", "type"]);
+    let message = first_string(&raw, &["message", "payload"]);
+    if level.is_empty() && message.is_empty() {
+        return None;
+    }
+    Some(LogEntry {
+        time: first_string(&raw, &["time"]),
+        level,
+        message,
+    })
+}
+
+fn first_string(raw: &Value, keys: &[&str]) -> String {
+    keys.iter()
+        .find_map(|key| raw.get(key).and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_string()
 }

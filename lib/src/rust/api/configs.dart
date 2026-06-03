@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import '../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `value_to_string`
+// These functions are ignored because they are not marked as `pub`: `stash_patch_body`, `value_to_string`
 
 /// `GET /configs` — full general config snapshot.
 Future<String> configs({required MihomoTarget target}) =>
@@ -20,12 +20,13 @@ Future<String> configMode({required MihomoTarget target}) =>
 
 /// `PATCH /configs` — pass-through. The full schema lives in mihomo's
 /// [`hub/route/configs.go`](https://github.com/MetaCubeX/mihomo/blob/Alpha/hub/route/configs.go);
-/// callers send any subset of those keys (`mode`, `log-level`, `allow-lan`,
+/// callers can send any subset of those keys (`mode`, `log-level`, `allow-lan`,
 /// `port`, `socks-port`, `mixed-port`, `redir-port`, `tproxy-port`,
 /// `bind-address`, `ipv6`, `sniffing`, `tcp-concurrent`, `interface-name`,
 /// `find-process-mode`, `skip-auth-prefixes`, `lan-allowed-ips`,
 /// `lan-disallowed-ips`, `tun`, `tuic-server`, `ss-config`, `vmess-config`,
-/// `tcptun-config`, `udptun-config`).
+/// `tcptun-config`, `udptun-config`). Stash is filtered to its supported
+/// subset: `mode`, `log-level`, `mixed-port`.
 Future<void> patchConfigs({
   required MihomoTarget target,
   required String bodyJson,

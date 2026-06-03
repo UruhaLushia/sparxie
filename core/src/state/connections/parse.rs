@@ -8,7 +8,7 @@ pub(super) fn parse_connection(item: &Value) -> Connection {
         id: take_string(Some(item), "id"),
         host: take_string(metadata, "host"),
         network: take_string(metadata, "network"),
-        conn_type: take_string(metadata, "type"),
+        conn_type: take_first_string(metadata, &["type", "inbound"]),
         source_ip: take_string(metadata, "sourceIP"),
         source_port: take_u32(metadata, "sourcePort"),
         destination_ip: take_string(metadata, "destinationIP"),
@@ -35,8 +35,8 @@ pub(super) fn parse_connection(item: &Value) -> Connection {
                     .collect()
             })
             .unwrap_or_default(),
-        upload: item.get("upload").and_then(|v| v.as_u64()).unwrap_or(0),
-        download: item.get("download").and_then(|v| v.as_u64()).unwrap_or(0),
+        upload: take_counter(Some(item), "upload"),
+        download: take_counter(Some(item), "download"),
         upload_speed: 0,
         download_speed: 0,
         start: take_string(Some(item), "start"),
@@ -45,11 +45,7 @@ pub(super) fn parse_connection(item: &Value) -> Connection {
 }
 
 fn take_string(value: Option<&Value>, key: &str) -> String {
-    value
-        .and_then(|v| v.get(key))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string()
+    value_to_string(value.and_then(|v| v.get(key)))
 }
 
 fn take_u32(value: Option<&Value>, key: &str) -> u32 {
@@ -64,4 +60,29 @@ fn take_u32(value: Option<&Value>, key: &str) -> u32 {
         return s.parse::<u32>().unwrap_or(0);
     }
     0
+}
+
+fn take_counter(value: Option<&Value>, key: &str) -> u64 {
+    let Some(raw) = value.and_then(|v| v.get(key)) else {
+        return 0;
+    };
+    raw.as_u64()
+        .or_else(|| raw.get("total").and_then(Value::as_u64))
+        .unwrap_or(0)
+}
+
+fn take_first_string(value: Option<&Value>, keys: &[&str]) -> String {
+    keys.iter()
+        .map(|key| take_string(value, key))
+        .find(|s| !s.is_empty())
+        .unwrap_or_default()
+}
+
+fn value_to_string(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Number(n)) => n.to_string(),
+        Some(Value::Bool(b)) => b.to_string(),
+        _ => String::new(),
+    }
 }
