@@ -6,10 +6,11 @@
 import '../../api.dart';
 import '../../frb_generated.dart';
 import '../../utils/error.dart';
+import 'catalog.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `proxy_delay_with_client`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// `GET /proxies/{name}/delay` — returns the measured delay in ms, or `0` if
 /// upstream returned non-success without an HTTP body. `expected_status`
@@ -64,6 +65,55 @@ Future<List<ProxyDelayEntry>> proxyGroupBatchDelay({
   concurrency: concurrency,
 );
 
+/// Concurrent group delay test that emits each node as soon as it finishes.
+Stream<ProxyDelayEvent> proxyGroupDelayStream({
+  required MihomoTarget target,
+  required String group,
+  required String testUrl,
+  required int timeoutMs,
+  String? expectedStatus,
+  required int concurrency,
+  required ProxyMemberSort memberSort,
+  required int windowOffset,
+  required int windowLimit,
+  required int windowMembersHash,
+}) => RustLib.instance.api.crateApiProxiesDelayProxyGroupDelayStream(
+  target: target,
+  group: group,
+  testUrl: testUrl,
+  timeoutMs: timeoutMs,
+  expectedStatus: expectedStatus,
+  concurrency: concurrency,
+  memberSort: memberSort,
+  windowOffset: windowOffset,
+  windowLimit: windowLimit,
+  windowMembersHash: windowMembersHash,
+);
+
+Future<ProxyDelayEvent> proxyDelayWindow({
+  required MihomoTarget target,
+  required String group,
+  required String name,
+  required String testUrl,
+  required int timeoutMs,
+  String? expectedStatus,
+  required ProxyMemberSort memberSort,
+  required int windowOffset,
+  required int windowLimit,
+  required int windowMembersHash,
+}) => RustLib.instance.api.crateApiProxiesDelayProxyDelayWindow(
+  target: target,
+  group: group,
+  name: name,
+  testUrl: testUrl,
+  timeoutMs: timeoutMs,
+  expectedStatus: expectedStatus,
+  memberSort: memberSort,
+  windowOffset: windowOffset,
+  windowLimit: windowLimit,
+  windowMembersHash: windowMembersHash,
+);
+
 class ProxyDelayEntry {
   final String name;
   final int delay;
@@ -83,4 +133,42 @@ class ProxyDelayEntry {
           runtimeType == other.runtimeType &&
           name == other.name &&
           delay == other.delay;
+}
+
+class ProxyDelayEvent {
+  final String name;
+  final int delay;
+  final int windowOffset;
+  final int windowMembersHash;
+  final List<ProxyMemberEntry> windowEntries;
+
+  const ProxyDelayEvent({
+    required this.name,
+    required this.delay,
+    required this.windowOffset,
+    required this.windowMembersHash,
+    required this.windowEntries,
+  });
+
+  static Future<ProxyDelayEvent> default_() =>
+      RustLib.instance.api.crateApiProxiesDelayProxyDelayEventDefault();
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      delay.hashCode ^
+      windowOffset.hashCode ^
+      windowMembersHash.hashCode ^
+      windowEntries.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyDelayEvent &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          delay == other.delay &&
+          windowOffset == other.windowOffset &&
+          windowMembersHash == other.windowMembersHash &&
+          windowEntries == other.windowEntries;
 }

@@ -150,9 +150,12 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     final target = _target();
     if (target == null || _testingGroup.contains(group.name)) return;
     final testUrl = _resolveTestUrl(group);
+    final window = widget.session.proxies.currentMemberWindowRequest(
+      group.name,
+    );
     setState(() => _testingGroup.add(group.name));
     try {
-      if (widget.prefs.delayTestUseGroupApi) {
+      if (widget.prefs.delayTestUseGroupApi && !widget.session.isStash.value) {
         final delays = await rust.groupDelay(
           target: target,
           group: group.name,
@@ -161,15 +164,21 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
           concurrency: widget.prefs.delayTestConcurrency,
         );
         widget.session.proxies.applyGroupDelay(delays);
+        await _reloadDelayWindow(target, group, window);
       } else {
-        final delays = await rust.proxyGroupBatchDelay(
+        await for (final event in rust.proxyGroupDelayStream(
           target: target,
           group: group.name,
           testUrl: testUrl,
           timeoutMs: widget.prefs.delayTestTimeoutMs,
           concurrency: widget.prefs.delayTestConcurrency,
-        );
-        widget.session.proxies.applyProxyDelay(delays);
+          memberSort: _memberSort(widget.prefs.proxiesSort),
+          windowOffset: window?.offset ?? 0,
+          windowLimit: window?.limit ?? 0,
+          windowMembersHash: window?.membersHash ?? 0,
+        )) {
+          widget.session.proxies.applyProxyDelayEvent(group.name, event);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -185,17 +194,46 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   Future<void> _testNode(ProxyGroup group, String name) async {
     final target = _target();
     if (target == null) return;
+    final window = widget.session.proxies.currentMemberWindowRequest(
+      group.name,
+    );
     try {
-      final ms = await rust.proxyDelay(
+      final event = await rust.proxyDelayWindow(
         target: target,
+        group: group.name,
         name: name,
         testUrl: _resolveTestUrl(group),
         timeoutMs: widget.prefs.delayTestTimeoutMs,
+        memberSort: _memberSort(widget.prefs.proxiesSort),
+        windowOffset: window?.offset ?? 0,
+        windowLimit: window?.limit ?? 0,
+        windowMembersHash: window?.membersHash ?? 0,
       );
-      widget.session.proxies.applyNodeDelay(name, ms.toInt());
+      widget.session.proxies.applyProxyDelayEvent(group.name, event);
     } catch (_) {
       widget.session.proxies.applyNodeDelay(name, 0);
     }
+  }
+
+  Future<void> _reloadDelayWindow(
+    rust.MihomoTarget target,
+    ProxyGroup group,
+    ProxyMemberWindowRequest? window,
+  ) async {
+    if (window == null || widget.prefs.proxiesSort != ProxiesSort.delay) return;
+    final entries = await rust.proxyGroupMembers(
+      target: target,
+      group: group.name,
+      offset: window.offset,
+      limit: window.limit,
+      memberSort: rust.ProxyMemberSort.delay,
+    );
+    widget.session.proxies.applyGroupMembers(
+      group.name,
+      window.membersHash,
+      window.offset,
+      entries,
+    );
   }
 
   @override

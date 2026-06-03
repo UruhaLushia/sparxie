@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
 use flutter_rust_bridge::frb;
@@ -157,6 +157,52 @@ pub(super) fn merge_nodes(target: &MihomoTarget, incoming: HashMap<String, Cache
             }
         }
         changed
+    });
+}
+
+pub(super) fn update_node_delays<'a>(
+    target: &MihomoTarget,
+    delays: impl IntoIterator<Item = (&'a str, i32)>,
+) {
+    let mut delays: HashMap<&str, i32> = delays.into_iter().collect();
+    if delays.is_empty() {
+        return;
+    }
+    let _ = with_catalog(target, |catalog| {
+        let mut changed_ids = HashSet::new();
+        for (id, name) in catalog.names.iter().enumerate() {
+            let Some(delay) = delays.remove(name.as_str()) else {
+                continue;
+            };
+            let Some(slot) = catalog.nodes.get_mut(id) else {
+                continue;
+            };
+            match slot {
+                Some(node) if node.delay != delay => {
+                    node.delay = delay;
+                    changed_ids.insert(id);
+                }
+                None => {
+                    *slot = Some(CachedNode {
+                        proxy_type: "Proxy".to_string(),
+                        delay,
+                    });
+                    changed_ids.insert(id);
+                }
+                _ => {}
+            }
+            if delays.is_empty() {
+                break;
+            }
+        }
+        if changed_ids.is_empty() {
+            return;
+        }
+        for group in catalog.groups.values_mut() {
+            if group.members.iter().any(|id| changed_ids.contains(id)) {
+                group.clear_sorted_members();
+            }
+        }
     });
 }
 

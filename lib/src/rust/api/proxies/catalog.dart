@@ -8,7 +8,7 @@ import '../../frb_generated.dart';
 import '../../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `cached_group_member_names`, `cached_node`, `group_order`, `provider_nodes`, `proxy_delay`
+// These functions are ignored because they are not marked as `pub`: `cached_group_member_names`, `cached_node`, `group_order`, `provider_nodes`, `proxy_delay`, `same_member_order`, `update_cached_node_delay_window`, `update_cached_node_delay`, `update_cached_node_delays`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Structured proxy + group catalog. Rust parses mihomo's `/proxies`, applies

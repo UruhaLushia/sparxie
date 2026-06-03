@@ -228,12 +228,64 @@ pub async fn proxy_group_members(
 
 pub(crate) async fn cached_group_member_names(
     target: MihomoTarget,
-    group: String,
+    group: &str,
 ) -> Result<Vec<String>, MihomoError> {
     if !cache::has_catalog(&target) {
         let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
-    Ok(cache::member_names(&target, &group))
+    Ok(cache::member_names(&target, group))
+}
+
+pub(crate) fn update_cached_node_delay(target: &MihomoTarget, name: &str, delay: i32) {
+    cache::update_node_delays(target, [(name, delay)]);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn update_cached_node_delay_window(
+    target: &MihomoTarget,
+    group: &str,
+    member_sort: ProxyMemberSort,
+    window_offset: u32,
+    window_limit: u32,
+    _window_members_hash: u32,
+    name: &str,
+    delay: i32,
+) -> Option<(bool, Vec<ProxyMemberEntry>)> {
+    if window_limit == 0 {
+        update_cached_node_delay(target, name, delay);
+        return None;
+    }
+    let before = cache::member_entries(target, group, window_offset, window_limit, member_sort)
+        .unwrap_or_default();
+    let visible_delay_changed = before
+        .iter()
+        .find(|entry| entry.name == name)
+        .is_some_and(|entry| entry.delay != delay);
+
+    if member_sort != ProxyMemberSort::Delay {
+        update_cached_node_delay(target, name, delay);
+        return visible_delay_changed.then(|| (true, Vec::new()));
+    }
+
+    update_cached_node_delay(target, name, delay);
+    let after = cache::member_entries(target, group, window_offset, window_limit, member_sort)
+        .unwrap_or_default();
+    if same_member_order(&before, &after) {
+        visible_delay_changed.then(|| (true, Vec::new()))
+    } else {
+        Some((false, after))
+    }
+}
+
+pub(crate) fn update_cached_node_delays<'a>(
+    target: &MihomoTarget,
+    delays: impl IntoIterator<Item = (&'a str, i32)>,
+) {
+    cache::update_node_delays(target, delays);
+}
+
+fn same_member_order(a: &[ProxyMemberEntry], b: &[ProxyMemberEntry]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.name == b.name)
 }
 
 fn group_order(

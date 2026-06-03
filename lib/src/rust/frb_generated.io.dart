@@ -57,6 +57,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<ProxyDelayEvent> dco_decode_StreamSink_proxy_delay_event_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<TrafficSample> dco_decode_StreamSink_traffic_sample_Sse(
     dynamic raw,
   );
@@ -170,6 +175,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProxyDelayEntry dco_decode_proxy_delay_entry(dynamic raw);
 
   @protected
+  ProxyDelayEvent dco_decode_proxy_delay_event(dynamic raw);
+
+  @protected
   ProxyGroupEntry dco_decode_proxy_group_entry(dynamic raw);
 
   @protected
@@ -226,6 +234,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<MemorySample> sse_decode_StreamSink_memory_sample_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<ProxyDelayEvent> sse_decode_StreamSink_proxy_delay_event_Sse(
     SseDeserializer deserializer,
   );
 
@@ -363,6 +376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProxyDelayEntry sse_decode_proxy_delay_entry(SseDeserializer deserializer);
 
   @protected
+  ProxyDelayEvent sse_decode_proxy_delay_event(SseDeserializer deserializer);
+
+  @protected
   ProxyGroupEntry sse_decode_proxy_group_entry(SseDeserializer deserializer);
 
   @protected
@@ -429,6 +445,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_memory_sample_Sse(
     RustStreamSink<MemorySample> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_proxy_delay_event_Sse(
+    RustStreamSink<ProxyDelayEvent> self,
     SseSerializer serializer,
   );
 
@@ -603,6 +625,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_proxy_delay_entry(
     ProxyDelayEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_proxy_delay_event(
+    ProxyDelayEvent self,
     SseSerializer serializer,
   );
 
