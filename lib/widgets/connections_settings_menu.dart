@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
+import '../platform_capabilities.dart';
 
 /// AppBar tune button for the connections page. Opens a right-anchored
 /// settings sheet exposing connection-list preferences.
@@ -74,46 +75,53 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                 Expanded(
                   child: ListenableBuilder(
                     listenable: prefs,
-                    builder: (context, _) => ListView(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      children: [
-                        _SettingsBlock(
-                          label: '连接列表刷新间隔',
-                          hint:
-                              '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加 mihomo 与设备负载。',
-                          child: _RefreshChips(prefs: prefs),
-                        ),
-                        SwitchListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
+                    builder: (context, _) {
+                      final canResolveProcess = supportsProcessIdentity;
+                      return ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        children: [
+                          _SettingsBlock(
+                            label: '连接列表刷新间隔',
+                            hint:
+                                '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加 mihomo 与设备负载。',
+                            child: _RefreshChips(prefs: prefs),
                           ),
-                          title: const Text('显示进程图标'),
-                          subtitle: const Text('仅本机内核;按连接所属应用显示图标'),
-                          value: prefs.connectionsShowProcessIcon,
-                          onChanged: prefs.setConnectionsShowProcessIcon,
-                        ),
-                        SwitchListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                            ),
+                            title: const Text('显示进程图标'),
+                            subtitle: const Text('仅本机内核;按连接所属应用显示图标'),
+                            value: prefs.connectionsShowProcessIcon,
+                            onChanged: canResolveProcess
+                                ? prefs.setConnectionsShowProcessIcon
+                                : null,
                           ),
-                          title: const Text('显示应用名称'),
-                          subtitle: const Text('用解析到的应用名替代原始进程名'),
-                          value: prefs.connectionsShowAppName,
-                          onChanged: prefs.setConnectionsShowAppName,
-                        ),
-                        SwitchListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                            ),
+                            title: const Text('显示应用名称'),
+                            subtitle: const Text('用解析到的应用名替代原始进程名'),
+                            value: prefs.connectionsShowAppName,
+                            onChanged: canResolveProcess
+                                ? prefs.setConnectionsShowAppName
+                                : null,
                           ),
-                          title: const Text('来源归类'),
-                          subtitle: const Text('活动连接按来源分组'),
-                          value: prefs.connectionsGroupByProcess,
-                          onChanged: prefs.setConnectionsGroupByProcess,
-                        ),
-                        if (prefs.connectionsGroupByProcess)
-                          _GroupSortRow(prefs: prefs),
-                      ],
-                    ),
+                          SwitchListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                            ),
+                            title: const Text('来源归类'),
+                            subtitle: const Text('活动连接按来源分组'),
+                            value: prefs.connectionsGroupByProcess,
+                            onChanged: prefs.setConnectionsGroupByProcess,
+                          ),
+                          if (prefs.connectionsGroupByProcess)
+                            _GroupSortRow(prefs: prefs),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
