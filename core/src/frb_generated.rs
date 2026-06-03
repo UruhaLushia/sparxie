@@ -942,6 +942,7 @@ fn wire__crate__api__groups__group_delay_impl(
             let api_test_url = <String>::sse_decode(&mut deserializer);
             let api_timeout_ms = <u32>::sse_decode(&mut deserializer);
             let api_expected_status = <Option<String>>::sse_decode(&mut deserializer);
+            let api_concurrency = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::utils::error::MihomoError>(
@@ -952,6 +953,7 @@ fn wire__crate__api__groups__group_delay_impl(
                             api_test_url,
                             api_timeout_ms,
                             api_expected_status,
+                            api_concurrency,
                         )
                         .await?;
                         Ok(output_ok)
@@ -3877,9 +3879,21 @@ impl SseDecode for crate::api::version::VersionInfo {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_version = <String>::sse_decode(deserializer);
         let mut var_isCmfa = <bool>::sse_decode(deserializer);
+        let mut var_isStash = <bool>::sse_decode(deserializer);
+        let mut var_supportsCoreConfig = <bool>::sse_decode(deserializer);
+        let mut var_supportsCoreActions = <bool>::sse_decode(deserializer);
+        let mut var_supportsCoreManagement = <bool>::sse_decode(deserializer);
+        let mut var_supportsCacheFlush = <bool>::sse_decode(deserializer);
+        let mut var_supportsMemory = <bool>::sse_decode(deserializer);
         return crate::api::version::VersionInfo {
             version: var_version,
             is_cmfa: var_isCmfa,
+            is_stash: var_isStash,
+            supports_core_config: var_supportsCoreConfig,
+            supports_core_actions: var_supportsCoreActions,
+            supports_core_management: var_supportsCoreManagement,
+            supports_cache_flush: var_supportsCacheFlush,
+            supports_memory: var_supportsMemory,
         };
     }
 }
@@ -4678,6 +4692,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::version::VersionInfo {
         [
             self.version.into_into_dart().into_dart(),
             self.is_cmfa.into_into_dart().into_dart(),
+            self.is_stash.into_into_dart().into_dart(),
+            self.supports_core_config.into_into_dart().into_dart(),
+            self.supports_core_actions.into_into_dart().into_dart(),
+            self.supports_core_management.into_into_dart().into_dart(),
+            self.supports_cache_flush.into_into_dart().into_dart(),
+            self.supports_memory.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5270,6 +5290,12 @@ impl SseEncode for crate::api::version::VersionInfo {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.version, serializer);
         <bool>::sse_encode(self.is_cmfa, serializer);
+        <bool>::sse_encode(self.is_stash, serializer);
+        <bool>::sse_encode(self.supports_core_config, serializer);
+        <bool>::sse_encode(self.supports_core_actions, serializer);
+        <bool>::sse_encode(self.supports_core_management, serializer);
+        <bool>::sse_encode(self.supports_cache_flush, serializer);
+        <bool>::sse_encode(self.supports_memory, serializer);
     }
 }
 

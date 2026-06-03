@@ -44,21 +44,23 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      // Rebuild on prefs (nav layout decides whether to show core/resources)
-      // and on isCmfa (CMFA hides 内核配置).
-      listenable: Listenable.merge([prefs, session.isCmfa]),
+      listenable: Listenable.merge([
+        prefs,
+        session.supportsCoreConfig,
+        session.supportsCoreActions,
+      ]),
       builder: (context, _) {
         final isCards = prefs.navLayout == NavLayout.cards;
         // 分流规则 has a dedicated 规则 card in cards layout; in wide standard
         // it's a rail item. Only the compact bottom bar shows its tile here.
         final showRules = !isCards && !railManagesPages;
-        // 核心操作 is a rail item in wide standard; shown here otherwise.
-        final showCoreActions = !railManagesPages;
+        final showCoreActions =
+            !railManagesPages && session.supportsCoreActions.value;
         // 内核配置 / 外部资源 are hero cards in cards layout and rail items in
         // wide standard; only the compact bottom bar (neither) needs the
         // static tiles below.
         final showCoreResources = !isCards && !railManagesPages;
-        final showCore = showCoreResources && !session.isCmfa.value;
+        final showCore = showCoreResources && session.supportsCoreConfig.value;
         final showResources = showCoreResources;
 
         // Overflow rail items lead the list, then the settings tiles — one

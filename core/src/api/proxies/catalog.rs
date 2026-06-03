@@ -55,7 +55,8 @@ pub async fn proxy_catalog(
     include_hidden: bool,
     filter: String,
 ) -> Result<ProxyCatalog, MihomoError> {
-    let raw = target.client()?.get_json("proxies").await?;
+    let client = target.client()?;
+    let raw = client.get_json("proxies").await?;
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
         return Ok(ProxyCatalog::default());
     };
@@ -128,12 +129,15 @@ pub async fn proxy_catalog(
     for (name, id) in name_ids {
         names[id] = name;
     }
+    let previous_nodes = cache::node_details(&target);
     let mut nodes = Vec::with_capacity(names.len());
     for name in &names {
-        nodes.push(proxies.get(name).map(|data| CachedNode {
-            proxy_type: field_or(data, "type", "Proxy"),
-            delay: history_delay(data.get("history")),
-        }));
+        nodes.push(
+            proxies
+                .get(name)
+                .map(cached_node)
+                .or_else(|| previous_nodes.get(name).cloned()),
+        );
     }
     cache::replace_catalog(
         &target,
@@ -151,6 +155,46 @@ pub async fn proxy_catalog(
     })
 }
 
+async fn provider_nodes(
+    client: &crate::client::MihomoClient,
+) -> Result<HashMap<String, CachedNode>, MihomoError> {
+    let raw = client.get_json("providers/proxies").await?;
+    let mut out = HashMap::new();
+    let Some(providers) = raw.get("providers").and_then(Value::as_object) else {
+        return Ok(out);
+    };
+    for provider in providers.values() {
+        let Some(nodes) = provider.get("proxies").and_then(Value::as_array) else {
+            continue;
+        };
+        for node in nodes {
+            let name = field_or(node, "name", "");
+            if !name.is_empty() {
+                out.insert(name, cached_node(node));
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn cached_node(data: &Value) -> CachedNode {
+    CachedNode {
+        proxy_type: field_or(data, "type", "Proxy"),
+        delay: proxy_delay(data),
+    }
+}
+
+fn proxy_delay(data: &Value) -> i32 {
+    let history = history_delay(data.get("history"));
+    if history >= 0 {
+        history
+    } else {
+        data.get("delay")
+            .map(super::value::value_to_i32)
+            .unwrap_or(-1)
+    }
+}
+
 /// Windowed members for one proxy group. The full member list stays in Rust so
 /// very large groups do not cross the bridge on every catalog refresh.
 pub async fn proxy_group_members(
@@ -163,10 +207,22 @@ pub async fn proxy_group_members(
     if !cache::has_catalog(&target) {
         let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
+    if cache::group_has_missing_nodes(&target, &group) {
+        let client = target.client()?;
+        if let Ok(nodes) = provider_nodes(&client).await {
+            cache::merge_nodes(&target, nodes);
+        }
+    }
     if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
         return Ok(entries);
     }
     let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+    if cache::group_has_missing_nodes(&target, &group) {
+        let client = target.client()?;
+        if let Ok(nodes) = provider_nodes(&client).await {
+            cache::merge_nodes(&target, nodes);
+        }
+    }
     Ok(cache::member_entries(&target, &group, offset, limit, member_sort).unwrap_or_default())
 }
 

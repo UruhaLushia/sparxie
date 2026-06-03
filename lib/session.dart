@@ -135,9 +135,13 @@ class MihomoSession {
   final ValueNotifier<int> ruleCount = ValueNotifier(0);
 
   /// True when the active controller is a CMFA-flavored mihomo build.
-  /// Driven entirely by [versionString] — its substring `cmfa` is the only
-  /// signal mihomo exposes today (no boolean field on `/version`).
   final ValueNotifier<bool> isCmfa = ValueNotifier(false);
+
+  final ValueNotifier<bool> supportsCoreConfig = ValueNotifier(false);
+  final ValueNotifier<bool> supportsCoreActions = ValueNotifier(false);
+  final ValueNotifier<bool> supportsCoreManagement = ValueNotifier(false);
+  final ValueNotifier<bool> supportsCacheFlush = ValueNotifier(false);
+  final ValueNotifier<bool> supportsMemory = ValueNotifier(false);
 
   /// While true, incoming connection deltas are dropped on the floor —
   /// the visible row list and totals stay frozen at the last applied
@@ -336,6 +340,13 @@ class MihomoSession {
   void _resubscribeAll() {
     _cancelAll();
     isStreaming.value = false;
+    traffic.value = rust.TrafficSample(
+      up: BigInt.zero,
+      down: BigInt.zero,
+      upTotal: BigInt.zero,
+      downTotal: BigInt.zero,
+    );
+    memory.value = rust.MemorySample(inuse: BigInt.zero, oslimit: BigInt.zero);
     connections.reset();
     connectionsTotals.value = ConnectionsTotals.zero;
     logs.reset();
@@ -345,6 +356,11 @@ class MihomoSession {
     _queuedProxyMemberLoads.clear();
     versionString.value = '';
     isCmfa.value = false;
+    supportsCoreConfig.value = false;
+    supportsCoreActions.value = false;
+    supportsCoreManagement.value = false;
+    supportsCacheFlush.value = false;
+    supportsMemory.value = false;
     connectionsPaused.value = false;
     ruleCount.value = 0;
     _iconsWarmed = false;
@@ -354,7 +370,6 @@ class MihomoSession {
     }
     error.value = null;
     _subscribeTraffic();
-    _subscribeMemory();
     _subscribeConnections();
     _subscribeLogs();
     _startProxiesPoll();
@@ -428,8 +443,14 @@ class MihomoSession {
       if (!identical(_activeKey, controller)) return;
       versionString.value = info.version;
       isCmfa.value = info.isCmfa;
+      supportsCoreConfig.value = info.supportsCoreConfig;
+      supportsCoreActions.value = info.supportsCoreActions;
+      supportsCoreManagement.value = info.supportsCoreManagement;
+      supportsCacheFlush.value = info.supportsCacheFlush;
+      supportsMemory.value = info.supportsMemory;
+      if (info.supportsMemory && _memorySub == null) _subscribeMemory();
     } catch (_) {
-      // Non-critical; absent version just means CMFA features default to false.
+      // Non-critical; capability-gated UI stays hidden until a later reconnect.
     }
   }
 
@@ -608,6 +629,11 @@ class MihomoSession {
     processIcons.dispose();
     versionString.dispose();
     isCmfa.dispose();
+    supportsCoreConfig.dispose();
+    supportsCoreActions.dispose();
+    supportsCoreManagement.dispose();
+    supportsCacheFlush.dispose();
+    supportsMemory.dispose();
     ruleCount.dispose();
     connectionsPaused.dispose();
     error.dispose();

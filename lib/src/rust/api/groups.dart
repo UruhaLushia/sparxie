@@ -8,15 +8,15 @@ import '../frb_generated.dart';
 import '../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `value_to_i32`
+// These functions are ignored because they are not marked as `pub`: `concurrent_group_delay`, `value_to_i32`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
 /// `GET /group` — only proxy groups, in stable order.
 Future<String> groups({required MihomoTarget target}) =>
     RustLib.instance.api.crateApiGroupsGroups(target: target);
 
-/// `GET /group/{name}/delay` — runs a parallel URL test for every node in the
-/// group and returns the resulting per-node delays.
+/// Test every node in a group. Mihomo uses `/group/{name}/delay`; Stash falls
+/// back to concurrent `/proxies/{node}/delay` calls because it has no `/group`.
 ///
 /// **Side effect (mihomo behavior):** for non-Selector groups (URLTest,
 /// Fallback, etc.) the call clears the persisted "fixed" selection before
@@ -27,12 +27,14 @@ Future<List<GroupDelayEntry>> groupDelay({
   required String testUrl,
   required int timeoutMs,
   String? expectedStatus,
+  int? concurrency,
 }) => RustLib.instance.api.crateApiGroupsGroupDelay(
   target: target,
   group: group,
   testUrl: testUrl,
   timeoutMs: timeoutMs,
   expectedStatus: expectedStatus,
+  concurrency: concurrency,
 );
 
 class GroupDelayEntry {

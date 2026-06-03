@@ -19,6 +19,7 @@ use crate::client::MihomoClient;
 // so each sub-module needs to be `pub`. The flat re-exports below remain so
 // downstream Rust callers (and codegen scanners) can also reach symbols via
 // `crate::api::*`.
+pub(crate) mod backend;
 pub mod cache;
 pub mod configs;
 pub mod connections;

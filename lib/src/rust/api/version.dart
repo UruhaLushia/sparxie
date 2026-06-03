@@ -8,9 +8,10 @@ import '../frb_generated.dart';
 import '../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `info_from_probe`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 
-/// `GET /version` → `{version, meta}`.
+/// Raw version endpoint, with Stash falling back to `/`.
 Future<String> version({required MihomoTarget target}) =>
     RustLib.instance.api.crateApiVersionVersion(target: target);
 
@@ -20,14 +21,37 @@ Future<VersionInfo> versionInfo({required MihomoTarget target}) =>
 class VersionInfo {
   final String version;
   final bool isCmfa;
+  final bool isStash;
+  final bool supportsCoreConfig;
+  final bool supportsCoreActions;
+  final bool supportsCoreManagement;
+  final bool supportsCacheFlush;
+  final bool supportsMemory;
 
-  const VersionInfo({required this.version, required this.isCmfa});
+  const VersionInfo({
+    required this.version,
+    required this.isCmfa,
+    required this.isStash,
+    required this.supportsCoreConfig,
+    required this.supportsCoreActions,
+    required this.supportsCoreManagement,
+    required this.supportsCacheFlush,
+    required this.supportsMemory,
+  });
 
   static Future<VersionInfo> default_() =>
       RustLib.instance.api.crateApiVersionVersionInfoDefault();
 
   @override
-  int get hashCode => version.hashCode ^ isCmfa.hashCode;
+  int get hashCode =>
+      version.hashCode ^
+      isCmfa.hashCode ^
+      isStash.hashCode ^
+      supportsCoreConfig.hashCode ^
+      supportsCoreActions.hashCode ^
+      supportsCoreManagement.hashCode ^
+      supportsCacheFlush.hashCode ^
+      supportsMemory.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -35,5 +59,11 @@ class VersionInfo {
       other is VersionInfo &&
           runtimeType == other.runtimeType &&
           version == other.version &&
-          isCmfa == other.isCmfa;
+          isCmfa == other.isCmfa &&
+          isStash == other.isStash &&
+          supportsCoreConfig == other.supportsCoreConfig &&
+          supportsCoreActions == other.supportsCoreActions &&
+          supportsCoreManagement == other.supportsCoreManagement &&
+          supportsCacheFlush == other.supportsCacheFlush &&
+          supportsMemory == other.supportsMemory;
 }

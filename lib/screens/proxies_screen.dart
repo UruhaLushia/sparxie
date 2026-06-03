@@ -158,6 +158,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
           group: group.name,
           testUrl: testUrl,
           timeoutMs: widget.prefs.delayTestTimeoutMs,
+          concurrency: widget.prefs.delayTestConcurrency,
         );
         widget.session.proxies.applyGroupDelay(delays);
       } else {
