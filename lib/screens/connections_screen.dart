@@ -514,7 +514,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   double _rowHeight = _baseRowHeight;
 
   final ScrollController _scrollController = ScrollController();
-  // Coalesce ensureWindow calls during fast scrolls — one call per frame.
+  // Coalesce ensureWindow calls to one per frame.
   bool _scheduled = false;
 
   @override
@@ -557,10 +557,16 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   void _onChange() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _scheduleEnsureWindow();
   }
 
   void _onScroll() {
+    _scheduleEnsureWindow();
+  }
+
+  void _scheduleEnsureWindow() {
     if (_scheduled) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {

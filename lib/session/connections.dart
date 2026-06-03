@@ -288,7 +288,7 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   /// Keep only five rows above and below the actual viewport in Dart memory.
   static const int _windowOverscan = 5;
-  static const int _windowRefetchMargin = 2;
+  static const int _windowRefetchMargin = _windowOverscan;
 
   static const Duration _refetchDebounce = Duration(milliseconds: 50);
   static const Duration _rowRetireDelay = Duration(milliseconds: 250);
@@ -475,6 +475,14 @@ class ConnectionListNotifier extends ChangeNotifier {
       _refetchAgain = true;
       return;
     }
+    if (force) {
+      _refetchTimer?.cancel();
+      _refetchTimer = null;
+      final force = _pendingRefetchForce;
+      _pendingRefetchForce = false;
+      unawaited(_runRefetch(force: force));
+      return;
+    }
     _refetchTimer?.cancel();
     _refetchTimer = Timer(_refetchDebounce, () {
       _refetchTimer = null;
@@ -514,7 +522,11 @@ class ConnectionListNotifier extends ChangeNotifier {
         _refetchAgain = false;
         final force = _pendingRefetchForce;
         _pendingRefetchForce = false;
-        _scheduleRefetch(force: force);
+        if (force) {
+          unawaited(_runRefetch(force: force));
+        } else {
+          _scheduleRefetch();
+        }
       }
     }
   }
