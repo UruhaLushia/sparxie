@@ -20,6 +20,8 @@ class ConnectionDetailSheet extends StatelessWidget {
     final source = '${row.sourceIp}:${row.sourcePort}';
     final dest = _destinationText(row);
     final bytes = row.bytes.value;
+    final hasConnectionLogs =
+        showConnectionLog && row.connectionLogs.isNotEmpty;
     final entries = <(String, String)>[
       ('主机', row.host),
       if (row.id.isNotEmpty) ('连接 ID', row.id),
@@ -38,8 +40,6 @@ class ConnectionDetailSheet extends StatelessWidget {
       ('规则', row.rule.isEmpty ? '-' : row.rule),
       if (row.rulePayload.isNotEmpty) ('匹配规则', row.rulePayload),
       ('代理链', row.chainsLabel.isEmpty ? '-' : row.chainsLabel),
-      if (showConnectionLog && row.connectionLogs.isNotEmpty)
-        ('连接日志', row.connectionLogs.join('\n')),
       ('上传量', formatBytes(bytes.upload)),
       ('下载量', formatBytes(bytes.download)),
       if (row.start != null) ('连接建立时间', row.start!.toLocal().toString()),
@@ -76,9 +76,16 @@ class ConnectionDetailSheet extends StatelessWidget {
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
-                itemCount: entries.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
+                itemCount: entries.length + (hasConnectionLogs ? 1 : 0),
+                separatorBuilder: (_, index) => SizedBox(
+                  height: hasConnectionLogs && index == entries.length - 1
+                      ? 12
+                      : 6,
+                ),
                 itemBuilder: (context, index) {
+                  if (hasConnectionLogs && index == entries.length) {
+                    return _ConnectionLogSection(logs: row.connectionLogs);
+                  }
                   final (label, value) = entries[index];
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,6 +111,65 @@ class ConnectionDetailSheet extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ConnectionLogSection extends StatelessWidget {
+  const _ConnectionLogSection({required this.logs});
+
+  final List<String> logs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textStyle = theme.textTheme.bodySmall?.copyWith(
+      fontFamily: 'monospace',
+      color: scheme.onSurface,
+      height: 1.35,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '连接日志',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.55),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < logs.length; i++) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: SelectableText(logs[i], style: textStyle),
+                ),
+                if (i != logs.length - 1)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: scheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
