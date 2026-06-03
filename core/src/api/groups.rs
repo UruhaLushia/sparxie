@@ -1,6 +1,7 @@
 use crate::MihomoError;
 
 use super::backend::{BackendKind, probe_with_client};
+use super::proxies::catalog::update_cached_node_delays;
 use super::proxies::delay::proxy_group_batch_delay;
 use super::{MihomoTarget, urlencode};
 
@@ -79,6 +80,10 @@ pub async fn group_delay(
         });
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
+    update_cached_node_delays(
+        &target,
+        out.iter().map(|entry| (entry.name.as_str(), entry.delay)),
+    );
     Ok(out)
 }
 

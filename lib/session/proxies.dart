@@ -106,6 +106,19 @@ class ProxiesNotifier extends ChangeNotifier {
     _applyVisibleDelays(delayByName);
   }
 
+  void applyProxyDelayEvent(String groupName, rust.ProxyDelayEvent event) {
+    if (event.windowEntries.isNotEmpty) {
+      applyGroupMembers(
+        groupName,
+        event.windowMembersHash,
+        event.windowOffset,
+        event.windowEntries,
+      );
+    } else if (event.name.isNotEmpty) {
+      _setVisibleDelay(event.name, event.delay);
+    }
+  }
+
   void applyNodeDelay(String nodeName, int delayMs) {
     _setVisibleDelay(nodeName, delayMs);
   }
@@ -127,6 +140,10 @@ class ProxiesNotifier extends ChangeNotifier {
     int lastIndex,
   ) {
     return _groupsById[groupName]?._windowRequest(firstIndex, lastIndex);
+  }
+
+  ProxyMemberWindowRequest? currentMemberWindowRequest(String groupName) {
+    return _groupsById[groupName]?._currentWindowRequest();
   }
 
   void applyGroupMembers(
@@ -294,6 +311,15 @@ class ProxyGroup {
       return null;
     }
     return ProxyMemberWindowRequest(offset, limit, _membersHash);
+  }
+
+  ProxyMemberWindowRequest? _currentWindowRequest() {
+    if (_members.isEmpty) return null;
+    return ProxyMemberWindowRequest(
+      _memberOffset,
+      _members.length,
+      _membersHash,
+    );
   }
 
   bool _setMemberWindow(int offset, List<rust.ProxyMemberEntry> entries) {
