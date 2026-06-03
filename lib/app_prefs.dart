@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'config_store.dart';
+import 'platform_capabilities.dart';
 
 /// How a proxy group's nodes are ordered in the grid.
 enum ProxiesSort {
@@ -286,6 +287,7 @@ class AppPrefs extends ChangeNotifier {
 
   /// Show each connection's owning-process icon (local backend only).
   bool get connectionsShowProcessIcon =>
+      supportsProcessIdentity &&
       _bool(_kShowProcessIcon, defaultShowProcessIcon);
 
   Future<void> setConnectionsShowProcessIcon(bool value) async {
@@ -294,7 +296,8 @@ class AppPrefs extends ChangeNotifier {
   }
 
   /// Show the resolved application name in place of the raw process name.
-  bool get connectionsShowAppName => _bool(_kShowAppName, defaultShowAppName);
+  bool get connectionsShowAppName =>
+      supportsProcessIdentity && _bool(_kShowAppName, defaultShowAppName);
 
   Future<void> setConnectionsShowAppName(bool value) async {
     if (value == connectionsShowAppName) return;

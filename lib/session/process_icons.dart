@@ -32,6 +32,7 @@ class ProcessIconCache extends ChangeNotifier {
   final Set<String> _nameRequested = {};
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+  static bool get _isSupported => !kIsWeb && !Platform.isIOS;
 
   ui.Image? iconFor(String key, {int? size}) {
     final imageKey = _imageKey(key, size);
@@ -49,6 +50,7 @@ class ProcessIconCache extends ChangeNotifier {
   }
 
   void request(String key, {int? size}) {
+    if (!_isSupported) return;
     if (key.isEmpty) return;
     final imageKey = _imageKey(key, size);
     if (_images.containsKey(imageKey) ||
@@ -69,6 +71,7 @@ class ProcessIconCache extends ChangeNotifier {
   String _imageKey(String key, int? size) => size == null ? key : '$key@$size';
 
   void requestName(String key) {
+    if (!_isSupported) return;
     if (key.isEmpty) return;
     if (_names.containsKey(key) ||
         _nameMissing.contains(key) ||
