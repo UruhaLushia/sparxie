@@ -137,6 +137,7 @@ class MihomoSession {
   /// True when the active controller is a CMFA-flavored mihomo build.
   final ValueNotifier<bool> isCmfa = ValueNotifier(false);
 
+  final ValueNotifier<bool> isStash = ValueNotifier(false);
   final ValueNotifier<bool> supportsCoreConfig = ValueNotifier(false);
   final ValueNotifier<bool> supportsCoreActions = ValueNotifier(false);
   final ValueNotifier<bool> supportsCoreManagement = ValueNotifier(false);
@@ -356,6 +357,7 @@ class MihomoSession {
     _queuedProxyMemberLoads.clear();
     versionString.value = '';
     isCmfa.value = false;
+    isStash.value = false;
     supportsCoreConfig.value = false;
     supportsCoreActions.value = false;
     supportsCoreManagement.value = false;
@@ -443,6 +445,7 @@ class MihomoSession {
       if (!identical(_activeKey, controller)) return;
       versionString.value = info.version;
       isCmfa.value = info.isCmfa;
+      isStash.value = info.isStash;
       supportsCoreConfig.value = info.supportsCoreConfig;
       supportsCoreActions.value = info.supportsCoreActions;
       supportsCoreManagement.value = info.supportsCoreManagement;
@@ -629,6 +632,7 @@ class MihomoSession {
     processIcons.dispose();
     versionString.dispose();
     isCmfa.dispose();
+    isStash.dispose();
     supportsCoreConfig.dispose();
     supportsCoreActions.dispose();
     supportsCoreManagement.dispose();

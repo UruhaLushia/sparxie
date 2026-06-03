@@ -35,6 +35,7 @@ pub(super) fn parse_connection(item: &Value) -> Connection {
                     .collect()
             })
             .unwrap_or_default(),
+        connection_logs: take_string_list(metadata, "log"),
         upload: take_counter(Some(item), "upload"),
         download: take_counter(Some(item), "download"),
         upload_speed: 0,
@@ -75,6 +76,19 @@ fn take_first_string(value: Option<&Value>, keys: &[&str]) -> String {
     keys.iter()
         .map(|key| take_string(value, key))
         .find(|s| !s.is_empty())
+        .unwrap_or_default()
+}
+
+fn take_string_list(value: Option<&Value>, key: &str) -> Vec<String> {
+    value
+        .and_then(|v| v.get(key))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .map(|item| value_to_string(Some(item)))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
