@@ -1,6 +1,14 @@
 # Sparxie
 
-跨平台 mihomo 控制器。Flutter UI + Rust 后端，通过 flutter_rust_bridge 在进程内直连。
+跨平台代理控制器。Flutter UI + Rust 后端，通过 flutter_rust_bridge 在进程内直连
+
+## 支持的应用
+
+| 应用 / 后端 | 状态 | 说明 |
+|---|---|---|
+| mihomo | ✅ 完整支持 | 代理组、节点、规则、连接、日志、流量、配置、缓存、内存、升级 / 重启 |
+| Clash Meta for Android (CMFA) | ✅ 基础支持 | 代理组、连接、日志、流量可用；核心管理和部分配置操作不可用 |
+| Stash | ✅ 基础支持 | 代理组、Provider 节点、连接、日志、流量、基础配置可用；内存、缓存、核心管理不可用 |
 
 ## 平台
 
@@ -9,19 +17,20 @@
 | Android(arm64-v8a / x86_64 / universal) | ✅ |
 | Linux(x86_64 / arm64) | ✅ |
 | Windows(x86_64 / arm64) | ✅ |
-| macOS(Apple Silicon / Intel) | ✅ |
-| iOS | ✅ 未签名 IPA，供 SideStore 等工具自签 |
-| Web | 不支持 (依赖 dart:ffi) |
+| macOS(Apple Silicon) | ✅ |
+| macOS(Intel) | ✅ 仅 Release 构建；非 Release 不编译 |
+| iOS(arm64) | ✅ 未签名 IPA，供 SideStore 等工具自签 |
+| Web | 暂不支持 |
 
 ## 架构
 
 ```
 ┌──────────────┐    FFI    ┌────────────────┐    HTTP/WS   ┌────────┐
-│  Flutter UI  │ ────────→ │  Rust (cdylib) │ ───────────→ │ mihomo │
+│  Flutter UI  │ ────────→ │  Rust (cdylib) │ ───────────→ │ Backend│
 └──────────────┘           └────────────────┘              └────────┘
 ```
 
-所有 mihomo 通信、连接排序/分页、图标缓存都在 Rust 端;Dart 只做渲染。
+所有后端通信、代理组解析、连接排序 / 分页、图标缓存都在 Rust 端；Dart 只做渲染。
 
 ## 开发
 
