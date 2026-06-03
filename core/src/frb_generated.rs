@@ -3230,6 +3230,7 @@ impl SseDecode for crate::state::connections::types::Connection {
         let mut var_rule = <String>::sse_decode(deserializer);
         let mut var_rulePayload = <String>::sse_decode(deserializer);
         let mut var_chains = <Vec<String>>::sse_decode(deserializer);
+        let mut var_connectionLogs = <Vec<String>>::sse_decode(deserializer);
         let mut var_upload = <u64>::sse_decode(deserializer);
         let mut var_download = <u64>::sse_decode(deserializer);
         let mut var_uploadSpeed = <u64>::sse_decode(deserializer);
@@ -3259,6 +3260,7 @@ impl SseDecode for crate::state::connections::types::Connection {
             rule: var_rule,
             rule_payload: var_rulePayload,
             chains: var_chains,
+            connection_logs: var_connectionLogs,
             upload: var_upload,
             download: var_download,
             upload_speed: var_uploadSpeed,
@@ -4166,6 +4168,7 @@ impl flutter_rust_bridge::IntoDart for crate::state::connections::types::Connect
             self.rule.into_into_dart().into_dart(),
             self.rule_payload.into_into_dart().into_dart(),
             self.chains.into_into_dart().into_dart(),
+            self.connection_logs.into_into_dart().into_dart(),
             self.upload.into_into_dart().into_dart(),
             self.download.into_into_dart().into_dart(),
             self.upload_speed.into_into_dart().into_dart(),
@@ -4805,6 +4808,7 @@ impl SseEncode for crate::state::connections::types::Connection {
         <String>::sse_encode(self.rule, serializer);
         <String>::sse_encode(self.rule_payload, serializer);
         <Vec<String>>::sse_encode(self.chains, serializer);
+        <Vec<String>>::sse_encode(self.connection_logs, serializer);
         <u64>::sse_encode(self.upload, serializer);
         <u64>::sse_encode(self.download, serializer);
         <u64>::sse_encode(self.upload_speed, serializer);

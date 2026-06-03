@@ -3167,8 +3167,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Connection dco_decode_connection(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 28)
-      throw Exception('unexpected arr length: expect 28 but see ${arr.length}');
+    if (arr.length != 29)
+      throw Exception('unexpected arr length: expect 29 but see ${arr.length}');
     return Connection(
       id: dco_decode_String(arr[0]),
       host: dco_decode_String(arr[1]),
@@ -3192,12 +3192,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rule: dco_decode_String(arr[19]),
       rulePayload: dco_decode_String(arr[20]),
       chains: dco_decode_list_String(arr[21]),
-      upload: dco_decode_u_64(arr[22]),
-      download: dco_decode_u_64(arr[23]),
-      uploadSpeed: dco_decode_u_64(arr[24]),
-      downloadSpeed: dco_decode_u_64(arr[25]),
-      start: dco_decode_String(arr[26]),
-      isClosed: dco_decode_bool(arr[27]),
+      connectionLogs: dco_decode_list_String(arr[22]),
+      upload: dco_decode_u_64(arr[23]),
+      download: dco_decode_u_64(arr[24]),
+      uploadSpeed: dco_decode_u_64(arr[25]),
+      downloadSpeed: dco_decode_u_64(arr[26]),
+      start: dco_decode_String(arr[27]),
+      isClosed: dco_decode_bool(arr[28]),
     );
   }
 
@@ -3727,6 +3728,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_rule = sse_decode_String(deserializer);
     var var_rulePayload = sse_decode_String(deserializer);
     var var_chains = sse_decode_list_String(deserializer);
+    var var_connectionLogs = sse_decode_list_String(deserializer);
     var var_upload = sse_decode_u_64(deserializer);
     var var_download = sse_decode_u_64(deserializer);
     var var_uploadSpeed = sse_decode_u_64(deserializer);
@@ -3756,6 +3758,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rule: var_rule,
       rulePayload: var_rulePayload,
       chains: var_chains,
+      connectionLogs: var_connectionLogs,
       upload: var_upload,
       download: var_download,
       uploadSpeed: var_uploadSpeed,
@@ -4452,6 +4455,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.rule, serializer);
     sse_encode_String(self.rulePayload, serializer);
     sse_encode_list_String(self.chains, serializer);
+    sse_encode_list_String(self.connectionLogs, serializer);
     sse_encode_u_64(self.upload, serializer);
     sse_encode_u_64(self.download, serializer);
     sse_encode_u_64(self.uploadSpeed, serializer);

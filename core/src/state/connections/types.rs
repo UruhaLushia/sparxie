@@ -27,6 +27,7 @@ pub struct Connection {
     pub rule: String,
     pub rule_payload: String,
     pub chains: Vec<String>,
+    pub connection_logs: Vec<String>,
     pub upload: u64,
     pub download: u64,
     pub upload_speed: u64,

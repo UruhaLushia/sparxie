@@ -29,6 +29,7 @@ class Connection {
   final String rule;
   final String rulePayload;
   final List<String> chains;
+  final List<String> connectionLogs;
   final BigInt upload;
   final BigInt download;
   final BigInt uploadSpeed;
@@ -59,6 +60,7 @@ class Connection {
     required this.rule,
     required this.rulePayload,
     required this.chains,
+    required this.connectionLogs,
     required this.upload,
     required this.download,
     required this.uploadSpeed,
@@ -91,6 +93,7 @@ class Connection {
       rule.hashCode ^
       rulePayload.hashCode ^
       chains.hashCode ^
+      connectionLogs.hashCode ^
       upload.hashCode ^
       download.hashCode ^
       uploadSpeed.hashCode ^
@@ -125,6 +128,7 @@ class Connection {
           rule == other.rule &&
           rulePayload == other.rulePayload &&
           chains == other.chains &&
+          connectionLogs == other.connectionLogs &&
           upload == other.upload &&
           download == other.download &&
           uploadSpeed == other.uploadSpeed &&

@@ -182,8 +182,11 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) =>
-          ConnectionDetailSheet(row: row, onClose: () => _close(row.id)),
+      builder: (_) => ConnectionDetailSheet(
+        row: row,
+        showConnectionLog: widget.session.isStash.value,
+        onClose: () => _close(row.id),
+      ),
     );
   }
 

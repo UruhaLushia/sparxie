@@ -83,6 +83,7 @@ class ConnectionRow {
     required this.rule,
     required this.rulePayload,
     required this.chains,
+    required this.connectionLogs,
     required this.start,
     required this.sourceIp,
     required this.sourcePort,
@@ -112,6 +113,7 @@ class ConnectionRow {
   final String rule;
   final String rulePayload;
   final List<String> chains;
+  final List<String> connectionLogs;
   final DateTime? start;
   final String sourceIp;
   final int sourcePort;
@@ -169,6 +171,7 @@ class ConnectionRow {
       rule: c.rule,
       rulePayload: c.rulePayload,
       chains: List<String>.unmodifiable(c.chains),
+      connectionLogs: List<String>.unmodifiable(c.connectionLogs),
       start: DateTime.tryParse(c.start),
       sourceIp: c.sourceIp,
       sourcePort: c.sourcePort,
