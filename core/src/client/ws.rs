@@ -1,12 +1,18 @@
 use futures_util::{SinkExt, StreamExt};
+use reqwest::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
-    MaybeTlsStream, WebSocketStream,
-    tungstenite::{http::Response, protocol::Message},
+    MaybeTlsStream, WebSocketStream, client_async, connect_async, connect_async_tls_with_config,
+    tungstenite::{
+        client::IntoClientRequest,
+        http::{HeaderValue, Response},
+        protocol::Message,
+    },
 };
 
 use crate::MihomoError;
 
+use super::insecure_tls::insecure_ws_connector;
 use super::transport::AsyncStream;
 
 /// A WebSocket over either a TCP(-TLS) transport or a boxed IPC stream.
@@ -43,6 +49,74 @@ pub(super) fn check_ws_response<T>(response: &Response<T>) -> Result<(), MihomoE
         });
     }
     Ok(())
+}
+
+pub(super) async fn open_tcp(
+    base: &Url,
+    path: &str,
+    secret: Option<&str>,
+    allow_insecure: bool,
+) -> Result<WsStream, MihomoError> {
+    let mut url = ws_url(base, path)?;
+    if let Some(secret) = secret {
+        url.query_pairs_mut().append_pair("token", secret);
+    }
+
+    let mut request = url
+        .as_str()
+        .into_client_request()
+        .map_err(|e| MihomoError::InvalidUrl(format!("ws request: {e}")))?;
+    if let Some(secret) = secret {
+        let value = HeaderValue::from_str(&format!("Bearer {secret}"))
+            .map_err(|e| MihomoError::Other(format!("ws auth header: {e}")))?;
+        request.headers_mut().insert("authorization", value);
+    }
+
+    let (stream, response) = if allow_insecure {
+        connect_async_tls_with_config(request, None, false, Some(insecure_ws_connector()))
+            .await
+            .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?
+    } else {
+        connect_async(request)
+            .await
+            .map_err(|e| MihomoError::Other(format!("websocket connect: {e}")))?
+    };
+    check_ws_response(&response)?;
+    Ok(WsStream::Tcp(Box::new(stream)))
+}
+
+fn ws_url(base: &Url, path: &str) -> Result<Url, MihomoError> {
+    let mut url = base
+        .join(path.trim_start_matches('/'))
+        .map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
+    let new_scheme = match url.scheme() {
+        "http" => "ws",
+        "https" => "wss",
+        "ws" | "wss" => return Ok(url),
+        other => {
+            return Err(MihomoError::InvalidUrl(format!(
+                "unsupported scheme `{other}` for websocket upgrade"
+            )));
+        }
+    };
+    url.set_scheme(new_scheme)
+        .map_err(|_| MihomoError::InvalidUrl("scheme rewrite failed".into()))?;
+    Ok(url)
+}
+
+pub(super) async fn open_ipc(
+    stream: Box<dyn AsyncStream>,
+    path: &str,
+) -> Result<WsStream, MihomoError> {
+    let request = format!("ws://localhost/{}", path.trim_start_matches('/'))
+        .into_client_request()
+        .map_err(|e| MihomoError::InvalidUrl(format!("ipc ws request: {e}")))?;
+
+    let (stream, response) = client_async(request, stream)
+        .await
+        .map_err(|e| MihomoError::Other(format!("ipc websocket connect: {e}")))?;
+    check_ws_response(&response)?;
+    Ok(WsStream::Ipc(Box::new(stream)))
 }
 
 /// Read the next JSON line from a websocket stream, ignoring pings & binary frames.
