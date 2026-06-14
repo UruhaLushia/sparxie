@@ -2,33 +2,28 @@
 /// Re-exports keep screen code stable when we reorganize the Rust side.
 library;
 
-export 'src/rust/api.dart' show MihomoTarget;
-export 'src/rust/utils/error.dart';
-export 'src/rust/state/logs.dart' show LogEntry;
-export 'src/rust/state/traffic.dart' show MemorySample, TrafficSample;
-export 'src/rust/state/connections/types.dart'
-    show
-        Connection,
-        ConnectionGroup,
-        ConnectionGroupSort,
-        ConnectionsFrame,
-        ConnectionsListKind,
-        ConnectionsSort,
-        ConnectionsTotals;
+import 'controller.dart' as ctl;
+import 'src/rust/backend/api/target.dart' as api;
 
-export 'src/rust/api/cache.dart';
-export 'src/rust/api/configs.dart';
-export 'src/rust/api/connections.dart';
-export 'src/rust/api/dns.dart';
-export 'src/rust/api/fonts.dart';
-export 'src/rust/api/groups.dart';
-export 'src/rust/api/icons.dart';
-export 'src/rust/api/providers.dart';
-export 'src/rust/api/proxies.dart';
-export 'src/rust/api/proxies/catalog.dart';
-export 'src/rust/api/proxies/delay.dart';
-export 'src/rust/api/rules.dart';
-export 'src/rust/api/storage.dart';
-export 'src/rust/api/streams.dart';
-export 'src/rust/api/upgrade.dart';
-export 'src/rust/api/version.dart';
+export 'src/rust/backend/api/connections.dart';
+export 'src/rust/backend/api/control.dart';
+export 'src/rust/backend/api/providers.dart';
+export 'src/rust/backend/api/proxies.dart';
+export 'src/rust/backend/api/proxy_delay.dart';
+export 'src/rust/backend/api/resources.dart';
+export 'src/rust/backend/api/rules.dart';
+export 'src/rust/backend/api/streams.dart';
+export 'src/rust/backend/api/target.dart';
+export 'src/rust/backend/api/types.dart';
+export 'src/rust/utils/error.dart';
+
+api.BackendTarget backendTargetForController(ctl.Controller c) =>
+    api.BackendTarget(
+      backendType: switch (c.type) {
+        ctl.BackendType.clash => api.BackendType.clash,
+        ctl.BackendType.surge => api.BackendType.surge,
+      },
+      baseUrl: c.baseUrl,
+      secret: c.secret.isEmpty ? null : c.secret,
+      allowInsecure: c.allowInsecure,
+    );

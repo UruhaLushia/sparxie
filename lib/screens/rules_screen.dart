@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -65,21 +64,17 @@ class _RulesScreenState extends State<RulesScreen> {
     if (!identical(widget.store.active, _activeKey)) _bind();
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   void _bind() {
     _activeKey = widget.store.active;
     _resetWindow();
     if (_activeKey == null) {
-      setState(() => _error = '请先在“后端”中添加一个 mihomo 实例');
+      setState(() => _error = '请先在“后端”中添加一个后端');
       return;
     }
     _load();
@@ -111,7 +106,7 @@ class _RulesScreenState extends State<RulesScreen> {
       _limit = _initialLimit();
       await _fetchWindow(_offset, _limit);
     } catch (e) {
-      if (mounted) setState(() => _error = formatError(e));
+      if (mounted) setState(() => _error = _formatError(e));
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -247,7 +242,8 @@ class _RulesScreenState extends State<RulesScreen> {
     try {
       await rust.rulesDisable(
         target: target,
-        indicesJson: jsonEncode({'${rule.index}': !enabled}),
+        index: rule.index,
+        disabled: !enabled,
       );
     } catch (e) {
       if (!mounted) return;
@@ -256,9 +252,12 @@ class _RulesScreenState extends State<RulesScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('切换失败:${formatError(e)}')));
+      ).showSnackBar(SnackBar(content: Text('切换失败:${_formatError(e)}')));
     }
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: _activeKey?.name);
 
   static rust.RuleEntry _withDisabled(rust.RuleEntry r, bool disabled) =>
       rust.RuleEntry(
@@ -266,6 +265,7 @@ class _RulesScreenState extends State<RulesScreen> {
         ruleType: r.ruleType,
         payload: r.payload,
         proxy: r.proxy,
+        extraParams: r.extraParams,
         disabled: disabled,
         hitCount: r.hitCount,
         missCount: r.missCount,
@@ -391,6 +391,11 @@ class _RuleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final rate = _hitRate;
+    final meta = [
+      if (rule.ruleType.isNotEmpty) rule.ruleType,
+      if (rule.proxy.isNotEmpty) rule.proxy,
+      if (rule.extraParams.isNotEmpty) rule.extraParams.join(', '),
+    ].join('  ·  ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Card(
@@ -425,7 +430,7 @@ class _RuleTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${rule.ruleType}  ·  ${rule.proxy}',
+                      meta,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),

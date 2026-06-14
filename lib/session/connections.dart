@@ -151,6 +151,7 @@ class ConnectionRow {
     if (host.toLowerCase().contains(n)) return true;
     if (chainsLabel.toLowerCase().contains(n)) return true;
     if (rule.toLowerCase().contains(n)) return true;
+    if (rulePayload.toLowerCase().contains(n)) return true;
     if (network.toLowerCase().contains(n)) return true;
     if (process.toLowerCase().contains(n)) return true;
     if (processPath.toLowerCase().contains(n)) return true;

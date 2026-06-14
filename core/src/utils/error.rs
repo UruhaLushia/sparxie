@@ -16,12 +16,12 @@ pub enum MihomoError {
 impl fmt::Display for MihomoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MihomoError::InvalidUrl(s) => write!(f, "无效的 mihomo 地址:{s}"),
+            MihomoError::InvalidUrl(s) => write!(f, "无效的后端地址:{s}"),
             MihomoError::InvalidRegex { pattern, message } => {
                 write!(f, "正则 `{pattern}` 无效:{message}")
             }
             MihomoError::Upstream { status, body } => {
-                write!(f, "mihomo 返回 {status}: {body}")
+                write!(f, "后端返回 {status}: {body}")
             }
             MihomoError::Network(msg) => write!(f, "网络错误:{msg}"),
             MihomoError::InvalidJson(msg) => write!(f, "返回 JSON 解析失败:{msg}"),

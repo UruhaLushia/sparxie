@@ -2,10 +2,27 @@ import 'package:flutter/foundation.dart';
 
 import 'config_store.dart';
 
+enum BackendType {
+  clash,
+  surge;
+
+  String get label => switch (this) {
+    BackendType.clash => 'Clash',
+    BackendType.surge => 'Surge',
+  };
+
+  static BackendType fromJson(Object? value) => switch (value) {
+    'clash' => BackendType.clash,
+    'surge' => BackendType.surge,
+    _ => BackendType.clash,
+  };
+}
+
 class Controller {
   Controller({
     required this.id,
     required this.name,
+    this.type = BackendType.clash,
     required this.baseUrl,
     this.secret = '',
     this.allowInsecure = false,
@@ -13,6 +30,7 @@ class Controller {
 
   final String id;
   final String name;
+  final BackendType type;
   final String baseUrl;
   final String secret;
 
@@ -21,6 +39,7 @@ class Controller {
 
   Controller copyWith({
     String? name,
+    BackendType? type,
     String? baseUrl,
     String? secret,
     bool? allowInsecure,
@@ -28,6 +47,7 @@ class Controller {
     return Controller(
       id: id,
       name: name ?? this.name,
+      type: type ?? this.type,
       baseUrl: baseUrl ?? this.baseUrl,
       secret: secret ?? this.secret,
       allowInsecure: allowInsecure ?? this.allowInsecure,
@@ -37,6 +57,7 @@ class Controller {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    'type': type.name,
     'baseUrl': baseUrl,
     'secret': secret,
     'allowInsecure': allowInsecure,
@@ -45,6 +66,7 @@ class Controller {
   factory Controller.fromJson(Map<String, dynamic> json) => Controller(
     id: json['id'] as String,
     name: json['name'] as String? ?? '',
+    type: BackendType.fromJson(json['type']),
     baseUrl: json['baseUrl'] as String? ?? '',
     secret: json['secret'] as String? ?? '',
     allowInsecure: json['allowInsecure'] as bool? ?? false,
@@ -80,7 +102,9 @@ class ControllerStore extends ChangeNotifier {
   List<Controller> get controllers => List.unmodifiable(_controllers);
 
   Controller? get active {
-    if (_activeId == null) return _controllers.isEmpty ? null : _controllers.first;
+    if (_activeId == null) {
+      return _controllers.isEmpty ? null : _controllers.first;
+    }
     return _controllers.firstWhere(
       (c) => c.id == _activeId,
       orElse: () => _controllers.first,
@@ -115,6 +139,7 @@ class ControllerStore extends ChangeNotifier {
 
   Future<Controller> add({
     required String name,
+    BackendType type = BackendType.clash,
     required String baseUrl,
     String secret = '',
     bool allowInsecure = false,
@@ -122,6 +147,7 @@ class ControllerStore extends ChangeNotifier {
     final controller = Controller(
       id: _newId(),
       name: name,
+      type: type,
       baseUrl: baseUrl,
       secret: secret,
       allowInsecure: allowInsecure,
@@ -136,6 +162,7 @@ class ControllerStore extends ChangeNotifier {
   Future<void> update(
     String id, {
     String? name,
+    BackendType? type,
     String? baseUrl,
     String? secret,
     bool? allowInsecure,
@@ -145,6 +172,7 @@ class ControllerStore extends ChangeNotifier {
           (c) => c.id == id
               ? c.copyWith(
                   name: name,
+                  type: type,
                   baseUrl: baseUrl,
                   secret: secret,
                   allowInsecure: allowInsecure,

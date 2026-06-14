@@ -37,6 +37,7 @@ class ProxiesNotifier extends ChangeNotifier {
         final group = ProxyGroup._(
           name: name,
           type: entry.proxyType,
+          selectable: entry.selectable,
           icon: entry.icon,
           memberCount: entry.memberCount,
           membersHash: entry.membersHash,
@@ -52,6 +53,7 @@ class ProxiesNotifier extends ChangeNotifier {
           existing._type = entry.proxyType;
           shapeChanged = true;
         }
+        existing._selectable = entry.selectable;
         if (existing._icon != entry.icon) {
           existing._icon = entry.icon;
           shapeChanged = true;
@@ -202,6 +204,7 @@ class ProxyGroup {
   ProxyGroup._({
     required this.name,
     required String type,
+    required bool selectable,
     required String icon,
     required this._memberCount,
     required this._membersHash,
@@ -209,6 +212,7 @@ class ProxyGroup {
     required String testUrl,
     required String fixed,
   }) : _type = type, // ignore: prefer_initializing_formals
+       _selectable = selectable, // ignore: prefer_initializing_formals
        _icon = icon, // ignore: prefer_initializing_formals
        _testUrl = testUrl, // ignore: prefer_initializing_formals
        // ignore: prefer_initializing_formals
@@ -221,6 +225,7 @@ class ProxyGroup {
   static const int _memberRefetchMargin = 16;
   final String name;
   String _type;
+  bool _selectable;
   String _icon;
   String _testUrl;
   int _memberCount;
@@ -231,10 +236,11 @@ class ProxyGroup {
 
   String get type => _type;
   String get icon => _icon;
-  bool get canSelectMembers => _type != 'LoadBalance';
+  bool get canSelectMembers => _selectable;
+  bool get hidesExactNow => _type == 'LoadBalance';
   ValueListenable<int> get membersVersion => _membersVersion;
 
-  /// Per-group `tester`/`testUrl` configured in mihomo (empty when absent).
+  /// Per-group `tester`/`testUrl` configured by the backend (empty when absent).
   String get testUrl => _testUrl;
   int get memberCount => _memberCount;
 

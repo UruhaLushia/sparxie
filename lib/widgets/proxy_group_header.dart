@@ -57,9 +57,9 @@ class ProxyGroupHeader extends StatelessWidget {
                       child: ValueListenableBuilder<String>(
                         valueListenable: group.now,
                         builder: (_, now, _) {
-                          final displayNow = group.canSelectMembers
-                              ? (now.isEmpty ? '-' : now)
-                              : '*';
+                          final displayNow = group.hidesExactNow
+                              ? '*'
+                              : (now.isEmpty ? '-' : now);
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,

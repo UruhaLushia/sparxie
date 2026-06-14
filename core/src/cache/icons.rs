@@ -19,7 +19,8 @@ use crate::cache::db::{self, ICONS};
 pub const TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct State {
-    client: Client,
+    client: Mutex<Client>,
+    allow_insecure: Mutex<bool>,
     /// URLs currently being refetched in the background, so we don't
     /// fan out multiple parallel refreshes for the same icon.
     inflight: Mutex<HashSet<String>>,
@@ -32,20 +33,39 @@ static STATE: OnceLock<State> = OnceLock::new();
 
 /// Initialize the HTTP client. The shared cache DB is opened separately via
 /// [`db::init`]. Idempotent.
-pub fn init() -> Result<(), MihomoError> {
-    if STATE.get().is_some() {
+pub fn init(allow_insecure: bool) -> Result<(), MihomoError> {
+    if STATE.get().is_none() {
+        let _ = STATE.set(State {
+            client: Mutex::new(build_client(allow_insecure)?),
+            allow_insecure: Mutex::new(allow_insecure),
+            inflight: Mutex::new(HashSet::new()),
+            miss_locks: Mutex::new(HashMap::new()),
+        });
+    }
+    set_allow_insecure(allow_insecure)
+}
+
+pub fn set_allow_insecure(allow_insecure: bool) -> Result<(), MihomoError> {
+    let state = state()?;
+    let mut current = state
+        .allow_insecure
+        .lock()
+        .expect("icon allow_insecure poisoned");
+    if *current == allow_insecure {
         return Ok(());
     }
-    let client = Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|e| MihomoError::Other(format!("icon http client build: {e}")))?;
-    let _ = STATE.set(State {
-        client,
-        inflight: Mutex::new(HashSet::new()),
-        miss_locks: Mutex::new(HashMap::new()),
-    });
+    let client = build_client(allow_insecure)?;
+    *state.client.lock().expect("icon client poisoned") = client;
+    *current = allow_insecure;
     Ok(())
+}
+
+fn build_client(allow_insecure: bool) -> Result<Client, MihomoError> {
+    Client::builder()
+        .timeout(Duration::from_secs(15))
+        .danger_accept_invalid_certs(allow_insecure)
+        .build()
+        .map_err(|e| MihomoError::Other(format!("icon http client build: {e}")))
 }
 
 fn state() -> Result<&'static State, MihomoError> {
@@ -81,7 +101,8 @@ pub async fn fetch(url: String) -> Result<Vec<u8>, MihomoError> {
         return Ok(bytes);
     }
 
-    let result = download(&state.client, &url).await;
+    let client = state.client.lock().expect("icon client poisoned").clone();
+    let result = download(&client, &url).await;
     if let Ok(bytes) = &result {
         let _ = store_entry(key, bytes.clone()).await;
     }
@@ -150,7 +171,7 @@ fn spawn_refetch(state: &'static State, url: String, key: String) {
     }
     drop(inflight);
 
-    let client = state.client.clone();
+    let client = state.client.lock().expect("icon client poisoned").clone();
     let inflight = &state.inflight;
     tokio::spawn(async move {
         if let Ok(bytes) = download(&client, &url).await {

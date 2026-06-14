@@ -18,7 +18,7 @@ class CoreConfigScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final hideMode = prefs?.navLayout == NavLayout.cards;
     return Scaffold(
-      appBar: AppBar(title: const Text('内核配置')),
+      appBar: AppBar(title: const Text('核心配置')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),

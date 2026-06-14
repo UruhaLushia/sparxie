@@ -21,7 +21,7 @@ import 'rules_screen.dart';
 /// rail (too short a window to show them all). They're merged into the tile
 /// list alongside the settings tiles so every page stays reachable.
 ///
-/// [railManagesPages] is true in wide standard layout, where 内核配置 /
+/// [railManagesPages] is true in wide standard layout, where 核心配置 /
 /// 外部资源 / 核心操作 / 分流规则 are rail destinations (or [extras] when they
 /// overflow) — so their static tiles are suppressed here to avoid a second
 /// path to the same page. 后端设置 / 应用设置 always live here.
@@ -48,6 +48,7 @@ class SettingsScreen extends StatelessWidget {
         prefs,
         session.supportsCoreConfig,
         session.supportsCoreActions,
+        session.supportsExternalResources,
       ]),
       builder: (context, _) {
         final isCards = prefs.navLayout == NavLayout.cards;
@@ -56,12 +57,13 @@ class SettingsScreen extends StatelessWidget {
         final showRules = !isCards && !railManagesPages;
         final showCoreActions =
             !railManagesPages && session.supportsCoreActions.value;
-        // 内核配置 / 外部资源 are hero cards in cards layout and rail items in
+        // 核心配置 / 外部资源 are hero cards in cards layout and rail items in
         // wide standard; only the compact bottom bar (neither) needs the
         // static tiles below.
         final showCoreResources = !isCards && !railManagesPages;
         final showCore = showCoreResources && session.supportsCoreConfig.value;
-        final showResources = showCoreResources;
+        final showResources =
+            showCoreResources && session.supportsExternalResources.value;
 
         // Overflow rail items lead the list, then the settings tiles — one
         // flat section, no separate 导航 grouping.
@@ -71,7 +73,7 @@ class SettingsScreen extends StatelessWidget {
           _Tile(
             icon: Icons.dns_outlined,
             title: '后端设置',
-            subtitle: '管理 mihomo 后端实例',
+            subtitle: '管理后端实例',
             onTap: () => _push(context, BackendSettingsScreen(store: store)),
           ),
           _Tile(
@@ -86,7 +88,7 @@ class SettingsScreen extends StatelessWidget {
           if (showCore)
             _Tile(
               icon: Icons.memory_outlined,
-              title: '内核配置',
+              title: '核心配置',
               subtitle: '出站模式、日志级别、端口等',
               onTap: () =>
                   _push(context, CoreConfigScreen(store: store, prefs: prefs)),
@@ -292,6 +294,8 @@ class AppSettingsPanel extends StatelessWidget {
                 _FontRow(prefs: prefs),
                 const Divider(height: 24),
               ],
+              _OnlineResourcesRow(prefs: prefs),
+              const Divider(height: 24),
               _CacheRow(session: session),
             ],
           ),
@@ -433,6 +437,22 @@ class _FontPickerState extends State<_FontPicker> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _OnlineResourcesRow extends StatelessWidget {
+  const _OnlineResourcesRow({required this.prefs});
+  final AppPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('跳过在线资源证书验证'),
+      subtitle: const Text('用于图标 URL 等在线资源;不影响后端连接设置'),
+      value: prefs.allowInsecureOnlineResources,
+      onChanged: prefs.setAllowInsecureOnlineResources,
     );
   }
 }
@@ -602,6 +622,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
     if (existing == null) {
       await widget.store.add(
         name: result.name,
+        type: result.type,
         baseUrl: result.baseUrl,
         secret: result.secret,
         allowInsecure: result.allowInsecure,
@@ -610,6 +631,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
       await widget.store.update(
         existing.id,
         name: result.name,
+        type: result.type,
         baseUrl: result.baseUrl,
         secret: result.secret,
         allowInsecure: result.allowInsecure,
@@ -668,6 +690,7 @@ class _ControllerTile extends StatelessWidget {
       title: Text(controller.name),
       subtitle: Text(
         [
+          controller.type.label,
           controller.baseUrl,
           if (controller.secret.isNotEmpty) '已设置密钥',
         ].join('  •  '),
@@ -699,11 +722,13 @@ class _ControllerTile extends StatelessWidget {
 class _EditResult {
   _EditResult({
     required this.name,
+    required this.type,
     required this.baseUrl,
     required this.secret,
     required this.allowInsecure,
   });
   final String name;
+  final ctl.BackendType type;
   final String baseUrl;
   final String secret;
   final bool allowInsecure;
@@ -723,6 +748,7 @@ class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
   late final TextEditingController _address;
   late final TextEditingController _secret;
+  late ctl.BackendType _type;
   late bool _allowInsecure;
   late _Scheme _scheme;
   final _formKey = GlobalKey<FormState>();
@@ -731,13 +757,13 @@ class _EditDialogState extends State<_EditDialog> {
   static bool get _isUnixHost =>
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isAndroid);
 
-  /// Schemes offered on this platform: http/https everywhere, unix on Unix
-  /// hosts + Android, pipe on Windows only.
+  bool get _supportsIpc => _type == ctl.BackendType.clash;
+
   List<_Scheme> get _schemes => [
     _Scheme.http,
     _Scheme.https,
-    if (_isUnixHost) _Scheme.unix,
-    if (_isWindows) _Scheme.pipe,
+    if (_supportsIpc && _isUnixHost) _Scheme.unix,
+    if (_supportsIpc && _isWindows) _Scheme.pipe,
   ];
 
   static String _schemeLabel(_Scheme s) => switch (s) {
@@ -749,16 +775,42 @@ class _EditDialogState extends State<_EditDialog> {
 
   bool get _isIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
 
+  String get _defaultTcpAddress => switch (_type) {
+    ctl.BackendType.clash => '127.0.0.1:9090',
+    ctl.BackendType.surge => '127.0.0.1:6171',
+  };
+
+  String get _addressHint => switch (_scheme) {
+    _Scheme.http || _Scheme.https => _defaultTcpAddress,
+    _Scheme.unix => '/path/to/clash.sock',
+    _Scheme.pipe => r'\\.\pipe\clash',
+  };
+
   @override
   void initState() {
     super.initState();
     final c = widget.existing;
     _name = TextEditingController(text: c?.name ?? '');
+    _type = c?.type ?? ctl.BackendType.clash;
     final (scheme, addr) = _decompose(c?.baseUrl ?? 'http://127.0.0.1:9090');
     _scheme = _schemes.contains(scheme) ? scheme : _Scheme.http;
     _address = TextEditingController(text: addr);
     _secret = TextEditingController(text: c?.secret ?? '');
     _allowInsecure = c?.allowInsecure ?? false;
+  }
+
+  void _setType(ctl.BackendType type) {
+    final oldDefault = _defaultTcpAddress;
+    setState(() {
+      _type = type;
+      if (!_schemes.contains(_scheme)) {
+        _scheme = _Scheme.http;
+      }
+      final addr = _address.text.trim();
+      if (addr.isEmpty || addr == oldDefault) {
+        _address.text = _defaultTcpAddress;
+      }
+    });
   }
 
   /// Split a stored baseUrl into (scheme, address-without-scheme).
@@ -822,6 +874,22 @@ class _EditDialogState extends State<_EditDialog> {
                   (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<ctl.BackendType>(
+              initialValue: _type,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: '后端类型',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final type in ctl.BackendType.values)
+                  DropdownMenuItem(value: type, child: Text(type.label)),
+              ],
+              onChanged: (type) {
+                if (type != null) _setType(type);
+              },
+            ),
+            const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -840,11 +908,7 @@ class _EditDialogState extends State<_EditDialog> {
                     controller: _address,
                     decoration: InputDecoration(
                       labelText: _isIpc ? '路径' : '地址',
-                      hintText: switch (_scheme) {
-                        _Scheme.http || _Scheme.https => '127.0.0.1:9090',
-                        _Scheme.unix => '/path/to/mihomo.sock',
-                        _Scheme.pipe => r'\\.\pipe\mihomo',
-                      },
+                      hintText: _addressHint,
                       border: const OutlineInputBorder(),
                     ),
                     validator: (v) {
@@ -894,6 +958,7 @@ class _EditDialogState extends State<_EditDialog> {
               context,
               _EditResult(
                 name: _name.text.trim(),
+                type: _type,
                 baseUrl: _composeUrl(),
                 // Secret is only meaningful for TCP backends.
                 secret: _isIpc ? '' : _secret.text.trim(),

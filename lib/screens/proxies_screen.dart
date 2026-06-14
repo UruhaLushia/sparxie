@@ -76,14 +76,10 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     if (expanded) unawaited(widget.session.ensureProxyGroupMembers(name, 0, 0));
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   /// Resolve the URL used for a group's delay test, honoring scope:
@@ -217,7 +213,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   }
 
   Future<void> _reloadDelayWindow(
-    rust.MihomoTarget target,
+    rust.BackendTarget target,
     ProxyGroup group,
     ProxyMemberWindowRequest? window,
   ) async {
@@ -494,6 +490,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                               type: member.type,
                               delay: member.delay,
                               selectable: group.canSelectMembers,
+                              showSelection: !group.hidesExactNow,
                               nowListenable: group.now,
                               fixedListenable: group.fixed,
                               onSelect: () =>

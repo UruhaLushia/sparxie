@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/backend_switcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -32,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.store.addListener(_onStore);
     widget.session.traffic.addListener(_onTraffic);
     widget.session.memory.addListener(_onMemory);
+    widget.session.supportsMemory.addListener(_onSupportsMemory);
     widget.session.connectionsTotals.addListener(_onConnTotals);
     widget.session.error.addListener(_onSessionError);
     widget.session.versionString.addListener(_onVersion);
@@ -43,6 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.store.removeListener(_onStore);
     widget.session.traffic.removeListener(_onTraffic);
     widget.session.memory.removeListener(_onMemory);
+    widget.session.supportsMemory.removeListener(_onSupportsMemory);
     widget.session.connectionsTotals.removeListener(_onConnTotals);
     widget.session.error.removeListener(_onSessionError);
     widget.session.versionString.removeListener(_onVersion);
@@ -64,11 +67,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _onMemory() {
+    if (!widget.session.supportsMemory.value) return;
     _history.pushMemory(_toDouble(widget.session.memory.value.inuse));
   }
 
+  void _onSupportsMemory() {
+    if (!widget.session.supportsMemory.value) _history.clearMemory();
+    if (mounted) setState(() {});
+  }
+
   void _onConnTotals() {
-    // The connection count is shown in the card label; repaint on change.
     if (mounted) setState(() {});
   }
 
@@ -81,7 +89,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _activeKey = widget.store.active;
     _history.reset();
     if (_activeKey == null) {
-      setState(() => _error = '请先在“后端”中添加一个 mihomo 实例');
+      setState(() => _error = '请先在“后端”中添加一个后端');
       return;
     }
     setState(() => _error = widget.session.error.value);
@@ -89,15 +97,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final active = widget.store.active;
     final scheme = Theme.of(context).colorScheme;
     final core = widget.session.versionString.value;
+    final showVersion = widget.store.active?.type != ctl.BackendType.surge;
 
     return Scaffold(
+      backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
+        backgroundColor: scheme.surfaceContainerLowest,
+        scrolledUnderElevation: 0,
         title: Row(
           children: [
-            Text(active?.name ?? '概览'),
+            Flexible(
+              child: BackendSwitcher(
+                store: widget.store,
+                textStyle: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
             const SizedBox(width: 10),
             ValueListenableBuilder<bool>(
               valueListenable: widget.session.isStreaming,
@@ -110,13 +126,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-            if (core.isNotEmpty) ...[
+            if (showVersion && core.isNotEmpty) ...[
               const SizedBox(width: 10),
               Text(
                 core,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ],
@@ -152,6 +168,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _downloadCard(),
                     ],
                     const SizedBox(height: 12),
+                    if (widget.session.supportsMemory.value) ...[
+                      _memoryCard(),
+                      const SizedBox(height: 12),
+                    ],
                     _connectionsCard(),
                   ],
                 );
@@ -166,6 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _uploadCard() {
     final t = widget.session.traffic.value;
     return _MetricChartCard(
+      icon: Icons.arrow_upward_rounded,
       label: '上传',
       value: formatBytes(t.up),
       unit: '/s',
@@ -179,6 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _downloadCard() {
     final t = widget.session.traffic.value;
     return _MetricChartCard(
+      icon: Icons.arrow_downward_rounded,
       label: '下载',
       value: formatBytes(t.down),
       unit: '/s',
@@ -190,17 +212,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _connectionsCard() {
-    final mem = widget.session.memory.value;
     final count = widget.session.connectionsTotals.value.count;
     return _MetricChartCard(
+      icon: Icons.hub_outlined,
       label: '连接',
       value: '$count',
       unit: '',
-      footer: '内存使用 ${formatBytes(mem.inuse)}',
-      samples: _history.memSnapshot,
+      samples: const <double>[],
       color: const Color(0xff10b981),
+      formatY: (v) => '${v.round()}',
+      showChart: false,
+    );
+  }
+
+  Widget _memoryCard() {
+    final mem = widget.session.memory.value;
+    final limit = mem.oslimit > BigInt.zero
+        ? '上限 ${formatBytes(mem.oslimit)}'
+        : null;
+    return _MetricChartCard(
+      icon: Icons.memory_outlined,
+      label: '内存',
+      value: formatBytes(mem.inuse),
+      unit: '',
+      footer: limit ?? '当前使用',
+      samples: _history.memSnapshot,
+      color: const Color(0xfff59e0b),
       formatY: (v) => formatBytes(BigInt.from(v.round())),
-      labelDot: true,
     );
   }
 
@@ -228,10 +266,7 @@ class _ErrorBanner extends StatelessWidget {
           Icon(Icons.warning_rounded, color: scheme.onErrorContainer),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: scheme.onErrorContainer),
-            ),
+            child: Text(text, style: TextStyle(color: scheme.onErrorContainer)),
           ),
         ],
       ),
@@ -239,146 +274,176 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Sparkline-backed metric card:
-/// label · big value+unit · area chart with min/max markers · footer line.
+/// Sparkline-backed metric card with a compact header and peak summary.
 class _MetricChartCard extends StatelessWidget {
   const _MetricChartCard({
+    required this.icon,
     required this.label,
     required this.value,
     required this.unit,
-    required this.footer,
     required this.samples,
     required this.color,
     required this.formatY,
-    this.labelDot = false,
+    this.footer,
+    this.showChart = true,
   });
 
+  final IconData icon;
   final String label;
   final String value;
   final String unit;
-  final String footer;
+  final String? footer;
   final List<double> samples;
   final Color color;
   final String Function(double) formatY;
-  final bool labelDot;
+  final bool showChart;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final chartMax = _maxOf(samples);
-    final chartMid = chartMax / 2;
+    final peak = showChart && chartMax > 0 ? formatY(chartMax) : null;
+    final chartBackground = Color.alphaBlend(
+      color.withValues(alpha: 0.025),
+      scheme.surfaceContainerHigh,
+    );
 
     return Material(
-      color: scheme.surface,
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: 0.06),
+      color: scheme.surfaceContainerLow,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, size: 18, color: color),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                          if (unit.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                unit,
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                if (labelDot) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
+              ],
+            ),
+            if (showChart) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                height: 78,
+                decoration: BoxDecoration(
+                  color: chartBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.25),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: SizedBox.expand(
+                  child: CustomPaint(
+                    painter: _SparklinePainter(
+                      samples: samples,
                       color: color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          height: 1.0,
-                        ),
-                  ),
-                ),
-                if (unit.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      unit,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              height: 56,
-              child: CustomPaint(
-                painter: _SparklinePainter(
-                  samples: samples,
-                  color: color,
-                  axisColor: scheme.outlineVariant.withValues(alpha: 0.5),
-                ),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (chartMax > 0)
-                          Text(
-                            formatY(chartMax),
-                            style:
-                                Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                          ),
-                        if (chartMax > 0)
-                          Text(
-                            formatY(chartMid),
-                            style:
-                                Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                          ),
-                      ],
+                      gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
+                      pointBorderColor: chartBackground,
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              footer,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-            ),
+            ],
+            if (footer != null || peak != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (footer != null)
+                    Expanded(
+                      child: Text(
+                        footer!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (peak != null) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: _MetricPill(text: '峰值 $peak', color: color),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -395,28 +460,59 @@ class _MetricChartCard extends StatelessWidget {
   }
 }
 
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class _SparklinePainter extends CustomPainter {
   _SparklinePainter({
     required this.samples,
     required this.color,
-    required this.axisColor,
+    required this.gridColor,
+    required this.pointBorderColor,
   });
 
   final List<double> samples;
   final Color color;
-  final Color axisColor;
+  final Color gridColor;
+  final Color pointBorderColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final axis = Paint()
-      ..color = axisColor
+    final grid = Paint()
+      ..color = gridColor
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(
-      Offset(0, size.height - 0.5),
-      Offset(size.width, size.height - 0.5),
-      axis,
-    );
+
+    for (final ratio in const [0.25, 0.5, 0.75]) {
+      final y = size.height * ratio;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
 
     if (samples.length < 2) return;
 
@@ -426,51 +522,109 @@ class _SparklinePainter extends CustomPainter {
     }
     if (maxV <= 0) return;
 
-    // Build the path across the full width, normalized to [0, maxV] on Y.
-    // Reserve right-side gutter for the level labels rendered by the parent.
-    const rightGutter = 56.0;
-    final usable = (size.width - rightGutter).clamp(40.0, size.width);
-    final dx = usable / (samples.length - 1);
+    const horizontalPadding = 2.0;
+    const topPadding = 4.0;
+    const bottomPadding = 4.0;
+    final usableWidth = size.width > horizontalPadding * 2
+        ? size.width - horizontalPadding * 2
+        : size.width;
+    final usableHeight = size.height > topPadding + bottomPadding
+        ? size.height - topPadding - bottomPadding
+        : size.height;
+    final dx = usableWidth / (samples.length - 1);
+    final scaleMax = maxV * 1.12;
 
-    final line = Path();
-    final fill = Path();
-    for (var i = 0; i < samples.length; i++) {
-      final x = i * dx;
-      final ratio = (samples[i] / maxV).clamp(0.0, 1.0);
-      final y = size.height - ratio * (size.height - 4);
-      if (i == 0) {
-        line.moveTo(x, y);
-        fill.moveTo(x, size.height);
-        fill.lineTo(x, y);
-      } else {
-        line.lineTo(x, y);
-        fill.lineTo(x, y);
-      }
+    final points = <Offset>[];
+    for (var i = 0; i < samples.length; i += 1) {
+      final x = horizontalPadding + i * dx;
+      final ratio = (samples[i] / scaleMax).clamp(0.0, 1.0);
+      final y = topPadding + (1 - ratio) * usableHeight;
+      points.add(Offset(x, y));
     }
-    fill.lineTo((samples.length - 1) * dx, size.height);
-    fill.close();
 
-    canvas.drawPath(
-      fill,
+    final line = _smoothPath(points);
+    final fill = Path.from(line)
+      ..lineTo(points.last.dx, size.height)
+      ..lineTo(points.first.dx, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.03)],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(fill, fillPaint);
+
+    final glow = Paint()
+      ..color = color.withValues(alpha: 0.18)
+      ..strokeWidth = 5.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(line, glow);
+
+    final stroke = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(line, stroke);
+
+    final last = points.last;
+    canvas.drawCircle(
+      last,
+      5.5,
       Paint()..color = color.withValues(alpha: 0.18),
     );
-    canvas.drawPath(
-      line,
+    canvas.drawCircle(last, 3.2, Paint()..color = color);
+    canvas.drawCircle(
+      last,
+      3.2,
       Paint()
-        ..color = color
-        ..strokeWidth = 1.4
+        ..color = pointBorderColor
+        ..strokeWidth = 1.2
         ..style = PaintingStyle.stroke,
     );
   }
 
+  Path _smoothPath(List<Offset> points) {
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    if (points.length == 2) {
+      path.lineTo(points.last.dx, points.last.dy);
+      return path;
+    }
+
+    for (var i = 1; i < points.length - 1; i += 1) {
+      final current = points[i];
+      final next = points[i + 1];
+      final mid = Offset(
+        (current.dx + next.dx) / 2,
+        (current.dy + next.dy) / 2,
+      );
+      path.quadraticBezierTo(current.dx, current.dy, mid.dx, mid.dy);
+    }
+    path.quadraticBezierTo(
+      points[points.length - 2].dx,
+      points[points.length - 2].dy,
+      points.last.dx,
+      points.last.dy,
+    );
+    return path;
+  }
+
   @override
   bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.samples != samples || old.color != color;
+      old.samples != samples ||
+      old.color != color ||
+      old.gridColor != gridColor ||
+      old.pointBorderColor != pointBorderColor;
 }
 
 /// Ring-buffer-backed sample history. Three independent series tracked at
-/// whatever cadence the upstream notifiers fire (mihomo's WS streams emit at
-/// ~1 Hz). Notifies listeners after each push so the dashboard repaints.
+/// whatever cadence the upstream notifiers fire. Notifies listeners after
+/// each push so the dashboard repaints.
 class _SparkHistory extends ChangeNotifier {
   _SparkHistory({required this.capacity});
   final int capacity;
@@ -490,6 +644,12 @@ class _SparkHistory extends ChangeNotifier {
 
   void pushMemory(double inuse) {
     _push(_mem, inuse);
+    notifyListeners();
+  }
+
+  void clearMemory() {
+    if (_mem.isEmpty) return;
+    _mem.clear();
     notifyListeners();
   }
 
