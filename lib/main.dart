@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -35,21 +36,34 @@ Future<void> main() async {
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
   await WindowState.bind(config);
   await _initRust();
+  final prefs = await AppPrefs.load(config);
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
   try {
     final dir = await AppPaths.cacheDir();
-    await rust.initCache(cacheDir: dir.path);
+    await rust.initCache(
+      cacheDir: dir.path,
+      allowInsecureOnlineResources: prefs.allowInsecureOnlineResources,
+    );
   } catch (e) {
     if (kDebugMode) debugPrint('cache init failed: $e');
   }
   final store = await ControllerStore.load(config);
-  final prefs = await AppPrefs.load(config);
   final session = MihomoSession(store)
     ..setConnectionsInterval(prefs.connectionsRefreshMs);
+  var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
   prefs.addListener(() {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
+    final next = prefs.allowInsecureOnlineResources;
+    if (next != allowInsecureOnlineResources) {
+      allowInsecureOnlineResources = next;
+      unawaited(
+        rust
+            .setOnlineResourceAllowInsecure(allowInsecure: next)
+            .catchError((_) {}),
+      );
+    }
   });
   runApp(MihomoControllerApp(store: store, prefs: prefs, session: session));
 }
@@ -188,15 +202,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   // Standard layout exposes 概览 as the first tab. Cards layout drops 概览
   // (the launcher already surfaces overview info), 连接 (the traffic hero
-  // card opens it directly) and 内核配置 (a dedicated hero card opens it);
-  // 外部资源 lives in the nav grid as a small card on cards mode.
-  // On phones the standard nav is also capped at 5 items; 内核配置 and
+  // card opens it directly) and 核心配置 (a dedicated hero card opens it);
+  // 外部资源 lives in the nav grid as a small card on cards mode when the
+  // active backend exposes provider APIs.
+  // On phones the standard nav is also capped at 5 items; 核心配置 and
   // 外部资源 move into the 其他 page.
   List<_Dest> _destinationsFor(
     NavLayout layout, {
     required bool isCompact,
     required bool supportsCoreConfig,
     required bool supportsCoreActions,
+    required bool supportsExternalResources,
   }) {
     final showOnStandardWide = layout == NavLayout.standard && !isCompact;
     return [
@@ -206,14 +222,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       if (layout == NavLayout.standard)
         const _Dest(icon: Icons.lan_outlined, label: '连接'),
       if (showOnStandardWide && supportsCoreConfig)
-        const _Dest(icon: Icons.memory_outlined, label: '内核配置'),
+        const _Dest(icon: Icons.memory_outlined, label: '核心配置'),
       const _Dest(icon: Icons.terminal, label: '日志'),
-      if (showOnStandardWide)
+      if (showOnStandardWide && supportsExternalResources)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       if (showOnStandardWide && supportsCoreActions)
         const _Dest(icon: Icons.build_outlined, label: '核心操作'),
       if (showOnStandardWide) const _Dest(icon: Icons.rule, label: '分流规则'),
-      if (layout == NavLayout.cards)
+      if (layout == NavLayout.cards && supportsExternalResources)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       const _Dest(icon: Icons.more_horiz, label: '其他'),
     ];
@@ -232,7 +248,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         prefs: widget.prefs,
         session: widget.session,
       ),
-      '内核配置' => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
+      '核心配置' => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       '外部资源' => ResourcesScreen(store: widget.store),
       '日志' => LogsScreen(store: widget.store, session: widget.session),
       '核心操作' => CoreActionsScreen(store: widget.store, session: widget.session),
@@ -277,6 +293,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           widget.prefs,
           widget.session.supportsCoreConfig,
           widget.session.supportsCoreActions,
+          widget.session.supportsExternalResources,
         ]),
         builder: (context, _) {
           final size = MediaQuery.sizeOf(context);
@@ -291,6 +308,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             isCompact: !wide,
             supportsCoreConfig: widget.session.supportsCoreConfig.value,
             supportsCoreActions: widget.session.supportsCoreActions.value,
+            supportsExternalResources:
+                widget.session.supportsExternalResources.value,
           );
           if (wide) {
             return cards
@@ -383,8 +402,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildWideCards(List<_Dest> destinations) {
     final scheme = Theme.of(context).colorScheme;
+    final pages = _ensureStackPages(NavLayout.cards, destinations);
     // Sentinel _index < 0 means a hero-card-driven main area:
-    //   -1: 内核配置  (内核设置 hero card)
+    //   -1: 核心配置
     //   -2: 连接列表  (实时流量 / 连接 hero card)
     //   -3: 分流规则  (规则 card)
     final Widget mainArea = switch (_index) {
@@ -395,10 +415,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         session: widget.session,
       ),
       -3 => RulesScreen(store: widget.store),
-      _ => IndexedStack(
-        index: _index,
-        children: _ensureStackPages(NavLayout.cards, destinations),
-      ),
+      _ => IndexedStack(index: _index, children: pages),
     };
     return Scaffold(
       body: Row(
@@ -419,6 +436,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 connectionsSelected: _index == -2,
                 onRulesTap: () => setState(() => _index = -3),
                 rulesSelected: _index == -3,
+                onBackendSettingsTap: _openBackendSettings,
               ),
             ),
           ),
@@ -430,11 +448,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Widget _buildCompactStandard(List<_Dest> destinations) {
+    final pages = _ensureStackPages(NavLayout.standard, destinations);
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: _ensureStackPages(NavLayout.standard, destinations),
-      ),
+      body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
@@ -481,7 +497,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             MaterialPageRoute(builder: (_) => RulesScreen(store: widget.store)),
           ),
           rulesSelected: false,
+          onBackendSettingsTap: _openBackendSettings,
         ),
+      ),
+    );
+  }
+
+  void _openBackendSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BackendSettingsScreen(store: widget.store),
       ),
     );
   }
@@ -612,6 +637,7 @@ class _NavCardGrid extends StatelessWidget {
     required this.connectionsSelected,
     required this.onRulesTap,
     required this.rulesSelected,
+    required this.onBackendSettingsTap,
   });
 
   final ControllerStore store;
@@ -625,6 +651,7 @@ class _NavCardGrid extends StatelessWidget {
   final bool connectionsSelected;
   final VoidCallback onRulesTap;
   final bool rulesSelected;
+  final VoidCallback onBackendSettingsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -635,11 +662,24 @@ class _NavCardGrid extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 16),
-            child: Text(
-              'Sparxie',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: onBackendSettingsTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    'Sparxie',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
           ValueListenableBuilder<bool>(
@@ -746,8 +786,7 @@ class _StatusHeroCard extends StatelessWidget {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final active = store.active;
-        final name = active?.name ?? '未连接';
+        final name = store.active?.name ?? '未连接';
         return _CardSurface(
           height: 110,
           selected: selected,
@@ -763,9 +802,10 @@ class _StatusHeroCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       ValueListenableBuilder<bool>(
@@ -785,33 +825,39 @@ class _StatusHeroCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '内核设置',
+                    '核心配置',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const Spacer(),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.memory_outlined,
-                        size: 16,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: RepaintBoundary(
-                          child: ValueListenableBuilder<rust.MemorySample>(
-                            valueListenable: session.memory,
-                            builder: (_, sample, _) => Text(
-                              formatBytes(sample.inuse),
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: session.supportsMemory,
+                    builder: (_, supportsMemory, _) {
+                      if (!supportsMemory) return const SizedBox.shrink();
+                      return Row(
+                        children: [
+                          Icon(
+                            Icons.memory_outlined,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: RepaintBoundary(
+                              child: ValueListenableBuilder<rust.MemorySample>(
+                                valueListenable: session.memory,
+                                builder: (_, sample, _) => Text(
+                                  formatBytes(sample.inuse),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

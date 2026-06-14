@@ -6,7 +6,7 @@ import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../widgets/section_panel.dart';
 
-/// Standalone page for one-shot mihomo core actions: reload / restart /
+/// Standalone page for one-shot backend core actions: reload / restart /
 /// upgrade / geo update and DNS / FakeIP cache flushes. Each runs against the
 /// active backend with per-row busy state and a SnackBar result.
 ///
@@ -27,25 +27,21 @@ class CoreActionsScreen extends StatefulWidget {
 class _CoreActionsScreenState extends State<CoreActionsScreen> {
   String? _running;
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   Future<void> _run(
     String id,
     String successMsg,
-    Future<void> Function(rust.MihomoTarget target) action, {
+    Future<void> Function(rust.BackendTarget target) action, {
     String? confirm,
   }) async {
     final target = _target();
     if (target == null) {
-      _snack('请先在“后端”中添加一个 mihomo 实例');
+      _snack('请先在“后端”中添加一个后端');
       return;
     }
     if (confirm != null && !await _confirm(id, confirm)) return;
@@ -54,7 +50,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
     try {
       await action(target);
     } catch (e) {
-      failure = formatError(e);
+      failure = formatError(e, backendName: widget.store.active?.name);
     } finally {
       if (mounted) setState(() => _running = null);
     }
@@ -98,10 +94,13 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
           listenable: Listenable.merge([
             widget.session.supportsCoreManagement,
             widget.session.supportsCacheFlush,
+            widget.session.supportsDnsFlush,
           ]),
           builder: (context, _) {
             final showManagement = widget.session.supportsCoreManagement.value;
-            final showCache = widget.session.supportsCacheFlush.value;
+            final showDns = widget.session.supportsDnsFlush.value;
+            final showFakeip = widget.session.supportsCacheFlush.value;
+            final showCache = showDns || showFakeip;
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -136,7 +135,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                               _action(
                                 icon: Icons.restart_alt,
                                 title: '重启核心',
-                                subtitle: '重新启动 mihomo 核心',
+                                subtitle: '重新启动后端核心',
                                 id: 'restart',
                                 success: '核心已重启',
                                 run: (t) => rust.restartCore(target: t),
@@ -163,22 +162,24 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                           icon: Icons.cached,
                           child: Column(
                             children: [
-                              _action(
-                                icon: Icons.dns_outlined,
-                                title: '清空 DNS 缓存',
-                                subtitle: '清除核心的 DNS 解析缓存',
-                                id: 'dns',
-                                success: '已清空 DNS 缓存',
-                                run: (t) => rust.flushDns(target: t),
-                              ),
-                              _action(
-                                icon: Icons.layers_clear_outlined,
-                                title: '清空 FakeIP',
-                                subtitle: '清除 FakeIP 映射池',
-                                id: 'fakeip',
-                                success: '已清空 FakeIP',
-                                run: (t) => rust.flushFakeip(target: t),
-                              ),
+                              if (showDns)
+                                _action(
+                                  icon: Icons.dns_outlined,
+                                  title: '清空 DNS 缓存',
+                                  subtitle: '清除核心的 DNS 解析缓存',
+                                  id: 'dns',
+                                  success: '已清空 DNS 缓存',
+                                  run: (t) => rust.flushDns(target: t),
+                                ),
+                              if (showFakeip)
+                                _action(
+                                  icon: Icons.layers_clear_outlined,
+                                  title: '清空 FakeIP',
+                                  subtitle: '清除 FakeIP 映射池',
+                                  id: 'fakeip',
+                                  success: '已清空 FakeIP',
+                                  run: (t) => rust.flushFakeip(target: t),
+                                ),
                             ],
                           ),
                         ),
@@ -208,7 +209,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
     required String subtitle,
     required String id,
     required String success,
-    required Future<void> Function(rust.MihomoTarget target) run,
+    required Future<void> Function(rust.BackendTarget target) run,
     String? confirm,
   }) {
     final busy = _running == id;

@@ -13,6 +13,7 @@ class ProxyNodeTile extends StatelessWidget {
     required this.type,
     required this.delay,
     this.selectable = true,
+    this.showSelection = true,
     required this.nowListenable,
     required this.fixedListenable,
     required this.onSelect,
@@ -23,6 +24,7 @@ class ProxyNodeTile extends StatelessWidget {
   final String type;
   final ValueNotifier<int>? delay;
   final bool selectable;
+  final bool showSelection;
   final ValueNotifier<String> nowListenable;
   final ValueNotifier<String> fixedListenable;
   final VoidCallback onSelect;
@@ -35,7 +37,7 @@ class ProxyNodeTile extends StatelessWidget {
       child: ValueListenableBuilder<String>(
         valueListenable: nowListenable,
         builder: (_, now, _) {
-          final selected = selectable && now == name;
+          final selected = showSelection && now == name;
           return ValueListenableBuilder<String>(
             valueListenable: fixedListenable,
             builder: (_, fixed, _) {

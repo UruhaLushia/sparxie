@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
@@ -7,7 +5,7 @@ import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import 'section_panel.dart';
 
-/// Self-contained panel that pulls mihomo `/configs`, lets the user toggle
+/// Self-contained panel that pulls backend `/configs`, lets the user toggle
 /// the common knobs (mode, log level, lan/ipv6/sniff/tcp-concurrent, ports)
 /// and PATCHes them back. Used both inside the standard settings page and
 /// as the body of the cards-mode "基础配置" destination.
@@ -33,7 +31,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
   bool _loading = false;
   String? _error;
   String? _saving;
-  Map<String, dynamic>? _configs;
+  rust.CoreConfig? _configs;
 
   @override
   void initState() {
@@ -52,14 +50,10 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
     if (!identical(widget.store.active, _activeKey)) _bind();
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   void _bind() {
@@ -67,7 +61,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
     if (_activeKey == null) {
       setState(() {
         _configs = null;
-        _error = '请先在“后端”中添加一个 mihomo 实例';
+        _error = '请先在“后端”中添加一个后端';
       });
       return;
     }
@@ -82,39 +76,66 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
       _error = null;
     });
     try {
-      final raw = await rust.configs(target: target);
+      final configs = await rust.configs(target: target);
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
-      setState(() => _configs = jsonDecode(raw) as Map<String, dynamic>);
+      setState(() => _configs = configs);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = formatError(e));
+      setState(() => _error = _formatError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _patch(String key, Map<String, dynamic> body) async {
+  Future<void> _save(
+    String key,
+    Future<void> Function(rust.BackendTarget target) action,
+  ) async {
     final target = _target();
-    if (target == null) return;
+    if (target == null || _readOnly) return;
     setState(() {
       _saving = key;
       _error = null;
     });
     try {
-      await rust.patchConfigs(target: target, bodyJson: jsonEncode(body));
+      await action(target);
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = formatError(e));
+      setState(() => _error = _formatError(e));
     } finally {
       if (mounted) setState(() => _saving = null);
     }
   }
 
+  Future<void> _setMode(String mode) async {
+    final target = _target();
+    if (target == null || _readOnly) return;
+    setState(() {
+      _saving = 'mode';
+      _error = null;
+    });
+    try {
+      await rust.setConfigMode(target: target, mode: mode);
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _formatError(e));
+    } finally {
+      if (mounted) setState(() => _saving = null);
+    }
+  }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: _activeKey?.name);
+
+  bool get _readOnly => _activeKey?.type == ctl.BackendType.surge;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final c = _configs;
+    final readOnly = _readOnly;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -149,51 +170,72 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (c != null) ...[
-          if (widget.showOutboundMode && c.containsKey('mode')) ...[
+          if (widget.showOutboundMode && c.mode != null) ...[
             _ModeSection(
-              configs: c,
+              current: c.mode ?? 'rule',
               saving: _saving,
-              onChange: (mode) => _patch('mode', {'mode': mode}),
+              readOnly: readOnly,
+              onChange: _setMode,
             ),
             const SizedBox(height: 16),
           ],
-          if (_hasAny(c, const [
-            'log-level',
-            'tun',
-            'allow-lan',
-            'ipv6',
-            'tcp-concurrent',
-          ])) ...[
-            _SwitchSection(configs: c, saving: _saving, onPatch: _patch),
+          if (c.hasSwitches) ...[
+            _SwitchSection(
+              configs: c,
+              saving: _saving,
+              readOnly: readOnly,
+              onLogLevel: (level) => _save(
+                'log-level',
+                (target) =>
+                    rust.setConfigLogLevel(target: target, level: level),
+              ),
+              onTun: (enabled) => _save(
+                'tun',
+                (target) =>
+                    rust.setConfigTunEnabled(target: target, enabled: enabled),
+              ),
+              onBool: (key, value) => _save(
+                key,
+                (target) =>
+                    rust.setConfigBool(target: target, key: key, value: value),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
-          if (_hasAny(c, const ['port', 'socks-port', 'mixed-port']))
-            _PortsSection(configs: c, saving: _saving, onPatch: _patch),
+          if (c.hasPorts)
+            _PortsSection(
+              configs: c,
+              saving: _saving,
+              readOnly: readOnly,
+              onPort: (key, value) => _save(
+                key,
+                (target) =>
+                    rust.setConfigPort(target: target, key: key, value: value),
+              ),
+            ),
         ],
       ],
     );
-  }
-
-  bool _hasAny(Map<String, dynamic> configs, Iterable<String> keys) {
-    return keys.any(configs.containsKey);
   }
 }
 
 class _ModeSection extends StatelessWidget {
   const _ModeSection({
-    required this.configs,
+    required this.current,
     required this.saving,
+    required this.readOnly,
     required this.onChange,
   });
-  final Map<String, dynamic> configs;
+  final String current;
   final String? saving;
+  final bool readOnly;
   final ValueChanged<String> onChange;
 
   static const _modes = ['rule', 'global', 'direct'];
 
   @override
   Widget build(BuildContext context) {
-    final current = (configs['mode'] ?? 'rule').toString().toLowerCase();
+    final mode = current.toLowerCase();
     return SectionPanel(
       title: '出站模式',
       icon: Icons.alt_route,
@@ -203,8 +245,8 @@ class _ModeSection extends StatelessWidget {
           for (final m in _modes)
             ChoiceChip(
               label: Text(_label(m)),
-              selected: current == m,
-              onSelected: saving == 'mode' || current == m
+              selected: mode == m,
+              onSelected: readOnly || saving == 'mode' || mode == m
                   ? null
                   : (_) => onChange(m),
             ),
@@ -233,57 +275,58 @@ class _SwitchSection extends StatelessWidget {
   const _SwitchSection({
     required this.configs,
     required this.saving,
-    required this.onPatch,
+    required this.readOnly,
+    required this.onLogLevel,
+    required this.onTun,
+    required this.onBool,
   });
-  final Map<String, dynamic> configs;
+  final rust.CoreConfig configs;
   final String? saving;
-  final Future<void> Function(String key, Map<String, dynamic> body) onPatch;
+  final bool readOnly;
+  final ValueChanged<String> onLogLevel;
+  final ValueChanged<bool> onTun;
+  final void Function(String key, bool value) onBool;
 
   @override
   Widget build(BuildContext context) {
-    final tun = configs['tun'];
-    final tunEnabled = tun is Map && tun['enable'] == true;
-    final logLevel = (configs['log-level'] ?? 'info').toString().toLowerCase();
+    final logLevel = configs.logLevel ?? 'info';
     return SectionPanel(
       title: '通用',
       icon: Icons.tune,
       child: Column(
         children: [
-          if (configs.containsKey('log-level'))
+          if (configs.logLevel != null)
             _LogLevelRow(
               current: logLevel,
               busy: saving == 'log-level',
-              onChange: (v) => onPatch('log-level', {'log-level': v}),
+              readOnly: readOnly,
+              onChange: onLogLevel,
             ),
-          if (tun is Map)
+          if (configs.tunEnabled != null)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('TUN'),
               subtitle: saving == 'tun' ? const Text('保存中…') : null,
-              value: tunEnabled,
-              onChanged: saving == 'tun'
-                  ? null
-                  : (v) => onPatch('tun', {
-                      'tun': {'enable': v},
-                    }),
+              value: configs.tunEnabled!,
+              onChanged: readOnly || saving == 'tun' ? null : onTun,
             ),
-          if (configs.containsKey('allow-lan'))
+          if (configs.allowLan != null)
             _switchTile(
               label: '允许局域网连接',
               valueKey: 'allow-lan',
-              current: configs['allow-lan'] == true,
+              current: configs.allowLan!,
             ),
-          if (configs.containsKey('ipv6'))
+          if (configs.ipv6 != null)
             _switchTile(
               label: 'IPv6',
               valueKey: 'ipv6',
-              current: configs['ipv6'] == true,
+              current: configs.ipv6!,
             ),
-          if (configs.containsKey('tcp-concurrent'))
+          if (configs.tcpConcurrent != null)
             _switchTile(
               label: 'TCP 并发',
               valueKey: 'tcp-concurrent',
-              current: configs['tcp-concurrent'] == true,
+              current: configs.tcpConcurrent!,
             ),
         ],
       ),
@@ -301,7 +344,7 @@ class _SwitchSection extends StatelessWidget {
       title: Text(label),
       subtitle: busy ? const Text('保存中…') : null,
       value: current,
-      onChanged: busy ? null : (v) => onPatch(valueKey, {valueKey: v}),
+      onChanged: readOnly || busy ? null : (v) => onBool(valueKey, v),
     );
   }
 }
@@ -310,11 +353,13 @@ class _PortsSection extends StatefulWidget {
   const _PortsSection({
     required this.configs,
     required this.saving,
-    required this.onPatch,
+    required this.readOnly,
+    required this.onPort,
   });
-  final Map<String, dynamic> configs;
+  final rust.CoreConfig configs;
   final String? saving;
-  final Future<void> Function(String key, Map<String, dynamic> body) onPatch;
+  final bool readOnly;
+  final void Function(String key, int value) onPort;
 
   @override
   State<_PortsSection> createState() => _PortsSectionState();
@@ -339,9 +384,9 @@ class _PortsSectionState extends State<_PortsSection> {
 
   void _sync() {
     final c = widget.configs;
-    _http.text = '${c['port'] ?? 0}';
-    _socks.text = '${c['socks-port'] ?? 0}';
-    _mixed.text = '${c['mixed-port'] ?? 0}';
+    _http.text = '${c.port ?? 0}';
+    _socks.text = '${c.socksPort ?? 0}';
+    _mixed.text = '${c.mixedPort ?? 0}';
   }
 
   @override
@@ -360,13 +405,13 @@ class _PortsSectionState extends State<_PortsSection> {
       rows.add(row);
     }
 
-    if (widget.configs.containsKey('port')) {
+    if (widget.configs.port != null) {
       addRow(_row('HTTP', _http, 'port'));
     }
-    if (widget.configs.containsKey('socks-port')) {
+    if (widget.configs.socksPort != null) {
       addRow(_row('SOCKS5', _socks, 'socks-port'));
     }
-    if (widget.configs.containsKey('mixed-port')) {
+    if (widget.configs.mixedPort != null) {
       addRow(_row('Mixed', _mixed, 'mixed-port'));
     }
 
@@ -385,6 +430,7 @@ class _PortsSectionState extends State<_PortsSection> {
         Expanded(
           child: TextField(
             controller: c,
+            readOnly: widget.readOnly,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
@@ -398,11 +444,11 @@ class _PortsSectionState extends State<_PortsSection> {
         ),
         const SizedBox(width: 8),
         FilledButton.tonal(
-          onPressed: busy
+          onPressed: busy || widget.readOnly
               ? null
               : () {
                   final port = int.tryParse(c.text.trim()) ?? 0;
-                  widget.onPatch(key, {key: port});
+                  widget.onPort(key, port);
                 },
           child: busy
               ? const SizedBox.square(
@@ -420,11 +466,13 @@ class _LogLevelRow extends StatelessWidget {
   const _LogLevelRow({
     required this.current,
     required this.busy,
+    required this.readOnly,
     required this.onChange,
   });
 
   final String current;
   final bool busy;
+  final bool readOnly;
   final ValueChanged<String> onChange;
 
   static const _levels = ['silent', 'error', 'warning', 'info', 'debug'];
@@ -453,7 +501,7 @@ class _LogLevelRow extends StatelessWidget {
               for (final l in _levels)
                 DropdownMenuItem(value: l, child: Text(l)),
             ],
-            onChanged: busy
+            onChanged: readOnly || busy
                 ? null
                 : (v) {
                     if (v != null && v != current) onChange(v);
@@ -463,4 +511,15 @@ class _LogLevelRow extends StatelessWidget {
       ),
     );
   }
+}
+
+extension _CoreConfigView on rust.CoreConfig {
+  bool get hasSwitches =>
+      logLevel != null ||
+      tunEnabled != null ||
+      allowLan != null ||
+      ipv6 != null ||
+      tcpConcurrent != null;
+
+  bool get hasPorts => port != null || socksPort != null || mixedPort != null;
 }

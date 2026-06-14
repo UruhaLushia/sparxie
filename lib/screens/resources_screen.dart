@@ -162,14 +162,10 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     if (oldWidget.store != widget.store) _refresh();
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   Future<void> _refresh() async {
@@ -192,7 +188,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       setState(() => _items = list);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = formatError(e));
+      setState(() => _error = _formatError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -208,7 +204,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${p.name} 更新失败:${formatError(e)}')),
+        SnackBar(content: Text('${p.name} 更新失败:${_formatError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _busy.remove(p.name));
@@ -265,6 +261,9 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       ),
     );
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: widget.store.active?.name);
 }
 
 class _RuleProviderSectionState extends State<_RuleProviderSection> {
@@ -285,14 +284,10 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     if (oldWidget.store != widget.store) _refresh();
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   Future<void> _refresh() async {
@@ -315,7 +310,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       setState(() => _items = list);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = formatError(e));
+      setState(() => _error = _formatError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -331,7 +326,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${p.name} 更新失败:${formatError(e)}')),
+        SnackBar(content: Text('${p.name} 更新失败:${_formatError(e)}')),
       );
     } finally {
       if (mounted) setState(() => _busy.remove(p.name));
@@ -345,6 +340,9 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       }
     }
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: widget.store.active?.name);
 
   @override
   Widget build(BuildContext context) {

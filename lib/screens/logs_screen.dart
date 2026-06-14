@@ -255,13 +255,14 @@ class _LogTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final (badgeFg, badgeBg) = _levelColors(entry.level, scheme);
     final ts = entry.time.isEmpty ? '' : entry.time;
+    final level = entry.level.isEmpty ? 'log' : entry.level;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 60,
+            width: 68,
             margin: const EdgeInsets.only(top: 2),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
@@ -269,7 +270,10 @@ class _LogTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              entry.level.isEmpty ? 'log' : entry.level,
+              level,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.clip,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: badgeFg,

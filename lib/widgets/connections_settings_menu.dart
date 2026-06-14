@@ -83,7 +83,7 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                           _SettingsBlock(
                             label: '连接列表刷新间隔',
                             hint:
-                                '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加 mihomo 与设备负载。',
+                                '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加后端与设备负载。',
                             child: _RefreshChips(prefs: prefs),
                           ),
                           SwitchListTile(

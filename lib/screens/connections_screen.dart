@@ -34,14 +34,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   String _filter = '';
   ConnectionsTab _tab = ConnectionsTab.active;
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   @override
@@ -120,7 +116,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
@@ -152,7 +148,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
@@ -172,10 +168,13 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('清空失败:${formatError(e)}')));
+        ).showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
       }
     }
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: widget.store.active?.name);
 
   void _showDetail(ConnectionRow row) {
     showModalBottomSheet(
@@ -816,10 +815,13 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${formatError(e)}')));
+        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: widget.session.activeController?.name);
 
   @override
   Widget build(BuildContext context) {

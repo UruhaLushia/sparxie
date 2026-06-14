@@ -1,12 +1,11 @@
-//! mihomo controller backend, exposed to Flutter via flutter_rust_bridge.
+//! Proxy controller backend, exposed to Flutter via flutter_rust_bridge.
 
 mod assets;
+pub mod backend;
 mod cache;
-mod client;
-mod state;
+pub(crate) mod clash;
+pub(crate) mod surge;
 mod utils;
-
-pub mod api;
 
 mod frb_generated;
 

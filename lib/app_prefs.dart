@@ -20,7 +20,7 @@ enum NavLayout { cards, standard }
 
 /// Where the delay-test URL comes from when testing a group.
 ///
-/// `group` first tries the group's own `testUrl`/`tester` from mihomo
+/// `group` first tries the group's own `testUrl`/`tester` from the backend
 /// (falling back to the global URL when missing); `global` always uses
 /// the global URL.
 enum DelayTestScope { group, global }
@@ -102,6 +102,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kGroupSort = 'connectionsGroupSort';
   static const _kGroupSortAsc = 'connectionsGroupSortAsc';
   static const _kUiFontFamily = 'uiFontFamily';
+  static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -127,6 +128,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultGroupByProcess = false;
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
+  static const defaultAllowInsecureOnlineResources = false;
 
   static Future<AppPrefs> load(JsonStore store) async => AppPrefs._(store);
 
@@ -336,6 +338,16 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setUiFontFamily(String value) async {
     if (value == uiFontFamily) return;
     _put(_kUiFontFamily, value);
+  }
+
+  bool get allowInsecureOnlineResources => _bool(
+    _kAllowInsecureOnlineResources,
+    defaultAllowInsecureOnlineResources,
+  );
+
+  Future<void> setAllowInsecureOnlineResources(bool value) async {
+    if (value == allowInsecureOnlineResources) return;
+    _put(_kAllowInsecureOnlineResources, value);
   }
 
   static ProxiesSort _decodeSort(String? raw) {

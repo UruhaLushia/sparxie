@@ -6,30 +6,20 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
-import 'api.dart';
-import 'api/cache.dart';
-import 'api/configs.dart';
-import 'api/connections.dart';
-import 'api/dns.dart';
-import 'api/fonts.dart';
-import 'api/groups.dart';
-import 'api/icons.dart';
-import 'api/providers.dart';
-import 'api/proxies.dart';
-import 'api/proxies/catalog.dart';
-import 'api/proxies/delay.dart';
-import 'api/rules.dart';
-import 'api/storage.dart';
-import 'api/streams.dart';
-import 'api/upgrade.dart';
-import 'api/version.dart';
+import 'backend/api/connections.dart';
+import 'backend/api/control.dart';
+import 'backend/api/providers.dart';
+import 'backend/api/proxies.dart';
+import 'backend/api/proxy_delay.dart';
+import 'backend/api/resources.dart';
+import 'backend/api/rules.dart';
+import 'backend/api/streams.dart';
+import 'backend/api/target.dart';
+import 'backend/api/types.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
-import 'state/connections/types.dart';
-import 'state/logs.dart';
-import 'state/traffic.dart';
 import 'utils/error.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
@@ -72,10 +62,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  BackendTarget dco_decode_backend_target(dynamic raw);
+
+  @protected
+  BackendType dco_decode_backend_type(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
-  MihomoTarget dco_decode_box_autoadd_mihomo_target(dynamic raw);
+  BackendTarget dco_decode_box_autoadd_backend_target(dynamic raw);
+
+  @protected
+  bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -100,6 +99,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionsTotals dco_decode_connections_totals(dynamic raw);
+
+  @protected
+  CoreConfig dco_decode_core_config(dynamic raw);
 
   @protected
   GroupDelayEntry dco_decode_group_delay_entry(dynamic raw);
@@ -159,10 +161,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MihomoError dco_decode_mihomo_error(dynamic raw);
 
   @protected
-  MihomoTarget dco_decode_mihomo_target(dynamic raw);
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
-  String? dco_decode_opt_String(dynamic raw);
+  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
@@ -253,12 +255,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  BackendTarget sse_decode_backend_target(SseDeserializer deserializer);
+
+  @protected
+  BackendType sse_decode_backend_type(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
-  MihomoTarget sse_decode_box_autoadd_mihomo_target(
+  BackendTarget sse_decode_box_autoadd_backend_target(
     SseDeserializer deserializer,
   );
+
+  @protected
+  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
@@ -287,6 +298,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionsTotals sse_decode_connections_totals(SseDeserializer deserializer);
+
+  @protected
+  CoreConfig sse_decode_core_config(SseDeserializer deserializer);
 
   @protected
   GroupDelayEntry sse_decode_group_delay_entry(SseDeserializer deserializer);
@@ -360,10 +374,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MihomoError sse_decode_mihomo_error(SseDeserializer deserializer);
 
   @protected
-  MihomoTarget sse_decode_mihomo_target(SseDeserializer deserializer);
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
-  String? sse_decode_opt_String(SseDeserializer deserializer);
+  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
@@ -466,13 +480,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_backend_target(BackendTarget self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_backend_type(BackendType self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_mihomo_target(
-    MihomoTarget self,
+  void sse_encode_box_autoadd_backend_target(
+    BackendTarget self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
@@ -515,6 +538,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     ConnectionsTotals self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_core_config(CoreConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_group_delay_entry(
@@ -607,10 +633,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_mihomo_error(MihomoError self, SseSerializer serializer);
 
   @protected
-  void sse_encode_mihomo_target(MihomoTarget self, SseSerializer serializer);
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_String(String? self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);

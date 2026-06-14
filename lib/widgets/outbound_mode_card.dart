@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 
-/// Launcher card with three pill segments (规则/全局/直连). Tapping a
-/// segment immediately PATCHes mihomo's `mode`; no popup, no navigation.
+/// Launcher card with three pill segments (规则/全局/直连). Tapping a segment
+/// immediately switches the active backend mode; no popup, no navigation.
 class OutboundModeCard extends StatefulWidget {
   const OutboundModeCard({super.key, required this.store});
 
@@ -39,14 +37,10 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
     if (!identical(widget.store.active, _activeKey)) _bind();
   }
 
-  rust.MihomoTarget? _target() {
+  rust.BackendTarget? _target() {
     final c = widget.store.active;
     if (c == null) return null;
-    return rust.MihomoTarget(
-      baseUrl: c.baseUrl,
-      secret: c.secret.isEmpty ? null : c.secret,
-      allowInsecure: c.allowInsecure,
-    );
+    return rust.backendTargetForController(c);
   }
 
   void _bind() {
@@ -78,20 +72,20 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
       _saving = true;
     });
     try {
-      await rust.patchConfigs(
-        target: target,
-        bodyJson: jsonEncode({'mode': mode}),
-      );
+      await rust.setConfigMode(target: target, mode: mode);
     } catch (e) {
       if (!mounted) return;
       setState(() => _mode = previous);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('切换出站模式失败:${formatError(e)}')));
+      ).showSnackBar(SnackBar(content: Text('切换出站模式失败:${_formatError(e)}')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: _activeKey?.name);
 
   static const _options = <(String, String)>[
     ('rule', '规则'),

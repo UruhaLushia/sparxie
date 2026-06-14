@@ -25,7 +25,7 @@ class MihomoSession {
   final ControllerStore store;
 
   Controller? _activeKey;
-  rust.MihomoTarget? _target;
+  rust.BackendTarget? _target;
 
   StreamSubscription<rust.TrafficSample>? _trafficSub;
   StreamSubscription<rust.MemorySample>? _memorySub;
@@ -142,7 +142,9 @@ class MihomoSession {
   final ValueNotifier<bool> supportsCoreActions = ValueNotifier(false);
   final ValueNotifier<bool> supportsCoreManagement = ValueNotifier(false);
   final ValueNotifier<bool> supportsCacheFlush = ValueNotifier(false);
+  final ValueNotifier<bool> supportsDnsFlush = ValueNotifier(false);
   final ValueNotifier<bool> supportsMemory = ValueNotifier(false);
+  final ValueNotifier<bool> supportsExternalResources = ValueNotifier(false);
 
   /// While true, incoming connection deltas are dropped on the floor —
   /// the visible row list and totals stay frozen at the last applied
@@ -153,7 +155,7 @@ class MihomoSession {
   final ValueNotifier<bool> isStreaming = ValueNotifier(false);
 
   Controller? get activeController => _activeKey;
-  rust.MihomoTarget? get target => _target;
+  rust.BackendTarget? get target => _target;
 
   /// True when the active controller's host is this machine — process-icon
   /// resolution only makes sense for a local mihomo (the executable paths
@@ -254,7 +256,7 @@ class MihomoSession {
 
   Future<void> _loadProxyMemberWindow(
     _ProxyMemberLoadKey loadKey,
-    rust.MihomoTarget target,
+    rust.BackendTarget target,
     String group,
     ProxyMemberWindowRequest request,
     rust.ProxyMemberSort sort,
@@ -277,7 +279,7 @@ class MihomoSession {
         );
       }
     } catch (e) {
-      if (_target == target) error.value = formatError(e);
+      if (_target == target) error.value = _formatError(e);
       // The next visible tile build will retry.
     } finally {
       _proxyMemberLoads.remove(loadKey);
@@ -325,13 +327,7 @@ class MihomoSession {
     // so a dead/unreachable old controller doesn't keep retrying forever.
     final previous = _target;
     _activeKey = next;
-    _target = next == null
-        ? null
-        : rust.MihomoTarget(
-            baseUrl: next.baseUrl,
-            secret: next.secret.isEmpty ? null : next.secret,
-            allowInsecure: next.allowInsecure,
-          );
+    _target = next == null ? null : rust.backendTargetForController(next);
     if (previous != null) {
       unawaited(rust.stopTargetStreams(target: previous).catchError((_) {}));
     }
@@ -362,12 +358,17 @@ class MihomoSession {
     supportsCoreActions.value = false;
     supportsCoreManagement.value = false;
     supportsCacheFlush.value = false;
+    supportsDnsFlush.value =
+        _activeKey?.type == BackendType.surge && _target != null;
+    supportsCoreActions.value = supportsDnsFlush.value;
     supportsMemory.value = false;
+    supportsExternalResources.value =
+        _activeKey?.type == BackendType.clash && _target != null;
     connectionsPaused.value = false;
     ruleCount.value = 0;
     _iconsWarmed = false;
     if (_target == null) {
-      error.value = '请先在“后端”中添加一个 mihomo 实例';
+      error.value = '请先在“后端”中添加一个后端';
       return;
     }
     error.value = null;
@@ -447,9 +448,12 @@ class MihomoSession {
       isCmfa.value = info.isCmfa;
       isStash.value = info.isStash;
       supportsCoreConfig.value = info.supportsCoreConfig;
-      supportsCoreActions.value = info.supportsCoreActions;
       supportsCoreManagement.value = info.supportsCoreManagement;
       supportsCacheFlush.value = info.supportsCacheFlush;
+      supportsDnsFlush.value =
+          info.supportsCacheFlush || controller?.type == BackendType.surge;
+      supportsCoreActions.value =
+          info.supportsCoreActions || supportsDnsFlush.value;
       supportsMemory.value = info.supportsMemory;
       if (info.supportsMemory && _memorySub == null) _subscribeMemory();
     } catch (_) {
@@ -497,7 +501,7 @@ class MihomoSession {
         _warmIconCache(catalog.iconUrls);
       }
     } catch (e) {
-      if (identical(_activeKey, controller)) error.value = formatError(e);
+      if (identical(_activeKey, controller)) error.value = _formatError(e);
     } finally {
       _proxiesRefreshing = false;
       if (refreshAgain) unawaited(_refreshProxies());
@@ -555,7 +559,7 @@ class MihomoSession {
             connectionsTotals.value = ConnectionsTotals(
               upload: frame.totals.upload,
               download: frame.totals.download,
-              memory: frame.totals.memory,
+              memory: supportsMemory.value ? frame.totals.memory : BigInt.zero,
               count: connections.activeCount,
             );
             isStreaming.value = true;
@@ -594,7 +598,7 @@ class MihomoSession {
   }
 
   void _scheduleRetry(_RetryKind kind, Object cause) {
-    error.value = '$cause';
+    error.value = _formatError(cause);
     final controller = _activeKey;
     final delay = const Duration(seconds: 2);
     switch (kind) {
@@ -606,7 +610,9 @@ class MihomoSession {
       case _RetryKind.memory:
         _memoryRetry?.cancel();
         _memoryRetry = Timer(delay, () {
-          if (identical(_activeKey, controller)) _subscribeMemory();
+          if (identical(_activeKey, controller) && supportsMemory.value) {
+            _subscribeMemory();
+          }
         });
       case _RetryKind.connections:
         _connRetry?.cancel();
@@ -637,12 +643,17 @@ class MihomoSession {
     supportsCoreActions.dispose();
     supportsCoreManagement.dispose();
     supportsCacheFlush.dispose();
+    supportsDnsFlush.dispose();
     supportsMemory.dispose();
+    supportsExternalResources.dispose();
     ruleCount.dispose();
     connectionsPaused.dispose();
     error.dispose();
     isStreaming.dispose();
   }
+
+  String _formatError(Object error) =>
+      formatError(error, backendName: _activeKey?.name);
 }
 
 enum _RetryKind { traffic, memory, connections, logs }
@@ -656,7 +667,7 @@ class _QueuedProxyMemberLoad {
     required this.sort,
   });
 
-  final rust.MihomoTarget target;
+  final rust.BackendTarget target;
   final String group;
   final int firstIndex;
   final int lastIndex;
