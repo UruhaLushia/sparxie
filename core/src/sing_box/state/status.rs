@@ -12,6 +12,8 @@ use crate::sing_box::proto::daemon::{Status, SubscribeStatusRequest};
 struct LastStatus {
     traffic: TrafficSample,
     memory: MemorySample,
+    connections_in: u32,
+    connections_out: u32,
 }
 
 fn cache() -> &'static Mutex<HashMap<String, LastStatus>> {
@@ -66,7 +68,10 @@ pub fn store(target: &SingBoxTarget, status: &Status) -> (TrafficSample, MemoryS
     let memory = MemorySample {
         inuse: status.memory,
         oslimit: 0,
+        goroutines: non_negative_i32(status.goroutines),
     };
+    let connections_in = non_negative_i32(status.connections_in);
+    let connections_out = non_negative_i32(status.connections_out);
     cache()
         .lock()
         .expect("sing-box status cache poisoned")
@@ -75,6 +80,8 @@ pub fn store(target: &SingBoxTarget, status: &Status) -> (TrafficSample, MemoryS
             LastStatus {
                 traffic: traffic.clone(),
                 memory: memory.clone(),
+                connections_in,
+                connections_out,
             },
         );
     (traffic, memory)
@@ -89,6 +96,8 @@ pub fn totals(target: &SingBoxTarget) -> ConnectionsTotals {
         upload: status.traffic.up_total,
         download: status.traffic.down_total,
         memory: status.memory.inuse,
+        connections_in: status.connections_in,
+        connections_out: status.connections_out,
     }
 }
 
@@ -130,4 +139,8 @@ async fn stream_once(
 
 fn non_negative(value: i64) -> u64 {
     if value < 0 { 0 } else { value as u64 }
+}
+
+fn non_negative_i32(value: i32) -> u32 {
+    if value < 0 { 0 } else { value as u32 }
 }

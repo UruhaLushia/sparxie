@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bool_value`, `core_config_from_value`, `patch_config_value`, `string_value`, `u32_value`
+// These functions are ignored because they are not marked as `pub`: `bool_value`, `core_config_from_value`, `patch_config_value`, `string_list_value`, `string_value`, `u32_value`
 
 Future<CoreConfig> configs({required BackendTarget target}) =>
     RustLib.instance.api.crateBackendApiControlConfigs(target: target);

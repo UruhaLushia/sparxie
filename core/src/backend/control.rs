@@ -172,7 +172,8 @@ pub async fn restart_core(target: BackendTarget) -> Result<(), MihomoError> {
 fn core_config_from_value(raw: &Value) -> CoreConfig {
     let tun = raw.get("tun");
     CoreConfig {
-        mode: string_value(raw.get("mode")).map(|s| s.to_ascii_lowercase()),
+        mode: string_value(raw.get("mode")),
+        mode_options: string_list_value(raw.get("mode-options")),
         log_level: string_value(raw.get("log-level")).map(|s| s.to_ascii_lowercase()),
         tun_enabled: tun.and_then(|v| v.get("enable")).and_then(bool_value),
         allow_lan: raw.get("allow-lan").and_then(bool_value),
@@ -191,6 +192,16 @@ fn string_value(value: Option<&Value>) -> Option<String> {
         Value::Bool(b) => Some(b.to_string()),
         _ => None,
     })
+}
+
+fn string_list_value(value: Option<&Value>) -> Vec<String> {
+    let Some(Value::Array(items)) = value else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|item| string_value(Some(item)))
+        .collect()
 }
 
 fn bool_value(value: &Value) -> Option<bool> {

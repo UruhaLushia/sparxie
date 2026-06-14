@@ -13,6 +13,7 @@ import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
+import 'tailscale_screen.dart';
 
 /// "其他" — aggregator page that lists every settings/config destination
 /// as a tile. Each tile pushes a dedicated screen.
@@ -22,7 +23,7 @@ import 'rules_screen.dart';
 /// list alongside the settings tiles so every page stays reachable.
 ///
 /// [railManagesPages] is true in wide standard layout, where 核心配置 /
-/// 外部资源 / 核心操作 / 分流规则 are rail destinations (or [extras] when they
+/// 外部资源 / 核心操作 / 分流规则 can be rail destinations (or [extras] when they
 /// overflow) — so their static tiles are suppressed here to avoid a second
 /// path to the same page. 后端设置 / 应用设置 always live here.
 class SettingsScreen extends StatelessWidget {
@@ -49,12 +50,17 @@ class SettingsScreen extends StatelessWidget {
         session.supportsCoreConfig,
         session.supportsCoreActions,
         session.supportsExternalResources,
+        session.supportsRules,
+        session.supportsTailscale,
       ]),
       builder: (context, _) {
         final isCards = prefs.navLayout == NavLayout.cards;
         // 分流规则 has a dedicated 规则 card in cards layout; in wide standard
         // it's a rail item. Only the compact bottom bar shows its tile here.
-        final showRules = !isCards && !railManagesPages;
+        final showRules =
+            session.supportsRules.value && !isCards && !railManagesPages;
+        final showTailscale =
+            session.supportsTailscale.value && !isCards && !railManagesPages;
         final showCoreActions =
             !railManagesPages && session.supportsCoreActions.value;
         // 核心配置 / 外部资源 are hero cards in cards layout and rail items in
@@ -109,6 +115,13 @@ class SettingsScreen extends StatelessWidget {
               title: '分流规则',
               subtitle: '查看与筛选当前规则',
               onTap: () => _push(context, RulesScreen(store: store)),
+            ),
+          if (showTailscale)
+            _Tile(
+              icon: Icons.vpn_lock_outlined,
+              title: 'Tailscale',
+              subtitle: '状态与认证',
+              onTap: () => _push(context, TailscaleScreen(store: store)),
             ),
           if (showResources)
             _Tile(
@@ -758,22 +771,10 @@ class _EditDialogState extends State<_EditDialog> {
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isAndroid);
 
   bool get _supportsIpc => _type == ctl.BackendType.clash;
-
-  List<_Scheme> get _schemes => [
-    _Scheme.http,
-    _Scheme.https,
-    if (_supportsIpc && _isUnixHost) _Scheme.unix,
-    if (_supportsIpc && _isWindows) _Scheme.pipe,
-  ];
-
-  static String _schemeLabel(_Scheme s) => switch (s) {
-    _Scheme.http => 'http',
-    _Scheme.https => 'https',
-    _Scheme.unix => 'unix',
-    _Scheme.pipe => 'pipe',
-  };
+  bool get _canUseIpc => _supportsIpc && (_isUnixHost || _isWindows);
 
   bool get _isIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
+  bool get _useTls => _scheme == _Scheme.https;
 
   String get _defaultTcpAddress => switch (_type) {
     ctl.BackendType.clash => '127.0.0.1:9090',
@@ -794,8 +795,9 @@ class _EditDialogState extends State<_EditDialog> {
     _name = TextEditingController(text: c?.name ?? '');
     _type = c?.type ?? ctl.BackendType.clash;
     final (scheme, addr) = _decompose(c?.baseUrl ?? 'http://127.0.0.1:9090');
-    _scheme = _schemes.contains(scheme) ? scheme : _Scheme.http;
-    _address = TextEditingController(text: addr);
+    final allowed = _isSchemeAllowed(scheme);
+    _scheme = allowed ? scheme : _Scheme.http;
+    _address = TextEditingController(text: allowed ? addr : _defaultTcpAddress);
     _secret = TextEditingController(text: c?.secret ?? '');
     _allowInsecure = c?.allowInsecure ?? false;
   }
@@ -804,13 +806,53 @@ class _EditDialogState extends State<_EditDialog> {
     final oldDefault = _defaultTcpAddress;
     setState(() {
       _type = type;
-      if (!_schemes.contains(_scheme)) {
+      if (!_isSchemeAllowed(_scheme)) {
         _scheme = _Scheme.http;
       }
       final addr = _address.text.trim();
       if (addr.isEmpty || addr == oldDefault) {
         _address.text = _defaultTcpAddress;
       }
+    });
+  }
+
+  bool _isSchemeAllowed(_Scheme scheme) {
+    if (scheme == _Scheme.http || scheme == _Scheme.https) return true;
+    if (!_supportsIpc) return false;
+    return switch (scheme) {
+      _Scheme.unix => _isUnixHost,
+      _Scheme.pipe => _isWindows,
+      _ => false,
+    };
+  }
+
+  void _setTls(bool value) {
+    if (_isIpc) return;
+    setState(() {
+      _scheme = value ? _Scheme.https : _Scheme.http;
+      if (!value) _allowInsecure = false;
+    });
+  }
+
+  void _setIpc(bool value) {
+    if (value && !_canUseIpc) return;
+    final oldHint = _addressHint;
+    final oldDefault = _defaultTcpAddress;
+    setState(() {
+      if (value) {
+        _scheme = _isWindows ? _Scheme.pipe : _Scheme.unix;
+        final addr = _address.text.trim();
+        if (addr.isEmpty || addr == oldDefault) {
+          _address.text = _addressHint;
+        }
+      } else {
+        _scheme = _Scheme.http;
+        final addr = _address.text.trim();
+        if (addr.isEmpty || addr == oldHint) {
+          _address.text = _defaultTcpAddress;
+        }
+      }
+      if (_isIpc) _allowInsecure = false;
     });
   }
 
@@ -858,93 +900,96 @@ class _EditDialogState extends State<_EditDialog> {
     final isNew = widget.existing == null;
     return AlertDialog(
       title: Text(isNew ? '新增后端' : '编辑后端'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _name,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '名称',
-                hintText: '例如：家用机',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ctl.BackendType>(
-              initialValue: _type,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: '后端类型',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final type in ctl.BackendType.values)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: (type) {
-                if (type != null) _setType(type);
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 116,
-                  child: _SchemeDropdown(
-                    scheme: _scheme,
-                    schemes: _schemes,
-                    label: _schemeLabel,
-                    onChanged: (s) => setState(() => _scheme = s),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _address,
-                    decoration: InputDecoration(
-                      labelText: _isIpc ? '路径' : '地址',
-                      hintText: _addressHint,
-                      border: const OutlineInputBorder(),
-                    ),
-                    validator: (v) {
-                      final addr = v?.trim() ?? '';
-                      if (addr.isEmpty) {
-                        return _isIpc ? '请输入路径' : '请输入地址';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ],
-            ),
-            if (!_isIpc) ...[
-              const SizedBox(height: 12),
+      content: SizedBox(
+        width: 360,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               TextFormField(
-                controller: _secret,
+                controller: _name,
+                autofocus: true,
                 decoration: const InputDecoration(
-                  labelText: '密钥 (可选)',
+                  labelText: '名称',
+                  hintText: '例如：家用机',
                   border: OutlineInputBorder(),
                 ),
-                obscureText: true,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
               ),
-            ],
-            if (_scheme == _Scheme.https) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ctl.BackendType>(
+                initialValue: _type,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: '后端类型',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final type in ctl.BackendType.values)
+                    DropdownMenuItem(value: type, child: Text(type.label)),
+                ],
+                onChanged: (type) {
+                  if (type != null) _setType(type);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _address,
+                decoration: InputDecoration(
+                  labelText: _isIpc ? '路径' : '地址',
+                  hintText: _addressHint,
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final addr = v?.trim() ?? '';
+                  if (addr.isEmpty) {
+                    return _isIpc ? '请输入路径' : '请输入地址';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 4),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('跳过证书验证'),
-                subtitle: const Text('用于自签名 / 域名不匹配的 https 后端'),
-                value: _allowInsecure,
-                onChanged: (v) => setState(() => _allowInsecure = v),
+                title: const Text('TLS'),
+                subtitle: const Text('使用 https 连接后端'),
+                value: !_isIpc && _useTls,
+                onChanged: _isIpc ? null : _setTls,
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('IPC'),
+                subtitle: Text(
+                  _canUseIpc ? '使用本机 unix socket / pipe' : '当前后端类型不支持 IPC',
+                ),
+                value: _isIpc,
+                onChanged: _canUseIpc ? _setIpc : null,
+              ),
+              if (!_isIpc) ...[
+                const SizedBox(height: 4),
+                TextFormField(
+                  controller: _secret,
+                  decoration: const InputDecoration(
+                    labelText: '密钥 (可选)',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                ),
+              ],
+              if (_scheme == _Scheme.https) ...[
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('跳过证书验证'),
+                  subtitle: const Text('用于自签名 / 域名不匹配的 https 后端'),
+                  value: _allowInsecure,
+                  onChanged: (v) => setState(() => _allowInsecure = v),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [
@@ -970,43 +1015,6 @@ class _EditDialogState extends State<_EditDialog> {
           child: Text(isNew ? '添加' : '保存'),
         ),
       ],
-    );
-  }
-}
-
-/// Compact scheme prefix selector for the backend address field. Built as a
-/// form field so it shares the exact box metrics of the address TextFormField
-/// beside it (same border, height, baseline) and stays aligned.
-class _SchemeDropdown extends StatelessWidget {
-  const _SchemeDropdown({
-    required this.scheme,
-    required this.schemes,
-    required this.label,
-    required this.onChanged,
-  });
-
-  final _Scheme scheme;
-  final List<_Scheme> schemes;
-  final String Function(_Scheme) label;
-  final ValueChanged<_Scheme> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<_Scheme>(
-      initialValue: scheme,
-      isDense: true,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        labelText: '协议',
-        border: OutlineInputBorder(),
-      ),
-      items: [
-        for (final s in schemes)
-          DropdownMenuItem(value: s, child: Text(label(s))),
-      ],
-      onChanged: (s) {
-        if (s != null) onChanged(s);
-      },
     );
   }
 }

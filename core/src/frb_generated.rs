@@ -27,7 +27,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 754680228;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1825846757;
 
 // Section: executor
 
@@ -3554,6 +3554,272 @@ fn wire__crate__backend__api__resources__system_font_families_impl(
         },
     )
 }
+fn wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_endpoint_status_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::tailscale::TailscaleEndpointStatus::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_logout_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_logout",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_endpoint_tag = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok = crate::backend::api::tailscale::tailscale_logout(
+                            api_target,
+                            api_endpoint_tag,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_peer_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::tailscale::TailscalePeer::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_set_exit_node",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_endpoint_tag = <String>::sse_decode(&mut deserializer);
+            let api_stable_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok = crate::backend::api::tailscale::tailscale_set_exit_node(
+                            api_target,
+                            api_endpoint_tag,
+                            api_stable_id,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_status_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_status_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::tailscale::TailscaleStatus::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_status_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::backend::api::tailscale::TailscaleStatus,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok = crate::backend::api::tailscale::tailscale_status_stream(
+                            api_target, api_sink,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_user_group_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::tailscale::TailscaleUserGroup::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__backend__api__types__traffic_sample_default_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3996,6 +4262,19 @@ impl SseDecode
 
 impl SseDecode
     for StreamSink<
+        crate::backend::api::tailscale::TailscaleStatus,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
         crate::backend::api::types::TrafficSample,
         flutter_rust_bridge::for_generated::SseCodec,
     >
@@ -4213,10 +4492,14 @@ impl SseDecode for crate::backend::api::types::ConnectionsTotals {
         let mut var_upload = <u64>::sse_decode(deserializer);
         let mut var_download = <u64>::sse_decode(deserializer);
         let mut var_memory = <u64>::sse_decode(deserializer);
+        let mut var_connectionsIn = <u32>::sse_decode(deserializer);
+        let mut var_connectionsOut = <u32>::sse_decode(deserializer);
         return crate::backend::api::types::ConnectionsTotals {
             upload: var_upload,
             download: var_download,
             memory: var_memory,
+            connections_in: var_connectionsIn,
+            connections_out: var_connectionsOut,
         };
     }
 }
@@ -4225,6 +4508,7 @@ impl SseDecode for crate::backend::api::types::CoreConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_mode = <Option<String>>::sse_decode(deserializer);
+        let mut var_modeOptions = <Vec<String>>::sse_decode(deserializer);
         let mut var_logLevel = <Option<String>>::sse_decode(deserializer);
         let mut var_tunEnabled = <Option<bool>>::sse_decode(deserializer);
         let mut var_allowLan = <Option<bool>>::sse_decode(deserializer);
@@ -4235,6 +4519,7 @@ impl SseDecode for crate::backend::api::types::CoreConfig {
         let mut var_mixedPort = <Option<u32>>::sse_decode(deserializer);
         return crate::backend::api::types::CoreConfig {
             mode: var_mode,
+            mode_options: var_modeOptions,
             log_level: var_logLevel,
             tun_enabled: var_tunEnabled,
             allow_lan: var_allowLan,
@@ -4435,6 +4720,48 @@ impl SseDecode for Vec<crate::backend::api::types::RuleProviderEntry> {
     }
 }
 
+impl SseDecode for Vec<crate::backend::api::tailscale::TailscaleEndpointStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <crate::backend::api::tailscale::TailscaleEndpointStatus>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::backend::api::tailscale::TailscalePeer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::backend::api::tailscale::TailscalePeer>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::backend::api::tailscale::TailscaleUserGroup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <crate::backend::api::tailscale::TailscaleUserGroup>::sse_decode(deserializer),
+            );
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for crate::backend::api::types::LogEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4454,9 +4781,11 @@ impl SseDecode for crate::backend::api::types::MemorySample {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_inuse = <u64>::sse_decode(deserializer);
         let mut var_oslimit = <u64>::sse_decode(deserializer);
+        let mut var_goroutines = <u32>::sse_decode(deserializer);
         return crate::backend::api::types::MemorySample {
             inuse: var_inuse,
             oslimit: var_oslimit,
+            goroutines: var_goroutines,
         };
     }
 }
@@ -4521,6 +4850,19 @@ impl SseDecode for Option<bool> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<bool>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::backend::api::tailscale::TailscalePeer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::backend::api::tailscale::TailscalePeer>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -4724,6 +5066,107 @@ impl SseDecode for crate::backend::api::types::RulesSummary {
     }
 }
 
+impl SseDecode for crate::backend::api::tailscale::TailscaleEndpointStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_endpointTag = <String>::sse_decode(deserializer);
+        let mut var_backendState = <String>::sse_decode(deserializer);
+        let mut var_authUrl = <String>::sse_decode(deserializer);
+        let mut var_networkName = <String>::sse_decode(deserializer);
+        let mut var_magicDnsSuffix = <String>::sse_decode(deserializer);
+        let mut var_selfPeer =
+            <Option<crate::backend::api::tailscale::TailscalePeer>>::sse_decode(deserializer);
+        let mut var_userGroups =
+            <Vec<crate::backend::api::tailscale::TailscaleUserGroup>>::sse_decode(deserializer);
+        let mut var_exitNode =
+            <Option<crate::backend::api::tailscale::TailscalePeer>>::sse_decode(deserializer);
+        let mut var_keyAuth = <bool>::sse_decode(deserializer);
+        return crate::backend::api::tailscale::TailscaleEndpointStatus {
+            endpoint_tag: var_endpointTag,
+            backend_state: var_backendState,
+            auth_url: var_authUrl,
+            network_name: var_networkName,
+            magic_dns_suffix: var_magicDnsSuffix,
+            self_peer: var_selfPeer,
+            user_groups: var_userGroups,
+            exit_node: var_exitNode,
+            key_auth: var_keyAuth,
+        };
+    }
+}
+
+impl SseDecode for crate::backend::api::tailscale::TailscalePeer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_stableId = <String>::sse_decode(deserializer);
+        let mut var_hostName = <String>::sse_decode(deserializer);
+        let mut var_dnsName = <String>::sse_decode(deserializer);
+        let mut var_os = <String>::sse_decode(deserializer);
+        let mut var_tailscaleIps = <Vec<String>>::sse_decode(deserializer);
+        let mut var_online = <bool>::sse_decode(deserializer);
+        let mut var_exitNode = <bool>::sse_decode(deserializer);
+        let mut var_exitNodeOption = <bool>::sse_decode(deserializer);
+        let mut var_active = <bool>::sse_decode(deserializer);
+        let mut var_rxBytes = <i64>::sse_decode(deserializer);
+        let mut var_txBytes = <i64>::sse_decode(deserializer);
+        let mut var_keyExpiry = <i64>::sse_decode(deserializer);
+        let mut var_expired = <bool>::sse_decode(deserializer);
+        let mut var_sshHostKeys = <Vec<String>>::sse_decode(deserializer);
+        let mut var_shareeNode = <bool>::sse_decode(deserializer);
+        let mut var_lastSeen = <i64>::sse_decode(deserializer);
+        return crate::backend::api::tailscale::TailscalePeer {
+            stable_id: var_stableId,
+            host_name: var_hostName,
+            dns_name: var_dnsName,
+            os: var_os,
+            tailscale_ips: var_tailscaleIps,
+            online: var_online,
+            exit_node: var_exitNode,
+            exit_node_option: var_exitNodeOption,
+            active: var_active,
+            rx_bytes: var_rxBytes,
+            tx_bytes: var_txBytes,
+            key_expiry: var_keyExpiry,
+            expired: var_expired,
+            ssh_host_keys: var_sshHostKeys,
+            sharee_node: var_shareeNode,
+            last_seen: var_lastSeen,
+        };
+    }
+}
+
+impl SseDecode for crate::backend::api::tailscale::TailscaleStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_endpoints =
+            <Vec<crate::backend::api::tailscale::TailscaleEndpointStatus>>::sse_decode(
+                deserializer,
+            );
+        return crate::backend::api::tailscale::TailscaleStatus {
+            endpoints: var_endpoints,
+        };
+    }
+}
+
+impl SseDecode for crate::backend::api::tailscale::TailscaleUserGroup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_userId = <i64>::sse_decode(deserializer);
+        let mut var_loginName = <String>::sse_decode(deserializer);
+        let mut var_displayName = <String>::sse_decode(deserializer);
+        let mut var_profilePicUrl = <String>::sse_decode(deserializer);
+        let mut var_peers =
+            <Vec<crate::backend::api::tailscale::TailscalePeer>>::sse_decode(deserializer);
+        return crate::backend::api::tailscale::TailscaleUserGroup {
+            user_id: var_userId,
+            login_name: var_loginName,
+            display_name: var_displayName,
+            profile_pic_url: var_profilePicUrl,
+            peers: var_peers,
+        };
+    }
+}
+
 impl SseDecode for crate::backend::api::types::TrafficSample {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4784,6 +5227,7 @@ impl SseDecode for crate::backend::api::types::VersionInfo {
         let mut var_supportsCoreManagement = <bool>::sse_decode(deserializer);
         let mut var_supportsCacheFlush = <bool>::sse_decode(deserializer);
         let mut var_supportsMemory = <bool>::sse_decode(deserializer);
+        let mut var_supportsTailscale = <bool>::sse_decode(deserializer);
         return crate::backend::api::types::VersionInfo {
             version: var_version,
             is_cmfa: var_isCmfa,
@@ -4793,6 +5237,7 @@ impl SseDecode for crate::backend::api::types::VersionInfo {
             supports_core_management: var_supportsCoreManagement,
             supports_cache_flush: var_supportsCacheFlush,
             supports_memory: var_supportsMemory,
+            supports_tailscale: var_supportsTailscale,
         };
     }
 }
@@ -5259,38 +5704,80 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__backend__api__types__traffic_sample_default_impl(
+        89 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__backend__api__streams__traffic_stream_impl(
+        90 => wire__crate__backend__api__tailscale__tailscale_logout_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => {
+        91 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        92 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        93 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        94 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        95 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        96 => wire__crate__backend__api__types__traffic_sample_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        97 => wire__crate__backend__api__streams__traffic_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        98 => {
             wire__crate__backend__api__proxies__unfix_proxy_impl(port, ptr, rust_vec_len, data_len)
         }
-        92 => {
+        99 => {
             wire__crate__backend__api__control__update_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        93 => {
+        100 => {
             wire__crate__backend__api__control__upgrade_core_impl(port, ptr, rust_vec_len, data_len)
         }
-        94 => {
+        101 => {
             wire__crate__backend__api__control__upgrade_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        95 => {
+        102 => {
             wire__crate__backend__api__control__upgrade_ui_impl(port, ptr, rust_vec_len, data_len)
         }
-        96 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
-        97 => {
+        103 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
+        104 => {
             wire__crate__backend__api__control__version_info_impl(port, ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__backend__api__types__version_info_default_impl(
+        105 => wire__crate__backend__api__types__version_info_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -5537,6 +6024,8 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ConnectionsTo
             self.upload.into_into_dart().into_dart(),
             self.download.into_into_dart().into_dart(),
             self.memory.into_into_dart().into_dart(),
+            self.connections_in.into_into_dart().into_dart(),
+            self.connections_out.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5557,6 +6046,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::CoreConfig {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.mode.into_into_dart().into_dart(),
+            self.mode_options.into_into_dart().into_dart(),
             self.log_level.into_into_dart().into_dart(),
             self.tun_enabled.into_into_dart().into_dart(),
             self.allow_lan.into_into_dart().into_dart(),
@@ -5629,6 +6119,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::MemorySample 
         [
             self.inuse.into_into_dart().into_dart(),
             self.oslimit.into_into_dart().into_dart(),
+            self.goroutines.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5927,6 +6418,110 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::RulesSummary>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscaleEndpointStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.endpoint_tag.into_into_dart().into_dart(),
+            self.backend_state.into_into_dart().into_dart(),
+            self.auth_url.into_into_dart().into_dart(),
+            self.network_name.into_into_dart().into_dart(),
+            self.magic_dns_suffix.into_into_dart().into_dart(),
+            self.self_peer.into_into_dart().into_dart(),
+            self.user_groups.into_into_dart().into_dart(),
+            self.exit_node.into_into_dart().into_dart(),
+            self.key_auth.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::tailscale::TailscaleEndpointStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::TailscaleEndpointStatus>
+    for crate::backend::api::tailscale::TailscaleEndpointStatus
+{
+    fn into_into_dart(self) -> crate::backend::api::tailscale::TailscaleEndpointStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscalePeer {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.stable_id.into_into_dart().into_dart(),
+            self.host_name.into_into_dart().into_dart(),
+            self.dns_name.into_into_dart().into_dart(),
+            self.os.into_into_dart().into_dart(),
+            self.tailscale_ips.into_into_dart().into_dart(),
+            self.online.into_into_dart().into_dart(),
+            self.exit_node.into_into_dart().into_dart(),
+            self.exit_node_option.into_into_dart().into_dart(),
+            self.active.into_into_dart().into_dart(),
+            self.rx_bytes.into_into_dart().into_dart(),
+            self.tx_bytes.into_into_dart().into_dart(),
+            self.key_expiry.into_into_dart().into_dart(),
+            self.expired.into_into_dart().into_dart(),
+            self.ssh_host_keys.into_into_dart().into_dart(),
+            self.sharee_node.into_into_dart().into_dart(),
+            self.last_seen.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::tailscale::TailscalePeer
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::TailscalePeer>
+    for crate::backend::api::tailscale::TailscalePeer
+{
+    fn into_into_dart(self) -> crate::backend::api::tailscale::TailscalePeer {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscaleStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [self.endpoints.into_into_dart().into_dart()].into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::tailscale::TailscaleStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::TailscaleStatus>
+    for crate::backend::api::tailscale::TailscaleStatus
+{
+    fn into_into_dart(self) -> crate::backend::api::tailscale::TailscaleStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscaleUserGroup {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.user_id.into_into_dart().into_dart(),
+            self.login_name.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
+            self.profile_pic_url.into_into_dart().into_dart(),
+            self.peers.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::tailscale::TailscaleUserGroup
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::TailscaleUserGroup>
+    for crate::backend::api::tailscale::TailscaleUserGroup
+{
+    fn into_into_dart(self) -> crate::backend::api::tailscale::TailscaleUserGroup {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::TrafficSample {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5961,6 +6556,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::VersionInfo {
             self.supports_core_management.into_into_dart().into_dart(),
             self.supports_cache_flush.into_into_dart().into_dart(),
             self.supports_memory.into_into_dart().into_dart(),
+            self.supports_tailscale.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6023,6 +6619,18 @@ impl SseEncode
 impl SseEncode
     for StreamSink<
         crate::backend::api::types::ProxyDelayEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::backend::api::tailscale::TailscaleStatus,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -6208,6 +6816,8 @@ impl SseEncode for crate::backend::api::types::ConnectionsTotals {
         <u64>::sse_encode(self.upload, serializer);
         <u64>::sse_encode(self.download, serializer);
         <u64>::sse_encode(self.memory, serializer);
+        <u32>::sse_encode(self.connections_in, serializer);
+        <u32>::sse_encode(self.connections_out, serializer);
     }
 }
 
@@ -6215,6 +6825,7 @@ impl SseEncode for crate::backend::api::types::CoreConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<String>>::sse_encode(self.mode, serializer);
+        <Vec<String>>::sse_encode(self.mode_options, serializer);
         <Option<String>>::sse_encode(self.log_level, serializer);
         <Option<bool>>::sse_encode(self.tun_enabled, serializer);
         <Option<bool>>::sse_encode(self.allow_lan, serializer);
@@ -6368,6 +6979,36 @@ impl SseEncode for Vec<crate::backend::api::types::RuleProviderEntry> {
     }
 }
 
+impl SseEncode for Vec<crate::backend::api::tailscale::TailscaleEndpointStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::backend::api::tailscale::TailscaleEndpointStatus>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::backend::api::tailscale::TailscalePeer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::backend::api::tailscale::TailscalePeer>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::backend::api::tailscale::TailscaleUserGroup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::backend::api::tailscale::TailscaleUserGroup>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::backend::api::types::LogEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6382,6 +7023,7 @@ impl SseEncode for crate::backend::api::types::MemorySample {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.inuse, serializer);
         <u64>::sse_encode(self.oslimit, serializer);
+        <u32>::sse_encode(self.goroutines, serializer);
     }
 }
 
@@ -6438,6 +7080,16 @@ impl SseEncode for Option<bool> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <bool>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::backend::api::tailscale::TailscalePeer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::backend::api::tailscale::TailscalePeer>::sse_encode(value, serializer);
         }
     }
 }
@@ -6580,6 +7232,73 @@ impl SseEncode for crate::backend::api::types::RulesSummary {
     }
 }
 
+impl SseEncode for crate::backend::api::tailscale::TailscaleEndpointStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.endpoint_tag, serializer);
+        <String>::sse_encode(self.backend_state, serializer);
+        <String>::sse_encode(self.auth_url, serializer);
+        <String>::sse_encode(self.network_name, serializer);
+        <String>::sse_encode(self.magic_dns_suffix, serializer);
+        <Option<crate::backend::api::tailscale::TailscalePeer>>::sse_encode(
+            self.self_peer,
+            serializer,
+        );
+        <Vec<crate::backend::api::tailscale::TailscaleUserGroup>>::sse_encode(
+            self.user_groups,
+            serializer,
+        );
+        <Option<crate::backend::api::tailscale::TailscalePeer>>::sse_encode(
+            self.exit_node,
+            serializer,
+        );
+        <bool>::sse_encode(self.key_auth, serializer);
+    }
+}
+
+impl SseEncode for crate::backend::api::tailscale::TailscalePeer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.stable_id, serializer);
+        <String>::sse_encode(self.host_name, serializer);
+        <String>::sse_encode(self.dns_name, serializer);
+        <String>::sse_encode(self.os, serializer);
+        <Vec<String>>::sse_encode(self.tailscale_ips, serializer);
+        <bool>::sse_encode(self.online, serializer);
+        <bool>::sse_encode(self.exit_node, serializer);
+        <bool>::sse_encode(self.exit_node_option, serializer);
+        <bool>::sse_encode(self.active, serializer);
+        <i64>::sse_encode(self.rx_bytes, serializer);
+        <i64>::sse_encode(self.tx_bytes, serializer);
+        <i64>::sse_encode(self.key_expiry, serializer);
+        <bool>::sse_encode(self.expired, serializer);
+        <Vec<String>>::sse_encode(self.ssh_host_keys, serializer);
+        <bool>::sse_encode(self.sharee_node, serializer);
+        <i64>::sse_encode(self.last_seen, serializer);
+    }
+}
+
+impl SseEncode for crate::backend::api::tailscale::TailscaleStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::backend::api::tailscale::TailscaleEndpointStatus>>::sse_encode(
+            self.endpoints,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::backend::api::tailscale::TailscaleUserGroup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.user_id, serializer);
+        <String>::sse_encode(self.login_name, serializer);
+        <String>::sse_encode(self.display_name, serializer);
+        <String>::sse_encode(self.profile_pic_url, serializer);
+        <Vec<crate::backend::api::tailscale::TailscalePeer>>::sse_encode(self.peers, serializer);
+    }
+}
+
 impl SseEncode for crate::backend::api::types::TrafficSample {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6634,6 +7353,7 @@ impl SseEncode for crate::backend::api::types::VersionInfo {
         <bool>::sse_encode(self.supports_core_management, serializer);
         <bool>::sse_encode(self.supports_cache_flush, serializer);
         <bool>::sse_encode(self.supports_memory, serializer);
+        <bool>::sse_encode(self.supports_tailscale, serializer);
     }
 }
 
@@ -6648,7 +7368,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -6672,7 +7392,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

@@ -50,7 +50,13 @@ pub async fn configs(target: SurgeTarget) -> Result<Value, MihomoError> {
         .get("profile")
         .and_then(Value::as_str)
         .ok_or_else(|| MihomoError::InvalidJson("missing profile".into()))?;
-    Ok(profile_general_config(profile))
+    let mut config = profile_general_config(profile);
+    if let Value::Object(map) = &mut config
+        && let Ok(mode) = config_mode(target).await
+    {
+        map.insert("mode".into(), Value::String(mode));
+    }
+    Ok(config)
 }
 
 pub async fn config_mode(target: SurgeTarget) -> Result<String, MihomoError> {

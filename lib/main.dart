@@ -22,6 +22,7 @@ import 'screens/proxies_screen.dart';
 import 'screens/resources_screen.dart';
 import 'screens/rules_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/tailscale_screen.dart';
 import 'session.dart';
 import 'src/rust/frb_generated.dart';
 import 'utils.dart';
@@ -213,6 +214,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     required bool supportsCoreConfig,
     required bool supportsCoreActions,
     required bool supportsExternalResources,
+    required bool supportsRules,
+    required bool supportsTailscale,
   }) {
     final showOnStandardWide = layout == NavLayout.standard && !isCompact;
     return [
@@ -228,9 +231,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       if (showOnStandardWide && supportsCoreActions)
         const _Dest(icon: Icons.build_outlined, label: '核心操作'),
-      if (showOnStandardWide) const _Dest(icon: Icons.rule, label: '分流规则'),
+      if (showOnStandardWide && supportsRules)
+        const _Dest(icon: Icons.rule, label: '分流规则'),
+      if (showOnStandardWide && supportsTailscale)
+        const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
       if (layout == NavLayout.cards && supportsExternalResources)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
+      if (layout == NavLayout.cards && supportsTailscale)
+        const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
       const _Dest(icon: Icons.more_horiz, label: '其他'),
     ];
   }
@@ -253,6 +261,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       '日志' => LogsScreen(store: widget.store, session: widget.session),
       '核心操作' => CoreActionsScreen(store: widget.store, session: widget.session),
       '分流规则' => RulesScreen(store: widget.store),
+      'Tailscale' => TailscaleScreen(store: widget.store),
       _ => SettingsScreen(
         store: widget.store,
         prefs: widget.prefs,
@@ -274,7 +283,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       _stackLayout = layout;
       _stackLabels = labels;
       _stackPages = [for (final d in destinations) _buildPage(d)];
-      if (_index >= destinations.length) _index = 0;
+      if (_index >= destinations.length ||
+          (layout == NavLayout.standard && _index < 0)) {
+        _index = 0;
+      }
     }
     return _stackPages!;
   }
@@ -294,6 +306,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           widget.session.supportsCoreConfig,
           widget.session.supportsCoreActions,
           widget.session.supportsExternalResources,
+          widget.session.supportsRules,
+          widget.session.supportsTailscale,
         ]),
         builder: (context, _) {
           final size = MediaQuery.sizeOf(context);
@@ -310,6 +324,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             supportsCoreActions: widget.session.supportsCoreActions.value,
             supportsExternalResources:
                 widget.session.supportsExternalResources.value,
+            supportsRules: widget.session.supportsRules.value,
+            supportsTailscale: widget.session.supportsTailscale.value,
           );
           if (wide) {
             return cards
@@ -403,11 +419,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Widget _buildWideCards(List<_Dest> destinations) {
     final scheme = Theme.of(context).colorScheme;
     final pages = _ensureStackPages(NavLayout.cards, destinations);
+    final supportsRules = widget.session.supportsRules.value;
+    final effectiveIndex = !supportsRules && _index == -3 ? 0 : _index;
     // Sentinel _index < 0 means a hero-card-driven main area:
     //   -1: 核心配置
     //   -2: 连接列表  (实时流量 / 连接 hero card)
     //   -3: 分流规则  (规则 card)
-    final Widget mainArea = switch (_index) {
+    final Widget mainArea = switch (effectiveIndex) {
       -1 => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       -2 => ConnectionsScreen(
         store: widget.store,
@@ -415,7 +433,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         session: widget.session,
       ),
       -3 => RulesScreen(store: widget.store),
-      _ => IndexedStack(index: _index, children: pages),
+      _ => IndexedStack(index: effectiveIndex, children: pages),
     };
     return Scaffold(
       body: Row(
@@ -428,14 +446,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 store: widget.store,
                 session: widget.session,
                 destinations: destinations,
-                selectedIndex: _index,
+                selectedIndex: effectiveIndex,
                 onSelected: (i) => setState(() => _index = i),
                 onKernelTap: () => setState(() => _index = -1),
-                kernelSelected: _index == -1,
+                kernelSelected: effectiveIndex == -1,
                 onConnectionsTap: () => setState(() => _index = -2),
-                connectionsSelected: _index == -2,
+                connectionsSelected: effectiveIndex == -2,
+                supportsRules: supportsRules,
                 onRulesTap: () => setState(() => _index = -3),
-                rulesSelected: _index == -3,
+                rulesSelected: effectiveIndex == -3,
                 onBackendSettingsTap: _openBackendSettings,
               ),
             ),
@@ -497,6 +516,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             MaterialPageRoute(builder: (_) => RulesScreen(store: widget.store)),
           ),
           rulesSelected: false,
+          supportsRules: widget.session.supportsRules.value,
           onBackendSettingsTap: _openBackendSettings,
         ),
       ),
@@ -635,6 +655,7 @@ class _NavCardGrid extends StatelessWidget {
     required this.kernelSelected,
     required this.onConnectionsTap,
     required this.connectionsSelected,
+    required this.supportsRules,
     required this.onRulesTap,
     required this.rulesSelected,
     required this.onBackendSettingsTap,
@@ -649,6 +670,7 @@ class _NavCardGrid extends StatelessWidget {
   final bool kernelSelected;
   final VoidCallback onConnectionsTap;
   final bool connectionsSelected;
+  final bool supportsRules;
   final VoidCallback onRulesTap;
   final bool rulesSelected;
   final VoidCallback onBackendSettingsTap;
@@ -729,14 +751,15 @@ class _NavCardGrid extends StatelessWidget {
           badge: _badgeFor(i),
         ),
     ];
-    final ruleCard = _RuleNavCard(
-      session: session,
-      selected: rulesSelected,
-      onTap: onRulesTap,
-    );
-    // 规则 sits as the third small card in the grid.
     final cards = <Widget>[...navCards];
-    cards.insert(cards.length < 2 ? cards.length : 2, ruleCard);
+    if (supportsRules) {
+      final ruleCard = _RuleNavCard(
+        session: session,
+        selected: rulesSelected,
+        onTap: onRulesTap,
+      );
+      cards.insert(cards.length < 2 ? cards.length : 2, ruleCard);
+    }
 
     final rows = <Widget>[];
     for (var i = 0; i < cards.length; i += 2) {
@@ -847,11 +870,20 @@ class _StatusHeroCard extends StatelessWidget {
                             child: RepaintBoundary(
                               child: ValueListenableBuilder<rust.MemorySample>(
                                 valueListenable: session.memory,
-                                builder: (_, sample, _) => Text(
-                                  formatBytes(sample.inuse),
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
+                                builder: (_, sample, _) {
+                                  final text = sample.goroutines > 0
+                                      ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
+                                      : formatBytes(sample.inuse);
+                                  return Text(
+                                    text,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  );
+                                },
                               ),
                             ),
                           ),

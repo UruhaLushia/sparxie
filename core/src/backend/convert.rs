@@ -1,65 +1,10 @@
 use super::types::*;
 
-pub(in crate::backend) fn clash_member_sort(
-    sort: ProxyMemberSort,
-) -> crate::clash::api::ProxyMemberSort {
-    match sort {
-        ProxyMemberSort::Original => crate::clash::api::ProxyMemberSort::Original,
-        ProxyMemberSort::Name => crate::clash::api::ProxyMemberSort::Name,
-        ProxyMemberSort::Delay => crate::clash::api::ProxyMemberSort::Delay,
-    }
-}
+mod sorts;
 
-pub(in crate::backend) fn clash_list_kind(
-    kind: ConnectionsListKind,
-) -> crate::clash::state::connections::ConnectionsListKind {
-    match kind {
-        ConnectionsListKind::Active => {
-            crate::clash::state::connections::ConnectionsListKind::Active
-        }
-        ConnectionsListKind::Closed => {
-            crate::clash::state::connections::ConnectionsListKind::Closed
-        }
-    }
-}
-
-pub(in crate::backend) fn clash_conn_sort(
-    sort: ConnectionsSort,
-) -> crate::clash::state::connections::ConnectionsSort {
-    match sort {
-        ConnectionsSort::Time => crate::clash::state::connections::ConnectionsSort::Time,
-        ConnectionsSort::Upload => crate::clash::state::connections::ConnectionsSort::Upload,
-        ConnectionsSort::Download => crate::clash::state::connections::ConnectionsSort::Download,
-        ConnectionsSort::UploadSpeed => {
-            crate::clash::state::connections::ConnectionsSort::UploadSpeed
-        }
-        ConnectionsSort::DownloadSpeed => {
-            crate::clash::state::connections::ConnectionsSort::DownloadSpeed
-        }
-        ConnectionsSort::Process => crate::clash::state::connections::ConnectionsSort::Process,
-    }
-}
-
-pub(in crate::backend) fn clash_group_sort(
-    sort: ConnectionGroupSort,
-) -> crate::clash::state::connections::ConnectionGroupSort {
-    match sort {
-        ConnectionGroupSort::Name => crate::clash::state::connections::ConnectionGroupSort::Name,
-        ConnectionGroupSort::Count => crate::clash::state::connections::ConnectionGroupSort::Count,
-        ConnectionGroupSort::Upload => {
-            crate::clash::state::connections::ConnectionGroupSort::Upload
-        }
-        ConnectionGroupSort::Download => {
-            crate::clash::state::connections::ConnectionGroupSort::Download
-        }
-        ConnectionGroupSort::UploadSpeed => {
-            crate::clash::state::connections::ConnectionGroupSort::UploadSpeed
-        }
-        ConnectionGroupSort::DownloadSpeed => {
-            crate::clash::state::connections::ConnectionGroupSort::DownloadSpeed
-        }
-    }
-}
+pub(in crate::backend::api) use sorts::{
+    clash_conn_sort, clash_group_sort, clash_list_kind, clash_member_sort,
+};
 
 impl From<crate::clash::state::traffic::TrafficSample> for TrafficSample {
     fn from(value: crate::clash::state::traffic::TrafficSample) -> Self {
@@ -77,6 +22,7 @@ impl From<crate::clash::state::traffic::MemorySample> for MemorySample {
         Self {
             inuse: value.inuse,
             oslimit: value.oslimit,
+            goroutines: 0,
         }
     }
 }
@@ -133,6 +79,8 @@ impl From<crate::clash::state::connections::ConnectionsTotals> for ConnectionsTo
             upload: value.upload,
             download: value.download,
             memory: value.memory,
+            connections_in: 0,
+            connections_out: 0,
         }
     }
 }
@@ -293,6 +241,7 @@ impl From<crate::clash::api::VersionInfo> for VersionInfo {
             supports_core_management: value.supports_core_management,
             supports_cache_flush: value.supports_cache_flush,
             supports_memory: value.supports_memory,
+            supports_tailscale: false,
         }
     }
 }

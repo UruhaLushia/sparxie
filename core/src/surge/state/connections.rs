@@ -272,6 +272,8 @@ async fn fetch_snapshot(
             upload: traffic.up_total,
             download: traffic.down_total,
             memory: 0,
+            connections_in: 0,
+            connections_out: 0,
         },
         is_initial,
     })

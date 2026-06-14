@@ -18,6 +18,8 @@ pub mod resources;
 pub mod rules;
 #[path = "streams.rs"]
 pub mod streams;
+#[path = "tailscale.rs"]
+pub mod tailscale;
 #[path = "target.rs"]
 pub mod target;
 #[path = "types.rs"]

@@ -264,18 +264,27 @@ class ConnectionsTotals {
   final BigInt upload;
   final BigInt download;
   final BigInt memory;
+  final int connectionsIn;
+  final int connectionsOut;
 
   const ConnectionsTotals({
     required this.upload,
     required this.download,
     required this.memory,
+    required this.connectionsIn,
+    required this.connectionsOut,
   });
 
   static Future<ConnectionsTotals> default_() =>
       RustLib.instance.api.crateBackendApiTypesConnectionsTotalsDefault();
 
   @override
-  int get hashCode => upload.hashCode ^ download.hashCode ^ memory.hashCode;
+  int get hashCode =>
+      upload.hashCode ^
+      download.hashCode ^
+      memory.hashCode ^
+      connectionsIn.hashCode ^
+      connectionsOut.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -284,11 +293,14 @@ class ConnectionsTotals {
           runtimeType == other.runtimeType &&
           upload == other.upload &&
           download == other.download &&
-          memory == other.memory;
+          memory == other.memory &&
+          connectionsIn == other.connectionsIn &&
+          connectionsOut == other.connectionsOut;
 }
 
 class CoreConfig {
   final String? mode;
+  final List<String> modeOptions;
   final String? logLevel;
   final bool? tunEnabled;
   final bool? allowLan;
@@ -300,6 +312,7 @@ class CoreConfig {
 
   const CoreConfig({
     this.mode,
+    required this.modeOptions,
     this.logLevel,
     this.tunEnabled,
     this.allowLan,
@@ -316,6 +329,7 @@ class CoreConfig {
   @override
   int get hashCode =>
       mode.hashCode ^
+      modeOptions.hashCode ^
       logLevel.hashCode ^
       tunEnabled.hashCode ^
       allowLan.hashCode ^
@@ -331,6 +345,7 @@ class CoreConfig {
       other is CoreConfig &&
           runtimeType == other.runtimeType &&
           mode == other.mode &&
+          modeOptions == other.modeOptions &&
           logLevel == other.logLevel &&
           tunEnabled == other.tunEnabled &&
           allowLan == other.allowLan &&
@@ -392,14 +407,19 @@ class LogEntry {
 class MemorySample {
   final BigInt inuse;
   final BigInt oslimit;
+  final int goroutines;
 
-  const MemorySample({required this.inuse, required this.oslimit});
+  const MemorySample({
+    required this.inuse,
+    required this.oslimit,
+    required this.goroutines,
+  });
 
   static Future<MemorySample> default_() =>
       RustLib.instance.api.crateBackendApiTypesMemorySampleDefault();
 
   @override
-  int get hashCode => inuse.hashCode ^ oslimit.hashCode;
+  int get hashCode => inuse.hashCode ^ oslimit.hashCode ^ goroutines.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -407,7 +427,8 @@ class MemorySample {
       other is MemorySample &&
           runtimeType == other.runtimeType &&
           inuse == other.inuse &&
-          oslimit == other.oslimit;
+          oslimit == other.oslimit &&
+          goroutines == other.goroutines;
 }
 
 class ProxyCatalog {
@@ -779,6 +800,7 @@ class VersionInfo {
   final bool supportsCoreManagement;
   final bool supportsCacheFlush;
   final bool supportsMemory;
+  final bool supportsTailscale;
 
   const VersionInfo({
     required this.version,
@@ -789,6 +811,7 @@ class VersionInfo {
     required this.supportsCoreManagement,
     required this.supportsCacheFlush,
     required this.supportsMemory,
+    required this.supportsTailscale,
   });
 
   static Future<VersionInfo> default_() =>
@@ -803,7 +826,8 @@ class VersionInfo {
       supportsCoreActions.hashCode ^
       supportsCoreManagement.hashCode ^
       supportsCacheFlush.hashCode ^
-      supportsMemory.hashCode;
+      supportsMemory.hashCode ^
+      supportsTailscale.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -817,5 +841,6 @@ class VersionInfo {
           supportsCoreActions == other.supportsCoreActions &&
           supportsCoreManagement == other.supportsCoreManagement &&
           supportsCacheFlush == other.supportsCacheFlush &&
-          supportsMemory == other.supportsMemory;
+          supportsMemory == other.supportsMemory &&
+          supportsTailscale == other.supportsTailscale;
 }

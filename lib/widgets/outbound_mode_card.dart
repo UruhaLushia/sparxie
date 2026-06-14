@@ -4,7 +4,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 
-/// Launcher card with three pill segments (规则/全局/直连). Tapping a segment
+/// Launcher card for the backend's outbound modes. Tapping a segment
 /// immediately switches the active backend mode; no popup, no navigation.
 class OutboundModeCard extends StatefulWidget {
   const OutboundModeCard({super.key, required this.store});
@@ -18,6 +18,7 @@ class OutboundModeCard extends StatefulWidget {
 class _OutboundModeCardState extends State<OutboundModeCard> {
   ctl.Controller? _activeKey;
   String? _mode;
+  List<String> _options = const <String>[];
   bool _saving = false;
 
   @override
@@ -46,6 +47,7 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
   void _bind() {
     _activeKey = widget.store.active;
     _mode = null;
+    _options = const <String>[];
     if (_activeKey == null) return;
     _refresh();
   }
@@ -54,16 +56,27 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
     final target = _target();
     if (target == null) return;
     try {
-      final mode = await rust.configMode(target: target);
+      final configs = await rust.configs(target: target);
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
-      setState(() => _mode = mode);
+      setState(() {
+        _mode = configs.mode;
+        _options = _modeChoices(
+          configs,
+          useDefaultModes: _activeKey?.type != ctl.BackendType.singBox,
+        );
+      });
     } catch (_) {
       // Silent; the basic-config screen surfaces detailed errors.
+      if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      setState(() {
+        _mode = null;
+        _options = const <String>[];
+      });
     }
   }
 
   Future<void> _setMode(String mode) async {
-    if (_saving || mode == _mode) return;
+    if (_saving || (_mode != null && _sameMode(mode, _mode!))) return;
     final target = _target();
     if (target == null) return;
     final previous = _mode;
@@ -87,16 +100,12 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
   String _formatError(Object error) =>
       formatError(error, backendName: _activeKey?.name);
 
-  static const _options = <(String, String)>[
-    ('rule', '规则'),
-    ('global', '全局'),
-    ('direct', '直连'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final mode = _mode;
+    final options = _options;
+    if (options.isEmpty) return const SizedBox.shrink();
     return Material(
       color: scheme.surface,
       elevation: 1,
@@ -111,27 +120,81 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
             borderRadius: BorderRadius.circular(14),
           ),
           padding: const EdgeInsets.all(4),
-          child: Row(
-            children: [
-              for (final (key, label) in _options)
-                Expanded(
-                  child: _Segment(
-                    label: label,
-                    selected: mode == key,
-                    busy: _saving && mode == key,
-                    // Disable all segments while a switch is in flight to
-                    // prevent the user from racing two patches against each
-                    // other (and getting an out-of-order final state).
-                    onTap: mode == null || _saving ? null : () => _setMode(key),
+          child: options.length <= 3
+              ? Row(
+                  children: [
+                    for (final key in options)
+                      Expanded(
+                        child: _Segment(
+                          label: _label(key),
+                          selected: mode != null && _sameMode(mode, key),
+                          busy: _saving && mode != null && _sameMode(mode, key),
+                          onTap:
+                              _saving || (mode != null && _sameMode(mode, key))
+                              ? null
+                              : () => _setMode(key),
+                        ),
+                      ),
+                  ],
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final key in options)
+                        SizedBox(
+                          width: 96,
+                          child: _Segment(
+                            label: _label(key),
+                            selected: mode != null && _sameMode(mode, key),
+                            busy:
+                                _saving && mode != null && _sameMode(mode, key),
+                            onTap:
+                                _saving ||
+                                    (mode != null && _sameMode(mode, key))
+                                ? null
+                                : () => _setMode(key),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
-          ),
         ),
       ),
     );
   }
 }
+
+List<String> _modeChoices(
+  rust.CoreConfig configs, {
+  required bool useDefaultModes,
+}) {
+  const defaultModes = ['rule', 'global', 'direct'];
+  final choices = configs.modeOptions.isEmpty && useDefaultModes
+      ? defaultModes
+      : configs.modeOptions;
+  final out = <String>[];
+  for (final value in choices) {
+    if (value.isEmpty || out.any((item) => _sameMode(item, value))) continue;
+    out.add(value);
+  }
+  final current = configs.mode;
+  if (current != null &&
+      current.isNotEmpty &&
+      !out.any((item) => _sameMode(item, current))) {
+    out.insert(0, current);
+  }
+  return out;
+}
+
+bool _sameMode(String a, String b) => a.toLowerCase() == b.toLowerCase();
+
+String _label(String m) => switch (m.toLowerCase()) {
+  'rule' => '规则',
+  'global' => '全局',
+  'direct' => '直连',
+  _ => m,
+};
 
 class _Segment extends StatelessWidget {
   const _Segment({
