@@ -61,11 +61,19 @@ if [[ ! -x "$APP_EXECUTABLE" ]]; then
   exit 1
 fi
 
-if ! nm -g "$APP_EXECUTABLE" | grep -q '_frb_get_rust_content_hash'; then
-  echo "Rust FFI symbols are missing from $APP_EXECUTABLE" >&2
-  echo "Check iOS linker settings: DEAD_CODE_STRIPPING must be disabled for Runner." >&2
+SYMBOLS_FILE="$(mktemp)"
+if ! nm -g "$APP_EXECUTABLE" >"$SYMBOLS_FILE"; then
+  echo "Unable to inspect exported symbols in $APP_EXECUTABLE" >&2
+  rm -f "$SYMBOLS_FILE"
   exit 1
 fi
+if ! grep -q '_frb_get_rust_content_hash' "$SYMBOLS_FILE"; then
+  echo "Rust FFI symbols are missing from $APP_EXECUTABLE" >&2
+  echo "Check iOS linker settings: DEAD_CODE_STRIPPING must be disabled for Runner." >&2
+  rm -f "$SYMBOLS_FILE"
+  exit 1
+fi
+rm -f "$SYMBOLS_FILE"
 
 STAGE="$(mktemp -d)"
 cleanup() {
