@@ -39,6 +39,7 @@ tonic-prost = "0.14"
 url = "2.5"
 
 [build-dependencies]
+protoc-bin-vendored = "3.2.0"
 tonic-prost-build = "0.14"
 
 # Native icon resolver — only desktop resolves icons in Rust. Mobile either
