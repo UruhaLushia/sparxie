@@ -408,6 +408,8 @@
 				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
+					"-Xlinker",
+					"-export_dynamic",
 					"-force_load",
 					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
 				);
@@ -597,6 +599,8 @@
 				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
+					"-Xlinker",
+					"-export_dynamic",
 					"-force_load",
 					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
 				);
@@ -629,6 +633,8 @@
 				"IOS_RUST_TARGET[sdk=iphonesimulator*]" = "aarch64-apple-ios-sim";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
+					"-Xlinker",
+					"-export_dynamic",
 					"-force_load",
 					"$(SRCROOT)/../core/target/$(IOS_RUST_TARGET)/$(RUST_CORE_PROFILE_DIR)/libsparxie.a",
 				);
