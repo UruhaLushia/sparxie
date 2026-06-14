@@ -131,11 +131,7 @@ pub async fn fetch_groups(
     let state = slot.state.lock().expect("surge connections state poisoned");
     let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
     for row in state.active.values() {
-        let key = if row.process.is_empty() {
-            row.source_ip.clone()
-        } else {
-            row.process.clone()
-        };
+        let key = connection_group_key(row);
         let entry = groups
             .entry(key.clone())
             .or_insert_with(|| ConnectionGroup {
@@ -167,18 +163,34 @@ pub async fn fetch_group_connections(
     group: String,
     limit: u32,
 ) -> Vec<Connection> {
-    let rows = fetch_window(
-        target,
-        interval_ms,
-        ConnectionsListKind::Active,
-        0,
-        u32::MAX,
-    )
-    .await;
-    rows.into_iter()
-        .filter(|row| row.process == group || row.source_ip == group)
-        .take(limit as usize)
-        .collect()
+    let Some(slot) = slot_for(&target, interval_ms).await else {
+        return Vec::new();
+    };
+    let state = slot.state.lock().expect("surge connections state poisoned");
+    let mut rows: Vec<Connection> = state
+        .active
+        .values()
+        .filter(|row| connection_in_group(row, &group))
+        .cloned()
+        .collect();
+    sort_rows(&mut rows, state.sort, state.asc);
+    rows.into_iter().take(limit as usize).collect()
+}
+
+fn connection_group_key(row: &Connection) -> String {
+    if row.process.is_empty() {
+        row.source_ip.clone()
+    } else {
+        row.process.clone()
+    }
+}
+
+fn connection_in_group(row: &Connection, group: &str) -> bool {
+    if row.process.is_empty() {
+        row.source_ip == group
+    } else {
+        row.process == group
+    }
 }
 
 async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {

@@ -12,9 +12,14 @@ use crate::surge::client::{SurgeTarget, target_key};
 const LOGS_CAP: usize = 500;
 
 struct LogSlot {
-    buffer: Mutex<VecDeque<LogEntry>>,
-    seen: Mutex<HashSet<String>>,
+    state: Mutex<LogState>,
     sender: broadcast::Sender<LogEntry>,
+}
+
+#[derive(Default)]
+struct LogState {
+    buffer: VecDeque<(String, LogEntry)>,
+    seen: HashSet<String>,
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -44,8 +49,7 @@ pub async fn subscribe(
     } else {
         let (tx, _) = broadcast::channel::<LogEntry>(64);
         let slot = Arc::new(LogSlot {
-            buffer: Mutex::new(VecDeque::new()),
-            seen: Mutex::new(HashSet::new()),
+            state: Mutex::new(LogState::default()),
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
@@ -54,9 +58,16 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let buf = slot.buffer.lock().expect("surge logs buffer poisoned");
+    let state = slot.state.lock().expect("surge logs state poisoned");
     let rx = slot.sender.subscribe();
-    Ok((buf.iter().cloned().collect(), rx))
+    Ok((
+        state
+            .buffer
+            .iter()
+            .map(|(_, entry)| entry.clone())
+            .collect(),
+        rx,
+    ))
 }
 
 pub async fn clear(target: SurgeTarget, level: &str) {
@@ -64,10 +75,9 @@ pub async fn clear(target: SurgeTarget, level: &str) {
     let key = slot_key(&target, level);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
-        slot.buffer
-            .lock()
-            .expect("surge logs buffer poisoned")
-            .clear();
+        let mut state = slot.state.lock().expect("surge logs state poisoned");
+        state.buffer.clear();
+        state.seen.clear();
     }
 }
 
@@ -97,17 +107,16 @@ async fn poll_once(target: &SurgeTarget, level: &str, slot: &LogSlot) -> Result<
         }
         let key = event_key(&entry);
         {
-            let mut seen = slot.seen.lock().expect("surge logs seen set poisoned");
-            if !seen.insert(key) {
+            let mut state = slot.state.lock().expect("surge logs state poisoned");
+            if !state.seen.insert(key.clone()) {
                 continue;
             }
-        }
-        {
-            let mut buf = slot.buffer.lock().expect("surge logs buffer poisoned");
-            if buf.len() >= LOGS_CAP {
-                buf.pop_front();
+            if state.buffer.len() >= LOGS_CAP
+                && let Some((old_key, _)) = state.buffer.pop_front()
+            {
+                state.seen.remove(&old_key);
             }
-            buf.push_back(entry.clone());
+            state.buffer.push_back((key, entry.clone()));
         }
         let _ = slot.sender.send(entry);
     }
