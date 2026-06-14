@@ -30,6 +30,7 @@ pub async fn group_delay(
         .map(Into::into)
         .collect()),
         BackendType::Surge => crate::surge::api::group_delay(target.surge(), group).await,
+        BackendType::SingBox => crate::sing_box::api::group_delay(target.sing_box(), group).await,
     }
 }
 
@@ -61,6 +62,15 @@ pub async fn proxy_delay(
                     .unwrap_or(-1),
             )
         }
+        BackendType::SingBox => Ok(crate::sing_box::api::proxy_batch_delay(
+            target.sing_box(),
+            vec![name],
+        )
+        .await?
+        .into_iter()
+        .next()
+        .map(|entry| entry.delay as i64)
+        .unwrap_or(-1)),
     }
 }
 
@@ -88,6 +98,9 @@ pub async fn proxy_batch_delay(
         BackendType::Surge => {
             crate::surge::api::proxy_batch_delay(target.surge(), names, test_url).await
         }
+        BackendType::SingBox => {
+            crate::sing_box::api::proxy_batch_delay(target.sing_box(), names).await
+        }
     }
 }
 
@@ -114,6 +127,9 @@ pub async fn proxy_group_batch_delay(
         .collect()),
         BackendType::Surge => {
             crate::surge::api::proxy_group_batch_delay(target.surge(), group, test_url).await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::api::proxy_group_batch_delay(target.sing_box(), group).await
         }
     }
 }
@@ -195,6 +211,28 @@ pub async fn proxy_group_delay_stream(
             }
             Ok(())
         }
+        BackendType::SingBox => {
+            let delays =
+                crate::sing_box::api::proxy_group_batch_delay(target.sing_box(), group.clone())
+                    .await?;
+            for entry in delays {
+                let event = crate::sing_box::api::proxy_delay_window(
+                    target.sing_box(),
+                    group.clone(),
+                    entry.name,
+                    false,
+                    member_sort,
+                    window_offset,
+                    window_limit,
+                    window_members_hash,
+                )
+                .await?;
+                if sink.add(event).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -232,6 +270,19 @@ pub async fn proxy_delay_window(
                 group,
                 name,
                 test_url,
+                member_sort,
+                window_offset,
+                window_limit,
+                window_members_hash,
+            )
+            .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::api::proxy_delay_window(
+                target.sing_box(),
+                group,
+                name,
+                !test_url.trim().is_empty(),
                 member_sort,
                 window_offset,
                 window_limit,

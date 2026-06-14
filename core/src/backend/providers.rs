@@ -6,6 +6,7 @@ pub async fn proxy_providers(target: BackendTarget) -> Result<String, MihomoErro
     match target.backend_type {
         BackendType::Clash => crate::clash::api::proxy_providers(target.clash()).await,
         BackendType::Surge => crate::surge::api::proxy_providers(target.surge()).await,
+        BackendType::SingBox => Ok(serde_json::json!({ "providers": {} }).to_string()),
     }
 }
 
@@ -19,6 +20,7 @@ pub async fn proxy_provider_catalog(
             .map(Into::into)
             .collect()),
         BackendType::Surge => crate::surge::api::proxy_provider_catalog(target.surge()).await,
+        BackendType::SingBox => Ok(Vec::new()),
     }
 }
 
@@ -26,6 +28,7 @@ pub async fn proxy_provider_update(target: BackendTarget, name: String) -> Resul
     match target.backend_type {
         BackendType::Clash => crate::clash::api::proxy_provider_update(target.clash(), name).await,
         BackendType::Surge => crate::surge::api::unsupported("更新代理提供者").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("更新代理提供者").await,
     }
 }
 
@@ -38,6 +41,7 @@ pub async fn proxy_provider_healthcheck(
             crate::clash::api::proxy_provider_healthcheck(target.clash(), name).await
         }
         BackendType::Surge => crate::surge::api::unsupported("代理提供者健康检查").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("代理提供者健康检查").await,
     }
 }
 
@@ -45,6 +49,7 @@ pub async fn rule_providers(target: BackendTarget) -> Result<String, MihomoError
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rule_providers(target.clash()).await,
         BackendType::Surge => crate::surge::api::rule_providers(target.surge()).await,
+        BackendType::SingBox => Ok(serde_json::json!({ "providers": {} }).to_string()),
     }
 }
 
@@ -58,6 +63,7 @@ pub async fn rule_provider_catalog(
             .map(Into::into)
             .collect()),
         BackendType::Surge => crate::surge::api::rule_provider_catalog(target.surge()).await,
+        BackendType::SingBox => Ok(Vec::new()),
     }
 }
 
@@ -65,6 +71,7 @@ pub async fn rule_provider_update(target: BackendTarget, name: String) -> Result
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rule_provider_update(target.clash(), name).await,
         BackendType::Surge => crate::surge::api::unsupported("更新规则提供者").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("更新规则提供者").await,
     }
 }
 
@@ -72,6 +79,7 @@ pub async fn storage_get(target: BackendTarget, key: String) -> Result<String, M
     match target.backend_type {
         BackendType::Clash => crate::clash::api::storage_get(target.clash(), key).await,
         BackendType::Surge => crate::surge::api::unsupported("持久化存储").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("持久化存储").await,
     }
 }
 
@@ -83,6 +91,7 @@ pub async fn storage_set(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::storage_set(target.clash(), key, value).await,
         BackendType::Surge => crate::surge::api::unsupported("持久化存储").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("持久化存储").await,
     }
 }
 
@@ -90,5 +99,6 @@ pub async fn storage_delete(target: BackendTarget, key: String) -> Result<(), Mi
     match target.backend_type {
         BackendType::Clash => crate::clash::api::storage_delete(target.clash(), key).await,
         BackendType::Surge => crate::surge::api::unsupported("持久化存储").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("持久化存储").await,
     }
 }

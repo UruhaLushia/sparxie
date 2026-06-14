@@ -2,6 +2,7 @@
 pub enum BackendType {
     Clash,
     Surge,
+    SingBox,
 }
 
 #[derive(Clone, Debug)]
@@ -25,6 +26,14 @@ impl BackendTarget {
         crate::surge::client::SurgeTarget {
             base_url: self.base_url.clone(),
             key: self.secret.clone(),
+            allow_insecure: self.allow_insecure,
+        }
+    }
+
+    pub(in crate::backend) fn sing_box(&self) -> crate::sing_box::client::SingBoxTarget {
+        crate::sing_box::client::SingBoxTarget {
+            base_url: self.base_url.clone(),
+            secret: self.secret.clone(),
             allow_insecure: self.allow_insecure,
         }
     }

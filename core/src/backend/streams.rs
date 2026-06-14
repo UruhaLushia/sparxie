@@ -31,6 +31,17 @@ pub async fn traffic_stream(
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         },
+        BackendType::SingBox => {
+            let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok((traffic, _)) = item else { continue };
+                if sink.add(traffic).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -53,6 +64,17 @@ pub async fn memory_stream(
         BackendType::Surge => {
             let _ = sink;
             crate::surge::api::unsupported("内存流").await
+        }
+        BackendType::SingBox => {
+            let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok((_, memory)) = item else { continue };
+                if sink.add(memory).is_err() {
+                    break;
+                }
+            }
+            Ok(())
         }
     }
 }
@@ -97,6 +119,17 @@ pub async fn logs_stream(
             }
             Ok(())
         }
+        BackendType::SingBox => {
+            let mut stream =
+                crate::sing_box::state::logs::subscribe(target.sing_box(), &level).await?;
+            while let Some(log) = stream.message().await? {
+                let entries = crate::sing_box::state::logs::entries(log.messages, &level);
+                if !entries.is_empty() && sink.add(entries).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -104,5 +137,8 @@ pub async fn clear_logs(target: BackendTarget, level: String) {
     match target.backend_type {
         BackendType::Clash => crate::clash::state::logs::clear(target.clash(), &level).await,
         BackendType::Surge => crate::surge::state::logs::clear(target.surge(), &level).await,
+        BackendType::SingBox => {
+            let _ = crate::sing_box::state::logs::clear(target.sing_box()).await;
+        }
     }
 }

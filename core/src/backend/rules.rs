@@ -6,6 +6,7 @@ pub async fn rules_count(target: BackendTarget) -> u32 {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rules_count(target.clash()).await,
         BackendType::Surge => crate::surge::api::rules_count(target.surge()).await,
+        BackendType::SingBox => 0,
     }
 }
 
@@ -18,6 +19,7 @@ pub async fn rules_load(
             .await?
             .into()),
         BackendType::Surge => crate::surge::api::rules_load(target.surge(), filter).await,
+        BackendType::SingBox => Ok(RulesSummary::default()),
     }
 }
 
@@ -27,6 +29,7 @@ pub async fn rules_set_filter(target: BackendTarget, filter: String) -> RulesSum
             .await
             .into(),
         BackendType::Surge => crate::surge::api::rules_set_filter(target.surge(), filter).await,
+        BackendType::SingBox => RulesSummary::default(),
     }
 }
 
@@ -38,6 +41,7 @@ pub async fn rules_window(target: BackendTarget, offset: u32, limit: u32) -> Vec
             .map(Into::into)
             .collect(),
         BackendType::Surge => crate::surge::api::rules_window(target.surge(), offset, limit).await,
+        BackendType::SingBox => Vec::new(),
     }
 }
 
@@ -51,5 +55,6 @@ pub async fn rules_disable(
             crate::clash::api::rules_disable(target.clash(), index, disabled).await
         }
         BackendType::Surge => crate::surge::api::unsupported("禁用规则").await,
+        BackendType::SingBox => crate::sing_box::api::unsupported("禁用规则").await,
     }
 }

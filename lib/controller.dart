@@ -4,16 +4,19 @@ import 'config_store.dart';
 
 enum BackendType {
   clash,
-  surge;
+  surge,
+  singBox;
 
   String get label => switch (this) {
     BackendType.clash => 'Clash',
     BackendType.surge => 'Surge',
+    BackendType.singBox => 'sing-box',
   };
 
   static BackendType fromJson(Object? value) => switch (value) {
     'clash' => BackendType.clash,
     'surge' => BackendType.surge,
+    'singBox' || 'sing_box' || 'sing-box' => BackendType.singBox,
     _ => BackendType.clash,
   };
 }
