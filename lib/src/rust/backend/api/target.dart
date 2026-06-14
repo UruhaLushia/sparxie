@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clash`, `surge`
+// These functions are ignored because they are not marked as `pub`: `clash`, `sing_box`, `surge`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`
 
 class BackendTarget {
@@ -40,4 +40,4 @@ class BackendTarget {
           allowInsecure == other.allowInsecure;
 }
 
-enum BackendType { clash, surge }
+enum BackendType { clash, surge, singBox }

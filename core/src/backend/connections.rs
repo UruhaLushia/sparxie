@@ -14,6 +14,7 @@ pub async fn connections(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::connections(target.clash()).await,
         BackendType::Surge => crate::surge::api::connections(target.surge()).await,
+        BackendType::SingBox => Ok(serde_json::json!({ "connections": [] }).to_string()),
     }
 }
 
@@ -21,6 +22,7 @@ pub async fn close_connection(target: BackendTarget, id: String) -> Result<(), M
     match target.backend_type {
         BackendType::Clash => crate::clash::api::close_connection(target.clash(), id).await,
         BackendType::Surge => crate::surge::api::close_connection(target.surge(), id).await,
+        BackendType::SingBox => crate::sing_box::api::close_connection(target.sing_box(), id).await,
     }
 }
 
@@ -28,6 +30,9 @@ pub async fn close_all_connections(target: BackendTarget) -> Result<(), MihomoEr
     match target.backend_type {
         BackendType::Clash => crate::clash::api::close_all_connections(target.clash()).await,
         BackendType::Surge => crate::surge::api::close_all_connections(target.surge()).await,
+        BackendType::SingBox => {
+            crate::sing_box::api::close_all_connections(target.sing_box()).await
+        }
     }
 }
 
@@ -42,6 +47,9 @@ pub async fn close_connections_by_chain(
         BackendType::Surge => {
             crate::surge::api::close_connections_by_chain(target.surge(), chain).await
         }
+        BackendType::SingBox => {
+            crate::sing_box::api::close_connections_by_chain(target.sing_box(), chain).await
+        }
     }
 }
 
@@ -55,6 +63,9 @@ pub async fn close_connections_by_group(
             .map(|_| ()),
         BackendType::Surge => {
             crate::surge::api::close_connections_by_group(target.surge(), group).await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::api::close_connections_by_group(target.sing_box(), group).await
         }
     }
 }
@@ -80,6 +91,18 @@ pub async fn connections_stream(
         BackendType::Surge => {
             let rx =
                 crate::surge::state::connections::subscribe(target.surge(), interval_ms).await?;
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok(frame) = item else { continue };
+                if sink.add(frame).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
+        BackendType::SingBox => {
+            let rx = crate::sing_box::state::connections::subscribe(target.sing_box(), interval_ms)
+                .await?;
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(frame) = item else { continue };
@@ -121,6 +144,16 @@ pub async fn fetch_connection_window(
             )
             .await
         }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::fetch_window(
+                target.sing_box(),
+                interval_ms,
+                kind,
+                offset,
+                limit,
+            )
+            .await
+        }
     }
 }
 
@@ -144,6 +177,15 @@ pub async fn fetch_connection_groups(
         BackendType::Surge => {
             crate::surge::state::connections::fetch_groups(target.surge(), interval_ms, sort, asc)
                 .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::fetch_groups(
+                target.sing_box(),
+                interval_ms,
+                sort,
+                asc,
+            )
+            .await
         }
     }
 }
@@ -174,6 +216,15 @@ pub async fn fetch_connection_group_members(
             )
             .await
         }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::fetch_group_connections(
+                target.sing_box(),
+                interval_ms,
+                group,
+                limit,
+            )
+            .await
+        }
     }
 }
 
@@ -196,6 +247,10 @@ pub async fn set_connections_sort(
         BackendType::Surge => {
             crate::surge::state::connections::set_sort(target.surge(), interval_ms, sort, asc).await
         }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::set_sort(target.sing_box(), interval_ms, sort, asc)
+                .await
+        }
     }
 }
 
@@ -206,6 +261,9 @@ pub async fn clear_closed_connections(target: BackendTarget, interval_ms: u32) {
         }
         BackendType::Surge => {
             crate::surge::state::connections::clear_closed(target.surge(), interval_ms).await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::clear_closed(target.sing_box(), interval_ms).await
         }
     }
 }

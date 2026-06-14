@@ -778,6 +778,7 @@ class _EditDialogState extends State<_EditDialog> {
   String get _defaultTcpAddress => switch (_type) {
     ctl.BackendType.clash => '127.0.0.1:9090',
     ctl.BackendType.surge => '127.0.0.1:6171',
+    ctl.BackendType.singBox => '127.0.0.1:9091',
   };
 
   String get _addressHint => switch (_scheme) {

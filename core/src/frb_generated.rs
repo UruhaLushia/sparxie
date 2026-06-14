@@ -4039,6 +4039,7 @@ impl SseDecode for crate::backend::api::target::BackendType {
         return match inner {
             0 => crate::backend::api::target::BackendType::Clash,
             1 => crate::backend::api::target::BackendType::Surge,
+            2 => crate::backend::api::target::BackendType::SingBox,
             _ => unreachable!("Invalid variant for BackendType: {}", inner),
         };
     }
@@ -5342,6 +5343,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::target::BackendType 
         match self {
             Self::Clash => 0.into_dart(),
             Self::Surge => 1.into_dart(),
+            Self::SingBox => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -6066,6 +6068,7 @@ impl SseEncode for crate::backend::api::target::BackendType {
             match self {
                 crate::backend::api::target::BackendType::Clash => 0,
                 crate::backend::api::target::BackendType::Surge => 1,
+                crate::backend::api::target::BackendType::SingBox => 2,
                 _ => {
                     unimplemented!("");
                 }

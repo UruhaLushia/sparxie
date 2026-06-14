@@ -16,6 +16,17 @@ pub async fn groups(target: BackendTarget) -> Result<String, MihomoError> {
                     .join("\n"),
             )
         }
+        BackendType::SingBox => {
+            Ok(
+                crate::sing_box::api::proxy_catalog(target.sing_box(), true, String::new())
+                    .await?
+                    .groups
+                    .into_iter()
+                    .map(|group| group.name)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
+        }
     }
 }
 
@@ -38,6 +49,14 @@ pub async fn proxies(
                 .map(|group| group.name)
                 .collect::<Vec<_>>(),
         )?),
+        BackendType::SingBox => Ok(serde_json::to_string(
+            &crate::sing_box::api::proxy_catalog(target.sing_box(), true, String::new())
+                .await?
+                .groups
+                .into_iter()
+                .map(|group| group.name)
+                .collect::<Vec<_>>(),
+        )?),
     }
 }
 
@@ -45,6 +64,7 @@ pub async fn proxy_detail(target: BackendTarget, name: String) -> Result<String,
     match target.backend_type {
         BackendType::Clash => crate::clash::api::proxy_detail(target.clash(), name).await,
         BackendType::Surge => Ok(serde_json::json!({ "name": name }).to_string()),
+        BackendType::SingBox => Ok(serde_json::json!({ "name": name }).to_string()),
     }
 }
 
@@ -56,6 +76,9 @@ pub async fn select_proxy(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::select_proxy(target.clash(), group, name).await,
         BackendType::Surge => crate::surge::api::select_proxy(target.surge(), group, name).await,
+        BackendType::SingBox => {
+            crate::sing_box::api::select_proxy(target.sing_box(), group, name).await
+        }
     }
 }
 
@@ -63,6 +86,7 @@ pub async fn unfix_proxy(target: BackendTarget, name: String) -> Result<(), Miho
     match target.backend_type {
         BackendType::Clash => crate::clash::api::unfix_proxy(target.clash(), name).await,
         BackendType::Surge => crate::surge::api::unfix_proxy(target.surge(), name).await,
+        BackendType::SingBox => crate::sing_box::api::unfix_proxy(target.sing_box(), name).await,
     }
 }
 
@@ -81,6 +105,9 @@ pub async fn proxy_catalog(
         }
         BackendType::Surge => {
             crate::surge::api::proxy_catalog(target.surge(), include_hidden, filter).await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::api::proxy_catalog(target.sing_box(), include_hidden, filter).await
         }
     }
 }
@@ -107,6 +134,16 @@ pub async fn proxy_group_members(
         BackendType::Surge => {
             crate::surge::api::proxy_group_members(
                 target.surge(),
+                group,
+                offset,
+                limit,
+                member_sort,
+            )
+            .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::api::proxy_group_members(
+                target.sing_box(),
                 group,
                 offset,
                 limit,
