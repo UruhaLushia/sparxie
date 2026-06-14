@@ -22,7 +22,7 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  static const _levels = ['info', 'debug', 'warning', 'error', 'silent'];
+  static const _baseLevels = ['info', 'debug', 'warning', 'error', 'silent'];
 
   final ScrollController _scroll = ScrollController();
   Timer? _flushTimer;
@@ -122,6 +122,9 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final logs = widget.session.logs;
+    final levels = widget.store.active?.type == ctl.BackendType.singBox
+        ? const ['info', 'debug', 'trace', 'warning', 'error', 'silent']
+        : _baseLevels;
     return Scaffold(
       appBar: AppBar(
         title: const Text('日志'),
@@ -164,7 +167,7 @@ class _LogsScreenState extends State<LogsScreen> {
                     child: Wrap(
                       spacing: 8,
                       children: [
-                        for (final l in _levels)
+                        for (final l in levels)
                           ChoiceChip(
                             label: Text(l),
                             selected: widget.session.logsLevel == l,
@@ -312,6 +315,7 @@ class _LogTile extends StatelessWidget {
     switch (level.toLowerCase()) {
       case 'error':
       case 'fatal':
+      case 'panic':
         return (scheme.onErrorContainer, scheme.errorContainer);
       case 'warning':
       case 'warn':

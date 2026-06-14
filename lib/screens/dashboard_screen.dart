@@ -212,12 +212,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _connectionsCard() {
-    final count = widget.session.connectionsTotals.value.count;
+    final totals = widget.session.connectionsTotals.value;
+    final hasBreakdown = totals.connectionsIn > 0 || totals.connectionsOut > 0;
     return _MetricChartCard(
       icon: Icons.hub_outlined,
       label: '连接',
-      value: '$count',
+      value: hasBreakdown
+          ? '${totals.connectionsIn} / ${totals.connectionsOut}'
+          : '${totals.count}',
       unit: '',
+      footer: hasBreakdown ? '入站 / 出站' : null,
       samples: const <double>[],
       color: const Color(0xff10b981),
       formatY: (v) => '${v.round()}',
@@ -230,12 +234,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final limit = mem.oslimit > BigInt.zero
         ? '上限 ${formatBytes(mem.oslimit)}'
         : null;
+    final footer = [
+      ?limit,
+      if (mem.goroutines > 0) '协程 ${mem.goroutines}',
+    ].join(' · ');
     return _MetricChartCard(
       icon: Icons.memory_outlined,
       label: '内存',
       value: formatBytes(mem.inuse),
       unit: '',
-      footer: limit ?? '当前使用',
+      footer: footer.isEmpty ? '当前使用' : footer,
       samples: _history.memSnapshot,
       color: const Color(0xfff59e0b),
       formatY: (v) => formatBytes(BigInt.from(v.round())),

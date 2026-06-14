@@ -59,7 +59,7 @@ class MihomoSession {
   );
 
   final ValueNotifier<rust.MemorySample> memory = ValueNotifier(
-    rust.MemorySample(inuse: BigInt.zero, oslimit: BigInt.zero),
+    rust.MemorySample(inuse: BigInt.zero, oslimit: BigInt.zero, goroutines: 0),
   );
 
   late final ConnectionListNotifier connections = ConnectionListNotifier(
@@ -145,6 +145,8 @@ class MihomoSession {
   final ValueNotifier<bool> supportsDnsFlush = ValueNotifier(false);
   final ValueNotifier<bool> supportsMemory = ValueNotifier(false);
   final ValueNotifier<bool> supportsExternalResources = ValueNotifier(false);
+  final ValueNotifier<bool> supportsRules = ValueNotifier(false);
+  final ValueNotifier<bool> supportsTailscale = ValueNotifier(false);
 
   /// While true, incoming connection deltas are dropped on the floor —
   /// the visible row list and totals stay frozen at the last applied
@@ -343,7 +345,11 @@ class MihomoSession {
       upTotal: BigInt.zero,
       downTotal: BigInt.zero,
     );
-    memory.value = rust.MemorySample(inuse: BigInt.zero, oslimit: BigInt.zero);
+    memory.value = rust.MemorySample(
+      inuse: BigInt.zero,
+      oslimit: BigInt.zero,
+      goroutines: 0,
+    );
     connections.reset();
     connectionsTotals.value = ConnectionsTotals.zero;
     logs.reset();
@@ -364,6 +370,12 @@ class MihomoSession {
     supportsMemory.value = false;
     supportsExternalResources.value =
         _activeKey?.type == BackendType.clash && _target != null;
+    supportsRules.value =
+        _target != null && _activeKey?.type != BackendType.singBox;
+    supportsTailscale.value = false;
+    if (_activeKey?.type != BackendType.singBox && _logsLevel == 'trace') {
+      _logsLevel = 'debug';
+    }
     connectionsPaused.value = false;
     ruleCount.value = 0;
     _iconsWarmed = false;
@@ -455,6 +467,7 @@ class MihomoSession {
       supportsCoreActions.value =
           info.supportsCoreActions || supportsDnsFlush.value;
       supportsMemory.value = info.supportsMemory;
+      supportsTailscale.value = info.supportsTailscale;
       if (info.supportsMemory && _memorySub == null) _subscribeMemory();
     } catch (_) {
       // Non-critical; capability-gated UI stays hidden until a later reconnect.
@@ -466,7 +479,7 @@ class MihomoSession {
   Future<void> _probeRuleCount() async {
     final t = _target;
     final controller = _activeKey;
-    if (t == null) return;
+    if (t == null || !supportsRules.value) return;
     try {
       final n = await rust.rulesCount(target: t);
       if (identical(_activeKey, controller)) ruleCount.value = n;
@@ -560,6 +573,8 @@ class MihomoSession {
               upload: frame.totals.upload,
               download: frame.totals.download,
               memory: supportsMemory.value ? frame.totals.memory : BigInt.zero,
+              connectionsIn: frame.totals.connectionsIn,
+              connectionsOut: frame.totals.connectionsOut,
               count: connections.activeCount,
             );
             isStreaming.value = true;
@@ -646,6 +661,8 @@ class MihomoSession {
     supportsDnsFlush.dispose();
     supportsMemory.dispose();
     supportsExternalResources.dispose();
+    supportsRules.dispose();
+    supportsTailscale.dispose();
     ruleCount.dispose();
     connectionsPaused.dispose();
     error.dispose();

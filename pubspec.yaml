@@ -40,6 +40,8 @@ dependencies:
   sliver_tools: ^0.2.12
   freezed_annotation: ^3.0.0
   window_manager: ^0.5.1
+  url_launcher: ^6.3.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

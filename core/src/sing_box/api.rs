@@ -6,11 +6,13 @@ use crate::sing_box::client::SingBoxTarget;
 use crate::sing_box::proto::daemon::{ClashMode, CloseConnectionRequest};
 
 mod proxies;
+mod tailscale;
 
 pub use proxies::{
     group_delay, proxy_batch_delay, proxy_catalog, proxy_delay_window, proxy_group_batch_delay,
     proxy_group_members, select_proxy, unfix_proxy,
 };
+pub use tailscale::{tailscale_logout, tailscale_set_exit_node, tailscale_status_stream};
 
 pub async fn version(target: SingBoxTarget) -> Result<String, MihomoError> {
     Ok(target
@@ -24,12 +26,10 @@ pub async fn version(target: SingBoxTarget) -> Result<String, MihomoError> {
 
 pub async fn version_info(target: SingBoxTarget) -> Result<VersionInfo, MihomoError> {
     let version = version(target.clone()).await?;
-    let supports_core_config = target
-        .client()
-        .await?
-        .get_clash_mode_status(())
-        .await
-        .is_ok();
+    let supports_core_config = match target.client().await?.get_clash_mode_status(()).await {
+        Ok(response) => !response.into_inner().mode_list.is_empty(),
+        Err(_) => false,
+    };
     Ok(VersionInfo {
         version,
         supports_core_config,
@@ -37,12 +37,25 @@ pub async fn version_info(target: SingBoxTarget) -> Result<VersionInfo, MihomoEr
         supports_core_management: false,
         supports_cache_flush: false,
         supports_memory: true,
+        supports_tailscale: true,
         ..Default::default()
     })
 }
 
 pub async fn configs(target: SingBoxTarget) -> Result<Value, MihomoError> {
-    Ok(json!({ "mode": config_mode(target).await? }))
+    let status = target
+        .client()
+        .await?
+        .get_clash_mode_status(())
+        .await?
+        .into_inner();
+    if status.mode_list.is_empty() {
+        return Ok(json!({ "mode-options": [] }));
+    }
+    Ok(json!({
+        "mode": status.current_mode,
+        "mode-options": status.mode_list,
+    }))
 }
 
 pub async fn config_mode(target: SingBoxTarget) -> Result<String, MihomoError> {

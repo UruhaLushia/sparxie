@@ -18,6 +18,8 @@ pub struct MemorySample {
     pub inuse: u64,
     #[serde(default)]
     pub oslimit: u64,
+    #[serde(default)]
+    pub goroutines: u32,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -68,6 +70,8 @@ pub struct ConnectionsTotals {
     pub upload: u64,
     pub download: u64,
     pub memory: u64,
+    pub connections_in: u32,
+    pub connections_out: u32,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -217,6 +221,7 @@ pub struct RulesSummary {
 #[derive(Clone, Debug, Default)]
 pub struct CoreConfig {
     pub mode: Option<String>,
+    pub mode_options: Vec<String>,
     pub log_level: Option<String>,
     pub tun_enabled: Option<bool>,
     pub allow_lan: Option<bool>,
@@ -237,4 +242,5 @@ pub struct VersionInfo {
     pub supports_core_management: bool,
     pub supports_cache_flush: bool,
     pub supports_memory: bool,
+    pub supports_tailscale: bool,
 }

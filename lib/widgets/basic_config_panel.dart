@@ -136,6 +136,11 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
     final colorScheme = Theme.of(context).colorScheme;
     final c = _configs;
     final readOnly = _readOnly;
+    final modeChoices =
+        c?.modeChoices(
+          useDefaultModes: _activeKey?.type != ctl.BackendType.singBox,
+        ) ??
+        const <String>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -170,9 +175,10 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (c != null) ...[
-          if (widget.showOutboundMode && c.mode != null) ...[
+          if (widget.showOutboundMode && modeChoices.isNotEmpty) ...[
             _ModeSection(
-              current: c.mode ?? 'rule',
+              current: c.mode ?? '',
+              options: modeChoices,
               saving: _saving,
               readOnly: readOnly,
               onChange: _setMode,
@@ -222,31 +228,31 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
 class _ModeSection extends StatelessWidget {
   const _ModeSection({
     required this.current,
+    required this.options,
     required this.saving,
     required this.readOnly,
     required this.onChange,
   });
   final String current;
+  final List<String> options;
   final String? saving;
   final bool readOnly;
   final ValueChanged<String> onChange;
 
-  static const _modes = ['rule', 'global', 'direct'];
-
   @override
   Widget build(BuildContext context) {
-    final mode = current.toLowerCase();
     return SectionPanel(
       title: '出站模式',
       icon: Icons.alt_route,
       child: Wrap(
         spacing: 8,
+        runSpacing: 8,
         children: [
-          for (final m in _modes)
+          for (final m in options)
             ChoiceChip(
               label: Text(_label(m)),
-              selected: mode == m,
-              onSelected: readOnly || saving == 'mode' || mode == m
+              selected: _sameMode(current, m),
+              onSelected: readOnly || saving == 'mode' || _sameMode(current, m)
                   ? null
                   : (_) => onChange(m),
             ),
@@ -262,13 +268,6 @@ class _ModeSection extends StatelessWidget {
       ),
     );
   }
-
-  String _label(String m) => switch (m) {
-    'rule' => '规则',
-    'global' => '全局',
-    'direct' => '直连',
-    _ => m,
-  };
 }
 
 class _SwitchSection extends StatelessWidget {
@@ -514,6 +513,26 @@ class _LogLevelRow extends StatelessWidget {
 }
 
 extension _CoreConfigView on rust.CoreConfig {
+  static const _defaultModes = ['rule', 'global', 'direct'];
+
+  List<String> modeChoices({required bool useDefaultModes}) {
+    final choices = modeOptions.isEmpty && useDefaultModes
+        ? _defaultModes
+        : modeOptions;
+    final out = <String>[];
+    for (final value in choices) {
+      if (value.isEmpty || out.any((item) => _sameMode(item, value))) continue;
+      out.add(value);
+    }
+    final current = mode;
+    if (current != null &&
+        current.isNotEmpty &&
+        !out.any((item) => _sameMode(item, current))) {
+      out.insert(0, current);
+    }
+    return out;
+  }
+
   bool get hasSwitches =>
       logLevel != null ||
       tunEnabled != null ||
@@ -523,3 +542,12 @@ extension _CoreConfigView on rust.CoreConfig {
 
   bool get hasPorts => port != null || socksPort != null || mixedPort != null;
 }
+
+bool _sameMode(String a, String b) => a.toLowerCase() == b.toLowerCase();
+
+String _label(String m) => switch (m.toLowerCase()) {
+  'rule' => '规则',
+  'global' => '全局',
+  'direct' => '直连',
+  _ => m,
+};

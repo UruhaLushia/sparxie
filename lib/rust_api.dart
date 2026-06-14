@@ -13,6 +13,7 @@ export 'src/rust/backend/api/proxy_delay.dart';
 export 'src/rust/backend/api/resources.dart';
 export 'src/rust/backend/api/rules.dart';
 export 'src/rust/backend/api/streams.dart';
+export 'src/rust/backend/api/tailscale.dart';
 export 'src/rust/backend/api/target.dart';
 export 'src/rust/backend/api/types.dart';
 export 'src/rust/utils/error.dart';

@@ -14,6 +14,7 @@ import 'backend/api/proxy_delay.dart';
 import 'backend/api/resources.dart';
 import 'backend/api/rules.dart';
 import 'backend/api/streams.dart';
+import 'backend/api/tailscale.dart';
 import 'backend/api/target.dart';
 import 'backend/api/types.dart';
 import 'dart:async';
@@ -54,6 +55,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<TailscaleStatus> dco_decode_StreamSink_tailscale_status_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<TrafficSample> dco_decode_StreamSink_traffic_sample_Sse(
     dynamic raw,
   );
@@ -75,6 +81,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
+
+  @protected
+  TailscalePeer dco_decode_box_autoadd_tailscale_peer(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -152,6 +161,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<RuleProviderEntry> dco_decode_list_rule_provider_entry(dynamic raw);
 
   @protected
+  List<TailscaleEndpointStatus> dco_decode_list_tailscale_endpoint_status(
+    dynamic raw,
+  );
+
+  @protected
+  List<TailscalePeer> dco_decode_list_tailscale_peer(dynamic raw);
+
+  @protected
+  List<TailscaleUserGroup> dco_decode_list_tailscale_user_group(dynamic raw);
+
+  @protected
   LogEntry dco_decode_log_entry(dynamic raw);
 
   @protected
@@ -165,6 +185,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
+  TailscalePeer? dco_decode_opt_box_autoadd_tailscale_peer(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
@@ -201,6 +224,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RulesSummary dco_decode_rules_summary(dynamic raw);
+
+  @protected
+  TailscaleEndpointStatus dco_decode_tailscale_endpoint_status(dynamic raw);
+
+  @protected
+  TailscalePeer dco_decode_tailscale_peer(dynamic raw);
+
+  @protected
+  TailscaleStatus dco_decode_tailscale_status(dynamic raw);
+
+  @protected
+  TailscaleUserGroup dco_decode_tailscale_user_group(dynamic raw);
 
   @protected
   TrafficSample dco_decode_traffic_sample(dynamic raw);
@@ -247,6 +282,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<TailscaleStatus> sse_decode_StreamSink_tailscale_status_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<TrafficSample> sse_decode_StreamSink_traffic_sample_Sse(
     SseDeserializer deserializer,
   );
@@ -270,6 +310,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  TailscalePeer sse_decode_box_autoadd_tailscale_peer(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
@@ -365,6 +410,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TailscaleEndpointStatus> sse_decode_list_tailscale_endpoint_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TailscalePeer> sse_decode_list_tailscale_peer(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TailscaleUserGroup> sse_decode_list_tailscale_user_group(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   LogEntry sse_decode_log_entry(SseDeserializer deserializer);
 
   @protected
@@ -378,6 +438,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  TailscalePeer? sse_decode_opt_box_autoadd_tailscale_peer(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
@@ -418,6 +483,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RulesSummary sse_decode_rules_summary(SseDeserializer deserializer);
+
+  @protected
+  TailscaleEndpointStatus sse_decode_tailscale_endpoint_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TailscalePeer sse_decode_tailscale_peer(SseDeserializer deserializer);
+
+  @protected
+  TailscaleStatus sse_decode_tailscale_status(SseDeserializer deserializer);
+
+  @protected
+  TailscaleUserGroup sse_decode_tailscale_user_group(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TrafficSample sse_decode_traffic_sample(SseDeserializer deserializer);
@@ -471,6 +552,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_tailscale_status_Sse(
+    RustStreamSink<TailscaleStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_traffic_sample_Sse(
     RustStreamSink<TrafficSample> self,
     SseSerializer serializer,
@@ -496,6 +583,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_tailscale_peer(
+    TailscalePeer self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
@@ -624,6 +717,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_tailscale_endpoint_status(
+    List<TailscaleEndpointStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_tailscale_peer(
+    List<TailscalePeer> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_tailscale_user_group(
+    List<TailscaleUserGroup> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_log_entry(LogEntry self, SseSerializer serializer);
 
   @protected
@@ -637,6 +748,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_tailscale_peer(
+    TailscalePeer? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
@@ -697,6 +814,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_rules_summary(RulesSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tailscale_endpoint_status(
+    TailscaleEndpointStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tailscale_peer(TailscalePeer self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tailscale_status(
+    TailscaleStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tailscale_user_group(
+    TailscaleUserGroup self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_traffic_sample(TrafficSample self, SseSerializer serializer);

@@ -11,6 +11,7 @@ import 'backend/api/proxy_delay.dart';
 import 'backend/api/resources.dart';
 import 'backend/api/rules.dart';
 import 'backend/api/streams.dart';
+import 'backend/api/tailscale.dart';
 import 'backend/api/target.dart';
 import 'backend/api/types.dart';
 import 'dart:async';
@@ -76,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 754680228;
+  int get rustContentHash => 1825846757;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -481,6 +482,31 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<List<String>> crateBackendApiResourcesSystemFontFamilies();
+
+  Future<TailscaleEndpointStatus>
+  crateBackendApiTailscaleTailscaleEndpointStatusDefault();
+
+  Future<void> crateBackendApiTailscaleTailscaleLogout({
+    required BackendTarget target,
+    required String endpointTag,
+  });
+
+  Future<TailscalePeer> crateBackendApiTailscaleTailscalePeerDefault();
+
+  Future<void> crateBackendApiTailscaleTailscaleSetExitNode({
+    required BackendTarget target,
+    required String endpointTag,
+    required String stableId,
+  });
+
+  Future<TailscaleStatus> crateBackendApiTailscaleTailscaleStatusDefault();
+
+  Stream<TailscaleStatus> crateBackendApiTailscaleTailscaleStatusStream({
+    required BackendTarget target,
+  });
+
+  Future<TailscaleUserGroup>
+  crateBackendApiTailscaleTailscaleUserGroupDefault();
 
   Future<TrafficSample> crateBackendApiTypesTrafficSampleDefault();
 
@@ -3563,7 +3589,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "system_font_families", argNames: []);
 
   @override
-  Future<TrafficSample> crateBackendApiTypesTrafficSampleDefault() {
+  Future<TailscaleEndpointStatus>
+  crateBackendApiTailscaleTailscaleEndpointStatusDefault() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3572,6 +3599,234 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 89,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tailscale_endpoint_status,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateBackendApiTailscaleTailscaleEndpointStatusDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiTailscaleTailscaleEndpointStatusDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "tailscale_endpoint_status_default",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateBackendApiTailscaleTailscaleLogout({
+    required BackendTarget target,
+    required String endpointTag,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(endpointTag, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 90,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiTailscaleTailscaleLogoutConstMeta,
+        argValues: [target, endpointTag],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTailscaleTailscaleLogoutConstMeta =>
+      const TaskConstMeta(
+        debugName: "tailscale_logout",
+        argNames: ["target", "endpointTag"],
+      );
+
+  @override
+  Future<TailscalePeer> crateBackendApiTailscaleTailscalePeerDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 91,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tailscale_peer,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiTailscaleTailscalePeerDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTailscaleTailscalePeerDefaultConstMeta =>
+      const TaskConstMeta(debugName: "tailscale_peer_default", argNames: []);
+
+  @override
+  Future<void> crateBackendApiTailscaleTailscaleSetExitNode({
+    required BackendTarget target,
+    required String endpointTag,
+    required String stableId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(endpointTag, serializer);
+          sse_encode_String(stableId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 92,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiTailscaleTailscaleSetExitNodeConstMeta,
+        argValues: [target, endpointTag, stableId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTailscaleTailscaleSetExitNodeConstMeta =>
+      const TaskConstMeta(
+        debugName: "tailscale_set_exit_node",
+        argNames: ["target", "endpointTag", "stableId"],
+      );
+
+  @override
+  Future<TailscaleStatus> crateBackendApiTailscaleTailscaleStatusDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 93,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tailscale_status,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiTailscaleTailscaleStatusDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTailscaleTailscaleStatusDefaultConstMeta =>
+      const TaskConstMeta(debugName: "tailscale_status_default", argNames: []);
+
+  @override
+  Stream<TailscaleStatus> crateBackendApiTailscaleTailscaleStatusStream({
+    required BackendTarget target,
+  }) {
+    final sink = RustStreamSink<TailscaleStatus>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_StreamSink_tailscale_status_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 94,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta: kCrateBackendApiTailscaleTailscaleStatusStreamConstMeta,
+          argValues: [target, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateBackendApiTailscaleTailscaleStatusStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "tailscale_status_stream",
+        argNames: ["target", "sink"],
+      );
+
+  @override
+  Future<TailscaleUserGroup>
+  crateBackendApiTailscaleTailscaleUserGroupDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 95,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tailscale_user_group,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiTailscaleTailscaleUserGroupDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiTailscaleTailscaleUserGroupDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "tailscale_user_group_default",
+        argNames: [],
+      );
+
+  @override
+  Future<TrafficSample> crateBackendApiTypesTrafficSampleDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 96,
             port: port_,
           );
         },
@@ -3604,7 +3859,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 90,
+              funcId: 97,
               port: port_,
             );
           },
@@ -3641,7 +3896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 91,
+            funcId: 98,
             port: port_,
           );
         },
@@ -3674,7 +3929,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 99,
             port: port_,
           );
         },
@@ -3706,7 +3961,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 100,
             port: port_,
           );
         },
@@ -3739,7 +3994,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 101,
             port: port_,
           );
         },
@@ -3769,7 +4024,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 102,
             port: port_,
           );
         },
@@ -3799,7 +4054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 103,
             port: port_,
           );
         },
@@ -3829,7 +4084,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 104,
             port: port_,
           );
         },
@@ -3856,7 +4111,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 105,
             port: port_,
           );
         },
@@ -3913,6 +4168,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustStreamSink<TailscaleStatus> dco_decode_StreamSink_tailscale_status_Sse(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
   RustStreamSink<TrafficSample> dco_decode_StreamSink_traffic_sample_Sse(
     dynamic raw,
   ) {
@@ -3962,6 +4225,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool dco_decode_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  TailscalePeer dco_decode_box_autoadd_tailscale_peer(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_tailscale_peer(raw);
   }
 
   @protected
@@ -4065,12 +4334,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConnectionsTotals dco_decode_connections_totals(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ConnectionsTotals(
       upload: dco_decode_u_64(arr[0]),
       download: dco_decode_u_64(arr[1]),
       memory: dco_decode_u_64(arr[2]),
+      connectionsIn: dco_decode_u_32(arr[3]),
+      connectionsOut: dco_decode_u_32(arr[4]),
     );
   }
 
@@ -4078,18 +4349,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CoreConfig dco_decode_core_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return CoreConfig(
       mode: dco_decode_opt_String(arr[0]),
-      logLevel: dco_decode_opt_String(arr[1]),
-      tunEnabled: dco_decode_opt_box_autoadd_bool(arr[2]),
-      allowLan: dco_decode_opt_box_autoadd_bool(arr[3]),
-      ipv6: dco_decode_opt_box_autoadd_bool(arr[4]),
-      tcpConcurrent: dco_decode_opt_box_autoadd_bool(arr[5]),
-      port: dco_decode_opt_box_autoadd_u_32(arr[6]),
-      socksPort: dco_decode_opt_box_autoadd_u_32(arr[7]),
-      mixedPort: dco_decode_opt_box_autoadd_u_32(arr[8]),
+      modeOptions: dco_decode_list_String(arr[1]),
+      logLevel: dco_decode_opt_String(arr[2]),
+      tunEnabled: dco_decode_opt_box_autoadd_bool(arr[3]),
+      allowLan: dco_decode_opt_box_autoadd_bool(arr[4]),
+      ipv6: dco_decode_opt_box_autoadd_bool(arr[5]),
+      tcpConcurrent: dco_decode_opt_box_autoadd_bool(arr[6]),
+      port: dco_decode_opt_box_autoadd_u_32(arr[7]),
+      socksPort: dco_decode_opt_box_autoadd_u_32(arr[8]),
+      mixedPort: dco_decode_opt_box_autoadd_u_32(arr[9]),
     );
   }
 
@@ -4196,6 +4468,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TailscaleEndpointStatus> dco_decode_list_tailscale_endpoint_status(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_tailscale_endpoint_status)
+        .toList();
+  }
+
+  @protected
+  List<TailscalePeer> dco_decode_list_tailscale_peer(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_tailscale_peer).toList();
+  }
+
+  @protected
+  List<TailscaleUserGroup> dco_decode_list_tailscale_user_group(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_tailscale_user_group).toList();
+  }
+
+  @protected
   LogEntry dco_decode_log_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -4212,11 +4506,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MemorySample dco_decode_memory_sample(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return MemorySample(
       inuse: dco_decode_u_64(arr[0]),
       oslimit: dco_decode_u_64(arr[1]),
+      goroutines: dco_decode_u_32(arr[2]),
     );
   }
 
@@ -4257,6 +4552,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_bool(raw);
+  }
+
+  @protected
+  TailscalePeer? dco_decode_opt_box_autoadd_tailscale_peer(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_tailscale_peer(raw);
   }
 
   @protected
@@ -4412,6 +4713,77 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TailscaleEndpointStatus dco_decode_tailscale_endpoint_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return TailscaleEndpointStatus(
+      endpointTag: dco_decode_String(arr[0]),
+      backendState: dco_decode_String(arr[1]),
+      authUrl: dco_decode_String(arr[2]),
+      networkName: dco_decode_String(arr[3]),
+      magicDnsSuffix: dco_decode_String(arr[4]),
+      selfPeer: dco_decode_opt_box_autoadd_tailscale_peer(arr[5]),
+      userGroups: dco_decode_list_tailscale_user_group(arr[6]),
+      exitNode: dco_decode_opt_box_autoadd_tailscale_peer(arr[7]),
+      keyAuth: dco_decode_bool(arr[8]),
+    );
+  }
+
+  @protected
+  TailscalePeer dco_decode_tailscale_peer(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    return TailscalePeer(
+      stableId: dco_decode_String(arr[0]),
+      hostName: dco_decode_String(arr[1]),
+      dnsName: dco_decode_String(arr[2]),
+      os: dco_decode_String(arr[3]),
+      tailscaleIps: dco_decode_list_String(arr[4]),
+      online: dco_decode_bool(arr[5]),
+      exitNode: dco_decode_bool(arr[6]),
+      exitNodeOption: dco_decode_bool(arr[7]),
+      active: dco_decode_bool(arr[8]),
+      rxBytes: dco_decode_i_64(arr[9]),
+      txBytes: dco_decode_i_64(arr[10]),
+      keyExpiry: dco_decode_i_64(arr[11]),
+      expired: dco_decode_bool(arr[12]),
+      sshHostKeys: dco_decode_list_String(arr[13]),
+      shareeNode: dco_decode_bool(arr[14]),
+      lastSeen: dco_decode_i_64(arr[15]),
+    );
+  }
+
+  @protected
+  TailscaleStatus dco_decode_tailscale_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return TailscaleStatus(
+      endpoints: dco_decode_list_tailscale_endpoint_status(arr[0]),
+    );
+  }
+
+  @protected
+  TailscaleUserGroup dco_decode_tailscale_user_group(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return TailscaleUserGroup(
+      userId: dco_decode_i_64(arr[0]),
+      loginName: dco_decode_String(arr[1]),
+      displayName: dco_decode_String(arr[2]),
+      profilePicUrl: dco_decode_String(arr[3]),
+      peers: dco_decode_list_tailscale_peer(arr[4]),
+    );
+  }
+
+  @protected
   TrafficSample dco_decode_traffic_sample(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -4459,8 +4831,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   VersionInfo dco_decode_version_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return VersionInfo(
       version: dco_decode_String(arr[0]),
       isCmfa: dco_decode_bool(arr[1]),
@@ -4470,6 +4842,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       supportsCoreManagement: dco_decode_bool(arr[5]),
       supportsCacheFlush: dco_decode_bool(arr[6]),
       supportsMemory: dco_decode_bool(arr[7]),
+      supportsTailscale: dco_decode_bool(arr[8]),
     );
   }
 
@@ -4506,6 +4879,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   RustStreamSink<ProxyDelayEvent> sse_decode_StreamSink_proxy_delay_event_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  RustStreamSink<TailscaleStatus> sse_decode_StreamSink_tailscale_status_Sse(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4567,6 +4948,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_bool(deserializer));
+  }
+
+  @protected
+  TailscalePeer sse_decode_box_autoadd_tailscale_peer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_tailscale_peer(deserializer));
   }
 
   @protected
@@ -4715,10 +5104,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_upload = sse_decode_u_64(deserializer);
     var var_download = sse_decode_u_64(deserializer);
     var var_memory = sse_decode_u_64(deserializer);
+    var var_connectionsIn = sse_decode_u_32(deserializer);
+    var var_connectionsOut = sse_decode_u_32(deserializer);
     return ConnectionsTotals(
       upload: var_upload,
       download: var_download,
       memory: var_memory,
+      connectionsIn: var_connectionsIn,
+      connectionsOut: var_connectionsOut,
     );
   }
 
@@ -4726,6 +5119,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CoreConfig sse_decode_core_config(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_mode = sse_decode_opt_String(deserializer);
+    var var_modeOptions = sse_decode_list_String(deserializer);
     var var_logLevel = sse_decode_opt_String(deserializer);
     var var_tunEnabled = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_allowLan = sse_decode_opt_box_autoadd_bool(deserializer);
@@ -4736,6 +5130,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_mixedPort = sse_decode_opt_box_autoadd_u_32(deserializer);
     return CoreConfig(
       mode: var_mode,
+      modeOptions: var_modeOptions,
       logLevel: var_logLevel,
       tunEnabled: var_tunEnabled,
       allowLan: var_allowLan,
@@ -4928,6 +5323,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TailscaleEndpointStatus> sse_decode_list_tailscale_endpoint_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TailscaleEndpointStatus>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_tailscale_endpoint_status(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TailscalePeer> sse_decode_list_tailscale_peer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TailscalePeer>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_tailscale_peer(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TailscaleUserGroup> sse_decode_list_tailscale_user_group(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TailscaleUserGroup>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_tailscale_user_group(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   LogEntry sse_decode_log_entry(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_time = sse_decode_String(deserializer);
@@ -4941,7 +5378,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_inuse = sse_decode_u_64(deserializer);
     var var_oslimit = sse_decode_u_64(deserializer);
-    return MemorySample(inuse: var_inuse, oslimit: var_oslimit);
+    var var_goroutines = sse_decode_u_32(deserializer);
+    return MemorySample(
+      inuse: var_inuse,
+      oslimit: var_oslimit,
+      goroutines: var_goroutines,
+    );
   }
 
   @protected
@@ -4995,6 +5437,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_bool(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  TailscalePeer? sse_decode_opt_box_autoadd_tailscale_peer(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_tailscale_peer(deserializer));
     } else {
       return null;
     }
@@ -5176,6 +5631,98 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TailscaleEndpointStatus sse_decode_tailscale_endpoint_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_endpointTag = sse_decode_String(deserializer);
+    var var_backendState = sse_decode_String(deserializer);
+    var var_authUrl = sse_decode_String(deserializer);
+    var var_networkName = sse_decode_String(deserializer);
+    var var_magicDnsSuffix = sse_decode_String(deserializer);
+    var var_selfPeer = sse_decode_opt_box_autoadd_tailscale_peer(deserializer);
+    var var_userGroups = sse_decode_list_tailscale_user_group(deserializer);
+    var var_exitNode = sse_decode_opt_box_autoadd_tailscale_peer(deserializer);
+    var var_keyAuth = sse_decode_bool(deserializer);
+    return TailscaleEndpointStatus(
+      endpointTag: var_endpointTag,
+      backendState: var_backendState,
+      authUrl: var_authUrl,
+      networkName: var_networkName,
+      magicDnsSuffix: var_magicDnsSuffix,
+      selfPeer: var_selfPeer,
+      userGroups: var_userGroups,
+      exitNode: var_exitNode,
+      keyAuth: var_keyAuth,
+    );
+  }
+
+  @protected
+  TailscalePeer sse_decode_tailscale_peer(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_stableId = sse_decode_String(deserializer);
+    var var_hostName = sse_decode_String(deserializer);
+    var var_dnsName = sse_decode_String(deserializer);
+    var var_os = sse_decode_String(deserializer);
+    var var_tailscaleIps = sse_decode_list_String(deserializer);
+    var var_online = sse_decode_bool(deserializer);
+    var var_exitNode = sse_decode_bool(deserializer);
+    var var_exitNodeOption = sse_decode_bool(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    var var_rxBytes = sse_decode_i_64(deserializer);
+    var var_txBytes = sse_decode_i_64(deserializer);
+    var var_keyExpiry = sse_decode_i_64(deserializer);
+    var var_expired = sse_decode_bool(deserializer);
+    var var_sshHostKeys = sse_decode_list_String(deserializer);
+    var var_shareeNode = sse_decode_bool(deserializer);
+    var var_lastSeen = sse_decode_i_64(deserializer);
+    return TailscalePeer(
+      stableId: var_stableId,
+      hostName: var_hostName,
+      dnsName: var_dnsName,
+      os: var_os,
+      tailscaleIps: var_tailscaleIps,
+      online: var_online,
+      exitNode: var_exitNode,
+      exitNodeOption: var_exitNodeOption,
+      active: var_active,
+      rxBytes: var_rxBytes,
+      txBytes: var_txBytes,
+      keyExpiry: var_keyExpiry,
+      expired: var_expired,
+      sshHostKeys: var_sshHostKeys,
+      shareeNode: var_shareeNode,
+      lastSeen: var_lastSeen,
+    );
+  }
+
+  @protected
+  TailscaleStatus sse_decode_tailscale_status(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_endpoints = sse_decode_list_tailscale_endpoint_status(deserializer);
+    return TailscaleStatus(endpoints: var_endpoints);
+  }
+
+  @protected
+  TailscaleUserGroup sse_decode_tailscale_user_group(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_userId = sse_decode_i_64(deserializer);
+    var var_loginName = sse_decode_String(deserializer);
+    var var_displayName = sse_decode_String(deserializer);
+    var var_profilePicUrl = sse_decode_String(deserializer);
+    var var_peers = sse_decode_list_tailscale_peer(deserializer);
+    return TailscaleUserGroup(
+      userId: var_userId,
+      loginName: var_loginName,
+      displayName: var_displayName,
+      profilePicUrl: var_profilePicUrl,
+      peers: var_peers,
+    );
+  }
+
+  @protected
   TrafficSample sse_decode_traffic_sample(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_up = sse_decode_u_64(deserializer);
@@ -5230,6 +5777,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_supportsCoreManagement = sse_decode_bool(deserializer);
     var var_supportsCacheFlush = sse_decode_bool(deserializer);
     var var_supportsMemory = sse_decode_bool(deserializer);
+    var var_supportsTailscale = sse_decode_bool(deserializer);
     return VersionInfo(
       version: var_version,
       isCmfa: var_isCmfa,
@@ -5239,6 +5787,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       supportsCoreManagement: var_supportsCoreManagement,
       supportsCacheFlush: var_supportsCacheFlush,
       supportsMemory: var_supportsMemory,
+      supportsTailscale: var_supportsTailscale,
     );
   }
 
@@ -5320,6 +5869,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_StreamSink_tailscale_status_Sse(
+    RustStreamSink<TailscaleStatus> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tailscale_status,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_traffic_sample_Sse(
     RustStreamSink<TrafficSample> self,
     SseSerializer serializer,
@@ -5376,6 +5942,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_tailscale_peer(
+    TailscalePeer self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_tailscale_peer(self, serializer);
   }
 
   @protected
@@ -5484,12 +6059,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.upload, serializer);
     sse_encode_u_64(self.download, serializer);
     sse_encode_u_64(self.memory, serializer);
+    sse_encode_u_32(self.connectionsIn, serializer);
+    sse_encode_u_32(self.connectionsOut, serializer);
   }
 
   @protected
   void sse_encode_core_config(CoreConfig self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_String(self.mode, serializer);
+    sse_encode_list_String(self.modeOptions, serializer);
     sse_encode_opt_String(self.logLevel, serializer);
     sse_encode_opt_box_autoadd_bool(self.tunEnabled, serializer);
     sse_encode_opt_box_autoadd_bool(self.allowLan, serializer);
@@ -5674,6 +6252,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_tailscale_endpoint_status(
+    List<TailscaleEndpointStatus> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_tailscale_endpoint_status(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_tailscale_peer(
+    List<TailscalePeer> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_tailscale_peer(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_tailscale_user_group(
+    List<TailscaleUserGroup> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_tailscale_user_group(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_log_entry(LogEntry self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.time, serializer);
@@ -5686,6 +6300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.inuse, serializer);
     sse_encode_u_64(self.oslimit, serializer);
+    sse_encode_u_32(self.goroutines, serializer);
   }
 
   @protected
@@ -5735,6 +6350,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_bool(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_tailscale_peer(
+    TailscalePeer? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_tailscale_peer(self, serializer);
     }
   }
 
@@ -5878,6 +6506,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_tailscale_endpoint_status(
+    TailscaleEndpointStatus self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.endpointTag, serializer);
+    sse_encode_String(self.backendState, serializer);
+    sse_encode_String(self.authUrl, serializer);
+    sse_encode_String(self.networkName, serializer);
+    sse_encode_String(self.magicDnsSuffix, serializer);
+    sse_encode_opt_box_autoadd_tailscale_peer(self.selfPeer, serializer);
+    sse_encode_list_tailscale_user_group(self.userGroups, serializer);
+    sse_encode_opt_box_autoadd_tailscale_peer(self.exitNode, serializer);
+    sse_encode_bool(self.keyAuth, serializer);
+  }
+
+  @protected
+  void sse_encode_tailscale_peer(TailscalePeer self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.stableId, serializer);
+    sse_encode_String(self.hostName, serializer);
+    sse_encode_String(self.dnsName, serializer);
+    sse_encode_String(self.os, serializer);
+    sse_encode_list_String(self.tailscaleIps, serializer);
+    sse_encode_bool(self.online, serializer);
+    sse_encode_bool(self.exitNode, serializer);
+    sse_encode_bool(self.exitNodeOption, serializer);
+    sse_encode_bool(self.active, serializer);
+    sse_encode_i_64(self.rxBytes, serializer);
+    sse_encode_i_64(self.txBytes, serializer);
+    sse_encode_i_64(self.keyExpiry, serializer);
+    sse_encode_bool(self.expired, serializer);
+    sse_encode_list_String(self.sshHostKeys, serializer);
+    sse_encode_bool(self.shareeNode, serializer);
+    sse_encode_i_64(self.lastSeen, serializer);
+  }
+
+  @protected
+  void sse_encode_tailscale_status(
+    TailscaleStatus self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_tailscale_endpoint_status(self.endpoints, serializer);
+  }
+
+  @protected
+  void sse_encode_tailscale_user_group(
+    TailscaleUserGroup self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.userId, serializer);
+    sse_encode_String(self.loginName, serializer);
+    sse_encode_String(self.displayName, serializer);
+    sse_encode_String(self.profilePicUrl, serializer);
+    sse_encode_list_tailscale_peer(self.peers, serializer);
+  }
+
+  @protected
   void sse_encode_traffic_sample(TrafficSample self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.up, serializer);
@@ -5926,5 +6614,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.supportsCoreManagement, serializer);
     sse_encode_bool(self.supportsCacheFlush, serializer);
     sse_encode_bool(self.supportsMemory, serializer);
+    sse_encode_bool(self.supportsTailscale, serializer);
   }
 }

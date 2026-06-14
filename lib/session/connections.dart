@@ -10,17 +10,23 @@ class ConnectionsTotals {
     required this.upload,
     required this.download,
     required this.memory,
+    required this.connectionsIn,
+    required this.connectionsOut,
     required this.count,
   });
   final BigInt upload;
   final BigInt download;
   final BigInt memory;
+  final int connectionsIn;
+  final int connectionsOut;
   final int count;
 
   static final ConnectionsTotals zero = ConnectionsTotals(
     upload: BigInt.zero,
     download: BigInt.zero,
     memory: BigInt.zero,
+    connectionsIn: 0,
+    connectionsOut: 0,
     count: 0,
   );
 
@@ -30,10 +36,19 @@ class ConnectionsTotals {
       upload == other.upload &&
       download == other.download &&
       memory == other.memory &&
+      connectionsIn == other.connectionsIn &&
+      connectionsOut == other.connectionsOut &&
       count == other.count;
 
   @override
-  int get hashCode => Object.hash(upload, download, memory, count);
+  int get hashCode => Object.hash(
+    upload,
+    download,
+    memory,
+    connectionsIn,
+    connectionsOut,
+    count,
+  );
 }
 
 /// Bytes pair for one connection.
