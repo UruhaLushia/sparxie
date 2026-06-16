@@ -10,6 +10,7 @@
 | Clash | Clash Meta for Android (CMFA) | ✅ 基础支持 | 代理组、连接、日志、流量可用；核心管理和部分配置操作不可用 |
 | Clash | Stash | ✅ 基础支持 | 代理组、Provider 节点、连接、日志、流量、基础配置可用；内存、缓存、核心管理不可用 |
 | Surge | Surge | ✅ 基础支持 | 策略组、策略选择、连接、规则、流量、出站模式、DNS 刷新可用；核心管理、Provider 管理、内存流不可用 |
+| sing-box service | sing-box |  ✅ 基础支持 (基于 1.14.0-alpha.31) | 状态信息 (协程/内存)、代理组、节点、连接、日志、tailscale 状态 |
 
 ## 平台
 
