@@ -131,10 +131,17 @@ async fn stream_once(
         .subscribe_status(request)
         .await?
         .into_inner();
-    while let Some(status) = stream.message().await? {
+    loop {
+        let status = tokio::select! {
+            biased;
+            _ = slot.sender.closed() => return Ok(()),
+            read = stream.message() => match read? {
+                Some(status) => status,
+                None => return Ok(()),
+            },
+        };
         let _ = slot.sender.send(store(target, &status));
     }
-    Ok(())
 }
 
 fn non_negative(value: i64) -> u64 {

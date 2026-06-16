@@ -80,6 +80,7 @@ fn upsert_event(state: &mut State, id: String, event: ConnectionEvent, dt_secs: 
 }
 
 fn close_event(state: &mut State, id: String, event: ConnectionEvent, dt_secs: f64) {
+    let previous = state.active.remove(&id);
     let mut row = event
         .connection
         .map(|raw| {
@@ -89,7 +90,7 @@ fn close_event(state: &mut State, id: String, event: ConnectionEvent, dt_secs: f
                 speed(event.downlink_delta, dt_secs),
             )
         })
-        .or_else(|| state.active.remove(&id))
+        .or(previous)
         .unwrap_or_default();
     row.id = id;
     row.is_closed = true;

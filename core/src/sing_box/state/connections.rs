@@ -207,12 +207,19 @@ async fn stream_once(
         .await?
         .into_inner();
     let mut first = true;
-    while let Some(events) = stream.message().await? {
+    loop {
+        let events = tokio::select! {
+            biased;
+            _ = slot.sender.closed() => return Ok(()),
+            read = stream.message() => match read? {
+                Some(events) => events,
+                None => return Ok(()),
+            },
+        };
         let frame = apply_events(target, slot, events, interval_ms, first);
         first = false;
         let _ = slot.sender.send(frame);
     }
-    Ok(())
 }
 
 fn push_closed(state: &mut State, row: Connection) {
