@@ -37,7 +37,7 @@ class ConnectionDetailSheet extends StatelessWidget {
       if (row.process.isNotEmpty) ('进程名', row.process),
       if (row.processPath.isNotEmpty) ('进程路径', row.processPath),
       if (row.uid != 0) ('UID', '${row.uid}'),
-      ('规则类型', row.rule.isEmpty ? '-' : row.rule),
+      if (row.rule.isNotEmpty) ('规则类型', row.rule),
       if (row.rulePayload.isNotEmpty) ('规则内容', row.rulePayload),
       ('代理链', row.chainsLabel.isEmpty ? '-' : row.chainsLabel),
       ('上传量', formatBytes(bytes.upload)),
