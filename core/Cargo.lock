@@ -1789,11 +1789,13 @@ name = "sparxie"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "blake3",
  "file-icon",
  "flutter_rust_bridge",
  "fontdb",
  "futures-util",
+ "hex",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -1803,6 +1805,7 @@ dependencies = [
  "redb",
  "regex",
  "reqwest",
+ "ring",
  "rustls",
  "serde",
  "serde_json",

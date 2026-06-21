@@ -34,6 +34,7 @@ pub(super) fn request(
     path: &str,
     body_bytes: Bytes,
     has_body: bool,
+    headers: Vec<(&'static str, String)>,
 ) -> Result<hyper::Request<Full<Bytes>>, MihomoError> {
     let uri: Uri = format!("/{}", path.trim_start_matches('/'))
         .parse()
@@ -46,6 +47,9 @@ pub(super) fn request(
         .header("host", "localhost");
     if has_body {
         builder = builder.header("content-type", "application/json");
+    }
+    for (name, value) in headers {
+        builder = builder.header(name, value);
     }
     builder
         .body(Full::new(body_bytes))
