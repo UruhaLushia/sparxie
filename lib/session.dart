@@ -16,6 +16,13 @@ export 'session/proxies.dart';
 
 typedef _ProxyMemberLoadKey = (String, rust.ProxyMemberSort);
 
+const _retryDelays = <Duration>[
+  Duration(seconds: 5),
+  Duration(seconds: 10),
+  Duration(seconds: 20),
+  Duration(seconds: 30),
+];
+
 class MihomoSession {
   MihomoSession(this.store) {
     store.addListener(_onStoreChange);
@@ -38,6 +45,12 @@ class MihomoSession {
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
+  _SessionErrorSource? _errorSource;
+  final _retryAttempts = <_RetryKind, int>{};
+  int _trafficEpoch = 0;
+  int _memoryEpoch = 0;
+  int _connectionsEpoch = 0;
+  int _logsEpoch = 0;
   final _proxyMemberLoads = <_ProxyMemberLoadKey>{};
   final _queuedProxyMemberLoads =
       <_ProxyMemberLoadKey, _QueuedProxyMemberLoad>{};
@@ -283,9 +296,12 @@ class MihomoSession {
           request.offset,
           entries,
         );
+        _clearError(_SessionErrorSource.proxyMember);
       }
     } catch (e) {
-      if (_target == target) error.value = _formatError(e);
+      if (_target == target) {
+        _showError(_formatError(e), _SessionErrorSource.proxyMember);
+      }
       // The next visible tile build will retry.
     } finally {
       _proxyMemberLoads.remove(loadKey);
@@ -384,10 +400,10 @@ class MihomoSession {
     ruleCount.value = 0;
     _iconsWarmed = false;
     if (_target == null) {
-      error.value = '请先在“后端”中添加一个后端';
+      _showError('请先在“后端”中添加一个后端', _SessionErrorSource.controller);
       return;
     }
-    error.value = null;
+    _clearError();
     _subscribeTraffic();
     _subscribeConnections();
     _subscribeLogs();
@@ -407,6 +423,7 @@ class MihomoSession {
     _connRetry?.cancel();
     _logsRetry?.cancel();
     _proxiesPoll?.cancel();
+    _invalidateAllStreams();
     _trafficSub = null;
     _memorySub = null;
     _connSub = null;
@@ -416,22 +433,29 @@ class MihomoSession {
     _connRetry = null;
     _logsRetry = null;
     _proxiesPoll = null;
+    _retryAttempts.clear();
     _proxyMemberLoads.clear();
     _queuedProxyMemberLoads.clear();
   }
 
   void _restartConnections() {
+    _connectionsEpoch++;
     _connSub?.cancel();
     _connRetry?.cancel();
+    _connSub = null;
+    _connRetry = null;
+    _retryAttempts.remove(_RetryKind.connections);
     connections.reset();
     if (_target != null) _subscribeConnections();
   }
 
   void _restartLogs() {
+    _logsEpoch++;
     _logsSub?.cancel();
     _logsRetry?.cancel();
     _logsSub = null;
     _logsRetry = null;
+    _retryAttempts.remove(_RetryKind.logs);
     logs.reset();
     if (_target != null) _subscribeLogs();
   }
@@ -513,12 +537,15 @@ class MihomoSession {
         return;
       }
       proxies.applyCatalog(catalog);
+      _clearError(_SessionErrorSource.proxyCatalog);
       if (!_iconsWarmed) {
         _iconsWarmed = true;
         _warmIconCache(catalog.iconUrls);
       }
     } catch (e) {
-      if (identical(_activeKey, controller)) error.value = _formatError(e);
+      if (identical(_activeKey, controller)) {
+        _showError(_formatError(e), _SessionErrorSource.proxyCatalog);
+      }
     } finally {
       _proxiesRefreshing = false;
       if (refreshAgain) unawaited(_refreshProxies());
@@ -537,14 +564,21 @@ class MihomoSession {
   void _subscribeTraffic() {
     final t = _target;
     if (t == null) return;
+    final controller = _activeKey;
+    final epoch = _nextStreamEpoch(_RetryKind.traffic);
     _trafficSub = rust
         .trafficStream(target: t)
         .listen(
           (sample) {
+            if (!_isCurrentStream(_RetryKind.traffic, controller, epoch)) {
+              return;
+            }
+            _markStreamHealthy(_RetryKind.traffic);
             traffic.value = sample;
             isStreaming.value = true;
           },
-          onError: (Object e) => _scheduleRetry(_RetryKind.traffic, e),
+          onError: (Object e) =>
+              _scheduleRetry(_RetryKind.traffic, controller, epoch, e),
           cancelOnError: true,
         );
   }
@@ -552,11 +586,20 @@ class MihomoSession {
   void _subscribeMemory() {
     final t = _target;
     if (t == null) return;
+    final controller = _activeKey;
+    final epoch = _nextStreamEpoch(_RetryKind.memory);
     _memorySub = rust
         .memoryStream(target: t)
         .listen(
-          (sample) => memory.value = sample,
-          onError: (Object e) => _scheduleRetry(_RetryKind.memory, e),
+          (sample) {
+            if (!_isCurrentStream(_RetryKind.memory, controller, epoch)) {
+              return;
+            }
+            _markStreamHealthy(_RetryKind.memory);
+            memory.value = sample;
+          },
+          onError: (Object e) =>
+              _scheduleRetry(_RetryKind.memory, controller, epoch, e),
           cancelOnError: true,
         );
   }
@@ -564,10 +607,16 @@ class MihomoSession {
   void _subscribeConnections() {
     final t = _target;
     if (t == null) return;
+    final controller = _activeKey;
+    final epoch = _nextStreamEpoch(_RetryKind.connections);
     _connSub = rust
         .connectionsStream(target: t, intervalMs: _connectionsIntervalMs)
         .listen(
           (frame) {
+            if (!_isCurrentStream(_RetryKind.connections, controller, epoch)) {
+              return;
+            }
+            _markStreamHealthy(_RetryKind.connections);
             if (connectionsPaused.value) {
               isStreaming.value = true;
               return;
@@ -583,7 +632,8 @@ class MihomoSession {
             );
             isStreaming.value = true;
           },
-          onError: (Object e) => _scheduleRetry(_RetryKind.connections, e),
+          onError: (Object e) =>
+              _scheduleRetry(_RetryKind.connections, controller, epoch, e),
           cancelOnError: true,
         );
   }
@@ -592,6 +642,7 @@ class MihomoSession {
     final t = _target;
     if (t == null) return;
     final controller = _activeKey;
+    final epoch = _nextStreamEpoch(_RetryKind.logs);
     // Rust replays its ring buffer on every subscribe, so wipe the mirror
     // first to avoid stacking duplicates.
     logs.reset();
@@ -599,10 +650,12 @@ class MihomoSession {
         .logsStream(target: t, level: _logsLevel)
         .listen(
           (entries) {
-            if (!identical(_activeKey, controller)) return;
+            if (!_isCurrentStream(_RetryKind.logs, controller, epoch)) return;
+            _markStreamHealthy(_RetryKind.logs);
             logs.addAll(entries);
           },
-          onError: (Object e) => _scheduleRetry(_RetryKind.logs, e),
+          onError: (Object e) =>
+              _scheduleRetry(_RetryKind.logs, controller, epoch, e),
           cancelOnError: true,
         );
   }
@@ -616,33 +669,110 @@ class MihomoSession {
     await rust.clearLogs(target: t, level: _logsLevel);
   }
 
-  void _scheduleRetry(_RetryKind kind, Object cause) {
-    error.value = _formatError(cause);
-    final controller = _activeKey;
-    final delay = const Duration(seconds: 2);
+  void _scheduleRetry(
+    _RetryKind kind,
+    Controller? controller,
+    int epoch,
+    Object cause,
+  ) {
+    if (!_isCurrentStream(kind, controller, epoch)) return;
+    _clearSubscription(kind);
+    _showError(_formatError(cause), _SessionErrorSource.stream);
+    final delay = _nextRetryDelay(kind);
     switch (kind) {
       case _RetryKind.traffic:
         _trafficRetry?.cancel();
         _trafficRetry = Timer(delay, () {
-          if (identical(_activeKey, controller)) _subscribeTraffic();
+          _trafficRetry = null;
+          if (_isCurrentStream(kind, controller, epoch)) _subscribeTraffic();
         });
       case _RetryKind.memory:
         _memoryRetry?.cancel();
         _memoryRetry = Timer(delay, () {
-          if (identical(_activeKey, controller) && supportsMemory.value) {
+          _memoryRetry = null;
+          if (_isCurrentStream(kind, controller, epoch) &&
+              supportsMemory.value) {
             _subscribeMemory();
           }
         });
       case _RetryKind.connections:
         _connRetry?.cancel();
         _connRetry = Timer(delay, () {
-          if (identical(_activeKey, controller)) _subscribeConnections();
+          _connRetry = null;
+          if (_isCurrentStream(kind, controller, epoch)) {
+            _subscribeConnections();
+          }
         });
       case _RetryKind.logs:
         _logsRetry?.cancel();
         _logsRetry = Timer(delay, () {
-          if (identical(_activeKey, controller)) _subscribeLogs();
+          _logsRetry = null;
+          if (_isCurrentStream(kind, controller, epoch)) _subscribeLogs();
         });
+    }
+  }
+
+  void _showError(String message, _SessionErrorSource source) {
+    _errorSource = source;
+    error.value = message;
+  }
+
+  void _clearError([_SessionErrorSource? source]) {
+    if (source != null && _errorSource != source) return;
+    _errorSource = null;
+    if (error.value != null) error.value = null;
+  }
+
+  void _markStreamHealthy(_RetryKind kind) {
+    _retryAttempts.remove(kind);
+    _clearError(_SessionErrorSource.stream);
+  }
+
+  Duration _nextRetryDelay(_RetryKind kind) {
+    final attempt = _retryAttempts[kind] ?? 0;
+    _retryAttempts[kind] = attempt + 1;
+    final index = attempt >= _retryDelays.length
+        ? _retryDelays.length - 1
+        : attempt;
+    return _retryDelays[index];
+  }
+
+  int _nextStreamEpoch(_RetryKind kind) {
+    return switch (kind) {
+      _RetryKind.traffic => ++_trafficEpoch,
+      _RetryKind.memory => ++_memoryEpoch,
+      _RetryKind.connections => ++_connectionsEpoch,
+      _RetryKind.logs => ++_logsEpoch,
+    };
+  }
+
+  bool _isCurrentStream(_RetryKind kind, Controller? controller, int epoch) {
+    if (!identical(_activeKey, controller)) return false;
+    return switch (kind) {
+      _RetryKind.traffic => _trafficEpoch == epoch,
+      _RetryKind.memory => _memoryEpoch == epoch,
+      _RetryKind.connections => _connectionsEpoch == epoch,
+      _RetryKind.logs => _logsEpoch == epoch,
+    };
+  }
+
+  void _invalidateAllStreams() {
+    _trafficEpoch++;
+    _memoryEpoch++;
+    _connectionsEpoch++;
+    _logsEpoch++;
+  }
+
+  void _clearSubscription(_RetryKind kind) {
+    switch (kind) {
+      case _RetryKind.traffic:
+        _trafficSub = null;
+      case _RetryKind.memory:
+        _memorySub = null;
+      case _RetryKind.connections:
+        _connSub = null;
+      case _RetryKind.logs:
+        _logsSub = null;
     }
   }
 
@@ -678,6 +808,8 @@ class MihomoSession {
 }
 
 enum _RetryKind { traffic, memory, connections, logs }
+
+enum _SessionErrorSource { controller, proxyCatalog, proxyMember, stream }
 
 class _QueuedProxyMemberLoad {
   const _QueuedProxyMemberLoad({

@@ -4,13 +4,13 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
+use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
 use crate::clash::client::{MihomoClient, read_ws_text};
 
@@ -94,6 +94,7 @@ async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc
     // upstream produces no frames, so the sink-failure path never fires).
     let base = crate::clash::state::stop::base_key(&target);
     let start_gen = crate::clash::state::stop::generation(&base);
+    let mut backoff = RetryBackoff::new();
     loop {
         // Re-check under the slots lock before removing, so a subscriber that
         // attaches just as the stream ends isn't orphaned.
@@ -106,11 +107,14 @@ async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc
                 return;
             }
         }
-        if let Err(error) = stream_once(&target, &level, &base, start_gen, &slot).await {
-            eprintln!("[mihomo_backend] logs stream {key}: {error}");
-            // Wake early if a stop arrives during the retry backoff.
-            let mut ticks = crate::clash::state::stop::ticks();
-            let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
+        match stream_once(&target, &level, &base, start_gen, &slot).await {
+            Ok(()) => backoff.reset(),
+            Err(error) => {
+                eprintln!("[mihomo_backend] logs stream {key}: {error}");
+                // Wake early if a stop arrives during the retry backoff.
+                let mut ticks = crate::clash::state::stop::ticks();
+                let _ = tokio::time::timeout(backoff.next_delay(), ticks.changed()).await;
+            }
         }
     }
 }

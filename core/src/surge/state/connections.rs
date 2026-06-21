@@ -9,6 +9,7 @@ use crate::backend::api::{
     CLOSED_CAP, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame,
     ConnectionsListKind, ConnectionsSort, ConnectionsTotals,
 };
+use crate::backend::retry::RetryBackoff;
 use crate::surge::api::traffic_sample;
 use crate::surge::client::{SurgeTarget, target_key as base_target_key};
 
@@ -195,6 +196,7 @@ fn connection_in_group(row: &Connection, group: &str) -> bool {
 
 async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {
     let mut first = true;
+    let mut backoff = RetryBackoff::new();
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
@@ -203,12 +205,13 @@ async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: A
         match fetch_snapshot(&target, interval_ms, &slot, first).await {
             Ok(frame) => {
                 first = false;
+                backoff.reset();
                 let _ = slot.sender.send(frame);
                 tokio::time::sleep(Duration::from_millis(interval_ms as u64)).await;
             }
             Err(error) => {
                 eprintln!("[backend] surge connections stream {key}: {error}");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(backoff.next_delay()).await;
             }
         }
     }
