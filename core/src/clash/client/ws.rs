@@ -5,6 +5,7 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream, client_async, connect_async, connect_async_tls_with_config,
     tungstenite::{
         client::IntoClientRequest,
+        http::HeaderName,
         http::{HeaderValue, Response},
         protocol::Message,
     },
@@ -107,10 +108,18 @@ fn ws_url(base: &Url, path: &str) -> Result<Url, MihomoError> {
 pub(super) async fn open_ipc(
     stream: Box<dyn AsyncStream>,
     path: &str,
+    headers: Vec<(&'static str, String)>,
 ) -> Result<WsStream, MihomoError> {
-    let request = format!("ws://localhost/{}", path.trim_start_matches('/'))
+    let mut request = format!("ws://localhost/{}", path.trim_start_matches('/'))
         .into_client_request()
         .map_err(|e| MihomoError::InvalidUrl(format!("ipc ws request: {e}")))?;
+    for (name, value) in headers {
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|e| MihomoError::Other(format!("ipc ws auth header: {e}")))?;
+        let value = HeaderValue::from_str(&value)
+            .map_err(|e| MihomoError::Other(format!("ipc ws auth header: {e}")))?;
+        request.headers_mut().insert(name, value);
+    }
 
     let (stream, response) = client_async(request, stream)
         .await

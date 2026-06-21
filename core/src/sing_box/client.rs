@@ -103,12 +103,12 @@ async fn build_channel(target: &SingBoxTarget) -> Result<Channel, MihomoError> {
 fn endpoint_base(target: &SingBoxTarget) -> Result<(String, bool, String), MihomoError> {
     let parsed =
         Url::parse(target.base_url.trim()).map_err(|e| MihomoError::InvalidUrl(e.to_string()))?;
-    let https = match parsed.scheme() {
-        "http" => false,
-        "https" => true,
+    let (endpoint_scheme, https) = match parsed.scheme() {
+        "grpc" | "http" => ("http", false),
+        "grpcs" | "https" => ("https", true),
         scheme => {
             return Err(MihomoError::InvalidUrl(format!(
-                "sing-box API 不支持 {scheme} 地址"
+                "sing-box API 不支持 {scheme} 地址，仅支持 grpc/grpcs"
             )));
         }
     };
@@ -119,11 +119,7 @@ fn endpoint_base(target: &SingBoxTarget) -> Result<(String, bool, String), Mihom
     let port = parsed
         .port_or_known_default()
         .unwrap_or(if https { 443 } else { 80 });
-    Ok((
-        format!("{}://{}:{port}", parsed.scheme(), host),
-        https,
-        host,
-    ))
+    Ok((format!("{endpoint_scheme}://{host}:{port}"), https, host))
 }
 
 pub fn target_key(target: &SingBoxTarget) -> String {

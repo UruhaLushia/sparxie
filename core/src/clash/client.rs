@@ -1,5 +1,6 @@
 mod insecure_tls;
 mod ipc;
+mod service;
 mod transport;
 mod ws;
 
@@ -11,7 +12,6 @@ use serde_json::Value;
 
 use crate::MihomoError;
 
-pub use transport::AsyncStream;
 use transport::Transport;
 pub use ws::{WsStream, read_ws_text};
 
@@ -102,24 +102,35 @@ impl MihomoClient {
             .expect("tcp client present for tcp transport")
     }
 
-    /// One HTTP/1.1 request over an IPC transport (unix/pipe). No auth: local
-    /// IPC backends run without a secret.
+    /// One HTTP/1.1 request over an IPC transport (unix/pipe/service).
+    /// Direct IPC runs without mihomo secret; Sparkle service adds its own
+    /// signed headers below.
     async fn ipc_request(
         &self,
         method: Method,
         path: &str,
         body: Option<Value>,
     ) -> Result<Value, MihomoError> {
+        let request_path = self.transport.request_path(path);
         let has_body = body.is_some();
         let body_bytes = body.map(|b| Bytes::from(b.to_string())).unwrap_or_default();
-        let slot = ipc::slot(self.ipc_key()?).await;
+        let slot = ipc::slot(self.transport.ipc_key()?).await;
         let mut sender = slot.lock().await;
 
         for attempt in 0..2 {
             if sender.as_ref().map_or(true, |sender| sender.is_closed()) {
                 *sender = Some(self.open_ipc_sender().await?);
             }
-            let req = ipc::request(method.clone(), path, body_bytes.clone(), has_body)?;
+            let headers = self
+                .transport
+                .auth_headers(&method, &request_path, &body_bytes)?;
+            let req = ipc::request(
+                method.clone(),
+                &request_path,
+                body_bytes.clone(),
+                has_body,
+                headers,
+            )?;
             let sent = {
                 let tx = sender
                     .as_mut()
@@ -147,7 +158,7 @@ impl MihomoClient {
     }
 
     async fn open_ipc_sender(&self) -> Result<ipc::Sender, MihomoError> {
-        let stream = self.connect_ipc().await?;
+        let stream = self.transport.open_ipc().await?;
         let io = hyper_util::rt::TokioIo::new(stream);
         let (sender, conn) = hyper::client::conn::http1::handshake(io)
             .await
@@ -156,38 +167,6 @@ impl MihomoClient {
             let _ = conn.await;
         });
         Ok(sender)
-    }
-
-    fn ipc_key(&self) -> Result<String, MihomoError> {
-        match &self.transport {
-            Transport::Unix { path } => Ok(format!("unix:{path}")),
-            Transport::Pipe { name } => Ok(format!("pipe:{name}")),
-            Transport::Tcp { .. } => Err(MihomoError::Other("ipc_key on tcp transport".into())),
-        }
-    }
-
-    /// Connect the raw IPC stream for the current transport.
-    async fn connect_ipc(&self) -> Result<Box<dyn AsyncStream>, MihomoError> {
-        match &self.transport {
-            #[cfg(unix)]
-            Transport::Unix { path } => {
-                let stream = tokio::net::UnixStream::connect(path)
-                    .await
-                    .map_err(|e| MihomoError::Network(format!("unix connect {path}: {e}")))?;
-                Ok(Box::new(stream))
-            }
-            #[cfg(not(unix))]
-            Transport::Unix { .. } => Err(MihomoError::Other(
-                "unix sockets are not supported on this platform".into(),
-            )),
-            #[cfg(windows)]
-            Transport::Pipe { name } => Ok(Box::new(ipc::open_named_pipe(name).await?)),
-            #[cfg(not(windows))]
-            Transport::Pipe { .. } => Err(MihomoError::Other(
-                "named pipes are only supported on Windows".into(),
-            )),
-            Transport::Tcp { .. } => Err(MihomoError::Other("connect_ipc on tcp transport".into())),
-        }
     }
 
     /// Open a WebSocket connection to a mihomo streaming endpoint.
@@ -201,7 +180,11 @@ impl MihomoClient {
             Transport::Tcp { base } => {
                 ws::open_tcp(base, path, self.secret.as_deref(), self.allow_insecure).await
             }
-            _ => ws::open_ipc(self.connect_ipc().await?, path).await,
+            _ => {
+                let path = self.transport.request_path(path);
+                let headers = self.transport.auth_headers(&Method::GET, &path, &[])?;
+                ws::open_ipc(self.transport.open_ipc().await?, &path, headers).await
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
@@ -755,7 +756,7 @@ class _EditDialog extends StatefulWidget {
   State<_EditDialog> createState() => _EditDialogState();
 }
 
-enum _Scheme { http, https, unix, pipe }
+enum _Scheme { http, https, unix, pipe, sparkleService }
 
 class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
@@ -772,9 +773,17 @@ class _EditDialogState extends State<_EditDialog> {
 
   bool get _supportsIpc => _type == ctl.BackendType.clash;
   bool get _canUseIpc => _supportsIpc && (_isUnixHost || _isWindows);
+  bool get _canUseSparkleService =>
+      _supportsIpc &&
+      !kIsWeb &&
+      (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
-  bool get _isIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
-  bool get _useTls => _scheme == _Scheme.https;
+  bool get _isIpc =>
+      _scheme == _Scheme.unix ||
+      _scheme == _Scheme.pipe ||
+      _scheme == _Scheme.sparkleService;
+  bool get _isDirectIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
+  bool get _isSparkleService => _scheme == _Scheme.sparkleService;
 
   String get _defaultTcpAddress => switch (_type) {
     ctl.BackendType.clash => '127.0.0.1:9090',
@@ -786,7 +795,37 @@ class _EditDialogState extends State<_EditDialog> {
     _Scheme.http || _Scheme.https => _defaultTcpAddress,
     _Scheme.unix => '/path/to/clash.sock',
     _Scheme.pipe => r'\\.\pipe\clash',
+    _Scheme.sparkleService => '默认读取 Sparkle service-auth.json',
   };
+
+  List<_Scheme> get _schemeOptions => [
+    _Scheme.http,
+    _Scheme.https,
+    if (_canUseIpc) _isWindows ? _Scheme.pipe : _Scheme.unix,
+    if (_canUseSparkleService) _Scheme.sparkleService,
+  ];
+
+  String _schemeLabel(_Scheme scheme) => switch (scheme) {
+    _Scheme.http => _type == ctl.BackendType.singBox ? 'gRPC' : 'HTTP',
+    _Scheme.https => _type == ctl.BackendType.singBox ? 'gRPC TLS' : 'HTTPS',
+    _Scheme.unix || _Scheme.pipe => 'IPC',
+    _Scheme.sparkleService => 'Sparkle 服务',
+  };
+
+  String get _addressLabel {
+    if (_isSparkleService) return '鉴权文件';
+    if (_isDirectIpc) return '路径';
+    return _type == ctl.BackendType.singBox ? 'gRPC 地址' : '地址';
+  }
+
+  String get _tlsSkipSubtitle => _type == ctl.BackendType.singBox
+      ? '用于自签名 / 域名不匹配的 gRPC TLS 后端'
+      : '用于自签名 / 域名不匹配的 https 后端';
+
+  static bool _isIpcScheme(_Scheme scheme) =>
+      scheme == _Scheme.unix ||
+      scheme == _Scheme.pipe ||
+      scheme == _Scheme.sparkleService;
 
   @override
   void initState() {
@@ -803,14 +842,16 @@ class _EditDialogState extends State<_EditDialog> {
   }
 
   void _setType(ctl.BackendType type) {
+    if (type == _type) return;
     final oldDefault = _defaultTcpAddress;
+    final oldScheme = _scheme;
     setState(() {
       _type = type;
       if (!_isSchemeAllowed(_scheme)) {
         _scheme = _Scheme.http;
       }
       final addr = _address.text.trim();
-      if (addr.isEmpty || addr == oldDefault) {
+      if (addr.isEmpty || addr == oldDefault || _isIpcScheme(oldScheme)) {
         _address.text = _defaultTcpAddress;
       }
     });
@@ -822,37 +863,40 @@ class _EditDialogState extends State<_EditDialog> {
     return switch (scheme) {
       _Scheme.unix => _isUnixHost,
       _Scheme.pipe => _isWindows,
+      _Scheme.sparkleService => _canUseSparkleService,
       _ => false,
     };
   }
 
-  void _setTls(bool value) {
-    if (_isIpc) return;
-    setState(() {
-      _scheme = value ? _Scheme.https : _Scheme.http;
-      if (!value) _allowInsecure = false;
-    });
-  }
-
-  void _setIpc(bool value) {
-    if (value && !_canUseIpc) return;
-    final oldHint = _addressHint;
+  void _setScheme(_Scheme scheme) {
+    if (scheme == _scheme || !_isSchemeAllowed(scheme)) return;
     final oldDefault = _defaultTcpAddress;
+    final oldHint = _addressHint;
+    final oldScheme = _scheme;
     setState(() {
-      if (value) {
-        _scheme = _isWindows ? _Scheme.pipe : _Scheme.unix;
-        final addr = _address.text.trim();
-        if (addr.isEmpty || addr == oldDefault) {
+      _scheme = scheme;
+      if (_isIpc) _allowInsecure = false;
+
+      final addr = _address.text.trim();
+      if (_isSparkleService) {
+        if (addr.isEmpty || addr == oldDefault || addr == oldHint) {
+          _address.clear();
+        }
+        return;
+      }
+      if (_isDirectIpc) {
+        if (addr.isEmpty ||
+            addr == oldDefault ||
+            oldScheme == _Scheme.sparkleService) {
           _address.text = _addressHint;
         }
-      } else {
-        _scheme = _Scheme.http;
-        final addr = _address.text.trim();
-        if (addr.isEmpty || addr == oldHint) {
-          _address.text = _defaultTcpAddress;
-        }
+        return;
       }
-      if (_isIpc) _allowInsecure = false;
+      if (addr.isEmpty ||
+          addr == oldHint ||
+          oldScheme == _Scheme.sparkleService) {
+        _address.text = _defaultTcpAddress;
+      }
     });
   }
 
@@ -864,6 +908,20 @@ class _EditDialogState extends State<_EditDialog> {
     }
     if (u.startsWith('pipe:')) {
       return (_Scheme.pipe, _stripLeadingSlashes(u.substring('pipe:'.length)));
+    }
+    if (u == 'sparkle-service' || u.startsWith('sparkle-service:')) {
+      return (
+        _Scheme.sparkleService,
+        _stripLeadingSlashes(
+          u.substring('sparkle-service'.length).replaceFirst(':', ''),
+        ),
+      );
+    }
+    if (u.startsWith('grpcs://')) {
+      return (_Scheme.https, u.substring('grpcs://'.length));
+    }
+    if (u.startsWith('grpc://')) {
+      return (_Scheme.http, u.substring('grpc://'.length));
     }
     if (u.startsWith('https://')) {
       return (_Scheme.https, u.substring('https://'.length));
@@ -880,11 +938,26 @@ class _EditDialogState extends State<_EditDialog> {
   String _composeUrl() {
     final addr = _address.text.trim();
     return switch (_scheme) {
-      _Scheme.http => 'http://$addr',
-      _Scheme.https => 'https://$addr',
+      _Scheme.http =>
+        '${_type == ctl.BackendType.singBox ? 'grpc' : 'http'}://$addr',
+      _Scheme.https =>
+        '${_type == ctl.BackendType.singBox ? 'grpcs' : 'https'}://$addr',
       _Scheme.unix => 'unix:$addr',
       _Scheme.pipe => 'pipe:$addr',
+      _Scheme.sparkleService =>
+        addr.isEmpty ? 'sparkle-service:' : 'sparkle-service:$addr',
     };
+  }
+
+  Future<void> _pickAuthFile() async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'JSON', extensions: ['json']),
+        XTypeGroup(label: 'All files'),
+      ],
+    );
+    if (file == null || !mounted) return;
+    setState(() => _address.text = file.path);
   }
 
   @override
@@ -935,40 +1008,50 @@ class _EditDialogState extends State<_EditDialog> {
                 },
               ),
               const SizedBox(height: 12),
+              DropdownButtonFormField<_Scheme>(
+                initialValue: _scheme,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: '连接方式',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final scheme in _schemeOptions)
+                    DropdownMenuItem(
+                      value: scheme,
+                      child: Text(_schemeLabel(scheme)),
+                    ),
+                ],
+                onChanged: (scheme) {
+                  if (scheme != null) _setScheme(scheme);
+                },
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _address,
                 decoration: InputDecoration(
-                  labelText: _isIpc ? '路径' : '地址',
+                  labelText: _addressLabel,
                   hintText: _addressHint,
                   border: OutlineInputBorder(),
+                  suffixIcon: _isSparkleService
+                      ? IconButton(
+                          tooltip: '选择鉴权文件',
+                          icon: const Icon(Icons.folder_open_outlined),
+                          onPressed: _pickAuthFile,
+                        )
+                      : null,
                 ),
                 validator: (v) {
                   final addr = v?.trim() ?? '';
+                  if (_isSparkleService) return null;
                   if (addr.isEmpty) {
-                    return _isIpc ? '请输入路径' : '请输入地址';
+                    return _isDirectIpc ? '请输入路径' : '请输入地址';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 4),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('TLS'),
-                subtitle: const Text('使用 https 连接后端'),
-                value: !_isIpc && _useTls,
-                onChanged: _isIpc ? null : _setTls,
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('IPC'),
-                subtitle: Text(
-                  _canUseIpc ? '使用本机 unix socket / pipe' : '当前后端类型不支持 IPC',
-                ),
-                value: _isIpc,
-                onChanged: _canUseIpc ? _setIpc : null,
-              ),
               if (!_isIpc) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _secret,
                   decoration: const InputDecoration(
@@ -983,7 +1066,7 @@ class _EditDialogState extends State<_EditDialog> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('跳过证书验证'),
-                  subtitle: const Text('用于自签名 / 域名不匹配的 https 后端'),
+                  subtitle: Text(_tlsSkipSubtitle),
                   value: _allowInsecure,
                   onChanged: (v) => setState(() => _allowInsecure = v),
                 ),

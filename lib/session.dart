@@ -167,7 +167,11 @@ class MihomoSession {
     if (c == null) return false;
     final url = c.baseUrl.trim();
     // IPC transports are always on this machine.
-    if (url.startsWith('unix:') || url.startsWith('pipe:')) return true;
+    if (url.startsWith('unix:') ||
+        url.startsWith('pipe:') ||
+        url.startsWith('sparkle-service:')) {
+      return true;
+    }
     final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
     return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
