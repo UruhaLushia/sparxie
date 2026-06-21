@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     as frb;
 
@@ -113,6 +114,13 @@ class MihomoControllerApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',
+          locale: const Locale('zh', 'CN'),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh', 'CN')],
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xff2563eb),
