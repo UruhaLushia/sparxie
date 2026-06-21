@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::Value;
 
 use crate::MihomoError;
+use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
 use crate::clash::client::{MihomoClient, read_ws_text};
 
@@ -23,6 +23,7 @@ pub(super) async fn stream_loop(
     // upstream produces no frames, so the sink-failure path never fires).
     let base = crate::clash::state::stop::base_key(&target);
     let start_gen = crate::clash::state::stop::generation(&base);
+    let mut backoff = RetryBackoff::new();
     loop {
         {
             let mut map = slots().lock().await;
@@ -33,10 +34,13 @@ pub(super) async fn stream_loop(
                 return;
             }
         }
-        if let Err(error) = stream_once(&target, interval_ms, &base, start_gen, &slot).await {
-            eprintln!("[mihomo_backend] connections stream {key}: {error}");
-            let mut ticks = crate::clash::state::stop::ticks();
-            let _ = tokio::time::timeout(Duration::from_secs(2), ticks.changed()).await;
+        match stream_once(&target, interval_ms, &base, start_gen, &slot).await {
+            Ok(()) => backoff.reset(),
+            Err(error) => {
+                eprintln!("[mihomo_backend] connections stream {key}: {error}");
+                let mut ticks = crate::clash::state::stop::ticks();
+                let _ = tokio::time::timeout(backoff.next_delay(), ticks.changed()).await;
+            }
         }
     }
 }

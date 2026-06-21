@@ -7,6 +7,7 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
 use crate::backend::api::LogEntry;
+use crate::backend::retry::RetryBackoff;
 use crate::surge::client::{SurgeTarget, target_key};
 
 const LOGS_CAP: usize = 500;
@@ -82,16 +83,20 @@ pub async fn clear(target: SurgeTarget, level: &str) {
 }
 
 async fn poll_loop(target: SurgeTarget, level: String, key: String, slot: Arc<LogSlot>) {
+    let mut backoff = RetryBackoff::new();
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
             return;
         }
         match poll_once(&target, &level, &slot).await {
-            Ok(()) => tokio::time::sleep(Duration::from_secs(5)).await,
+            Ok(()) => {
+                backoff.reset();
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
             Err(error) => {
                 eprintln!("[backend] surge events stream {key}: {error}");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(backoff.next_delay()).await;
             }
         }
     }

@@ -8,6 +8,7 @@ use crate::backend::api::{
     CLOSED_CAP, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame,
     ConnectionsListKind, ConnectionsSort,
 };
+use crate::backend::retry::RetryBackoff;
 use crate::sing_box::client::{SingBoxTarget, target_key as base_target_key};
 use crate::sing_box::proto::daemon::SubscribeConnectionsRequest;
 
@@ -177,16 +178,17 @@ pub async fn fetch_group_connections(
 }
 
 async fn stream_loop(target: SingBoxTarget, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {
+    let mut backoff = RetryBackoff::new();
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
             return;
         }
         match stream_once(&target, interval_ms, &slot).await {
-            Ok(()) => {}
+            Ok(()) => backoff.reset(),
             Err(error) => {
                 eprintln!("[backend] sing-box connections stream {key}: {error}");
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                tokio::time::sleep(backoff.next_delay()).await;
             }
         }
     }
