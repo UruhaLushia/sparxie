@@ -13,6 +13,7 @@ import 'app_paths.dart';
 import 'app_prefs.dart';
 import 'config_store.dart';
 import 'controller.dart';
+import 'imported_fonts.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
 import 'screens/connections_screen.dart';
@@ -39,6 +40,7 @@ Future<void> main() async {
   await WindowState.bind(config);
   await _initRust();
   final prefs = await AppPrefs.load(config);
+  await ImportedFonts.loadAll(prefs.importedFonts);
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
@@ -81,15 +83,50 @@ Future<void> _initRust() {
   );
 }
 
-String? _resolveFontFamily(String userPick) {
-  if (userPick.isNotEmpty) return userPick;
-  if (kIsWeb) return null;
-  return Platform.isWindows ? 'Microsoft YaHei UI' : null;
+const _windowsFontFamily = 'Microsoft YaHei UI';
+const _windowsFontFallback = ['Microsoft YaHei', 'Segoe UI'];
+
+String? _resolveFontFamily(List<String> userFonts) {
+  if (userFonts.isEmpty || userFonts.first == AppPrefs.systemFontFamily) {
+    return _platformFontFamily();
+  }
+  return userFonts.first;
 }
 
-List<String>? _resolveFontFallback() {
+List<String>? _resolveFontFallback(List<String> userFonts) {
+  final fallback = <String>[];
+  for (final family in userFonts.skip(1)) {
+    if (family == AppPrefs.systemFontFamily) {
+      _addSystemFallback(fallback);
+    } else {
+      _addFont(fallback, family);
+    }
+  }
+  if (!kIsWeb && Platform.isWindows) {
+    for (final family in _windowsFontFallback) {
+      _addFont(fallback, family);
+    }
+  }
+  return fallback.isEmpty ? null : fallback;
+}
+
+String? _platformFontFamily() {
   if (kIsWeb) return null;
-  return Platform.isWindows ? const ['Microsoft YaHei', 'Segoe UI'] : null;
+  return Platform.isWindows ? _windowsFontFamily : null;
+}
+
+void _addSystemFallback(List<String> out) {
+  if (kIsWeb) return;
+  if (Platform.isWindows) {
+    _addFont(out, _windowsFontFamily);
+    for (final family in _windowsFontFallback) {
+      _addFont(out, family);
+    }
+  }
+}
+
+void _addFont(List<String> out, String family) {
+  if (!out.contains(family)) out.add(family);
 }
 
 class MihomoControllerApp extends StatelessWidget {
@@ -109,8 +146,9 @@ class MihomoControllerApp extends StatelessWidget {
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
-        final fontFamily = _resolveFontFamily(prefs.uiFontFamily);
-        final fontFallback = _resolveFontFallback();
+        final uiFonts = prefs.uiFontFamilies;
+        final fontFamily = _resolveFontFamily(uiFonts);
+        final fontFallback = _resolveFontFallback(uiFonts);
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,6 +7,7 @@ import 'package:file_selector/file_selector.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
+import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
@@ -270,9 +272,7 @@ class AppSettingsPanel extends StatelessWidget {
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
-        final showFontSettings =
-            !kIsWeb &&
-            (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+        final showFontSettings = !kIsWeb;
         return SectionPanel(
           title: '应用',
           icon: Icons.app_settings_alt_outlined,
@@ -319,27 +319,30 @@ class AppSettingsPanel extends StatelessWidget {
   }
 }
 
-/// Inline row showing the current UI font with a picker that lists installed
-/// system fonts (enumerated by the Rust backend), each previewed in its own
-/// face. Empty selection means "follow the system default".
+/// Inline row showing the ordered UI font set. Empty selection means "follow
+/// the system default".
 class _FontRow extends StatelessWidget {
   const _FontRow({required this.prefs});
   final AppPrefs prefs;
 
   @override
   Widget build(BuildContext context) {
-    final current = prefs.uiFontFamily;
-    final label = current.isEmpty ? '跟随系统' : current;
+    final families = prefs.uiFontFamilies;
+    final label = families.isEmpty
+        ? '跟随系统'
+        : families.map(_fontLabel).join(' / ');
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('字体', style: Theme.of(context).textTheme.titleSmall),
+              Text('字体集', style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 2),
               Text(
                 label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -350,39 +353,40 @@ class _FontRow extends StatelessWidget {
         const SizedBox(width: 12),
         OutlinedButton(
           onPressed: () => _pick(context),
-          child: const Text('选择'),
+          child: const Text('编辑'),
         ),
       ],
     );
   }
 
   Future<void> _pick(BuildContext context) async {
-    final picked = await showModalBottomSheet<String>(
+    await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => _FontPicker(current: prefs.uiFontFamily),
+      builder: (_) => _FontSetEditor(prefs: prefs),
     );
-    // A non-null result is a deliberate choice ('' = follow system).
-    if (picked != null) await prefs.setUiFontFamily(picked);
   }
 }
 
-class _FontPicker extends StatefulWidget {
-  const _FontPicker({required this.current});
-  final String current;
+class _FontSetEditor extends StatefulWidget {
+  const _FontSetEditor({required this.prefs});
+  final AppPrefs prefs;
 
   @override
-  State<_FontPicker> createState() => _FontPickerState();
+  State<_FontSetEditor> createState() => _FontSetEditorState();
 }
 
-class _FontPickerState extends State<_FontPicker> {
+class _FontSetEditorState extends State<_FontSetEditor> {
   List<String>? _families;
-  String _filter = '';
+  late final List<String> _selected;
+  final _fontMenuController = TextEditingController();
+  bool _importingFont = false;
 
   @override
   void initState() {
     super.initState();
+    _selected = List<String>.of(widget.prefs.uiFontFamilies);
     rust
         .systemFontFamilies()
         .then((list) {
@@ -394,17 +398,15 @@ class _FontPickerState extends State<_FontPicker> {
   }
 
   @override
+  void dispose() {
+    _fontMenuController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final all = _families;
-    final filtered = all == null
-        ? const <String>[]
-        : (_filter.isEmpty
-              ? all
-              : all
-                    .where(
-                      (f) => f.toLowerCase().contains(_filter.toLowerCase()),
-                    )
-                    .toList());
+    final available = all == null ? const <String>[] : _availableFamilies(all);
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.7,
@@ -412,38 +414,109 @@ class _FontPickerState extends State<_FontPicker> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: '搜索字体',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onChanged: (v) => setState(() => _filter = v.trim()),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '字体集',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '导入字体文件',
+                        onPressed: _importingFont ? null : _importFont,
+                        icon: _importingFont
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.upload_file_outlined),
+                      ),
+                      TextButton.icon(
+                        onPressed: _selected.isEmpty ? null : _clearFamilies,
+                        icon: const Icon(Icons.clear_all),
+                        label: const Text('清空'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LayoutBuilder(
+                    builder: (context, constraints) => DropdownMenu<String>(
+                      key: ValueKey(available.length),
+                      controller: _fontMenuController,
+                      enabled: all != null && available.isNotEmpty,
+                      width: constraints.maxWidth,
+                      menuHeight: 320,
+                      enableFilter: true,
+                      requestFocusOnTap: true,
+                      leadingIcon: const Icon(Icons.font_download_outlined),
+                      hintText: all == null
+                          ? '加载字体集'
+                          : available.isEmpty
+                          ? '没有可添加字体'
+                          : '添加字体',
+                      inputDecorationTheme: InputDecorationThemeData(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      dropdownMenuEntries: [
+                        for (final family in available)
+                          DropdownMenuEntry(
+                            value: family,
+                            label: _fontLabel(family),
+                            labelWidget: Text(
+                              _fontLabel(family),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _fontPreviewStyle(family),
+                            ),
+                          ),
+                      ],
+                      onSelected: _addFamily,
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
               child: all == null
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      itemCount: filtered.length + 1,
+                  : _selected.isEmpty
+                  ? const Center(child: Text('跟随系统'))
+                  : ReorderableListView.builder(
+                      buildDefaultDragHandles: false,
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                      proxyDecorator: _fontDragProxy,
+                      itemCount: _selected.length,
+                      onReorderItem: _reorderFamily,
                       itemBuilder: (context, index) {
-                        final family = index == 0 ? '' : filtered[index - 1];
-                        final selected = family == widget.current;
-                        return ListTile(
-                          title: Text(
-                            family.isEmpty ? '跟随系统' : family,
-                            style: family.isEmpty
-                                ? null
-                                : TextStyle(fontFamily: family),
+                        final family = _selected[index];
+                        final isPrimary = index == 0;
+                        return Padding(
+                          key: ValueKey(family),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
                           ),
-                          trailing: selected
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
-                          onTap: () => Navigator.pop(context, family),
+                          child: _FontFamilyTile(
+                            family: family,
+                            subtitle: isPrimary ? '主字体' : '备用字体',
+                            dragHandle: ReorderableDragStartListener(
+                              index: index,
+                              child: const Icon(Icons.drag_handle),
+                            ),
+                            onRemove: () => _removeFamily(index),
+                          ),
                         );
                       },
                     ),
@@ -453,7 +526,211 @@ class _FontPickerState extends State<_FontPicker> {
       ),
     );
   }
+
+  Widget _fontDragProxy(Widget child, int index, Animation<double> animation) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final t = Curves.easeOutCubic.transform(animation.value);
+        final colorScheme = Theme.of(context).colorScheme;
+        return Transform.scale(
+          scale: 1 + t * 0.01,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.10 * t),
+                  blurRadius: 10 * t,
+                  offset: Offset(0, 3 * t),
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  List<String> _availableFamilies(List<String> all) {
+    final selected = _selected.toSet();
+    final known = <String>{};
+    final rest = <String>[];
+    for (final family in [
+      ...all,
+      for (final font in widget.prefs.importedFonts) font.family,
+    ]) {
+      if (family == AppPrefs.systemFontFamily) continue;
+      if (!selected.contains(family) && known.add(family)) {
+        rest.add(family);
+      }
+    }
+    rest.sort(_compareFamilies);
+    return [
+      if (!selected.contains(AppPrefs.systemFontFamily))
+        AppPrefs.systemFontFamily,
+      ...rest,
+    ];
+  }
+
+  int _compareFamilies(String a, String b) {
+    final lower = a.toLowerCase().compareTo(b.toLowerCase());
+    return lower == 0 ? a.compareTo(b) : lower;
+  }
+
+  void _addFamily(String? family) {
+    _fontMenuController.clear();
+    if (family == null || _selected.contains(family)) return;
+    setState(() => _selected.add(family));
+    _saveFamilies();
+  }
+
+  Future<void> _removeFamily(int index) async {
+    final family = _selected[index];
+    setState(() => _selected.removeAt(index));
+    _saveFamilies();
+    await _deleteImportedFont(family);
+  }
+
+  Future<void> _clearFamilies() async {
+    final families = List<String>.of(_selected);
+    setState(_selected.clear);
+    _saveFamilies();
+    for (final family in families) {
+      await _deleteImportedFont(family);
+    }
+  }
+
+  void _reorderFamily(int oldIndex, int newIndex) {
+    setState(() {
+      final family = _selected.removeAt(oldIndex);
+      if (oldIndex < newIndex) newIndex -= 1;
+      _selected.insert(newIndex, family);
+    });
+    _saveFamilies();
+  }
+
+  Future<void> _importFont() async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'Font files',
+          extensions: ['ttf', 'otf', 'ttc', 'otc'],
+        ),
+        XTypeGroup(label: 'All files'),
+      ],
+    );
+    if (file == null || !mounted) return;
+
+    setState(() => _importingFont = true);
+    try {
+      final imported = await ImportedFonts.importFile(
+        file.path,
+        reservedFamilies: {
+          AppPrefs.systemFontFamily,
+          ..._selected,
+          ...?_families,
+          for (final font in widget.prefs.importedFonts) font.family,
+        },
+      );
+      await widget.prefs.addImportedFont(imported);
+      if (!mounted) return;
+      setState(() {
+        _selected.add(imported.family);
+        _importingFont = false;
+      });
+      _saveFamilies();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _importingFont = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('字体导入失败：$e')));
+    }
+  }
+
+  Future<void> _deleteImportedFont(String family) async {
+    final imports = widget.prefs.importedFonts;
+    final index = imports.indexWhere((font) => font.family == family);
+    if (index < 0) return;
+
+    final font = imports[index];
+    final next = List<ImportedFont>.of(imports)..removeAt(index);
+    await widget.prefs.setImportedFonts(next);
+    await ImportedFonts.delete(font).catchError((_) {});
+  }
+
+  void _saveFamilies() {
+    unawaited(widget.prefs.setUiFontFamilies(List<String>.of(_selected)));
+  }
 }
+
+class _FontFamilyTile extends StatelessWidget {
+  const _FontFamilyTile({
+    required this.family,
+    required this.subtitle,
+    required this.dragHandle,
+    required this.onRemove,
+  });
+
+  final String family;
+  final String subtitle;
+  final Widget dragHandle;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        minTileHeight: 54,
+        dense: true,
+        minLeadingWidth: 28,
+        visualDensity: VisualDensity.compact,
+        contentPadding: const EdgeInsetsDirectional.only(start: 14, end: 4),
+        leading: IconTheme.merge(
+          data: IconThemeData(
+            color: theme.colorScheme.onSurfaceVariant,
+            size: 22,
+          ),
+          child: dragHandle,
+        ),
+        title: Text(
+          _fontLabel(family),
+          overflow: TextOverflow.ellipsis,
+          style: _fontPreviewStyle(family),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        trailing: IconButton(
+          tooltip: '移除',
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+          icon: const Icon(Icons.close),
+          onPressed: onRemove,
+        ),
+      ),
+    );
+  }
+}
+
+String _fontLabel(String family) =>
+    family == AppPrefs.systemFontFamily ? '系统' : family;
+
+TextStyle? _fontPreviewStyle(String family) =>
+    family == AppPrefs.systemFontFamily ? null : TextStyle(fontFamily: family);
 
 class _OnlineResourcesRow extends StatelessWidget {
   const _OnlineResourcesRow({required this.prefs});

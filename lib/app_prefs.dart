@@ -74,9 +74,32 @@ enum GroupSort {
 /// selection just changed.
 enum CloseMode { all, group }
 
+@immutable
+class ImportedFont {
+  const ImportedFont({required this.family, required this.path});
+
+  final String family;
+  final String path;
+
+  Map<String, String> toJson() => {'family': family, 'path': path};
+
+  static ImportedFont? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final family = raw['family'];
+    final path = raw['path'];
+    if (family is! String || path is! String) return null;
+    final cleanFamily = family.trim();
+    final cleanPath = path.trim();
+    if (cleanFamily.isEmpty || cleanPath.isEmpty) return null;
+    return ImportedFont(family: cleanFamily, path: cleanPath);
+  }
+}
+
 /// App-wide preferences not tied to any particular mihomo controller.
 class AppPrefs extends ChangeNotifier {
   AppPrefs._(this._store);
+
+  static const systemFontFamily = '__system_font__';
 
   final JsonStore _store;
   Map<String, dynamic> get _s => _store.section('prefs');
@@ -102,6 +125,8 @@ class AppPrefs extends ChangeNotifier {
   static const _kGroupSort = 'connectionsGroupSort';
   static const _kGroupSortAsc = 'connectionsGroupSortAsc';
   static const _kUiFontFamily = 'uiFontFamily';
+  static const _kUiFontFamilies = 'uiFontFamilies';
+  static const _kImportedFonts = 'importedFonts';
   static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
 
   static const defaultConnectionsRefreshMs = 1000;
@@ -147,6 +172,11 @@ class AppPrefs extends ChangeNotifier {
   String _str(String key, String fallback) {
     final v = _s[key];
     return v is String ? v : fallback;
+  }
+
+  List<String> _strList(String key) {
+    final v = _s[key];
+    return v is List ? _sanitizeStringList(v) : const [];
   }
 
   void _put(String key, Object value) {
@@ -332,12 +362,40 @@ class AppPrefs extends ChangeNotifier {
     _put(_kGroupSortAsc, value);
   }
 
-  /// UI font family. Empty = platform default (no override).
-  String get uiFontFamily => _str(_kUiFontFamily, '');
+  /// Ordered UI font family set. Empty = platform default.
+  List<String> get uiFontFamilies {
+    final families = _strList(_kUiFontFamilies);
+    if (families.isNotEmpty || _s.containsKey(_kUiFontFamilies)) {
+      return families;
+    }
+    final legacy = _str(_kUiFontFamily, '').trim();
+    return legacy.isEmpty ? const [] : [legacy];
+  }
 
-  Future<void> setUiFontFamily(String value) async {
-    if (value == uiFontFamily) return;
-    _put(_kUiFontFamily, value);
+  Future<void> setUiFontFamilies(List<String> value) async {
+    final next = _sanitizeStringList(value);
+    if (_sameStrings(next, uiFontFamilies)) return;
+    _s[_kUiFontFamilies] = next;
+    _s[_kUiFontFamily] = next.isEmpty ? '' : next.first;
+    _store.scheduleSave();
+    notifyListeners();
+  }
+
+  List<ImportedFont> get importedFonts {
+    final raw = _s[_kImportedFonts];
+    if (raw is! List) return const [];
+    return _sanitizeImportedFonts(raw.map(ImportedFont.fromJson));
+  }
+
+  Future<void> setImportedFonts(List<ImportedFont> value) async {
+    final next = _sanitizeImportedFonts(value);
+    if (_sameImportedFonts(next, importedFonts)) return;
+    _put(_kImportedFonts, [for (final font in next) font.toJson()]);
+  }
+
+  Future<void> addImportedFont(ImportedFont font) async {
+    final next = [...importedFonts, font];
+    await setImportedFonts(next);
   }
 
   bool get allowInsecureOnlineResources => _bool(
@@ -396,5 +454,45 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultGroupSort;
+  }
+
+  static List<String> _sanitizeStringList(Iterable<Object?> raw) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final value in raw) {
+      if (value is! String) continue;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty || !seen.add(trimmed)) continue;
+      out.add(trimmed);
+    }
+    return out;
+  }
+
+  static List<ImportedFont> _sanitizeImportedFonts(
+    Iterable<ImportedFont?> raw,
+  ) {
+    final seen = <String>{};
+    final out = <ImportedFont>[];
+    for (final font in raw) {
+      if (font == null || !seen.add(font.family)) continue;
+      out.add(font);
+    }
+    return out;
+  }
+
+  static bool _sameStrings(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _sameImportedFonts(List<ImportedFont> a, List<ImportedFont> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].family != b[i].family || a[i].path != b[i].path) return false;
+    }
+    return true;
   }
 }
