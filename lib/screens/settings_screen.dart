@@ -630,7 +630,6 @@ class _FontSetEditorState extends State<_FontSetEditor> {
   void _reorderFamily(int oldIndex, int newIndex) {
     setState(() {
       final family = _selected.removeAt(oldIndex);
-      if (oldIndex < newIndex) newIndex -= 1;
       _selected.insert(newIndex, family);
     });
     _saveFamilies();
