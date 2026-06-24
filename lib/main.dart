@@ -33,6 +33,7 @@ import 'window_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.
   final config = await JsonStore.load();
   // Restore the desktop window's saved size / position / maximized state.
@@ -81,6 +82,44 @@ Future<void> _initRust() {
           )
         : null,
   );
+}
+
+void _enableEdgeToEdge() {
+  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+}
+
+class _SystemBarStyle extends StatelessWidget {
+  const _SystemBarStyle({required this.child});
+
+  final Widget child;
+
+  static const double _buttonNavThreshold = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return child;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    final iconBrightness = isDark ? Brightness.light : Brightness.dark;
+    final isButtonNav =
+        MediaQuery.viewPaddingOf(context).bottom >= _buttonNavThreshold;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: scheme.brightness,
+        systemNavigationBarColor: isButtonNav
+            ? scheme.surface
+            : Colors.transparent,
+        systemNavigationBarIconBrightness: iconBrightness,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+        systemStatusBarContrastEnforced: false,
+      ),
+      child: child,
+    );
+  }
 }
 
 const _windowsFontFamily = 'Microsoft YaHei UI';
@@ -177,6 +216,8 @@ class MihomoControllerApp extends StatelessWidget {
             fontFamily: fontFamily,
             fontFamilyFallback: fontFallback,
           ),
+          builder: (context, child) =>
+              _SystemBarStyle(child: child ?? const SizedBox.shrink()),
           home: HomeShell(store: store, prefs: prefs, session: session),
         );
       },
@@ -247,13 +288,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     return false;
   }
 
-  // Standard layout exposes 概览 as the first tab. Cards layout drops 概览
-  // (the launcher already surfaces overview info), 连接 (the traffic hero
-  // card opens it directly) and 核心配置 (a dedicated hero card opens it);
-  // 外部资源 lives in the nav grid as a small card on cards mode when the
-  // active backend exposes provider APIs.
-  // On phones the standard nav is also capped at 5 items; 核心配置 and
-  // 外部资源 move into the 其他 page.
   List<_Dest> _destinationsFor(
     NavLayout layout, {
     required bool isCompact,
@@ -531,7 +565,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLow,
+      // Let the grid scroll behind the bottom system gesture bar instead of
+      // reserving a solid strip; the ListView padding handles the inset.
       body: SafeArea(
+        bottom: false,
         child: _NavCardGrid(
           store: widget.store,
           session: widget.session,
@@ -726,7 +763,12 @@ class _NavCardGrid extends StatelessWidget {
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          24 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 16),

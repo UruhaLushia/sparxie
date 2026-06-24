@@ -139,6 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       body: SafeArea(
+        bottom: false,
         child: ListenableBuilder(
           listenable: _history,
           builder: (context, _) {
@@ -146,7 +147,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 640;
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    24 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   children: [
                     if (_error != null) ...[
                       _ErrorBanner(text: _error!),

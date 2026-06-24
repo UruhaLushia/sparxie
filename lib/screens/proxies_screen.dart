@@ -263,6 +263,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             if (_filter.isNotEmpty)
@@ -504,7 +505,12 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                     ),
                 ],
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            // Extend scroll content behind the bottom system gesture bar.
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 24 + MediaQuery.paddingOf(context).bottom,
+              ),
+            ),
           ],
         );
       },

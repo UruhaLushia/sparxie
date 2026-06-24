@@ -184,8 +184,14 @@ class _TailscaleScreenState extends State<TailscaleScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Tailscale')),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),

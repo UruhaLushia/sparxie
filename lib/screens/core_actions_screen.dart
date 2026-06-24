@@ -90,6 +90,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('核心操作')),
       body: SafeArea(
+        bottom: false,
         child: ListenableBuilder(
           listenable: Listenable.merge([
             widget.session.supportsCoreManagement,
@@ -102,7 +103,12 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
             final showFakeip = widget.session.supportsCacheFlush.value;
             final showCache = showDns || showFakeip;
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),

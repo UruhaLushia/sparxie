@@ -271,6 +271,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             // sticky toolbar: tabs + filter + sort field + direction toggle.
@@ -624,7 +625,12 @@ class _ConnectionsListState extends State<_ConnectionsList> {
           final showAppName = widget.prefs.connectionsShowAppName;
           return ListView.builder(
             controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              24 + MediaQuery.paddingOf(context).bottom,
+            ),
             // Fixed-height items let ListView do exact scroll math without
             // measuring offscreen widgets.
             itemExtent: _rowHeight,
@@ -897,7 +903,9 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                   ),
               ],
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
+          ),
         ],
       ),
     );

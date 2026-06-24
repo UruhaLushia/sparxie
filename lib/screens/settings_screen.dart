@@ -138,8 +138,14 @@ class SettingsScreen extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const Text('其他')),
           body: SafeArea(
+            bottom: false,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.paddingOf(context).bottom,
+              ),
               children: [
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
@@ -216,8 +222,14 @@ class BackendSettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('后端设置')),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
@@ -244,8 +256,14 @@ class AppSettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('应用设置')),
       body: SafeArea(
+        bottom: false,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
@@ -408,6 +426,7 @@ class _FontSetEditorState extends State<_FontSetEditor> {
     final all = _families;
     final available = all == null ? const <String>[] : _availableFamilies(all);
     return SafeArea(
+      bottom: false,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.7,
         child: Column(
@@ -495,7 +514,12 @@ class _FontSetEditorState extends State<_FontSetEditor> {
                   ? const Center(child: Text('跟随系统'))
                   : ReorderableListView.builder(
                       buildDefaultDragHandles: false,
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                      padding: EdgeInsets.fromLTRB(
+                        8,
+                        4,
+                        8,
+                        16 + MediaQuery.paddingOf(context).bottom,
+                      ),
                       proxyDecorator: _fontDragProxy,
                       itemCount: _selected.length,
                       onReorderItem: _reorderFamily,

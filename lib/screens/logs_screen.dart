@@ -145,6 +145,7 @@ class _LogsScreenState extends State<LogsScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Padding(
@@ -223,7 +224,12 @@ class _LogsScreenState extends State<LogsScreen> {
                   return RepaintBoundary(
                     child: SuperListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        8,
+                        16,
+                        24 + MediaQuery.paddingOf(context).bottom,
+                      ),
                       itemCount: entries.length,
                       itemBuilder: (context, index) =>
                           _LogTile(entry: entries[index]),

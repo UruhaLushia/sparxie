@@ -287,6 +287,7 @@ class _RulesScreenState extends State<RulesScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Padding(
@@ -337,7 +338,12 @@ class _RulesScreenState extends State<RulesScreen> {
                       onRefresh: _load,
                       child: ListView.builder(
                         controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          4,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
+                        ),
                         itemExtent: _rowHeight,
                         itemCount: _filtered,
                         itemBuilder: (_, index) {
