@@ -642,15 +642,22 @@ class _FontSetEditorState extends State<_FontSetEditor> {
         XTypeGroup(
           label: 'Font files',
           extensions: ['ttf', 'otf', 'ttc', 'otc'],
+          uniformTypeIdentifiers: [
+            'public.font',
+            'public.truetype-font',
+            'public.opentype-font',
+            'public.truetype-ttf-font',
+            'public.truetype-collection-font',
+          ],
         ),
-        XTypeGroup(label: 'All files'),
       ],
     );
     if (file == null || !mounted) return;
 
     setState(() => _importingFont = true);
+    ImportedFont? imported;
     try {
-      final imported = await ImportedFonts.importFile(
+      final newFont = await ImportedFonts.importFile(
         file.path,
         reservedFamilies: {
           AppPrefs.systemFontFamily,
@@ -659,14 +666,18 @@ class _FontSetEditorState extends State<_FontSetEditor> {
           for (final font in widget.prefs.importedFonts) font.family,
         },
       );
-      await widget.prefs.addImportedFont(imported);
+      imported = newFont;
+      await widget.prefs.addImportedFont(newFont);
       if (!mounted) return;
       setState(() {
-        _selected.add(imported.family);
+        _selected.add(newFont.family);
         _importingFont = false;
       });
       _saveFamilies();
     } catch (e) {
+      if (imported != null) {
+        await ImportedFonts.delete(imported).catchError((_) {});
+      }
       if (!mounted) return;
       setState(() => _importingFont = false);
       ScaffoldMessenger.of(

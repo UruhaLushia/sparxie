@@ -41,6 +41,7 @@ Future<void> main() async {
   await WindowState.bind(config);
   await _initRust();
   final prefs = await AppPrefs.load(config);
+  await ImportedFonts.cleanup(prefs.importedFonts);
   await ImportedFonts.loadAll(prefs.importedFonts);
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just

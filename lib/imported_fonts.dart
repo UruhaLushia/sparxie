@@ -21,6 +21,19 @@ class ImportedFonts {
     }
   }
 
+  static Future<void> cleanup(Iterable<ImportedFont> fonts) async {
+    final keep = {
+      for (final font in fonts)
+        if (font.path.trim().isNotEmpty) File(font.path).absolute.path,
+    };
+    final dir = await _fontDir();
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      if (keep.contains(entity.absolute.path)) continue;
+      await entity.delete().catchError((_) => entity);
+    }
+  }
+
   static Future<void> load(ImportedFont font) async {
     if (_loadedFamilies.contains(font.family)) return;
     final file = File(font.path);
@@ -40,32 +53,78 @@ class ImportedFonts {
     }
   }
 
+  static Future<void> deletePickerCache(String path) async {
+    if (!Platform.isAndroid || path.trim().isEmpty) return;
+    final file = File(path);
+    try {
+      if (!await file.exists()) return;
+      final cache = (await AppPaths.cacheDir()).absolute.path;
+      final absolute = file.absolute.path;
+      final parent = file.parent;
+      final parentName = _fileName(parent.path);
+      final isPluginCopy =
+          parent.parent.absolute.path == cache && _isUuid(parentName);
+      if (absolute == cache || !isPluginCopy) {
+        return;
+      }
+      await file.delete();
+      if (await parent.exists()) {
+        final empty = await parent.list().isEmpty;
+        if (empty) await parent.delete();
+      }
+    } catch (_) {}
+  }
+
   static Future<ImportedFont> importFile(
     String sourcePath, {
     required Set<String> reservedFamilies,
   }) async {
     final source = File(sourcePath);
-    if (!await source.exists()) {
-      throw const FileSystemException('字体文件不存在');
-    }
+    try {
+      if (!await source.exists()) {
+        throw const FileSystemException('字体文件不存在');
+      }
 
-    final name = _fileName(sourcePath);
+      final name = _fileName(sourcePath);
+      final extension = _extension(name);
+      if (!_supportedExtensions.contains(extension)) {
+        throw FileSystemException('不支持的字体格式', sourcePath);
+      }
+
+      final bytes = await source.readAsBytes();
+      return importBytes(
+        name,
+        bytes,
+        reservedFamilies: reservedFamilies,
+        sourcePath: sourcePath,
+      );
+    } finally {
+      await deletePickerCache(sourcePath);
+    }
+  }
+
+  static Future<ImportedFont> importBytes(
+    String sourceName,
+    List<int> bytes, {
+    required Set<String> reservedFamilies,
+    String? sourcePath,
+  }) async {
+    final name = _fileName(sourceName);
     final extension = _extension(name);
     if (!_supportedExtensions.contains(extension)) {
-      throw FileSystemException('不支持的字体格式', sourcePath);
+      throw FileSystemException('不支持的字体格式', sourcePath ?? sourceName);
     }
 
     final dir = await _fontDir();
     final target = File(
       '${dir.path}${Platform.pathSeparator}${_targetName(name)}',
     );
-    await source.copy(target.path);
-
     final font = ImportedFont(
       family: _uniqueFamily(_familyName(name), reservedFamilies),
       path: target.path,
     );
     try {
+      await target.writeAsBytes(bytes, flush: true);
       await load(font);
     } catch (_) {
       await target.delete().catchError((_) => target);
@@ -93,11 +152,15 @@ class ImportedFonts {
     return '${DateTime.now().microsecondsSinceEpoch}_$clean';
   }
 
+  static bool _isUuid(String value) => RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+
   static String _familyName(String name) {
     final dot = name.lastIndexOf('.');
     final base = dot < 0 ? name : name.substring(0, dot);
     final clean = base.trim().isEmpty ? 'Imported Font' : base.trim();
-    return '导入: $clean';
+    return '导入：$clean';
   }
 
   static String _uniqueFamily(String base, Set<String> reserved) {
