@@ -1249,6 +1249,7 @@ class _EditDialogState extends State<_EditDialog> {
   Widget build(BuildContext context) {
     final isNew = widget.existing == null;
     return AlertDialog(
+      scrollable: true,
       title: Text(isNew ? '新增后端' : '编辑后端'),
       content: SizedBox(
         width: 360,
