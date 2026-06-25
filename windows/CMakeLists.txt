@@ -57,6 +57,19 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# ===== Rust core =====
+set(RUST_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../core")
+set(RUST_DLL
+  "${RUST_SOURCE_DIR}/target/$<IF:$<OR:$<CONFIG:Release>,$<CONFIG:Profile>>,release,debug>/sparxie.dll")
+
+add_custom_target(rust_core ALL
+  COMMAND cargo build $<$<OR:$<CONFIG:Release>,$<CONFIG:Profile>>:--release>
+  WORKING_DIRECTORY "${RUST_SOURCE_DIR}"
+  COMMENT "Building Rust core (cargo)..."
+  COMMAND_EXPAND_LISTS
+  VERBATIM
+)
+add_dependencies(${BINARY_NAME} rust_core)
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
@@ -71,6 +84,12 @@ endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+# Copy sparxie.dll next to the .exe so it can be found at runtime.
+install(FILES "${RUST_DLL}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime
+)
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
