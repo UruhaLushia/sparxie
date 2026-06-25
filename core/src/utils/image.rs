@@ -7,14 +7,12 @@ use std::io::Cursor;
 
 pub(crate) const DEFAULT_ICON_SIZE: u32 = 256;
 const MAX_ICON_SIZE: u32 = 256;
-const DEFAULT_ICON_BORDER: u32 = 16;
-const ALPHA_THRESHOLD: u8 = 0;
+const DEFAULT_ICON_BORDER: u32 = 24;
+const ALPHA_THRESHOLD: u8 = 10;
+const CROP_EDGE_MARGIN: u32 = 2;
 
 pub(crate) fn normalize_desktop_icon(bytes: &[u8], size: u32) -> Option<Vec<u8>> {
-    let mut image = decode_png_rgba(bytes)?;
-    if cfg!(target_os = "windows") {
-        unpremultiply_edges(&mut image.pixels);
-    }
+    let image = decode_png_rgba(bytes)?;
     crop_and_pad_transparent(&image, size)
         .and_then(|normalized| encode_png_rgba(&normalized))
         .or_else(|| encode_png_rgba(&image))
@@ -28,7 +26,9 @@ struct RgbaImage {
 
 fn decode_png_rgba(bytes: &[u8]) -> Option<RgbaImage> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
-    decoder.set_transformations(png::Transformations::ALPHA | png::Transformations::STRIP_16);
+    decoder.set_transformations(
+        png::Transformations::EXPAND | png::Transformations::ALPHA | png::Transformations::STRIP_16,
+    );
     let mut reader = decoder.read_info().ok()?;
     let mut pixels = vec![0; reader.output_buffer_size()?];
     let info = reader.next_frame(&mut pixels).ok()?;
@@ -82,25 +82,7 @@ fn gray_alpha_to_rgba(src: &[u8]) -> Vec<u8> {
     out
 }
 
-fn unpremultiply_edges(pixels: &mut [u8]) {
-    for px in pixels.chunks_exact_mut(4) {
-        let alpha = px[3];
-        if alpha == 0 || alpha == 255 {
-            continue;
-        }
-        px[0] = unpremultiply_byte(px[0], alpha);
-        px[1] = unpremultiply_byte(px[1], alpha);
-        px[2] = unpremultiply_byte(px[2], alpha);
-    }
-}
-
-fn unpremultiply_byte(value: u8, alpha: u8) -> u8 {
-    ((u16::from(value) * 255 + u16::from(alpha) / 2) / u16::from(alpha)).min(255) as u8
-}
-
-fn crop_and_pad_transparent(src: &RgbaImage, size: u32) -> Option<RgbaImage> {
-    let size = size.clamp(1, MAX_ICON_SIZE);
-    let border = scaled_border(size);
+fn content_bounds(src: &RgbaImage) -> Option<Rect> {
     let mut top = src.height;
     let mut bottom = 0;
     let mut left = src.width;
@@ -122,10 +104,27 @@ fn crop_and_pad_transparent(src: &RgbaImage, size: u32) -> Option<RgbaImage> {
         return None;
     }
 
-    left = left.saturating_sub(1);
-    top = top.saturating_sub(1);
-    right = (right + 1).min(src.width - 1);
-    bottom = (bottom + 1).min(src.height - 1);
+    Some(Rect {
+        x: left,
+        y: top,
+        width: right - left + 1,
+        height: bottom - top + 1,
+    })
+}
+
+fn crop_and_pad_transparent(src: &RgbaImage, size: u32) -> Option<RgbaImage> {
+    let size = size.clamp(1, MAX_ICON_SIZE);
+    let border = scaled_border(size);
+    let bounds = content_bounds(src)?;
+    let mut left = bounds.x;
+    let mut top = bounds.y;
+    let mut right = bounds.x + bounds.width - 1;
+    let mut bottom = bounds.y + bounds.height - 1;
+
+    left = left.saturating_sub(CROP_EDGE_MARGIN);
+    top = top.saturating_sub(CROP_EDGE_MARGIN);
+    right = (right + CROP_EDGE_MARGIN).min(src.width - 1);
+    bottom = (bottom + CROP_EDGE_MARGIN).min(src.height - 1);
 
     let crop_width = right - left + 1;
     let crop_height = bottom - top + 1;
@@ -167,7 +166,7 @@ fn crop_and_pad_transparent(src: &RgbaImage, size: u32) -> Option<RgbaImage> {
         width: draw_width,
         height: draw_height,
     };
-    resample_bilinear(src, src_rect, &mut out, dst_rect);
+    resample_icon(src, src_rect, &mut out, dst_rect);
     Some(out)
 }
 
@@ -181,6 +180,75 @@ struct Rect {
     y: u32,
     width: u32,
     height: u32,
+}
+
+fn resample_icon(src: &RgbaImage, src_rect: Rect, dst: &mut RgbaImage, dst_rect: Rect) {
+    if src_rect.width > dst_rect.width || src_rect.height > dst_rect.height {
+        resample_area(src, src_rect, dst, dst_rect);
+    } else {
+        resample_bilinear(src, src_rect, dst, dst_rect);
+    }
+}
+
+fn resample_area(src: &RgbaImage, src_rect: Rect, dst: &mut RgbaImage, dst_rect: Rect) {
+    let scale_x = src_rect.width as f32 / dst_rect.width as f32;
+    let scale_y = src_rect.height as f32 / dst_rect.height as f32;
+    let src_right = src_rect.x + src_rect.width;
+    let src_bottom = src_rect.y + src_rect.height;
+
+    for dy in 0..dst_rect.height {
+        let sy0 = src_rect.y as f32 + dy as f32 * scale_y;
+        let sy1 = src_rect.y as f32 + (dy + 1) as f32 * scale_y;
+        let y_start = sy0.floor().max(src_rect.y as f32) as u32;
+        let y_end = sy1.ceil().min(src_bottom as f32) as u32;
+
+        for dx in 0..dst_rect.width {
+            let sx0 = src_rect.x as f32 + dx as f32 * scale_x;
+            let sx1 = src_rect.x as f32 + (dx + 1) as f32 * scale_x;
+            let x_start = sx0.floor().max(src_rect.x as f32) as u32;
+            let x_end = sx1.ceil().min(src_right as f32) as u32;
+
+            let mut alpha_sum = 0.0;
+            let mut red_sum = 0.0;
+            let mut green_sum = 0.0;
+            let mut blue_sum = 0.0;
+            let mut area_sum = 0.0;
+
+            for sy in y_start..y_end {
+                let overlap_y = ((sy + 1) as f32).min(sy1) - (sy as f32).max(sy0);
+                if overlap_y <= 0.0 {
+                    continue;
+                }
+                for sx in x_start..x_end {
+                    let overlap_x = ((sx + 1) as f32).min(sx1) - (sx as f32).max(sx0);
+                    if overlap_x <= 0.0 {
+                        continue;
+                    }
+                    let weight = overlap_x * overlap_y;
+                    let px = pixel(src, sx, sy);
+                    let alpha = px[3] as f32 / 255.0;
+                    alpha_sum += alpha * weight;
+                    red_sum += px[0] as f32 * alpha * weight;
+                    green_sum += px[1] as f32 * alpha * weight;
+                    blue_sum += px[2] as f32 * alpha * weight;
+                    area_sum += weight;
+                }
+            }
+
+            let sample = if alpha_sum <= 0.0 || area_sum <= 0.0 {
+                [0, 0, 0, 0]
+            } else {
+                [
+                    (red_sum / alpha_sum).round().clamp(0.0, 255.0) as u8,
+                    (green_sum / alpha_sum).round().clamp(0.0, 255.0) as u8,
+                    (blue_sum / alpha_sum).round().clamp(0.0, 255.0) as u8,
+                    (alpha_sum * 255.0 / area_sum).round().clamp(0.0, 255.0) as u8,
+                ]
+            };
+            let offset = (((dst_rect.y + dy) * dst.width + dst_rect.x + dx) * 4) as usize;
+            dst.pixels[offset..offset + 4].copy_from_slice(&sample);
+        }
+    }
 }
 
 fn resample_bilinear(src: &RgbaImage, src_rect: Rect, dst: &mut RgbaImage, dst_rect: Rect) {

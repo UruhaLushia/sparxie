@@ -34,8 +34,8 @@ class ProcessIconCache extends ChangeNotifier {
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
   static bool get _isSupported => !kIsWeb && !Platform.isIOS;
 
-  ui.Image? iconFor(String key, {int? size}) {
-    final imageKey = _imageKey(key, size);
+  ui.Image? iconFor(String key, {int? size, int? decodeSize}) {
+    final imageKey = _imageKey(key, size, decodeSize);
     final image = _images.remove(imageKey);
     if (image != null) _images[imageKey] = image;
     return image;
@@ -49,10 +49,10 @@ class ProcessIconCache extends ChangeNotifier {
     return name;
   }
 
-  void request(String key, {int? size}) {
+  void request(String key, {int? size, int? decodeSize}) {
     if (!_isSupported) return;
     if (key.isEmpty) return;
-    final imageKey = _imageKey(key, size);
+    final imageKey = _imageKey(key, size, decodeSize);
     if (_images.containsKey(imageKey) ||
         _missing.contains(imageKey) ||
         _requested.contains(imageKey)) {
@@ -62,13 +62,16 @@ class ProcessIconCache extends ChangeNotifier {
     (_isAndroid
             ? _resolveAndroid(key)
             : rust.fetchProcessIcon(path: key, size: size))
-        .then((bytes) => _complete(imageKey, bytes))
+        .then((bytes) => _complete(imageKey, bytes, decodeSize: decodeSize))
         .catchError((_) {
           _requested.remove(imageKey);
         });
   }
 
-  String _imageKey(String key, int? size) => size == null ? key : '$key@$size';
+  String _imageKey(String key, int? size, int? decodeSize) {
+    final fetchKey = size == null ? key : '$key@$size';
+    return decodeSize == null ? fetchKey : '$fetchKey#$decodeSize';
+  }
 
   void requestName(String key) {
     if (!_isSupported) return;
@@ -111,14 +114,14 @@ class ProcessIconCache extends ChangeNotifier {
     return resolved;
   }
 
-  void _complete(String key, Uint8List? bytes) {
+  void _complete(String key, Uint8List? bytes, {int? decodeSize}) {
     if (bytes == null || bytes.isEmpty) {
       _requested.remove(key);
       _remember(_missing, key, _maxMisses);
       notifyListeners();
       return;
     }
-    _decode(bytes).then((image) {
+    _decode(bytes, targetSize: decodeSize).then((image) {
       _requested.remove(key);
       if (image != null) {
         final previous = _images.remove(key);
@@ -133,9 +136,13 @@ class ProcessIconCache extends ChangeNotifier {
   }
 
   /// Decode cached PNG bytes to a display-ready [ui.Image].
-  Future<ui.Image?> _decode(Uint8List bytes) async {
+  Future<ui.Image?> _decode(Uint8List bytes, {int? targetSize}) async {
     try {
-      final codec = await ui.instantiateImageCodec(bytes);
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: targetSize,
+        targetHeight: targetSize,
+      );
       final frame = await codec.getNextFrame();
       return frame.image;
     } catch (_) {

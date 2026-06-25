@@ -23,6 +23,8 @@ class ProcessIcon extends StatelessWidget {
   final String processPath;
   final double size;
 
+  static const _desktopIconSize = 256;
+
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   // Android keys by package name (mihomo's `process`), desktop by exec path.
@@ -39,17 +41,22 @@ class ProcessIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final key = _key;
-    final targetSize = _isAndroid
+    final targetSize = _isAndroid ? null : _desktopIconSize;
+    final decodeSize = _isAndroid
         ? null
-        : (size * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 256);
-    cache.request(key, size: targetSize);
+        : (size * MediaQuery.devicePixelRatioOf(context)).ceil();
+    cache.request(key, size: targetSize, decodeSize: decodeSize);
     final fallback = key.isEmpty
         ? 'assets/process_icons/device.png'
         : _defaultAppAsset;
     return ListenableBuilder(
       listenable: cache,
       builder: (context, _) {
-        final image = cache.iconFor(key, size: targetSize);
+        final image = cache.iconFor(
+          key,
+          size: targetSize,
+          decodeSize: decodeSize,
+        );
         return SizedBox.square(
           dimension: size,
           child: image != null

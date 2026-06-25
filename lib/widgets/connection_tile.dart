@@ -77,6 +77,7 @@ class ConnectionTile extends StatelessWidget {
     final wantName =
         !hideProcess && showAppName && cache != null && iconKey.isNotEmpty;
     if (wantName) cache.requestName(iconKey);
+    final verticalPadding = compact ? 7.0 : (wantIcon ? 6.0 : 10.0);
 
     // Tile chrome rebuilds only on identity change. Bytes line repaints
     // independently when this row's counters tick.
@@ -87,9 +88,9 @@ class ConnectionTile extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.fromLTRB(
             wantIcon ? 10 : 14,
-            compact ? 7 : 10,
+            verticalPadding,
             8,
-            compact ? 7 : 10,
+            verticalPadding,
           ),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
@@ -106,7 +107,7 @@ class ConnectionTile extends StatelessWidget {
                   cache: cache,
                   process: row.process,
                   processPath: row.processPath,
-                  size: 38,
+                  size: 50,
                 ),
                 const SizedBox(width: 10),
               ],
@@ -123,7 +124,9 @@ class ConnectionTile extends StatelessWidget {
                                   listenable: cache,
                                   builder: (context, _) => Text(
                                     _titleFor(cache.nameFor(iconKey)),
-                                    style: Theme.of(context).textTheme.titleSmall
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
                                         ?.copyWith(
                                           fontWeight: FontWeight.w600,
                                           height: 1.1,
