@@ -123,45 +123,72 @@ class _SystemBarStyle extends StatelessWidget {
   }
 }
 
-const _windowsFontFamily = 'Microsoft YaHei UI';
-const _windowsFontFallback = ['Microsoft YaHei', 'Segoe UI'];
-
-String? _resolveFontFamily(List<String> userFonts) {
-  if (userFonts.isEmpty || userFonts.first == AppPrefs.systemFontFamily) {
-    return _platformFontFamily();
-  }
-  return userFonts.first;
+ThemeData _appTheme({
+  required Brightness brightness,
+  required Color seedColor,
+  required List<String> userFonts,
+}) {
+  final base = ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+    ),
+    useMaterial3: true,
+  );
+  return _applyFontSet(base, userFonts);
 }
 
-List<String>? _resolveFontFallback(List<String> userFonts) {
-  final fallback = <String>[];
-  for (final family in userFonts.skip(1)) {
+ThemeData _applyFontSet(ThemeData base, List<String> userFonts) {
+  if (userFonts.isEmpty) return base;
+  return base.copyWith(
+    textTheme: _applyTextThemeFontSet(base.textTheme, userFonts),
+    primaryTextTheme: _applyTextThemeFontSet(base.primaryTextTheme, userFonts),
+  );
+}
+
+TextTheme _applyTextThemeFontSet(TextTheme theme, List<String> userFonts) {
+  return theme.copyWith(
+    displayLarge: _applyTextStyleFontSet(theme.displayLarge, userFonts),
+    displayMedium: _applyTextStyleFontSet(theme.displayMedium, userFonts),
+    displaySmall: _applyTextStyleFontSet(theme.displaySmall, userFonts),
+    headlineLarge: _applyTextStyleFontSet(theme.headlineLarge, userFonts),
+    headlineMedium: _applyTextStyleFontSet(theme.headlineMedium, userFonts),
+    headlineSmall: _applyTextStyleFontSet(theme.headlineSmall, userFonts),
+    titleLarge: _applyTextStyleFontSet(theme.titleLarge, userFonts),
+    titleMedium: _applyTextStyleFontSet(theme.titleMedium, userFonts),
+    titleSmall: _applyTextStyleFontSet(theme.titleSmall, userFonts),
+    bodyLarge: _applyTextStyleFontSet(theme.bodyLarge, userFonts),
+    bodyMedium: _applyTextStyleFontSet(theme.bodyMedium, userFonts),
+    bodySmall: _applyTextStyleFontSet(theme.bodySmall, userFonts),
+    labelLarge: _applyTextStyleFontSet(theme.labelLarge, userFonts),
+    labelMedium: _applyTextStyleFontSet(theme.labelMedium, userFonts),
+    labelSmall: _applyTextStyleFontSet(theme.labelSmall, userFonts),
+  );
+}
+
+TextStyle? _applyTextStyleFontSet(TextStyle? style, List<String> userFonts) {
+  if (style == null) return null;
+  final chain = <String>[];
+  for (final family in userFonts) {
     if (family == AppPrefs.systemFontFamily) {
-      _addSystemFallback(fallback);
+      _addSystemFontChain(chain, style);
     } else {
-      _addFont(fallback, family);
+      _addFont(chain, family);
     }
   }
-  if (!kIsWeb && Platform.isWindows) {
-    for (final family in _windowsFontFallback) {
-      _addFont(fallback, family);
-    }
-  }
-  return fallback.isEmpty ? null : fallback;
+  if (chain.isEmpty) return style;
+  final fallback = chain.skip(1).toList();
+  return style.copyWith(
+    fontFamily: chain.first,
+    fontFamilyFallback: fallback.isEmpty ? null : fallback,
+  );
 }
 
-String? _platformFontFamily() {
-  if (kIsWeb) return null;
-  return Platform.isWindows ? _windowsFontFamily : null;
-}
-
-void _addSystemFallback(List<String> out) {
-  if (kIsWeb) return;
-  if (Platform.isWindows) {
-    _addFont(out, _windowsFontFamily);
-    for (final family in _windowsFontFallback) {
-      _addFont(out, family);
-    }
+void _addSystemFontChain(List<String> out, TextStyle style) {
+  final family = style.fontFamily;
+  if (family != null) _addFont(out, family);
+  for (final family in style.fontFamilyFallback ?? const <String>[]) {
+    _addFont(out, family);
   }
 }
 
@@ -187,8 +214,6 @@ class MihomoControllerApp extends StatelessWidget {
       listenable: prefs,
       builder: (context, _) {
         final uiFonts = prefs.uiFontFamilies;
-        final fontFamily = _resolveFontFamily(uiFonts);
-        final fontFallback = _resolveFontFallback(uiFonts);
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',
@@ -199,23 +224,15 @@ class MihomoControllerApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('zh', 'CN')],
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xff2563eb),
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-            fontFamily: fontFamily,
-            fontFamilyFallback: fontFallback,
+          theme: _appTheme(
+            brightness: Brightness.light,
+            seedColor: const Color(0xff2563eb),
+            userFonts: uiFonts,
           ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xff60a5fa),
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-            fontFamily: fontFamily,
-            fontFamilyFallback: fontFallback,
+          darkTheme: _appTheme(
+            brightness: Brightness.dark,
+            seedColor: const Color(0xff60a5fa),
+            userFonts: uiFonts,
           ),
           builder: (context, child) =>
               _SystemBarStyle(child: child ?? const SizedBox.shrink()),
