@@ -575,7 +575,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final isDark = scheme.brightness == Brightness.dark;
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(index: _index, children: pages),
+      body: _SlideIndexedStack(index: _index, children: pages),
       bottomNavigationBar: ClipRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -642,7 +642,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                     bottom: data.viewPadding.bottom + navBarExtra,
                   ),
                 ),
-                child: IndexedStack(index: _index, children: pages),
+                child: _SlideIndexedStack(index: _index, children: pages),
               );
             },
           ),
@@ -1377,6 +1377,61 @@ class _NavCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SlideIndexedStack extends StatefulWidget {
+  const _SlideIndexedStack({required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<_SlideIndexedStack> createState() => _SlideIndexedStackState();
+}
+
+class _SlideIndexedStackState extends State<_SlideIndexedStack>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  int _displayIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayIndex = widget.index;
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _ctrl.value = 1.0;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_SlideIndexedStack old) {
+    super.didUpdateWidget(old);
+    if (old.index != widget.index) {
+      _ctrl.reverse().then((_) {
+        if (!mounted) return;
+        setState(() => _displayIndex = widget.index);
+        _ctrl.forward();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: IndexedStack(index: _displayIndex, children: widget.children),
     );
   }
 }
