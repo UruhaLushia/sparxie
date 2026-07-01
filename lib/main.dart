@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -315,12 +316,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     required bool supportsRules,
     required bool supportsTailscale,
   }) {
-    final showOnStandardWide = layout == NavLayout.standard && !isCompact;
+    final isStandardLike = layout == NavLayout.standard || layout == NavLayout.floating;
+    final showOnStandardWide = isStandardLike && !isCompact;
     return [
-      if (layout == NavLayout.standard)
+      if (isStandardLike)
         const _Dest(icon: Icons.space_dashboard_outlined, label: '概览'),
       const _Dest(icon: Icons.account_tree_outlined, label: '代理组'),
-      if (layout == NavLayout.standard)
+      if (isStandardLike)
         const _Dest(icon: Icons.lan_outlined, label: '连接'),
       if (showOnStandardWide && supportsCoreConfig)
         const _Dest(icon: Icons.memory_outlined, label: '核心配置'),
@@ -414,9 +416,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           // (see _computeRail); only the compact bottom bar uses a reduced
           // set, since a NavigationBar can't grow.
           final wide = size.width >= 800;
-          final cards = widget.prefs.navLayout == NavLayout.cards;
+          final layout = widget.prefs.navLayout;
+          final cards = layout == NavLayout.cards;
           final destinations = _destinationsFor(
-            widget.prefs.navLayout,
+            layout,
             isCompact: !wide,
             supportsCoreConfig: widget.session.supportsCoreConfig.value,
             supportsCoreActions: widget.session.supportsCoreActions.value,
@@ -430,9 +433,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 ? _buildWideCards(destinations)
                 : _buildWideStandard(destinations);
           }
-          return cards
-              ? _buildCompactLauncher(context, destinations)
-              : _buildCompactStandard(destinations);
+          if (cards) return _buildCompactLauncher(context, destinations);
+          if (layout == NavLayout.floating) {
+            return _buildCompactFloating(destinations);
+          }
+          return _buildCompactStandard(destinations);
         },
       ),
     );
@@ -566,16 +571,93 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildCompactStandard(List<_Dest> destinations) {
     final pages = _ensureStackPages(NavLayout.standard, destinations);
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: [
-          for (final d in destinations)
-            NavigationDestination(icon: Icon(d.icon), label: d.label),
-        ],
+      bottomNavigationBar: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: NavigationBarTheme(
+            data: NavigationBarThemeData(
+              height: 64,
+              elevation: 0,
+              backgroundColor: isDark
+                  ? scheme.surface.withValues(alpha: 0.6)
+                  : scheme.surface.withValues(alpha: 0.7),
+              indicatorColor: scheme.primaryContainer,
+              iconTheme: WidgetStateProperty.resolveWith((states) {
+                final selected = states.contains(WidgetState.selected);
+                return IconThemeData(
+                  size: 22,
+                  color: selected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                );
+              }),
+              labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                final selected = states.contains(WidgetState.selected);
+                return TextStyle(
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                );
+              }),
+              indicatorShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              destinations: [
+                for (final d in destinations)
+                  NavigationDestination(icon: Icon(d.icon), label: d.label),
+              ],
+            ),
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildCompactFloating(List<_Dest> destinations) {
+    final pages = _ensureStackPages(NavLayout.floating, destinations);
+    return Stack(
+      children: [
+        Scaffold(
+          body: Builder(
+            builder: (context) {
+              final data = MediaQuery.of(context);
+              const navBarExtra = 84.0; // 68 bar + 16 top gap
+              return MediaQuery(
+                data: data.copyWith(
+                  padding: data.padding.copyWith(
+                    bottom: data.padding.bottom + navBarExtra,
+                  ),
+                  viewPadding: data.viewPadding.copyWith(
+                    bottom: data.viewPadding.bottom + navBarExtra,
+                  ),
+                ),
+                child: IndexedStack(index: _index, children: pages),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _FloatingNavBar(
+            selectedIndex: _index,
+            onSelected: (i) => setState(() => _index = i),
+            destinations: destinations,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1293,6 +1375,138 @@ class _NavCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingNavBar extends StatelessWidget {
+  const _FloatingNavBar({
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.destinations,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final List<_Dest> destinations;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 12 + bottomPadding),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? scheme.surfaceContainerHigh.withValues(alpha: 0.68)
+                  : scheme.surfaceContainer.withValues(alpha: 0.74),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.08),
+                width: 0.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                  blurRadius: 16,
+                  spreadRadius: -2,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              height: 54,
+              child: Row(
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    Expanded(
+                      child: _FloatingNavItem(
+                        icon: destinations[i].icon,
+                        label: destinations[i].label,
+                        selected: i == selectedIndex,
+                        onTap: () => onSelected(i),
+                        scheme: scheme,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingNavItem extends StatelessWidget {
+  const _FloatingNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.scheme,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? scheme.primary : scheme.onSurfaceVariant;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSlide(
+              offset: Offset(0, selected ? -0.08 : 0),
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: Icon(icon, size: 22, color: fg),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 10,
+                color: fg,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              width: selected ? 18 : 0,
+              height: 3,
+              decoration: BoxDecoration(
+                color: selected ? scheme.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
         ),
       ),
     );

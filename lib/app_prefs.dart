@@ -16,7 +16,7 @@ enum ProxiesSort {
 }
 
 /// Visual layout of the primary navigation chrome.
-enum NavLayout { cards, standard }
+enum NavLayout { cards, standard, floating }
 
 /// Where the delay-test URL comes from when testing a group.
 ///
