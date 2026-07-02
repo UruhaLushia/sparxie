@@ -132,14 +132,14 @@ async fn provider_nodes(
     let Some(providers) = raw.get("providers").and_then(Value::as_object) else {
         return Ok(out);
     };
-    for provider in providers.values() {
+    for (provider_name, provider) in providers {
         let Some(nodes) = provider.get("proxies").and_then(Value::as_array) else {
             continue;
         };
         for node in nodes {
             let name = field_or(node, "name", "");
             if !name.is_empty() {
-                out.insert(name, cached_node(node));
+                out.insert(name, cached_node_with_provider(node, Some(provider_name.clone())));
             }
         }
     }
@@ -147,10 +147,20 @@ async fn provider_nodes(
 }
 
 fn cached_node(data: &Value) -> CachedNode {
+    cached_node_with_provider(data, node_provider_name(data))
+}
+
+fn cached_node_with_provider(data: &Value, provider: Option<String>) -> CachedNode {
     CachedNode {
         proxy_type: field_or(data, "type", "Proxy"),
         delay: proxy_delay(data),
+        provider,
     }
+}
+
+fn node_provider_name(data: &Value) -> Option<String> {
+    let provider = field_or(data, "provider-name", "");
+    (!provider.is_empty()).then_some(provider)
 }
 
 fn proxy_delay(data: &Value) -> i32 {
@@ -203,6 +213,26 @@ pub(crate) async fn cached_group_member_names(
         let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
     Ok(cache::member_names(&target, group))
+}
+
+pub(crate) async fn cached_node_providers(
+    target: MihomoTarget,
+    names: &[String],
+) -> Result<HashMap<String, String>, MihomoError> {
+    let names: HashSet<String> = names.iter().cloned().collect();
+    if names.is_empty() {
+        return Ok(HashMap::new());
+    }
+    if !cache::has_catalog(&target) {
+        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+    }
+    if cache::names_have_missing_nodes(&target, &names) {
+        let client = target.client()?;
+        if let Ok(nodes) = provider_nodes(&client).await {
+            cache::merge_nodes(&target, nodes);
+        }
+    }
+    Ok(cache::node_providers(&target, &names))
 }
 
 pub(crate) fn update_cached_node_delay(target: &MihomoTarget, name: &str, delay: i32) {

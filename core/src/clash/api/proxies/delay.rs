@@ -4,10 +4,10 @@ use crate::MihomoError;
 use crate::clash::api::{MihomoTarget, urlencode};
 use crate::clash::client::MihomoClient;
 
-use super::catalog::{ProxyMemberEntry, ProxyMemberSort};
 use super::catalog::{
-    cached_group_member_names, update_cached_node_delay, update_cached_node_delay_window,
-    update_cached_node_delays,
+    ProxyMemberEntry, ProxyMemberSort, cached_group_member_names, cached_node_providers,
+    update_cached_node_delay,
+    update_cached_node_delay_window, update_cached_node_delays,
 };
 use super::value::value_to_i32;
 
@@ -37,9 +37,11 @@ pub async fn proxy_delay(
     expected_status: Option<String>,
 ) -> Result<i64, MihomoError> {
     let client = target.client()?;
+    let providers = cached_node_providers(target.clone(), std::slice::from_ref(&name)).await?;
     let result = proxy_delay_with_client(
         &client,
         &name,
+        providers.get(&name).map(String::as_str),
         &test_url,
         timeout_ms,
         expected_status.as_deref(),
@@ -70,16 +72,24 @@ pub async fn proxy_batch_delay(
     let client = target.client()?;
     let concurrency = concurrency.clamp(1, 512) as usize;
     let expected_status = expected_status.filter(|s| !s.is_empty());
+    let providers = cached_node_providers(target.clone(), &names).await?;
     let mut out = stream::iter(names)
         .map(|name| {
             let client = &client;
             let test_url = test_url.as_str();
             let expected_status = expected_status.as_deref();
+            let provider = providers.get(&name).map(String::as_str);
             async move {
-                let delay =
-                    proxy_delay_with_client(client, &name, test_url, timeout_ms, expected_status)
-                        .await
-                        .unwrap_or_default();
+                let delay = proxy_delay_with_client(
+                    client,
+                    &name,
+                    provider,
+                    test_url,
+                    timeout_ms,
+                    expected_status,
+                )
+                .await
+                .unwrap_or_default();
                 ProxyDelayEntry { name, delay }
             }
         })
@@ -130,9 +140,11 @@ pub async fn proxy_delay_window(
     window_members_hash: u32,
 ) -> Result<ProxyDelayEvent, MihomoError> {
     let client = target.client()?;
+    let providers = cached_node_providers(target.clone(), std::slice::from_ref(&name)).await?;
     let delay = proxy_delay_with_client(
         &client,
         &name,
+        providers.get(&name).map(String::as_str),
         &test_url,
         timeout_ms,
         expected_status.as_deref(),
@@ -163,21 +175,49 @@ pub async fn proxy_delay_window(
 async fn proxy_delay_with_client(
     client: &MihomoClient,
     name: &str,
+    provider: Option<&str>,
     test_url: &str,
     timeout_ms: u32,
     expected_status: Option<&str>,
 ) -> Result<i32, MihomoError> {
-    let mut path = format!(
-        "proxies/{}/delay?url={}&timeout={}",
-        urlencode(name),
-        urlencode(test_url),
-        timeout_ms,
-    );
+    let mut path = if let Some(provider) = provider {
+        format!(
+            "providers/proxies/{}/{}/healthcheck?url={}&timeout={}",
+            urlencode(provider),
+            urlencode(name),
+            urlencode(test_url),
+            timeout_ms,
+        )
+    } else {
+        format!(
+            "proxies/{}/delay?url={}&timeout={}",
+            urlencode(name),
+            urlencode(test_url),
+            timeout_ms,
+        )
+    };
     if let Some(expected) = expected_status
         && !expected.is_empty()
     {
         path.push_str(&format!("&expected={}", urlencode(expected)));
     }
-    let v = client.get_json(&path).await?;
+    let v = match client.get_json(&path).await {
+        Ok(v) => v,
+        Err(MihomoError::Upstream { status: 404, .. }) if provider.is_some() => {
+            let mut fallback = format!(
+                "proxies/{}/delay?url={}&timeout={}",
+                urlencode(name),
+                urlencode(test_url),
+                timeout_ms,
+            );
+            if let Some(expected) = expected_status
+                && !expected.is_empty()
+            {
+                fallback.push_str(&format!("&expected={}", urlencode(expected)));
+            }
+            client.get_json(&fallback).await?
+        }
+        Err(err) => return Err(err),
+    };
     Ok(v.get("delay").map(value_to_i32).unwrap_or_default())
 }

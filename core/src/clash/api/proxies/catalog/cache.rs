@@ -16,6 +16,7 @@ use sort::sort_members;
 pub(super) struct CachedNode {
     pub(super) proxy_type: String,
     pub(super) delay: i32,
+    pub(super) provider: Option<String>,
 }
 
 #[frb(ignore)]
@@ -190,6 +191,7 @@ pub(super) fn update_node_delays<'a>(
                     *slot = Some(CachedNode {
                         proxy_type: "Proxy".to_string(),
                         delay,
+                        provider: None,
                     });
                     changed_ids.insert(id);
                 }
@@ -240,6 +242,41 @@ pub(super) fn member_names(target: &MihomoTarget, group_name: &str) -> Vec<Strin
             .collect()
     })
     .unwrap_or_default()
+}
+
+pub(super) fn node_providers(
+    target: &MihomoTarget,
+    names: &HashSet<String>,
+) -> HashMap<String, String> {
+    with_catalog(target, |catalog| {
+        catalog
+            .names
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| names.contains(*name))
+            .filter_map(|(id, name)| {
+                catalog
+                    .nodes
+                    .get(id)
+                    .and_then(Option::as_ref)
+                    .and_then(|node| node.provider.clone())
+                    .map(|provider| (name.clone(), provider))
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+pub(super) fn names_have_missing_nodes(target: &MihomoTarget, names: &HashSet<String>) -> bool {
+    with_catalog(target, |catalog| {
+        catalog
+            .names
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| names.contains(*name))
+            .any(|(id, _)| catalog.nodes.get(id).is_none_or(Option::is_none))
+    })
+    .unwrap_or(false)
 }
 
 fn with_catalog<T>(target: &MihomoTarget, f: impl FnOnce(&mut CachedCatalog) -> T) -> Option<T> {
