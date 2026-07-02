@@ -132,14 +132,17 @@ async fn provider_nodes(
     let Some(providers) = raw.get("providers").and_then(Value::as_object) else {
         return Ok(out);
     };
-    for (provider_name, provider) in providers {
+    for provider in providers.values() {
+        if field_or(provider, "vehicleType", "") == "Compatible" {
+            continue;
+        }
         let Some(nodes) = provider.get("proxies").and_then(Value::as_array) else {
             continue;
         };
         for node in nodes {
             let name = field_or(node, "name", "");
             if !name.is_empty() {
-                out.insert(name, cached_node_with_provider(node, Some(provider_name.clone())));
+                out.insert(name, cached_node(node));
             }
         }
     }
@@ -186,7 +189,7 @@ pub async fn proxy_group_members(
     if !cache::has_catalog(&target) {
         let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
-    if cache::group_has_missing_nodes(&target, &group) {
+    if cache::group_needs_provider_nodes(&target, &group) {
         let client = target.client()?;
         if let Ok(nodes) = provider_nodes(&client).await {
             cache::merge_nodes(&target, nodes);
@@ -196,7 +199,7 @@ pub async fn proxy_group_members(
         return Ok(entries);
     }
     let _ = proxy_catalog(target.clone(), true, String::new()).await?;
-    if cache::group_has_missing_nodes(&target, &group) {
+    if cache::group_needs_provider_nodes(&target, &group) {
         let client = target.client()?;
         if let Ok(nodes) = provider_nodes(&client).await {
             cache::merge_nodes(&target, nodes);
@@ -226,7 +229,7 @@ pub(crate) async fn cached_node_providers(
     if !cache::has_catalog(&target) {
         let _ = proxy_catalog(target.clone(), true, String::new()).await?;
     }
-    if cache::names_have_missing_nodes(&target, &names) {
+    if cache::names_need_provider_nodes(&target, &names) {
         let client = target.client()?;
         if let Ok(nodes) = provider_nodes(&client).await {
             cache::merge_nodes(&target, nodes);

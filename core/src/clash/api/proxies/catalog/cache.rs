@@ -127,7 +127,7 @@ pub(super) fn member_entries(
     .flatten()
 }
 
-pub(super) fn group_has_missing_nodes(target: &MihomoTarget, group_name: &str) -> bool {
+pub(super) fn group_needs_provider_nodes(target: &MihomoTarget, group_name: &str) -> bool {
     with_catalog(target, |catalog| {
         let CachedCatalog { nodes, groups, .. } = catalog;
         let Some(group) = groups.get(group_name) else {
@@ -136,7 +136,7 @@ pub(super) fn group_has_missing_nodes(target: &MihomoTarget, group_name: &str) -
         group
             .members
             .iter()
-            .any(|id| nodes.get(*id).is_none_or(Option::is_none))
+            .any(|id| needs_provider_node(nodes.get(*id).and_then(Option::as_ref), groups))
     })
     .unwrap_or(false)
 }
@@ -151,9 +151,22 @@ pub(super) fn merge_nodes(target: &MihomoTarget, incoming: HashMap<String, Cache
             let Some(node) = incoming.get(name) else {
                 continue;
             };
-            if catalog.nodes.get(id).is_some_and(Option::is_none) {
-                catalog.nodes[id] = Some(node.clone());
-                changed = true;
+            let Some(slot) = catalog.nodes.get_mut(id) else {
+                continue;
+            };
+            match slot {
+                None => {
+                    *slot = Some(node.clone());
+                    changed = true;
+                }
+                Some(existing) if node.provider.is_some() && existing.provider != node.provider => {
+                    existing.provider = node.provider.clone();
+                    if existing.proxy_type == "Proxy" {
+                        existing.proxy_type.clone_from(&node.proxy_type);
+                    }
+                    changed = true;
+                }
+                _ => {}
             }
         }
         if changed {
@@ -267,16 +280,37 @@ pub(super) fn node_providers(
     .unwrap_or_default()
 }
 
-pub(super) fn names_have_missing_nodes(target: &MihomoTarget, names: &HashSet<String>) -> bool {
+pub(super) fn names_need_provider_nodes(target: &MihomoTarget, names: &HashSet<String>) -> bool {
     with_catalog(target, |catalog| {
         catalog
             .names
             .iter()
             .enumerate()
             .filter(|(_, name)| names.contains(*name))
-            .any(|(id, _)| catalog.nodes.get(id).is_none_or(Option::is_none))
+            .any(|(id, _)| {
+                needs_provider_node(
+                    catalog.nodes.get(id).and_then(Option::as_ref),
+                    &catalog.groups,
+                )
+            })
     })
     .unwrap_or(false)
+}
+
+fn needs_provider_node(node: Option<&CachedNode>, groups: &HashMap<String, CachedGroup>) -> bool {
+    match node {
+        None => true,
+        Some(node) => {
+            if node
+                .provider
+                .as_deref()
+                .is_some_and(|provider| groups.contains_key(provider))
+            {
+                return true;
+            }
+            node.provider.is_none() && node.proxy_type == "Proxy"
+        }
+    }
 }
 
 fn with_catalog<T>(target: &MihomoTarget, f: impl FnOnce(&mut CachedCatalog) -> T) -> Option<T> {

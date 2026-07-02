@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
@@ -207,7 +208,8 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         windowMembersHash: window?.membersHash ?? 0,
       );
       widget.session.proxies.applyProxyDelayEvent(group.name, event);
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) debugPrint('proxy delay failed for $name: $e');
       widget.session.proxies.applyNodeDelay(name, 0);
     }
   }

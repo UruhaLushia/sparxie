@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
@@ -82,7 +82,19 @@ Future<void> _initRust() {
             iKnowHowToUseIt: true,
             debugInfo: 'Rust core is statically linked into Runner',
           )
+        : Platform.isLinux
+        ? _linuxBundledRustLibrary()
         : null,
+  );
+}
+
+frb.ExternalLibrary? _linuxBundledRustLibrary() {
+  final executableDir = File(Platform.resolvedExecutable).parent;
+  final library = File('${executableDir.path}/lib/libsparxie.so');
+  if (!library.existsSync()) return null;
+  return frb.ExternalLibrary.open(
+    library.path,
+    debugInfo: 'Rust core bundled beside Linux runner',
   );
 }
 
@@ -316,14 +328,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     required bool supportsRules,
     required bool supportsTailscale,
   }) {
-    final isStandardLike = layout == NavLayout.standard || layout == NavLayout.floating;
+    final isStandardLike =
+        layout == NavLayout.standard || layout == NavLayout.floating;
     final showOnStandardWide = isStandardLike && !isCompact;
     return [
       if (isStandardLike)
         const _Dest(icon: Icons.space_dashboard_outlined, label: '概览'),
       const _Dest(icon: Icons.account_tree_outlined, label: '代理组'),
-      if (isStandardLike)
-        const _Dest(icon: Icons.lan_outlined, label: '连接'),
+      if (isStandardLike) const _Dest(icon: Icons.lan_outlined, label: '连接'),
       if (showOnStandardWide && supportsCoreConfig)
         const _Dest(icon: Icons.memory_outlined, label: '核心配置'),
       const _Dest(icon: Icons.terminal, label: '日志'),

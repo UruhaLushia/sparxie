@@ -150,29 +150,41 @@ pub async fn proxy_group_delay_stream(
 ) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => {
+            let clash_target = target.clash();
             let members = crate::clash::api::proxy_group_members(
-                target.clash(),
+                clash_target.clone(),
                 group.clone(),
                 0,
                 u32::MAX,
                 crate::clash::api::ProxyMemberSort::Original,
             )
             .await?;
+            let names = members
+                .into_iter()
+                .map(|member| member.name)
+                .collect::<Vec<_>>();
+            let providers =
+                crate::clash::api::cached_node_providers(clash_target.clone(), &names).await?;
+            let client = clash_target.client()?;
             let concurrency = concurrency.clamp(1, 512) as usize;
-            let mut stream = stream::iter(members.into_iter().map(|member| member.name))
+            let mut stream = stream::iter(names)
                 .map(|name| {
-                    let target = target.clone();
+                    let target = &clash_target;
+                    let client = &client;
                     let group = group.clone();
+                    let provider = providers.get(&name).cloned();
                     let test_url = test_url.clone();
                     let expected_status = expected_status.clone();
                     async move {
-                        crate::clash::api::proxy_delay_window(
-                            target.clash(),
-                            group,
+                        crate::clash::api::proxy_delay_window_with_client(
+                            target,
+                            client,
+                            &group,
                             name,
-                            test_url,
+                            provider.as_deref(),
+                            &test_url,
                             timeout_ms,
-                            expected_status,
+                            expected_status.as_deref(),
                             clash_member_sort(member_sort),
                             window_offset,
                             window_limit,

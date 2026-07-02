@@ -6,8 +6,7 @@ use crate::clash::client::MihomoClient;
 
 use super::catalog::{
     ProxyMemberEntry, ProxyMemberSort, cached_group_member_names, cached_node_providers,
-    update_cached_node_delay,
-    update_cached_node_delay_window, update_cached_node_delays,
+    update_cached_node_delay, update_cached_node_delay_window, update_cached_node_delays,
 };
 use super::value::value_to_i32;
 
@@ -26,9 +25,10 @@ pub struct ProxyDelayEvent {
     pub window_entries: Vec<ProxyMemberEntry>,
 }
 
-/// `GET /proxies/{name}/delay` — returns the measured delay in ms, or `0` if
-/// upstream returned non-success without an HTTP body. `expected_status`
-/// follows mihomo's range syntax, e.g. `"200/204/301-302"`.
+/// Test one proxy node. Provider-backed nodes use
+/// `/providers/proxies/{provider}/{name}/healthcheck`; ordinary nodes use
+/// `/proxies/{name}/delay`. `expected_status` follows mihomo's range syntax,
+/// e.g. `"200/204/301-302"`.
 pub async fn proxy_delay(
     target: MihomoTarget,
     name: String,
@@ -141,19 +141,52 @@ pub async fn proxy_delay_window(
 ) -> Result<ProxyDelayEvent, MihomoError> {
     let client = target.client()?;
     let providers = cached_node_providers(target.clone(), std::slice::from_ref(&name)).await?;
-    let delay = proxy_delay_with_client(
+    let provider = providers.get(&name).map(String::as_str);
+    proxy_delay_window_with_client(
+        &target,
         &client,
-        &name,
-        providers.get(&name).map(String::as_str),
+        &group,
+        name,
+        provider,
         &test_url,
         timeout_ms,
         expected_status.as_deref(),
+        member_sort,
+        window_offset,
+        window_limit,
+        window_members_hash,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn proxy_delay_window_with_client(
+    target: &MihomoTarget,
+    client: &MihomoClient,
+    group: &str,
+    name: String,
+    provider: Option<&str>,
+    test_url: &str,
+    timeout_ms: u32,
+    expected_status: Option<&str>,
+    member_sort: ProxyMemberSort,
+    window_offset: u32,
+    window_limit: u32,
+    window_members_hash: u32,
+) -> Result<ProxyDelayEvent, MihomoError> {
+    let delay = proxy_delay_with_client(
+        client,
+        &name,
+        provider,
+        test_url,
+        timeout_ms,
+        expected_status,
     )
     .await
     .unwrap_or_default();
     let Some((visible_delay, window_entries)) = update_cached_node_delay_window(
         &target,
-        &group,
+        group,
         member_sort,
         window_offset,
         window_limit,
@@ -201,23 +234,6 @@ async fn proxy_delay_with_client(
     {
         path.push_str(&format!("&expected={}", urlencode(expected)));
     }
-    let v = match client.get_json(&path).await {
-        Ok(v) => v,
-        Err(MihomoError::Upstream { status: 404, .. }) if provider.is_some() => {
-            let mut fallback = format!(
-                "proxies/{}/delay?url={}&timeout={}",
-                urlencode(name),
-                urlencode(test_url),
-                timeout_ms,
-            );
-            if let Some(expected) = expected_status
-                && !expected.is_empty()
-            {
-                fallback.push_str(&format!("&expected={}", urlencode(expected)));
-            }
-            client.get_json(&fallback).await?
-        }
-        Err(err) => return Err(err),
-    };
+    let v = client.get_json(&path).await?;
     Ok(v.get("delay").map(value_to_i32).unwrap_or_default())
 }
