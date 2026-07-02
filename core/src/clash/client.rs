@@ -77,6 +77,16 @@ impl MihomoClient {
         }
     }
 
+    /// Like [`get_json`], but IPC transports open a one-off HTTP/1 connection
+    /// instead of using the shared sender. Delay healthchecks can legitimately
+    /// run for seconds; sharing one IPC sender makes batch tests serialize.
+    pub async fn get_json_isolated(&self, path: &str) -> Result<Value, MihomoError> {
+        match &self.transport {
+            Transport::Tcp { .. } => self.get_json(path).await,
+            _ => self.ipc_request_isolated(Method::GET, path, None).await,
+        }
+    }
+
     pub async fn forward(
         &self,
         method: Method,
@@ -94,6 +104,36 @@ impl MihomoClient {
             }
             _ => self.ipc_request(method, path, body).await,
         }
+    }
+
+    async fn ipc_request_isolated(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Value, MihomoError> {
+        let request_path = self.transport.request_path(path);
+        let has_body = body.is_some();
+        let body_bytes = body.map(|b| Bytes::from(b.to_string())).unwrap_or_default();
+
+        for attempt in 0..2 {
+            let mut sender = self.open_ipc_sender().await?;
+            match self
+                .send_ipc_request(
+                    &mut sender,
+                    &method,
+                    &request_path,
+                    body_bytes.clone(),
+                    has_body,
+                )
+                .await
+            {
+                Ok(resp) => return ipc::response(resp).await,
+                Err(_) if attempt == 0 => continue,
+                Err(message) => return Err(MihomoError::Network(message)),
+            }
+        }
+        unreachable!("ipc isolated request retry loop always returns")
     }
 
     fn http(&self) -> &Client {
@@ -122,28 +162,17 @@ impl MihomoClient {
                 *sender = Some(self.open_ipc_sender().await?);
             }
             let headers = self
-                .transport
-                .auth_headers(&method, &request_path, &body_bytes)?;
-            let req = ipc::request(
-                method.clone(),
-                &request_path,
-                body_bytes.clone(),
-                has_body,
-                headers,
-            )?;
-            let sent = {
-                let tx = sender
-                    .as_mut()
-                    .expect("ipc sender was just created when missing");
-                match tx.ready().await {
-                    Ok(()) => tx
-                        .send_request(req)
-                        .await
-                        .map_err(|error| format!("ipc send: {error}")),
-                    Err(error) => Err(format!("ipc ready: {error}")),
-                }
-            };
-            match sent {
+                .send_ipc_request(
+                    sender
+                        .as_mut()
+                        .expect("ipc sender was just created when missing"),
+                    &method,
+                    &request_path,
+                    body_bytes.clone(),
+                    has_body,
+                )
+                .await;
+            match headers {
                 Ok(resp) => return ipc::response(resp).await,
                 Err(message) => {
                     *sender = None;
@@ -155,6 +184,29 @@ impl MihomoClient {
             }
         }
         unreachable!("ipc request retry loop always returns")
+    }
+
+    async fn send_ipc_request(
+        &self,
+        sender: &mut ipc::Sender,
+        method: &Method,
+        request_path: &str,
+        body_bytes: Bytes,
+        has_body: bool,
+    ) -> Result<hyper::Response<hyper::body::Incoming>, String> {
+        let headers = self
+            .transport
+            .auth_headers(method, request_path, &body_bytes)
+            .map_err(|error| error.to_string())?;
+        let req = ipc::request(method.clone(), request_path, body_bytes, has_body, headers)
+            .map_err(|error| error.to_string())?;
+        match sender.ready().await {
+            Ok(()) => sender
+                .send_request(req)
+                .await
+                .map_err(|error| format!("ipc send: {error}")),
+            Err(error) => Err(format!("ipc ready: {error}")),
+        }
     }
 
     async fn open_ipc_sender(&self) -> Result<ipc::Sender, MihomoError> {

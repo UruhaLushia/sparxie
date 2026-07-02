@@ -234,6 +234,6 @@ async fn proxy_delay_with_client(
     {
         path.push_str(&format!("&expected={}", urlencode(expected)));
     }
-    let v = client.get_json(&path).await?;
+    let v = client.get_json_isolated(&path).await?;
     Ok(v.get("delay").map(value_to_i32).unwrap_or_default())
 }
