@@ -43,7 +43,7 @@ pub struct ConnectionsTotals {
     pub memory: u64,
 }
 
-/// Aggregate of all active connections sharing one process or source IP.
+/// Aggregate of connections sharing one process or source IP.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ConnectionGroup {
     pub key: String,

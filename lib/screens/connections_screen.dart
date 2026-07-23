@@ -61,6 +61,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   void _syncGrouping() {
     final cn = widget.session.connections;
+    cn.setVisibleTab(_tab);
     cn.grouped = widget.prefs.connectionsGroupByProcess;
     cn.setGroupSort(
       _toRustGroupSort(widget.prefs.connectionsGroupSort),
@@ -105,6 +106,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     ConnectionsSort.downloadSpeed => '下载速度',
     ConnectionsSort.process => '进程名',
   };
+
+  void _setTab(ConnectionsTab tab) {
+    if (tab == _tab) return;
+    widget.session.connections.setVisibleTab(tab);
+    setState(() => _tab = tab);
+  }
 
   Future<void> _close(String id) async {
     final target = _target();
@@ -263,7 +270,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 onPressed: totals.count == 0
                     ? null
                     : () => _closeAll(totals.count),
-                icon: const Icon(Icons.delete_sweep_outlined),
+                icon: const Icon(Icons.close),
               );
             },
           ),
@@ -305,8 +312,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                             ),
                           ],
                           selected: {_tab},
-                          onSelectionChanged: (s) =>
-                              setState(() => _tab = s.first),
+                          onSelectionChanged: (s) => _setTab(s.first),
                         );
                       },
                     );
@@ -447,13 +453,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               child: ListenableBuilder(
                 listenable: widget.prefs,
                 builder: (context, _) {
-                  final grouped =
-                      widget.prefs.connectionsGroupByProcess &&
-                      _tab == ConnectionsTab.active;
+                  final grouped = widget.prefs.connectionsGroupByProcess;
                   if (grouped) {
                     return _GroupedConnectionsList(
                       session: widget.session,
                       prefs: widget.prefs,
+                      tab: _tab,
                       filter: _filter,
                       onTap: _showDetail,
                       onClose: _close,
@@ -733,7 +738,7 @@ class _RowPlaceholder extends StatelessWidget {
   }
 }
 
-/// Grouped (by-process) active connections. Each process is a pinned header
+/// Grouped (by-process) connections. Each process is a pinned header
 /// (icon + label + count + aggregated bytes/speed); expanding one lists its
 /// member connections. Group summaries and member rows are kept fresh by the
 /// notifier, which patches volatile counters in place.
@@ -741,6 +746,7 @@ class _GroupedConnectionsList extends StatefulWidget {
   const _GroupedConnectionsList({
     required this.session,
     required this.prefs,
+    required this.tab,
     required this.filter,
     required this.onTap,
     required this.onClose,
@@ -748,6 +754,7 @@ class _GroupedConnectionsList extends StatefulWidget {
 
   final MihomoSession session;
   final AppPrefs prefs;
+  final ConnectionsTab tab;
   final String filter;
   final ValueChanged<ConnectionRow> onTap;
   final ValueChanged<String> onClose;
@@ -794,6 +801,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   }
 
   Future<void> _closeGroup(ConnectionGroupSummary g) async {
+    if (widget.tab != ConnectionsTab.active) return;
     final target = widget.session.target;
     if (target == null) return;
     final count = g.count.value;
@@ -826,6 +834,25 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     }
   }
 
+  Future<void> _clearClosedGroup(ConnectionGroupSummary g) async {
+    final target = widget.session.target;
+    if (target == null) return;
+    widget.session.connections.clearClosedGroupOptimistic(g.key);
+    try {
+      await rust.clearClosedConnectionsByGroup(
+        target: target,
+        intervalMs: widget.prefs.connectionsRefreshMs,
+        group: g.key,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
+      }
+    }
+  }
+
   String _formatError(Object error) =>
       formatError(error, backendName: widget.session.activeController?.name);
 
@@ -836,7 +863,11 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     if (groups.isEmpty) {
       return Center(
         child: Text(
-          widget.filter.isEmpty ? '暂无连接' : '没有匹配的进程',
+          widget.filter.isEmpty
+              ? widget.tab == ConnectionsTab.active
+                    ? '暂无连接'
+                    : '暂无已关闭连接'
+              : '没有匹配的进程',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
@@ -861,7 +892,12 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                       summary: group,
                       expanded: cn.isExpanded(group.key),
                       onToggle: () => cn.toggleGroup(group.key),
-                      onCloseAll: () => _closeGroup(group),
+                      onCloseAll: widget.tab == ConnectionsTab.active
+                          ? () => _closeGroup(group)
+                          : null,
+                      onClearAll: widget.tab == ConnectionsTab.closed
+                          ? () => _clearClosedGroup(group)
+                          : null,
                       processIcons: processIcons,
                       showIcon: showIcon,
                       showAppName: showAppName,

@@ -160,6 +160,7 @@ pub async fn fetch_connection_window(
 pub async fn fetch_connection_groups(
     target: BackendTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
 ) -> Vec<ConnectionGroup> {
@@ -167,6 +168,7 @@ pub async fn fetch_connection_groups(
         BackendType::Clash => crate::clash::state::connections::fetch_groups(
             target.clash(),
             interval_ms,
+            clash_list_kind(kind),
             clash_group_sort(sort),
             asc,
         )
@@ -175,13 +177,20 @@ pub async fn fetch_connection_groups(
         .map(Into::into)
         .collect(),
         BackendType::Surge => {
-            crate::surge::state::connections::fetch_groups(target.surge(), interval_ms, sort, asc)
-                .await
+            crate::surge::state::connections::fetch_groups(
+                target.surge(),
+                interval_ms,
+                kind,
+                sort,
+                asc,
+            )
+            .await
         }
         BackendType::SingBox => {
             crate::sing_box::state::connections::fetch_groups(
                 target.sing_box(),
                 interval_ms,
+                kind,
                 sort,
                 asc,
             )
@@ -193,6 +202,7 @@ pub async fn fetch_connection_groups(
 pub async fn fetch_connection_group_members(
     target: BackendTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     group: String,
     limit: u32,
 ) -> Vec<Connection> {
@@ -200,6 +210,7 @@ pub async fn fetch_connection_group_members(
         BackendType::Clash => crate::clash::state::connections::fetch_group_connections(
             target.clash(),
             interval_ms,
+            clash_list_kind(kind),
             group,
             limit,
         )
@@ -211,6 +222,7 @@ pub async fn fetch_connection_group_members(
             crate::surge::state::connections::fetch_group_connections(
                 target.surge(),
                 interval_ms,
+                kind,
                 group,
                 limit,
             )
@@ -220,6 +232,7 @@ pub async fn fetch_connection_group_members(
             crate::sing_box::state::connections::fetch_group_connections(
                 target.sing_box(),
                 interval_ms,
+                kind,
                 group,
                 limit,
             )
@@ -264,6 +277,39 @@ pub async fn clear_closed_connections(target: BackendTarget, interval_ms: u32) {
         }
         BackendType::SingBox => {
             crate::sing_box::state::connections::clear_closed(target.sing_box(), interval_ms).await
+        }
+    }
+}
+
+pub async fn clear_closed_connections_by_group(
+    target: BackendTarget,
+    interval_ms: u32,
+    group: String,
+) {
+    match target.backend_type {
+        BackendType::Clash => {
+            crate::clash::state::connections::clear_closed_by_group(
+                target.clash(),
+                interval_ms,
+                group,
+            )
+            .await
+        }
+        BackendType::Surge => {
+            crate::surge::state::connections::clear_closed_by_group(
+                target.surge(),
+                interval_ms,
+                group,
+            )
+            .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::clear_closed_by_group(
+                target.sing_box(),
+                interval_ms,
+                group,
+            )
+            .await
         }
     }
 }

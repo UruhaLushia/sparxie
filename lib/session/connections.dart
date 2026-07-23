@@ -274,12 +274,17 @@ typedef WindowFetcher =
 
 typedef GroupsFetcher =
     Future<List<rust.ConnectionGroup>> Function(
+      ConnectionsTab tab,
       rust.ConnectionGroupSort sort,
       bool asc,
     );
 
 typedef GroupMembersFetcher =
-    Future<List<rust.Connection>> Function(String groupKey, int limit);
+    Future<List<rust.Connection>> Function(
+      ConnectionsTab tab,
+      String groupKey,
+      int limit,
+    );
 
 /// Virtual paging: Rust holds the full sorted list, Dart only ever holds the
 /// visible rows plus a small overscan around the viewport.
@@ -299,7 +304,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   GroupMembersFetcher? groupMembersFetcher;
 
   /// Cap on member rows held per expanded group. An expanded group shows its
-  /// top-N by the active sort key; the header still reflects the true total.
+  /// top-N by the current sort key; the header still reflects the true total.
   static const int _groupMemberCap = 100;
 
   /// Keep only five rows above and below the actual viewport in Dart memory.
@@ -347,6 +352,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   final Map<String, LinkedHashMap<String, ConnectionRow>> _groupMemberRows =
       <String, LinkedHashMap<String, ConnectionRow>>{};
   Timer? _groupsTimer;
+  int _groupsRevision = 0;
   bool _refreshingGroups = false;
   bool _refreshGroupsAgain = false;
   bool _pendingGroupsForce = false;
@@ -368,11 +374,21 @@ class ConnectionListNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setVisibleTab(ConnectionsTab tab) {
+    if (tab == _visibleTab) return;
+    _visibleTab = tab;
+    if (!_grouped) return;
+    _disposeGroups();
+    _scheduleGroupsRefresh(force: true);
+    notifyListeners();
+  }
+
   /// Set the group ordering. A change forces an immediate re-sort.
   void setGroupSort(rust.ConnectionGroupSort sort, bool asc) {
     if (sort == _groupSort && asc == _groupSortAsc) return;
     _groupSort = sort;
     _groupSortAsc = asc;
+    _groupsRevision++;
     if (_grouped) _scheduleGroupsRefresh(force: true);
   }
 
@@ -570,13 +586,15 @@ class ConnectionListNotifier extends ChangeNotifier {
   Future<void> _refreshGroups({required bool force}) async {
     final fetcher = groupsFetcher;
     if (fetcher == null || !_grouped) return;
+    final tab = _visibleTab;
+    final revision = _groupsRevision;
     final List<rust.ConnectionGroup> fresh;
     try {
-      fresh = await fetcher(_groupSort, _groupSortAsc);
+      fresh = await fetcher(tab, _groupSort, _groupSortAsc);
     } catch (_) {
       return;
     }
-    if (!_grouped) return;
+    if (!_grouped || tab != _visibleTab || revision != _groupsRevision) return;
     _applyGroups(fresh, force: force);
     for (final key in _expandedGroups.toList()) {
       _refetchGroupMembers(key);
@@ -635,13 +653,19 @@ class ConnectionListNotifier extends ChangeNotifier {
   Future<void> _loadGroupMembers(String groupKey) async {
     final fetcher = groupMembersFetcher;
     if (fetcher == null || !_expandedGroups.contains(groupKey)) return;
+    final tab = _visibleTab;
+    final revision = _groupsRevision;
     final List<rust.Connection> rows;
     try {
-      rows = await fetcher(groupKey, _groupMemberCap);
+      rows = await fetcher(tab, groupKey, _groupMemberCap);
     } catch (_) {
       return;
     }
-    if (!_expandedGroups.contains(groupKey)) return;
+    if (tab != _visibleTab ||
+        revision != _groupsRevision ||
+        !_expandedGroups.contains(groupKey)) {
+      return;
+    }
 
     final rowMap = _groupMemberRows.putIfAbsent(
       groupKey,
@@ -678,6 +702,7 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   void _disposeGroups() {
     _groupsTimer?.cancel();
+    _groupsRevision++;
     for (final g in _groups) {
       g.dispose();
     }
@@ -796,6 +821,23 @@ class ConnectionListNotifier extends ChangeNotifier {
     _closedWindowIds.clear();
     _closedOffset = 0;
     _closedCount = 0;
+    if (_grouped && _visibleTab == ConnectionsTab.closed) {
+      _disposeGroups();
+    }
+    notifyListeners();
+  }
+
+  void clearClosedGroupOptimistic(String groupKey) {
+    final group = _groupsByKey.remove(groupKey);
+    if (group == null) return;
+    _groupsRevision++;
+    final count = group.count.value;
+    _groups.remove(group);
+    group.dispose();
+    _expandedGroups.remove(groupKey);
+    _disposeGroupMembers(groupKey);
+    _closedCount = (_closedCount - count).clamp(0, _closedCount);
+    _clearWindow(ConnectionsTab.closed);
     notifyListeners();
   }
 

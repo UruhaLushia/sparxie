@@ -18,7 +18,7 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use crate::MihomoError;
 use crate::clash::api::MihomoTarget;
 
-use groups::{active_groups, group_connections_by_order};
+use groups::{conn_in_group, connection_groups, group_connections_by_order};
 use ordering::sort_rows;
 use stream::stream_loop;
 pub use types::*;
@@ -108,6 +108,14 @@ pub async fn clear_closed(target: MihomoTarget, interval_ms: u32) {
     state.closed.clear();
 }
 
+pub async fn clear_closed_by_group(target: MihomoTarget, interval_ms: u32, group: String) {
+    let Some(slot) = slot_for(&target, interval_ms).await else {
+        return;
+    };
+    let mut state = slot.state.lock().expect("connections state poisoned");
+    state.closed.retain(|conn| !conn_in_group(conn, &group));
+}
+
 /// Slice the sorted list (active or closed) at `[offset, offset + limit)`.
 pub async fn fetch_window(
     target: MihomoTarget,
@@ -142,10 +150,11 @@ pub async fn fetch_window(
     }
 }
 
-/// Aggregate active connections into source groups, ordered by `sort`.
+/// Aggregate active or closed connections into source groups.
 pub async fn fetch_groups(
     target: MihomoTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
 ) -> Vec<ConnectionGroup> {
@@ -153,13 +162,17 @@ pub async fn fetch_groups(
         return Vec::new();
     };
     let state = slot.state.lock().expect("connections state poisoned");
-    active_groups(state.active.values(), sort, asc)
+    match kind {
+        ConnectionsListKind::Active => connection_groups(state.active.values(), sort, asc),
+        ConnectionsListKind::Closed => connection_groups(state.closed.iter().rev(), sort, asc),
+    }
 }
 
-/// Active connections belonging to `group`, sorted and capped at `limit`.
+/// Connections belonging to `group`, ordered like their source list.
 pub async fn fetch_group_connections(
     target: MihomoTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     group: String,
     limit: u32,
 ) -> Vec<Connection> {
@@ -167,8 +180,20 @@ pub async fn fetch_group_connections(
         return Vec::new();
     };
     let mut state = slot.state.lock().expect("connections state poisoned");
-    ensure_sorted_active_ids(&mut state);
-    group_connections_by_order(&state.active, &state.sorted_active_ids, &group, limit)
+    match kind {
+        ConnectionsListKind::Active => {
+            ensure_sorted_active_ids(&mut state);
+            group_connections_by_order(&state.active, &state.sorted_active_ids, &group, limit)
+        }
+        ConnectionsListKind::Closed => state
+            .closed
+            .iter()
+            .rev()
+            .filter(|conn| conn_in_group(conn, &group))
+            .take(limit as usize)
+            .cloned()
+            .collect(),
+    }
 }
 
 fn ensure_sorted_active_ids(state: &mut State) {

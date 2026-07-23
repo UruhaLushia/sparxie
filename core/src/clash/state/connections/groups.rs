@@ -6,10 +6,10 @@ use super::types::{Connection, ConnectionGroup, ConnectionGroupSort};
 /// Stable key + display label for mihomo's internally-generated connections
 /// (DNS hijack, internal probes, etc.). These carry no source address or
 /// process, so they'd otherwise collapse into one empty-key group.
-const INNER_KEY: &str = "\u{0}inner";
+const INNER_KEY: &str = "inner";
 const INNER_LABEL: &str = "内部连接";
 
-pub(super) fn active_groups<'a, I>(
+pub(super) fn connection_groups<'a, I>(
     connections: I,
     sort: ConnectionGroupSort,
     asc: bool,
@@ -58,7 +58,7 @@ pub(super) fn group_connections_by_order(
     rows
 }
 
-fn conn_in_group(conn: &Connection, group: &str) -> bool {
+pub(super) fn conn_in_group(conn: &Connection, group: &str) -> bool {
     if is_inner(conn) {
         group == INNER_KEY
     } else if !conn.process.is_empty() {
@@ -98,7 +98,7 @@ fn is_inner(conn: &Connection) -> bool {
     conn.conn_type.eq_ignore_ascii_case("inner")
 }
 
-/// Grouping key for an active connection: a dedicated bucket for inner
+/// Grouping key for a connection: a dedicated bucket for inner
 /// connections, else the process name, else the source IP.
 fn group_key(conn: &Connection) -> String {
     if is_inner(conn) {

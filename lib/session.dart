@@ -100,6 +100,7 @@ class MihomoSession {
   }
 
   Future<List<rust.ConnectionGroup>> _fetchConnectionGroups(
+    ConnectionsTab tab,
     rust.ConnectionGroupSort sort,
     bool asc,
   ) async {
@@ -108,12 +109,16 @@ class MihomoSession {
     return rust.fetchConnectionGroups(
       target: t,
       intervalMs: _connectionsIntervalMs,
+      kind: tab == ConnectionsTab.active
+          ? rust.ConnectionsListKind.active
+          : rust.ConnectionsListKind.closed,
       sort: sort,
       asc: asc,
     );
   }
 
   Future<List<rust.Connection>> _fetchConnectionGroupMembers(
+    ConnectionsTab tab,
     String groupKey,
     int limit,
   ) async {
@@ -122,6 +127,9 @@ class MihomoSession {
     return rust.fetchConnectionGroupMembers(
       target: t,
       intervalMs: _connectionsIntervalMs,
+      kind: tab == ConnectionsTab.active
+          ? rust.ConnectionsListKind.active
+          : rust.ConnectionsListKind.closed,
       group: groupKey,
       limit: limit,
     );

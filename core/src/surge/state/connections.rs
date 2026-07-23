@@ -98,6 +98,17 @@ pub async fn clear_closed(target: SurgeTarget, interval_ms: u32) {
         .clear();
 }
 
+pub async fn clear_closed_by_group(target: SurgeTarget, interval_ms: u32, group: String) {
+    let Some(slot) = slot_for(&target, interval_ms).await else {
+        return;
+    };
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .closed
+        .retain(|row| !connection_in_group(row, &group));
+}
+
 pub async fn fetch_window(
     target: SurgeTarget,
     interval_ms: u32,
@@ -123,6 +134,7 @@ pub async fn fetch_window(
 pub async fn fetch_groups(
     target: SurgeTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
 ) -> Vec<ConnectionGroup> {
@@ -131,7 +143,11 @@ pub async fn fetch_groups(
     };
     let state = slot.state.lock().expect("surge connections state poisoned");
     let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
-    for row in state.active.values() {
+    let rows: Vec<&Connection> = match kind {
+        ConnectionsListKind::Active => state.active.values().collect(),
+        ConnectionsListKind::Closed => state.closed.iter().rev().collect(),
+    };
+    for row in rows {
         let key = connection_group_key(row);
         let entry = groups
             .entry(key.clone())
@@ -161,6 +177,7 @@ pub async fn fetch_groups(
 pub async fn fetch_group_connections(
     target: SurgeTarget,
     interval_ms: u32,
+    kind: ConnectionsListKind,
     group: String,
     limit: u32,
 ) -> Vec<Connection> {
@@ -168,12 +185,21 @@ pub async fn fetch_group_connections(
         return Vec::new();
     };
     let state = slot.state.lock().expect("surge connections state poisoned");
-    let mut rows: Vec<Connection> = state
-        .active
-        .values()
-        .filter(|row| connection_in_group(row, &group))
-        .cloned()
-        .collect();
+    let mut rows: Vec<Connection> = match kind {
+        ConnectionsListKind::Active => state
+            .active
+            .values()
+            .filter(|row| connection_in_group(row, &group))
+            .cloned()
+            .collect(),
+        ConnectionsListKind::Closed => state
+            .closed
+            .iter()
+            .rev()
+            .filter(|row| connection_in_group(row, &group))
+            .cloned()
+            .collect(),
+    };
     sort_rows(&mut rows, state.sort, state.asc);
     rows.into_iter().take(limit as usize).collect()
 }
