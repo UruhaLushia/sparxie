@@ -18,6 +18,21 @@ enum ProxiesSort {
 /// Visual layout of the primary navigation chrome.
 enum NavLayout { cards, standard, floating }
 
+/// Item style of the compact bottom bar (floating and standard layouts).
+enum NavBarStyle {
+  /// Selected item expands into an icon+label capsule; others icon-only.
+  capsule,
+
+  /// All items icon+label; a pill indicator slides behind the selection.
+  pill,
+
+  /// All items icon+label; selection is tint-only (iOS-like).
+  tint,
+
+  /// Material 3: pill behind the selected icon, label always below.
+  m3,
+}
+
 /// How the proxies screen renders groups: the classic pinned-header list or
 /// Surge-style gradient cards that expand into an overlay.
 enum ProxiesLayout { list, cards }
@@ -116,6 +131,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kProxiesLayout = 'proxiesLayout';
   static const _kProxiesCardColored = 'proxiesCardColored';
   static const _kNavLayout = 'navLayout';
+  static const _kNavBarStyle = 'navBarStyle';
   static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
   static const _kDelayTestUrl = 'delayTestUrl';
   static const _kDelayTestTimeoutMs = 'delayTestTimeoutMs';
@@ -146,6 +162,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultProxiesCardColored = false;
 
   static const defaultNavLayout = NavLayout.cards;
+  static const defaultNavBarStyle = NavBarStyle.capsule;
   static const defaultAutoCloseOnSwitch = true;
   static const defaultDelayTestUrl = 'https://www.gstatic.com/generate_204';
   static const defaultDelayTestTimeoutMs = 5000;
@@ -258,6 +275,14 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setNavLayout(NavLayout value) async {
     if (value == navLayout) return;
     _put(_kNavLayout, value.name);
+  }
+
+  NavBarStyle get navBarStyle =>
+      _decodeNavBarStyle(_str(_kNavBarStyle, defaultNavBarStyle.name));
+
+  Future<void> setNavBarStyle(NavBarStyle value) async {
+    if (value == navBarStyle) return;
+    _put(_kNavBarStyle, value.name);
   }
 
   /// When true, switching a group's selected proxy also closes all active
@@ -446,6 +471,14 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultProxiesLayout;
+  }
+
+  static NavBarStyle _decodeNavBarStyle(String? raw) {
+    if (raw == null) return defaultNavBarStyle;
+    for (final v in NavBarStyle.values) {
+      if (v.name == raw) return v;
+    }
+    return defaultNavBarStyle;
   }
 
   static NavLayout _decodeNavLayout(String? raw) {

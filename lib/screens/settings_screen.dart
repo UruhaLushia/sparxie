@@ -337,6 +337,25 @@ class AppSettingsPanel extends StatelessWidget {
                 '卡片：窄屏网格入口、宽屏卡片侧栏；标准：底栏 / 侧栏；悬浮：圆角悬浮底栏。',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (prefs.navLayout != NavLayout.cards) ...[
+                const SizedBox(height: 12),
+                Text('底栏样式', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                SegmentedButton<NavBarStyle>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: NavBarStyle.capsule,
+                      label: Text('胶囊'),
+                    ),
+                    ButtonSegment(value: NavBarStyle.pill, label: Text('药丸')),
+                    ButtonSegment(value: NavBarStyle.tint, label: Text('素色')),
+                    ButtonSegment(value: NavBarStyle.m3, label: Text('M3')),
+                  ],
+                  selected: {prefs.navBarStyle},
+                  onSelectionChanged: (s) => prefs.setNavBarStyle(s.first),
+                ),
+              ],
               const Divider(height: 24),
               if (showFontSettings) ...[
                 _FontRow(prefs: prefs),

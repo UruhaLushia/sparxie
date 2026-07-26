@@ -596,48 +596,25 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final isDark = scheme.brightness == Brightness.dark;
     return Scaffold(
       extendBody: true,
-      body: _SlideIndexedStack(index: _index, children: pages),
+      body: _FadeThroughIndexedStack(index: _index, children: pages),
       bottomNavigationBar: ClipRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: NavigationBarTheme(
-            data: NavigationBarThemeData(
-              height: 64,
-              elevation: 0,
-              backgroundColor: isDark
-                  ? scheme.surface.withValues(alpha: 0.6)
-                  : scheme.surface.withValues(alpha: 0.7),
-              indicatorColor: scheme.primaryContainer,
-              iconTheme: WidgetStateProperty.resolveWith((states) {
-                final selected = states.contains(WidgetState.selected);
-                return IconThemeData(
-                  size: 22,
-                  color: selected
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurfaceVariant,
-                );
-              }),
-              labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                final selected = states.contains(WidgetState.selected);
-                return TextStyle(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: selected
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurfaceVariant,
-                );
-              }),
-              indicatorShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+          child: ColoredBox(
+            color: isDark
+                ? scheme.surface.withValues(alpha: 0.6)
+                : scheme.surface.withValues(alpha: 0.7),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 64,
+                child: _NavBarItems(
+                  style: widget.prefs.navBarStyle,
+                  destinations: destinations,
+                  selectedIndex: _index,
+                  onSelected: (i) => setState(() => _index = i),
+                ),
               ),
-            ),
-            child: NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
-              destinations: [
-                for (final d in destinations)
-                  NavigationDestination(icon: Icon(d.icon), label: d.label),
-              ],
             ),
           ),
         ),
@@ -653,7 +630,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           body: Builder(
             builder: (context) {
               final data = MediaQuery.of(context);
-              const navBarExtra = 84.0; // 68 bar + 16 top gap
+              const navBarExtra = 88.0; // 56 bar + 12 pad + 20 top gap
               return MediaQuery(
                 data: data.copyWith(
                   padding: data.padding.copyWith(
@@ -663,7 +640,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                     bottom: data.viewPadding.bottom + navBarExtra,
                   ),
                 ),
-                child: _SlideIndexedStack(index: _index, children: pages),
+                child: _FadeThroughIndexedStack(index: _index, children: pages),
               );
             },
           ),
@@ -676,6 +653,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             selectedIndex: _index,
             onSelected: (i) => setState(() => _index = i),
             destinations: destinations,
+            style: widget.prefs.navBarStyle,
           ),
         ),
       ],
@@ -1402,32 +1380,50 @@ class _NavCard extends StatelessWidget {
   }
 }
 
-class _SlideIndexedStack extends StatefulWidget {
-  const _SlideIndexedStack({required this.index, required this.children});
+class _FadeThroughIndexedStack extends StatefulWidget {
+  const _FadeThroughIndexedStack({required this.index, required this.children});
 
   final int index;
   final List<Widget> children;
 
   @override
-  State<_SlideIndexedStack> createState() => _SlideIndexedStackState();
+  State<_FadeThroughIndexedStack> createState() =>
+      _FadeThroughIndexedStackState();
 }
 
-class _SlideIndexedStackState extends State<_SlideIndexedStack>
+class _FadeThroughIndexedStackState extends State<_FadeThroughIndexedStack>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _fade;
-  int _displayIndex = 0;
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  late final Animation<double> _fadeIn = CurvedAnimation(
+    parent: _ctrl,
+    curve: const Interval(0.3, 1, curve: Curves.easeOutCubic),
+  );
+  late final Animation<double> _scaleIn = Tween<double>(
+    begin: 0.94,
+    end: 1,
+  ).animate(_fadeIn);
+  late final Animation<double> _fadeOut = ReverseAnimation(
+    CurvedAnimation(
+      parent: _ctrl,
+      curve: const Interval(0, 0.3, curve: Curves.easeIn),
+    ),
+  );
+  int _current = 0;
+  int _outgoing = -1;
 
   @override
   void initState() {
     super.initState();
-    _displayIndex = widget.index;
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 180),
-    );
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _ctrl.value = 1.0;
+    _current = widget.index;
+    _ctrl.value = 1;
+    _ctrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed && _outgoing >= 0) {
+        setState(() => _outgoing = -1);
+      }
+    });
   }
 
   @override
@@ -1437,22 +1433,57 @@ class _SlideIndexedStackState extends State<_SlideIndexedStack>
   }
 
   @override
-  void didUpdateWidget(_SlideIndexedStack old) {
+  void didUpdateWidget(_FadeThroughIndexedStack old) {
     super.didUpdateWidget(old);
     if (old.index != widget.index) {
-      _ctrl.reverse().then((_) {
-        if (!mounted) return;
-        setState(() => _displayIndex = widget.index);
-        _ctrl.forward();
+      setState(() {
+        _outgoing = _current;
+        _current = widget.index;
       });
+      _ctrl.forward(from: 0);
     }
+  }
+
+  // Every child keeps the same wrapper chain and a stable key, so moving
+  // between hidden/outgoing/current only flips parameters — page state
+  // (stream subscriptions etc.) survives z-order changes.
+  Widget _wrap(int i) {
+    final active = i == _current;
+    final outgoing = i == _outgoing;
+    return Offstage(
+      key: ValueKey(i),
+      offstage: !active && !outgoing,
+      child: TickerMode(
+        enabled: active || outgoing,
+        child: IgnorePointer(
+          ignoring: !active,
+          child: FadeTransition(
+            opacity: active
+                ? _fadeIn
+                : outgoing
+                ? _fadeOut
+                : const AlwaysStoppedAnimation(1),
+            child: ScaleTransition(
+              scale: active ? _scaleIn : const AlwaysStoppedAnimation(1),
+              child: widget.children[i],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: IndexedStack(index: _displayIndex, children: widget.children),
+    final order = <int>[
+      for (var i = 0; i < widget.children.length; i++)
+        if (i != _current && i != _outgoing) i,
+      if (_outgoing >= 0) _outgoing,
+      _current,
+    ];
+    return Stack(
+      fit: StackFit.expand,
+      children: [for (final i in order) _wrap(i)],
     );
   }
 }
@@ -1462,11 +1493,13 @@ class _FloatingNavBar extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.destinations,
+    required this.style,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final List<_Dest> destinations;
+  final NavBarStyle style;
 
   @override
   Widget build(BuildContext context) {
@@ -1475,51 +1508,50 @@ class _FloatingNavBar extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 12 + bottomPadding),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: isDark
-                  ? scheme.surfaceContainerHigh.withValues(alpha: 0.68)
-                  : scheme.surfaceContainer.withValues(alpha: 0.74),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
+      child: Center(
+        heightFactor: 1,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.08),
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                  blurRadius: 16,
-                  spreadRadius: -2,
-                  offset: const Offset(0, 4),
+                    ? scheme.surfaceContainerHigh.withValues(alpha: 0.68)
+                    : scheme.surfaceContainer.withValues(alpha: 0.74),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : Colors.black.withValues(alpha: 0.08),
+                  width: 0.5,
                 ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: SizedBox(
-              height: 54,
-              child: Row(
-                children: [
-                  for (var i = 0; i < destinations.length; i++)
-                    Expanded(
-                      child: _FloatingNavItem(
-                        icon: destinations[i].icon,
-                        label: destinations[i].label,
-                        selected: i == selectedIndex,
-                        onTap: () => onSelected(i),
-                        scheme: scheme,
-                      ),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                    blurRadius: 16,
+                    spreadRadius: -2,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
                 ],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: SizedBox(
+                  height: 56,
+                  child: _NavBarItems(
+                    style: style,
+                    destinations: destinations,
+                    selectedIndex: selectedIndex,
+                    onSelected: onSelected,
+                    shrinkWrap: true,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1529,13 +1561,143 @@ class _FloatingNavBar extends StatelessWidget {
   }
 }
 
-class _FloatingNavItem extends StatelessWidget {
-  const _FloatingNavItem({
+Color _navIndicatorColor(ColorScheme scheme, bool isDark) =>
+    scheme.primaryContainer.withValues(alpha: isDark ? 0.6 : 0.9);
+
+class _NavBarItems extends StatelessWidget {
+  const _NavBarItems({
+    required this.style,
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+    this.shrinkWrap = false,
+  });
+
+  final NavBarStyle style;
+  final List<_Dest> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  /// True for the floating bar: the row hugs its content (fixed-width cells)
+  /// instead of stretching edge to edge.
+  final bool shrinkWrap;
+
+  static const double _cellWidth = 68;
+
+  Widget _cell(Widget child) => shrinkWrap
+      ? SizedBox(width: _cellWidth, child: child)
+      : Expanded(child: child);
+
+  Widget _labeledRow(ColorScheme scheme, Color selectedColor) {
+    return Row(
+      mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        for (var i = 0; i < destinations.length; i++)
+          _cell(
+            _LabeledNavItem(
+              icon: destinations[i].icon,
+              label: destinations[i].label,
+              selected: i == selectedIndex,
+              onTap: () => onSelected(i),
+              selectedColor: selectedColor,
+              unselectedColor: scheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    return switch (style) {
+      NavBarStyle.capsule => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          spacing: shrinkWrap ? 2 : 0,
+          children: [
+            for (var i = 0; i < destinations.length; i++)
+              _CapsuleNavItem(
+                icon: destinations[i].icon,
+                label: destinations[i].label,
+                selected: i == selectedIndex,
+                onTap: () => onSelected(i),
+                scheme: scheme,
+                isDark: isDark,
+              ),
+          ],
+        ),
+      ),
+      NavBarStyle.pill => Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedAlign(
+              alignment: Alignment(
+                destinations.length == 1
+                    ? 0
+                    : -1 + 2 * selectedIndex / (destinations.length - 1),
+                0,
+              ),
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              child: FractionallySizedBox(
+                widthFactor: 1 / destinations.length,
+                heightFactor: 1,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Center(
+                    child: SizedBox(
+                      height: 44,
+                      width: double.infinity,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer.withValues(
+                            alpha: isDark ? 0.6 : 0.9,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _labeledRow(scheme, scheme.onPrimaryContainer),
+        ],
+      ),
+      NavBarStyle.tint => _labeledRow(scheme, scheme.primary),
+      NavBarStyle.m3 => Row(
+        mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
+        children: [
+          for (var i = 0; i < destinations.length; i++)
+            _cell(
+              _M3NavItem(
+                icon: destinations[i].icon,
+                label: destinations[i].label,
+                selected: i == selectedIndex,
+                onTap: () => onSelected(i),
+                scheme: scheme,
+                isDark: isDark,
+              ),
+            ),
+        ],
+      ),
+    };
+  }
+}
+
+class _CapsuleNavItem extends StatelessWidget {
+  const _CapsuleNavItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
     required this.scheme,
+    required this.isDark,
   });
 
   final IconData icon;
@@ -1543,10 +1705,81 @@ class _FloatingNavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final ColorScheme scheme;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final fg = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: selected ? 14 : 10,
+            vertical: 9,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? _navIndicatorColor(scheme, isDark)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: fg),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.centerLeft,
+                child: selected
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: fg,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LabeledNavItem extends StatelessWidget {
+  const _LabeledNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.selectedColor,
+    required this.unselectedColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color selectedColor;
+  final Color unselectedColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected
+        ? selectedColor
+        : unselectedColor.withValues(alpha: 0.72);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -1554,32 +1787,82 @@ class _FloatingNavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSlide(
-              offset: Offset(0, selected ? -0.08 : 0),
+            AnimatedScale(
+              scale: selected ? 1.12 : 1,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
               child: Icon(icon, size: 22, color: fg),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                fontSize: 10,
+                color: fg,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              ),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _M3NavItem extends StatelessWidget {
+  const _M3NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.scheme,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final ColorScheme scheme;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+              decoration: BoxDecoration(
+                color: selected
+                    ? _navIndicatorColor(scheme, isDark)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: selected
+                    ? scheme.onPrimaryContainer
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 3),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 fontSize: 10,
-                color: fg,
+                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              width: selected ? 18 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: selected ? scheme.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ],
