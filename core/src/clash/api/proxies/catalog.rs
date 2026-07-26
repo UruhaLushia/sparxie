@@ -9,7 +9,7 @@ use crate::clash::api::MihomoTarget;
 use super::value::{field_or, first_field};
 
 use cache::{CachedCatalog, CachedGroup, CachedNode};
-use parse::{history_delay, intern_member_list, member_count, proxy_group_matches, push_icon};
+use parse::{contains_filter, history_delay, intern_member_list, push_icon};
 pub use types::{ProxyCatalog, ProxyGroupEntry, ProxyMemberEntry, ProxyMemberSort};
 
 mod cache;
@@ -52,19 +52,20 @@ pub async fn proxy_catalog(
 
     for (position, (name, data)) in proxies.iter().enumerate() {
         let all = data.get("all");
-        let member_count = member_count(all);
-        if member_count == 0 {
-            continue;
-        }
         let hidden = data.get("hidden").and_then(Value::as_bool).unwrap_or(false);
         if hidden && !include_hidden {
             continue;
         }
-        if !proxy_group_matches(name, all, filter.as_ref()) {
+        let member_filter = if contains_filter(name, filter.as_ref()) {
+            ""
+        } else {
+            filter.as_ref()
+        };
+        let (members, members_hash) = intern_member_list(all, &mut name_ids, member_filter);
+        if members.is_empty() {
             continue;
         }
-
-        let (members, members_hash) = intern_member_list(all, &mut name_ids);
+        let member_count = members.len();
         let icon = field_or(data, "icon", "");
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
         cached_groups.insert(name.clone(), CachedGroup::new(members));
@@ -115,6 +116,7 @@ pub async fn proxy_catalog(
             lower_names: None,
             nodes,
             groups: cached_groups,
+            filter: filter.into_owned(),
         },
     );
 
@@ -187,7 +189,7 @@ pub async fn proxy_group_members(
     member_sort: ProxyMemberSort,
 ) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+        refresh_cached_catalog(&target).await?;
     }
     if cache::group_needs_provider_nodes(&target, &group) {
         let client = target.client()?;
@@ -198,7 +200,7 @@ pub async fn proxy_group_members(
     if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
         return Ok(entries);
     }
-    let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+    refresh_cached_catalog(&target).await?;
     if cache::group_needs_provider_nodes(&target, &group) {
         let client = target.client()?;
         if let Ok(nodes) = provider_nodes(&client).await {
@@ -213,9 +215,15 @@ pub(crate) async fn cached_group_member_names(
     group: &str,
 ) -> Result<Vec<String>, MihomoError> {
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+        refresh_cached_catalog(&target).await?;
     }
     Ok(cache::member_names(&target, group))
+}
+
+async fn refresh_cached_catalog(target: &MihomoTarget) -> Result<(), MihomoError> {
+    let filter = cache::cached_filter(target).unwrap_or_default();
+    let _ = proxy_catalog(target.clone(), true, filter).await?;
+    Ok(())
 }
 
 pub(crate) async fn cached_node_providers(
@@ -227,7 +235,7 @@ pub(crate) async fn cached_node_providers(
         return Ok(HashMap::new());
     }
     if !cache::has_catalog(&target) {
-        let _ = proxy_catalog(target.clone(), true, String::new()).await?;
+        refresh_cached_catalog(&target).await?;
     }
     if cache::names_need_provider_nodes(&target, &names) {
         let client = target.client()?;

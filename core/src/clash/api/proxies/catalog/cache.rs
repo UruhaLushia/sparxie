@@ -31,6 +31,7 @@ pub(super) struct CachedCatalog {
     pub(super) lower_names: Option<Vec<String>>,
     pub(super) nodes: Vec<Option<CachedNode>>,
     pub(super) groups: HashMap<String, CachedGroup>,
+    pub(super) filter: String,
 }
 
 impl CachedCatalog {
@@ -87,6 +88,10 @@ pub(super) fn replace_catalog(target: &MihomoTarget, catalog: CachedCatalog) {
         .replace((cache_key(target), catalog));
 }
 
+pub(super) fn cached_filter(target: &MihomoTarget) -> Option<String> {
+    with_catalog(target, |catalog| catalog.filter.clone())
+}
+
 pub(super) fn has_catalog(target: &MihomoTarget) -> bool {
     let key = cache_key(target);
     catalog_cache()
@@ -112,6 +117,7 @@ pub(super) fn member_entries(
             lower_names,
             nodes,
             groups,
+            ..
         } = catalog;
         let group = groups.get_mut(group_name)?;
         let ids = group.member_ids(member_sort, lower_names.as_deref().unwrap_or(&[]), nodes);

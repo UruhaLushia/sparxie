@@ -14,8 +14,8 @@ use crate::sing_box::proto::daemon::{Groups, SelectOutboundRequest, UrlTestReque
 
 type MemberCache = HashMap<String, Vec<ProxyMemberEntry>>;
 
-fn cache() -> &'static Mutex<HashMap<String, MemberCache>> {
-    static C: OnceLock<Mutex<HashMap<String, MemberCache>>> = OnceLock::new();
+fn cache() -> &'static Mutex<HashMap<String, (String, MemberCache)>> {
+    static C: OnceLock<Mutex<HashMap<String, (String, MemberCache)>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -70,7 +70,7 @@ pub async fn group_delay(
     group: String,
 ) -> Result<Vec<GroupDelayEntry>, MihomoError> {
     let groups = url_test_group(&target, &group).await?;
-    let _ = catalog_from_groups(&target, groups, String::new());
+    let _ = catalog_from_groups(&target, groups, cached_filter(&target));
     Ok(cached_group_members(&target, &group)
         .into_iter()
         .map(|entry| GroupDelayEntry {
@@ -173,9 +173,11 @@ fn catalog_from_groups(target: &SingBoxTarget, groups: Groups, filter: String) -
     let mut out = Vec::new();
     let mut cached = HashMap::new();
     for group in groups.group {
+        let name_matches = needle.is_empty() || group.tag.to_lowercase().contains(&needle);
         let members = group
             .items
             .into_iter()
+            .filter(|item| name_matches || item.tag.to_lowercase().contains(&needle))
             .map(|item| ProxyMemberEntry {
                 name: item.tag,
                 proxy_type: item.r#type,
@@ -186,12 +188,7 @@ fn catalog_from_groups(target: &SingBoxTarget, groups: Groups, filter: String) -
                 },
             })
             .collect::<Vec<_>>();
-        if !needle.is_empty()
-            && !group.tag.to_lowercase().contains(&needle)
-            && !members
-                .iter()
-                .any(|member| member.name.to_lowercase().contains(&needle))
-        {
+        if !needle.is_empty() && members.is_empty() {
             continue;
         }
         let names = members
@@ -216,7 +213,7 @@ fn catalog_from_groups(target: &SingBoxTarget, groups: Groups, filter: String) -
     cache()
         .lock()
         .expect("sing-box proxy cache poisoned")
-        .insert(target_key(target), cached);
+        .insert(target_key(target), (needle, cached));
     ProxyCatalog {
         groups: out,
         icon_urls: Vec::new(),
@@ -235,12 +232,21 @@ async fn ensure_catalog(target: SingBoxTarget) -> Result<(), MihomoError> {
     Ok(())
 }
 
+fn cached_filter(target: &SingBoxTarget) -> String {
+    cache()
+        .lock()
+        .expect("sing-box proxy cache poisoned")
+        .get(&target_key(target))
+        .map(|(filter, _)| filter.clone())
+        .unwrap_or_default()
+}
+
 fn cached_group_members(target: &SingBoxTarget, group: &str) -> Vec<ProxyMemberEntry> {
     cache()
         .lock()
         .expect("sing-box proxy cache poisoned")
         .get(&target_key(target))
-        .and_then(|groups| groups.get(group).cloned())
+        .and_then(|(_, groups)| groups.get(group).cloned())
         .unwrap_or_default()
 }
 
@@ -249,7 +255,7 @@ fn cached_members_by_name(target: &SingBoxTarget) -> HashMap<String, i32> {
         .lock()
         .expect("sing-box proxy cache poisoned")
         .get(&target_key(target))
-        .map(|groups| {
+        .map(|(_, groups)| {
             groups
                 .values()
                 .flatten()

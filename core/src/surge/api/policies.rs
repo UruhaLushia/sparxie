@@ -41,7 +41,7 @@ pub async fn proxy_catalog(
         if name.is_empty() {
             continue;
         }
-        let members = policy_members(item.value, &delays);
+        let mut members = policy_members(item.value, &delays);
         if members.is_empty() {
             continue;
         }
@@ -49,13 +49,11 @@ pub async fn proxy_catalog(
         if meta.hidden && !include_hidden {
             continue;
         }
-        if !needle.is_empty()
-            && !name.to_lowercase().contains(&needle)
-            && !members
-                .iter()
-                .any(|member| member.entry.name.to_lowercase().contains(&needle))
-        {
-            continue;
+        if !needle.is_empty() && !name.to_lowercase().contains(&needle) {
+            members.retain(|member| member.entry.name.to_lowercase().contains(&needle));
+            if members.is_empty() {
+                continue;
+            }
         }
         let now = selected_policy(&client, &name).await.unwrap_or_default();
         let names: Vec<String> = members
