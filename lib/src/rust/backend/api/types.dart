@@ -801,6 +801,7 @@ class VersionInfo {
   final bool supportsCacheFlush;
   final bool supportsMemory;
   final bool supportsTailscale;
+  final bool supportsDiagnostics;
 
   const VersionInfo({
     required this.version,
@@ -812,6 +813,7 @@ class VersionInfo {
     required this.supportsCacheFlush,
     required this.supportsMemory,
     required this.supportsTailscale,
+    required this.supportsDiagnostics,
   });
 
   static Future<VersionInfo> default_() =>
@@ -827,7 +829,8 @@ class VersionInfo {
       supportsCoreManagement.hashCode ^
       supportsCacheFlush.hashCode ^
       supportsMemory.hashCode ^
-      supportsTailscale.hashCode;
+      supportsTailscale.hashCode ^
+      supportsDiagnostics.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -842,5 +845,6 @@ class VersionInfo {
           supportsCoreManagement == other.supportsCoreManagement &&
           supportsCacheFlush == other.supportsCacheFlush &&
           supportsMemory == other.supportsMemory &&
-          supportsTailscale == other.supportsTailscale;
+          supportsTailscale == other.supportsTailscale &&
+          supportsDiagnostics == other.supportsDiagnostics;
 }

@@ -8,7 +8,17 @@ import '../../utils/error.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+Stream<TailscalePingUpdate> tailscalePingStream({
+  required BackendTarget target,
+  required String endpointTag,
+  required String peerIp,
+}) => RustLib.instance.api.crateBackendApiTailscaleTailscalePingStream(
+  target: target,
+  endpointTag: endpointTag,
+  peerIp: peerIp,
+);
 
 Stream<TailscaleStatus> tailscaleStatusStream({
   required BackendTarget target,
@@ -168,6 +178,48 @@ class TailscalePeer {
           sshHostKeys == other.sshHostKeys &&
           shareeNode == other.shareeNode &&
           lastSeen == other.lastSeen;
+}
+
+class TailscalePingUpdate {
+  final double latencyMs;
+  final bool isDirect;
+  final String endpoint;
+  final int derpRegionId;
+  final String derpRegionCode;
+  final String error;
+
+  const TailscalePingUpdate({
+    required this.latencyMs,
+    required this.isDirect,
+    required this.endpoint,
+    required this.derpRegionId,
+    required this.derpRegionCode,
+    required this.error,
+  });
+
+  static Future<TailscalePingUpdate> default_() =>
+      RustLib.instance.api.crateBackendApiTailscaleTailscalePingUpdateDefault();
+
+  @override
+  int get hashCode =>
+      latencyMs.hashCode ^
+      isDirect.hashCode ^
+      endpoint.hashCode ^
+      derpRegionId.hashCode ^
+      derpRegionCode.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TailscalePingUpdate &&
+          runtimeType == other.runtimeType &&
+          latencyMs == other.latencyMs &&
+          isDirect == other.isDirect &&
+          endpoint == other.endpoint &&
+          derpRegionId == other.derpRegionId &&
+          derpRegionCode == other.derpRegionCode &&
+          error == other.error;
 }
 
 class TailscaleStatus {

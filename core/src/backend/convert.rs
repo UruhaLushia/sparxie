@@ -242,6 +242,7 @@ impl From<crate::clash::api::VersionInfo> for VersionInfo {
             supports_cache_flush: value.supports_cache_flush,
             supports_memory: value.supports_memory,
             supports_tailscale: false,
+            supports_diagnostics: false,
         }
     }
 }

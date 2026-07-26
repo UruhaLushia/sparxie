@@ -7,6 +7,7 @@ import 'src/rust/backend/api/target.dart' as api;
 
 export 'src/rust/backend/api/connections.dart';
 export 'src/rust/backend/api/control.dart';
+export 'src/rust/backend/api/diagnostics.dart';
 export 'src/rust/backend/api/providers.dart';
 export 'src/rust/backend/api/proxies.dart';
 export 'src/rust/backend/api/proxy_delay.dart';

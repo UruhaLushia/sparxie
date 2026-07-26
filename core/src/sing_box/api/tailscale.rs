@@ -1,13 +1,46 @@
 use crate::MihomoError;
 use crate::backend::api::tailscale::{
-    TailscaleEndpointStatus, TailscalePeer, TailscaleStatus, TailscaleUserGroup,
+    TailscaleEndpointStatus, TailscalePeer, TailscalePingUpdate, TailscaleStatus,
+    TailscaleUserGroup,
 };
 use crate::frb_generated::StreamSink;
 use crate::sing_box::client::SingBoxTarget;
 use crate::sing_box::proto::daemon::{
     SetTailscaleExitNodeRequest, TailscaleEndpointStatus as PbEndpointStatus,
-    TailscaleLogoutRequest, TailscalePeer as PbPeer, TailscaleUserGroup as PbUserGroup,
+    TailscaleLogoutRequest, TailscalePeer as PbPeer, TailscalePingRequest,
+    TailscaleUserGroup as PbUserGroup,
 };
+
+pub async fn tailscale_ping_stream(
+    target: SingBoxTarget,
+    endpoint_tag: String,
+    peer_ip: String,
+    sink: StreamSink<TailscalePingUpdate>,
+) -> Result<(), MihomoError> {
+    let mut stream = target
+        .client()
+        .await?
+        .start_tailscale_ping(TailscalePingRequest {
+            endpoint_tag,
+            peer_ip,
+        })
+        .await?
+        .into_inner();
+    while let Some(update) = stream.message().await? {
+        let ping = TailscalePingUpdate {
+            latency_ms: update.latency_ms,
+            is_direct: update.is_direct,
+            endpoint: update.endpoint,
+            derp_region_id: update.derp_region_id,
+            derp_region_code: update.derp_region_code,
+            error: update.error,
+        };
+        if sink.add(ping).is_err() {
+            break;
+        }
+    }
+    Ok(())
+}
 
 pub async fn tailscale_status_stream(
     target: SingBoxTarget,

@@ -5,14 +5,18 @@ use crate::backend::api::VersionInfo;
 use crate::sing_box::client::SingBoxTarget;
 use crate::sing_box::proto::daemon::{ClashMode, CloseConnectionRequest};
 
+mod diagnostics;
 mod proxies;
 mod tailscale;
 
+pub use diagnostics::{network_quality_test_stream, outbounds, stun_test_stream};
 pub use proxies::{
     group_delay, proxy_batch_delay, proxy_catalog, proxy_delay_window, proxy_group_batch_delay,
     proxy_group_members, select_proxy, unfix_proxy,
 };
-pub use tailscale::{tailscale_logout, tailscale_set_exit_node, tailscale_status_stream};
+pub use tailscale::{
+    tailscale_logout, tailscale_ping_stream, tailscale_set_exit_node, tailscale_status_stream,
+};
 
 pub async fn version(target: SingBoxTarget) -> Result<String, MihomoError> {
     Ok(target
@@ -38,6 +42,7 @@ pub async fn version_info(target: SingBoxTarget) -> Result<VersionInfo, MihomoEr
         supports_cache_flush: false,
         supports_memory: true,
         supports_tailscale: true,
+        supports_diagnostics: true,
         ..Default::default()
     })
 }

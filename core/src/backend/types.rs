@@ -243,4 +243,5 @@ pub struct VersionInfo {
     pub supports_cache_flush: bool,
     pub supports_memory: bool,
     pub supports_tailscale: bool,
+    pub supports_diagnostics: bool,
 }

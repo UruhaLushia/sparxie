@@ -168,6 +168,7 @@ class MihomoSession {
   final ValueNotifier<bool> supportsExternalResources = ValueNotifier(false);
   final ValueNotifier<bool> supportsRules = ValueNotifier(false);
   final ValueNotifier<bool> supportsTailscale = ValueNotifier(false);
+  final ValueNotifier<bool> supportsDiagnostics = ValueNotifier(false);
 
   /// While true, incoming connection deltas are dropped on the floor —
   /// the visible row list and totals stay frozen at the last applied
@@ -401,6 +402,7 @@ class MihomoSession {
     supportsRules.value =
         _target != null && _activeKey?.type != BackendType.singBox;
     supportsTailscale.value = false;
+    supportsDiagnostics.value = false;
     if (_activeKey?.type != BackendType.singBox && _logsLevel == 'trace') {
       _logsLevel = 'debug';
     }
@@ -504,6 +506,7 @@ class MihomoSession {
           info.supportsCoreActions || supportsDnsFlush.value;
       supportsMemory.value = info.supportsMemory;
       supportsTailscale.value = info.supportsTailscale;
+      supportsDiagnostics.value = info.supportsDiagnostics;
       if (info.supportsMemory && _memorySub == null) _subscribeMemory();
     } catch (_) {
       // Non-critical; capability-gated UI stays hidden until a later reconnect.
@@ -805,6 +808,7 @@ class MihomoSession {
     supportsExternalResources.dispose();
     supportsRules.dispose();
     supportsTailscale.dispose();
+    supportsDiagnostics.dispose();
     ruleCount.dispose();
     connectionsPaused.dispose();
     error.dispose();

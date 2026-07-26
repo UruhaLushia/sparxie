@@ -178,6 +178,22 @@ class _TailscaleScreenState extends State<TailscaleScreen> {
     );
   }
 
+  void _showPing(String endpointTag, rust.TailscalePeer peer) {
+    final target = _target();
+    if (target == null || peer.tailscaleIps.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 420),
+      builder: (_) => _PingSheet(
+        target: target,
+        endpointTag: endpointTag,
+        peerIp: peer.tailscaleIps.first,
+        title: _peerTitle(peer),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = _status;
@@ -204,6 +220,7 @@ class _TailscaleScreenState extends State<TailscaleScreen> {
                 onCopyAuth: _copyAuth,
                 onLogout: _logout,
                 onSetExitNode: _setExitNode,
+                onPing: _showPing,
               ),
             ),
           ],
@@ -223,6 +240,7 @@ class _Body extends StatelessWidget {
     required this.onCopyAuth,
     required this.onLogout,
     required this.onSetExitNode,
+    required this.onPing,
   });
 
   final bool loading;
@@ -233,6 +251,7 @@ class _Body extends StatelessWidget {
   final ValueChanged<String> onCopyAuth;
   final ValueChanged<String> onLogout;
   final void Function(String endpointTag, String stableId) onSetExitNode;
+  final void Function(String endpointTag, rust.TailscalePeer peer) onPing;
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +293,7 @@ class _Body extends StatelessWidget {
             onCopyAuth: onCopyAuth,
             onLogout: onLogout,
             onSetExitNode: onSetExitNode,
+            onPing: onPing,
           ),
         ],
       ],
@@ -289,6 +309,7 @@ class _EndpointPanel extends StatelessWidget {
     required this.onCopyAuth,
     required this.onLogout,
     required this.onSetExitNode,
+    required this.onPing,
   });
 
   final rust.TailscaleEndpointStatus endpoint;
@@ -297,6 +318,7 @@ class _EndpointPanel extends StatelessWidget {
   final ValueChanged<String> onCopyAuth;
   final ValueChanged<String> onLogout;
   final void Function(String endpointTag, String stableId) onSetExitNode;
+  final void Function(String endpointTag, rust.TailscalePeer peer) onPing;
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +375,7 @@ class _EndpointPanel extends StatelessWidget {
                 exitNode: exitNode,
                 busy: busy,
                 onSetExitNode: onSetExitNode,
+                onPing: onPing,
               ),
             ],
           ],
@@ -496,6 +519,7 @@ class _UserGroupBlock extends StatelessWidget {
     required this.exitNode,
     required this.busy,
     required this.onSetExitNode,
+    required this.onPing,
   });
 
   final rust.TailscaleUserGroup group;
@@ -503,6 +527,7 @@ class _UserGroupBlock extends StatelessWidget {
   final rust.TailscalePeer? exitNode;
   final Set<String> busy;
   final void Function(String endpointTag, String stableId) onSetExitNode;
+  final void Function(String endpointTag, rust.TailscalePeer peer) onPing;
 
   @override
   Widget build(BuildContext context) {
@@ -545,6 +570,7 @@ class _UserGroupBlock extends StatelessWidget {
               _actionKey(endpointTag, 'exit:${group.peers[i].stableId}'),
             ),
             onSetExitNode: onSetExitNode,
+            onPing: onPing,
           ),
         ],
       ],
@@ -559,6 +585,7 @@ class _PeerRow extends StatelessWidget {
     required this.selectedExit,
     required this.busy,
     required this.onSetExitNode,
+    required this.onPing,
   });
 
   final rust.TailscalePeer peer;
@@ -566,6 +593,7 @@ class _PeerRow extends StatelessWidget {
   final bool selectedExit;
   final bool busy;
   final void Function(String endpointTag, String stableId) onSetExitNode;
+  final void Function(String endpointTag, rust.TailscalePeer peer) onPing;
 
   @override
   Widget build(BuildContext context) {
@@ -616,6 +644,14 @@ class _PeerRow extends StatelessWidget {
               ],
             ),
           ),
+          if (peer.tailscaleIps.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Ping',
+              onPressed: () => onPing(endpointTag, peer),
+              icon: const Icon(Icons.network_ping, size: 20),
+            ),
+          ],
           if (peer.exitNodeOption) ...[
             const SizedBox(width: 8),
             IconButton(
@@ -707,6 +743,131 @@ class _StatusDot extends StatelessWidget {
       width: 10,
       height: 10,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _PingSheet extends StatefulWidget {
+  const _PingSheet({
+    required this.target,
+    required this.endpointTag,
+    required this.peerIp,
+    required this.title,
+  });
+
+  final rust.BackendTarget target;
+  final String endpointTag;
+  final String peerIp;
+  final String title;
+
+  @override
+  State<_PingSheet> createState() => _PingSheetState();
+}
+
+class _PingSheetState extends State<_PingSheet> {
+  StreamSubscription<rust.TailscalePingUpdate>? _sub;
+  rust.TailscalePingUpdate? _last;
+  String? _error;
+  int _count = 0;
+  double _sum = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = rust
+        .tailscalePingStream(
+          target: widget.target,
+          endpointTag: widget.endpointTag,
+          peerIp: widget.peerIp,
+        )
+        .listen(
+          (update) {
+            if (!mounted) return;
+            setState(() {
+              if (update.error.isNotEmpty) {
+                _error = update.error;
+              } else {
+                _error = null;
+                _last = update;
+                if (update.latencyMs > 0) {
+                  _count++;
+                  _sum += update.latencyMs;
+                }
+              }
+            });
+          },
+          onError: (Object e) {
+            if (!mounted) return;
+            setState(() => _error = formatError(e));
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final last = _last;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Ping ${widget.title}',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              widget.peerIp,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 14),
+            if (last == null && _error == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            if (last != null)
+              _InfoRows(
+                rows: [
+                  ('延迟', '${last.latencyMs.toStringAsFixed(1)} ms'),
+                  (
+                    '路径',
+                    last.isDirect
+                        ? '直连'
+                        : last.derpRegionCode.isEmpty
+                        ? 'DERP 中继'
+                        : 'DERP 中继 · ${last.derpRegionCode}',
+                  ),
+                  if (last.endpoint.isNotEmpty) ('端点', last.endpoint),
+                  if (_count > 0)
+                    (
+                      '平均',
+                      '${(_sum / _count).toStringAsFixed(1)} ms($_count 次)',
+                    ),
+                ],
+              ),
+            if (_error != null) ...[
+              if (last != null) const SizedBox(height: 10),
+              _MessageBox(_error!, error: true),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

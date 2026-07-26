@@ -20,6 +20,7 @@ import 'screens/core_config_screen.dart';
 import 'screens/connections_screen.dart';
 import 'screens/core_actions_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/diagnostics_screen.dart';
 import 'screens/logs_screen.dart';
 import 'screens/proxies_screen.dart';
 import 'screens/resources_screen.dart';
@@ -327,6 +328,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     required bool supportsExternalResources,
     required bool supportsRules,
     required bool supportsTailscale,
+    required bool supportsDiagnostics,
   }) {
     final isStandardLike =
         layout == NavLayout.standard || layout == NavLayout.floating;
@@ -347,10 +349,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         const _Dest(icon: Icons.rule, label: '分流规则'),
       if (showOnStandardWide && supportsTailscale)
         const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
+      if (showOnStandardWide && supportsDiagnostics)
+        const _Dest(icon: Icons.network_check_outlined, label: '网络工具'),
       if (layout == NavLayout.cards && supportsExternalResources)
         const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
       if (layout == NavLayout.cards && supportsTailscale)
         const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
+      if (layout == NavLayout.cards && supportsDiagnostics)
+        const _Dest(icon: Icons.network_check_outlined, label: '网络工具'),
       const _Dest(icon: Icons.more_horiz, label: '其他'),
     ];
   }
@@ -374,6 +380,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       '核心操作' => CoreActionsScreen(store: widget.store, session: widget.session),
       '分流规则' => RulesScreen(store: widget.store),
       'Tailscale' => TailscaleScreen(store: widget.store),
+      '网络工具' => DiagnosticsScreen(store: widget.store),
       _ => SettingsScreen(
         store: widget.store,
         prefs: widget.prefs,
@@ -420,6 +427,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           widget.session.supportsExternalResources,
           widget.session.supportsRules,
           widget.session.supportsTailscale,
+          widget.session.supportsDiagnostics,
         ]),
         builder: (context, _) {
           final size = MediaQuery.sizeOf(context);
@@ -439,6 +447,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 widget.session.supportsExternalResources.value,
             supportsRules: widget.session.supportsRules.value,
             supportsTailscale: widget.session.supportsTailscale.value,
+            supportsDiagnostics: widget.session.supportsDiagnostics.value,
           );
           if (wide) {
             return cards

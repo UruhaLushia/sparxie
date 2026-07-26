@@ -50,6 +50,36 @@ pub struct TailscalePeer {
     pub last_seen: i64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TailscalePingUpdate {
+    pub latency_ms: f64,
+    pub is_direct: bool,
+    pub endpoint: String,
+    pub derp_region_id: i32,
+    pub derp_region_code: String,
+    pub error: String,
+}
+
+pub async fn tailscale_ping_stream(
+    target: BackendTarget,
+    endpoint_tag: String,
+    peer_ip: String,
+    sink: StreamSink<TailscalePingUpdate>,
+) -> Result<(), MihomoError> {
+    match target.backend_type {
+        BackendType::SingBox => {
+            crate::sing_box::api::tailscale_ping_stream(
+                target.sing_box(),
+                endpoint_tag,
+                peer_ip,
+                sink,
+            )
+            .await
+        }
+        _ => Err(MihomoError::Other("当前后端不支持 Tailscale".into())),
+    }
+}
+
 pub async fn tailscale_status_stream(
     target: BackendTarget,
     sink: StreamSink<TailscaleStatus>,

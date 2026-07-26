@@ -8,6 +8,7 @@
 
 import 'backend/api/connections.dart';
 import 'backend/api/control.dart';
+import 'backend/api/diagnostics.dart';
 import 'backend/api/providers.dart';
 import 'backend/api/proxies.dart';
 import 'backend/api/proxy_delay.dart';
@@ -50,9 +51,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<NetworkQualityProgress>
+  dco_decode_StreamSink_network_quality_progress_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<ProxyDelayEvent> dco_decode_StreamSink_proxy_delay_event_Sse(
     dynamic raw,
   );
+
+  @protected
+  RustStreamSink<StunTestProgress> dco_decode_StreamSink_stun_test_progress_Sse(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<TailscalePingUpdate>
+  dco_decode_StreamSink_tailscale_ping_update_Sse(dynamic raw);
 
   @protected
   RustStreamSink<TailscaleStatus> dco_decode_StreamSink_tailscale_status_Sse(
@@ -113,6 +127,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CoreConfig dco_decode_core_config(dynamic raw);
 
   @protected
+  double dco_decode_f_64(dynamic raw);
+
+  @protected
   GroupDelayEntry dco_decode_group_delay_entry(dynamic raw);
 
   @protected
@@ -135,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<LogEntry> dco_decode_list_log_entry(dynamic raw);
+
+  @protected
+  List<OutboundEntry> dco_decode_list_outbound_entry(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -181,6 +201,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MihomoError dco_decode_mihomo_error(dynamic raw);
 
   @protected
+  NetworkQualityProgress dco_decode_network_quality_progress(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -194,6 +217,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  OutboundEntry dco_decode_outbound_entry(dynamic raw);
 
   @protected
   ProxyCatalog dco_decode_proxy_catalog(dynamic raw);
@@ -226,10 +252,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RulesSummary dco_decode_rules_summary(dynamic raw);
 
   @protected
+  StunTestProgress dco_decode_stun_test_progress(dynamic raw);
+
+  @protected
   TailscaleEndpointStatus dco_decode_tailscale_endpoint_status(dynamic raw);
 
   @protected
   TailscalePeer dco_decode_tailscale_peer(dynamic raw);
+
+  @protected
+  TailscalePingUpdate dco_decode_tailscale_ping_update(dynamic raw);
 
   @protected
   TailscaleStatus dco_decode_tailscale_status(dynamic raw);
@@ -277,9 +309,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<NetworkQualityProgress>
+  sse_decode_StreamSink_network_quality_progress_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<ProxyDelayEvent> sse_decode_StreamSink_proxy_delay_event_Sse(
     SseDeserializer deserializer,
   );
+
+  @protected
+  RustStreamSink<StunTestProgress> sse_decode_StreamSink_stun_test_progress_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<TailscalePingUpdate>
+  sse_decode_StreamSink_tailscale_ping_update_Sse(SseDeserializer deserializer);
 
   @protected
   RustStreamSink<TailscaleStatus> sse_decode_StreamSink_tailscale_status_Sse(
@@ -348,6 +395,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CoreConfig sse_decode_core_config(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
   GroupDelayEntry sse_decode_group_delay_entry(SseDeserializer deserializer);
 
   @protected
@@ -374,6 +424,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<LogEntry> sse_decode_list_log_entry(SseDeserializer deserializer);
+
+  @protected
+  List<OutboundEntry> sse_decode_list_outbound_entry(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -434,6 +489,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MihomoError sse_decode_mihomo_error(SseDeserializer deserializer);
 
   @protected
+  NetworkQualityProgress sse_decode_network_quality_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -449,6 +509,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  OutboundEntry sse_decode_outbound_entry(SseDeserializer deserializer);
 
   @protected
   ProxyCatalog sse_decode_proxy_catalog(SseDeserializer deserializer);
@@ -485,12 +548,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RulesSummary sse_decode_rules_summary(SseDeserializer deserializer);
 
   @protected
+  StunTestProgress sse_decode_stun_test_progress(SseDeserializer deserializer);
+
+  @protected
   TailscaleEndpointStatus sse_decode_tailscale_endpoint_status(
     SseDeserializer deserializer,
   );
 
   @protected
   TailscalePeer sse_decode_tailscale_peer(SseDeserializer deserializer);
+
+  @protected
+  TailscalePingUpdate sse_decode_tailscale_ping_update(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TailscaleStatus sse_decode_tailscale_status(SseDeserializer deserializer);
@@ -546,8 +617,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_network_quality_progress_Sse(
+    RustStreamSink<NetworkQualityProgress> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_proxy_delay_event_Sse(
     RustStreamSink<ProxyDelayEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_stun_test_progress_Sse(
+    RustStreamSink<StunTestProgress> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_tailscale_ping_update_Sse(
+    RustStreamSink<TailscalePingUpdate> self,
     SseSerializer serializer,
   );
 
@@ -636,6 +725,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_core_config(CoreConfig self, SseSerializer serializer);
 
   @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_group_delay_entry(
     GroupDelayEntry self,
     SseSerializer serializer,
@@ -670,6 +762,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_log_entry(List<LogEntry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_outbound_entry(
+    List<OutboundEntry> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
@@ -744,6 +842,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_mihomo_error(MihomoError self, SseSerializer serializer);
 
   @protected
+  void sse_encode_network_quality_progress(
+    NetworkQualityProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -763,6 +867,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint8List? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_outbound_entry(OutboundEntry self, SseSerializer serializer);
 
   @protected
   void sse_encode_proxy_catalog(ProxyCatalog self, SseSerializer serializer);
@@ -816,6 +923,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_rules_summary(RulesSummary self, SseSerializer serializer);
 
   @protected
+  void sse_encode_stun_test_progress(
+    StunTestProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_tailscale_endpoint_status(
     TailscaleEndpointStatus self,
     SseSerializer serializer,
@@ -823,6 +936,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_tailscale_peer(TailscalePeer self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tailscale_ping_update(
+    TailscalePingUpdate self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_tailscale_status(

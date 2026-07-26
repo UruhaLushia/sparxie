@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 497413198;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -368221613;
 
 // Section: executor
 
@@ -846,6 +846,45 @@ fn wire__crate__backend__api__types__core_config_default_impl(
         },
     )
 }
+fn wire__crate__backend__api__diagnostics__diagnostics_outbounds_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "diagnostics_outbounds",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok =
+                            crate::backend::api::diagnostics::diagnostics_outbounds(api_target)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__backend__api__control__dns_query_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1606,6 +1645,130 @@ fn wire__crate__backend__api__streams__memory_stream_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__diagnostics__network_quality_progress_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "network_quality_progress_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::diagnostics::NetworkQualityProgress::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__diagnostics__network_quality_test_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "network_quality_test_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_config_url = <String>::sse_decode(&mut deserializer);
+            let api_outbound_tag = <String>::sse_decode(&mut deserializer);
+            let api_serial = <bool>::sse_decode(&mut deserializer);
+            let api_max_runtime_seconds = <i32>::sse_decode(&mut deserializer);
+            let api_http3 = <bool>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::backend::api::diagnostics::NetworkQualityProgress,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok =
+                            crate::backend::api::diagnostics::network_quality_test_stream(
+                                api_target,
+                                api_config_url,
+                                api_outbound_tag,
+                                api_serial,
+                                api_max_runtime_seconds,
+                                api_http3,
+                                api_sink,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__diagnostics__outbound_entry_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "outbound_entry_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::diagnostics::OutboundEntry::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -3569,6 +3732,89 @@ fn wire__crate__backend__api__resources__store_process_name_impl(
         },
     )
 }
+fn wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stun_test_progress_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::diagnostics::StunTestProgress::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__diagnostics__stun_test_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stun_test_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_server = <String>::sse_decode(&mut deserializer);
+            let api_outbound_tag = <String>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::backend::api::diagnostics::StunTestProgress,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok = crate::backend::api::diagnostics::stun_test_stream(
+                            api_target,
+                            api_server,
+                            api_outbound_tag,
+                            api_sink,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__backend__api__resources__system_font_families_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3709,6 +3955,89 @@ fn wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(
                         crate::backend::api::tailscale::TailscalePeer::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_ping_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_endpoint_tag = <String>::sse_decode(&mut deserializer);
+            let api_peer_ip = <String>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::backend::api::tailscale::TailscalePingUpdate,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::utils::error::MihomoError>(
+                    (move || async move {
+                        let output_ok = crate::backend::api::tailscale::tailscale_ping_stream(
+                            api_target,
+                            api_endpoint_tag,
+                            api_peer_ip,
+                            api_sink,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tailscale_ping_update_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::tailscale::TailscalePingUpdate::default(),
                     )?;
                     Ok(output_ok)
                 })())
@@ -4301,7 +4630,46 @@ impl SseDecode
 
 impl SseDecode
     for StreamSink<
+        crate::backend::api::diagnostics::NetworkQualityProgress,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
         crate::backend::api::types::ProxyDelayEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
+        crate::backend::api::diagnostics::StunTestProgress,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
+        crate::backend::api::tailscale::TailscalePingUpdate,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -4584,6 +4952,13 @@ impl SseDecode for crate::backend::api::types::CoreConfig {
     }
 }
 
+impl SseDecode for f64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_f64::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for crate::backend::api::types::GroupDelayEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4673,6 +5048,18 @@ impl SseDecode for Vec<crate::backend::api::types::LogEntry> {
             ans_.push(<crate::backend::api::types::LogEntry>::sse_decode(
                 deserializer,
             ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::backend::api::diagnostics::OutboundEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::backend::api::diagnostics::OutboundEntry>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -4886,6 +5273,40 @@ impl SseDecode for crate::utils::error::MihomoError {
     }
 }
 
+impl SseDecode for crate::backend::api::diagnostics::NetworkQualityProgress {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_phase = <i32>::sse_decode(deserializer);
+        let mut var_downloadCapacity = <i64>::sse_decode(deserializer);
+        let mut var_uploadCapacity = <i64>::sse_decode(deserializer);
+        let mut var_downloadRpm = <i32>::sse_decode(deserializer);
+        let mut var_uploadRpm = <i32>::sse_decode(deserializer);
+        let mut var_idleLatencyMs = <i32>::sse_decode(deserializer);
+        let mut var_elapsedMs = <i64>::sse_decode(deserializer);
+        let mut var_isFinal = <bool>::sse_decode(deserializer);
+        let mut var_error = <String>::sse_decode(deserializer);
+        let mut var_downloadCapacityAccuracy = <i32>::sse_decode(deserializer);
+        let mut var_uploadCapacityAccuracy = <i32>::sse_decode(deserializer);
+        let mut var_downloadRpmAccuracy = <i32>::sse_decode(deserializer);
+        let mut var_uploadRpmAccuracy = <i32>::sse_decode(deserializer);
+        return crate::backend::api::diagnostics::NetworkQualityProgress {
+            phase: var_phase,
+            download_capacity: var_downloadCapacity,
+            upload_capacity: var_uploadCapacity,
+            download_rpm: var_downloadRpm,
+            upload_rpm: var_uploadRpm,
+            idle_latency_ms: var_idleLatencyMs,
+            elapsed_ms: var_elapsedMs,
+            is_final: var_isFinal,
+            error: var_error,
+            download_capacity_accuracy: var_downloadCapacityAccuracy,
+            upload_capacity_accuracy: var_uploadCapacityAccuracy,
+            download_rpm_accuracy: var_downloadRpmAccuracy,
+            upload_rpm_accuracy: var_uploadRpmAccuracy,
+        };
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4940,6 +5361,18 @@ impl SseDecode for Option<Vec<u8>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for crate::backend::api::diagnostics::OutboundEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_tag = <String>::sse_decode(deserializer);
+        let mut var_outboundType = <String>::sse_decode(deserializer);
+        return crate::backend::api::diagnostics::OutboundEntry {
+            tag: var_tag,
+            outbound_type: var_outboundType,
+        };
     }
 }
 
@@ -5118,6 +5551,30 @@ impl SseDecode for crate::backend::api::types::RulesSummary {
     }
 }
 
+impl SseDecode for crate::backend::api::diagnostics::StunTestProgress {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_phase = <i32>::sse_decode(deserializer);
+        let mut var_externalAddr = <String>::sse_decode(deserializer);
+        let mut var_latencyMs = <i32>::sse_decode(deserializer);
+        let mut var_natMapping = <i32>::sse_decode(deserializer);
+        let mut var_natFiltering = <i32>::sse_decode(deserializer);
+        let mut var_isFinal = <bool>::sse_decode(deserializer);
+        let mut var_error = <String>::sse_decode(deserializer);
+        let mut var_natTypeSupported = <bool>::sse_decode(deserializer);
+        return crate::backend::api::diagnostics::StunTestProgress {
+            phase: var_phase,
+            external_addr: var_externalAddr,
+            latency_ms: var_latencyMs,
+            nat_mapping: var_natMapping,
+            nat_filtering: var_natFiltering,
+            is_final: var_isFinal,
+            error: var_error,
+            nat_type_supported: var_natTypeSupported,
+        };
+    }
+}
+
 impl SseDecode for crate::backend::api::tailscale::TailscaleEndpointStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5183,6 +5640,26 @@ impl SseDecode for crate::backend::api::tailscale::TailscalePeer {
             ssh_host_keys: var_sshHostKeys,
             sharee_node: var_shareeNode,
             last_seen: var_lastSeen,
+        };
+    }
+}
+
+impl SseDecode for crate::backend::api::tailscale::TailscalePingUpdate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_latencyMs = <f64>::sse_decode(deserializer);
+        let mut var_isDirect = <bool>::sse_decode(deserializer);
+        let mut var_endpoint = <String>::sse_decode(deserializer);
+        let mut var_derpRegionId = <i32>::sse_decode(deserializer);
+        let mut var_derpRegionCode = <String>::sse_decode(deserializer);
+        let mut var_error = <String>::sse_decode(deserializer);
+        return crate::backend::api::tailscale::TailscalePingUpdate {
+            latency_ms: var_latencyMs,
+            is_direct: var_isDirect,
+            endpoint: var_endpoint,
+            derp_region_id: var_derpRegionId,
+            derp_region_code: var_derpRegionCode,
+            error: var_error,
         };
     }
 }
@@ -5280,6 +5757,7 @@ impl SseDecode for crate::backend::api::types::VersionInfo {
         let mut var_supportsCacheFlush = <bool>::sse_decode(deserializer);
         let mut var_supportsMemory = <bool>::sse_decode(deserializer);
         let mut var_supportsTailscale = <bool>::sse_decode(deserializer);
+        let mut var_supportsDiagnostics = <bool>::sse_decode(deserializer);
         return crate::backend::api::types::VersionInfo {
             version: var_version,
             is_cmfa: var_isCmfa,
@@ -5290,6 +5768,7 @@ impl SseDecode for crate::backend::api::types::VersionInfo {
             supports_cache_flush: var_supportsCacheFlush,
             supports_memory: var_supportsMemory,
             supports_tailscale: var_supportsTailscale,
+            supports_diagnostics: var_supportsDiagnostics,
         };
     }
 }
@@ -5416,426 +5895,474 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__backend__api__control__dns_query_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__backend__api__connections__fetch_connection_group_members_impl(
+        22 => wire__crate__backend__api__diagnostics__diagnostics_outbounds_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__backend__api__connections__fetch_connection_groups_impl(
+        23 => wire__crate__backend__api__control__dns_query_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__backend__api__connections__fetch_connection_group_members_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__backend__api__connections__fetch_connection_window_impl(
+        25 => wire__crate__backend__api__connections__fetch_connection_groups_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => {
+        26 => wire__crate__backend__api__connections__fetch_connection_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => {
             wire__crate__backend__api__resources__fetch_icon_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__backend__api__resources__fetch_process_icon_impl(
+        28 => wire__crate__backend__api__resources__fetch_process_icon_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__backend__api__resources__fetch_process_name_impl(
+        29 => wire__crate__backend__api__resources__fetch_process_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__backend__api__control__flush_dns_impl(port, ptr, rust_vec_len, data_len),
-        30 => {
+        30 => wire__crate__backend__api__control__flush_dns_impl(port, ptr, rust_vec_len, data_len),
+        31 => {
             wire__crate__backend__api__control__flush_fakeip_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => wire__crate__backend__api__proxy_delay__group_delay_impl(
+        32 => wire__crate__backend__api__proxy_delay__group_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__backend__api__types__group_delay_entry_default_impl(
+        33 => wire__crate__backend__api__types__group_delay_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__backend__api__proxies__groups_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__backend__api__resources__icon_cache_size_impl(
+        34 => wire__crate__backend__api__proxies__groups_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__backend__api__resources__icon_cache_size_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__backend__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        36 => {
+        36 => wire__crate__backend__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        37 => {
             wire__crate__backend__api__resources__init_cache_impl(port, ptr, rust_vec_len, data_len)
         }
-        37 => wire__crate__backend__api__types__log_entry_default_impl(
+        38 => wire__crate__backend__api__types__log_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => {
+        39 => {
             wire__crate__backend__api__streams__logs_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        39 => wire__crate__backend__api__types__memory_sample_default_impl(
+        40 => wire__crate__backend__api__types__memory_sample_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__backend__api__streams__memory_stream_impl(
+        41 => wire__crate__backend__api__streams__memory_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__backend__api__proxies__proxies_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__backend__api__proxy_delay__proxy_batch_delay_impl(
+        42 => wire__crate__backend__api__diagnostics__network_quality_progress_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__backend__api__proxies__proxy_catalog_impl(
+        43 => wire__crate__backend__api__diagnostics__network_quality_test_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__backend__api__types__proxy_catalog_default_impl(
+        44 => wire__crate__backend__api__diagnostics__outbound_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__backend__api__proxy_delay__proxy_delay_impl(
+        45 => wire__crate__backend__api__proxies__proxies_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__backend__api__proxy_delay__proxy_batch_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__backend__api__types__proxy_delay_entry_default_impl(
+        47 => wire__crate__backend__api__proxies__proxy_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__backend__api__types__proxy_delay_event_default_impl(
+        48 => wire__crate__backend__api__types__proxy_catalog_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__backend__api__proxy_delay__proxy_delay_window_impl(
+        49 => wire__crate__backend__api__proxy_delay__proxy_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => {
+        50 => wire__crate__backend__api__types__proxy_delay_entry_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        51 => wire__crate__backend__api__types__proxy_delay_event_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        52 => wire__crate__backend__api__proxy_delay__proxy_delay_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        53 => {
             wire__crate__backend__api__proxies__proxy_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__backend__api__proxy_delay__proxy_group_batch_delay_impl(
+        54 => wire__crate__backend__api__proxy_delay__proxy_group_batch_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__backend__api__proxy_delay__proxy_group_delay_stream_impl(
+        55 => wire__crate__backend__api__proxy_delay__proxy_group_delay_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__backend__api__types__proxy_group_entry_default_impl(
+        56 => wire__crate__backend__api__types__proxy_group_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__backend__api__proxies__proxy_group_members_impl(
+        57 => wire__crate__backend__api__proxies__proxy_group_members_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__backend__api__types__proxy_member_entry_default_impl(
+        58 => wire__crate__backend__api__types__proxy_member_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__backend__api__types__proxy_member_sort_default_impl(
+        59 => wire__crate__backend__api__types__proxy_member_sort_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__backend__api__providers__proxy_provider_catalog_impl(
+        60 => wire__crate__backend__api__providers__proxy_provider_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(
+        61 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__backend__api__providers__proxy_provider_healthcheck_impl(
+        62 => wire__crate__backend__api__providers__proxy_provider_healthcheck_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__backend__api__providers__proxy_provider_update_impl(
+        63 => wire__crate__backend__api__providers__proxy_provider_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__backend__api__providers__proxy_providers_impl(
+        64 => wire__crate__backend__api__providers__proxy_providers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__backend__api__control__reload_configs_impl(
+        65 => wire__crate__backend__api__control__reload_configs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(
+        66 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => {
+        67 => {
             wire__crate__backend__api__control__restart_core_impl(port, ptr, rust_vec_len, data_len)
         }
-        64 => wire__crate__backend__api__types__rule_entry_default_impl(
+        68 => wire__crate__backend__api__types__rule_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__backend__api__providers__rule_provider_catalog_impl(
+        69 => wire__crate__backend__api__providers__rule_provider_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__backend__api__types__rule_provider_entry_default_impl(
+        70 => wire__crate__backend__api__types__rule_provider_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__backend__api__providers__rule_provider_update_impl(
+        71 => wire__crate__backend__api__providers__rule_provider_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__backend__api__providers__rule_providers_impl(
+        72 => wire__crate__backend__api__providers__rule_providers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__backend__api__rules__rules_count_impl(port, ptr, rust_vec_len, data_len),
-        70 => {
+        73 => wire__crate__backend__api__rules__rules_count_impl(port, ptr, rust_vec_len, data_len),
+        74 => {
             wire__crate__backend__api__rules__rules_disable_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__backend__api__rules__rules_load_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__backend__api__rules__rules_set_filter_impl(
+        75 => wire__crate__backend__api__rules__rules_load_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__backend__api__rules__rules_set_filter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__backend__api__types__rules_summary_default_impl(
+        77 => wire__crate__backend__api__types__rules_summary_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => {
+        78 => {
             wire__crate__backend__api__rules__rules_window_impl(port, ptr, rust_vec_len, data_len)
         }
-        75 => {
+        79 => {
             wire__crate__backend__api__proxies__select_proxy_impl(port, ptr, rust_vec_len, data_len)
         }
-        76 => wire__crate__backend__api__control__set_config_bool_impl(
+        80 => wire__crate__backend__api__control__set_config_bool_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__backend__api__control__set_config_log_level_impl(
+        81 => wire__crate__backend__api__control__set_config_log_level_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__crate__backend__api__control__set_config_mode_impl(
+        82 => wire__crate__backend__api__control__set_config_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__backend__api__control__set_config_port_impl(
+        83 => wire__crate__backend__api__control__set_config_port_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__backend__api__control__set_config_tun_enabled_impl(
+        84 => wire__crate__backend__api__control__set_config_tun_enabled_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__backend__api__connections__set_connections_sort_impl(
+        85 => wire__crate__backend__api__connections__set_connections_sort_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(
+        86 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__backend__api__connections__stop_target_streams_impl(
+        87 => wire__crate__backend__api__connections__stop_target_streams_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => wire__crate__backend__api__providers__storage_delete_impl(
+        88 => wire__crate__backend__api__providers__storage_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__backend__api__providers__storage_get_impl(
+        89 => wire__crate__backend__api__providers__storage_get_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__backend__api__providers__storage_set_impl(
+        90 => wire__crate__backend__api__providers__storage_set_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__backend__api__resources__store_process_icon_impl(
+        91 => wire__crate__backend__api__resources__store_process_icon_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__backend__api__resources__store_process_name_impl(
+        92 => wire__crate__backend__api__resources__store_process_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__backend__api__resources__system_font_families_impl(
+        93 => wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
+        94 => wire__crate__backend__api__diagnostics__stun_test_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__backend__api__tailscale__tailscale_logout_impl(
+        95 => wire__crate__backend__api__resources__system_font_families_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
+        96 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
+        97 => wire__crate__backend__api__tailscale__tailscale_logout_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(
+        98 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
+        99 => wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
+        100 => wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__backend__api__types__traffic_sample_default_impl(
+        101 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__backend__api__streams__traffic_stream_impl(
+        102 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => {
+        103 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        104 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        105 => wire__crate__backend__api__types__traffic_sample_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        106 => wire__crate__backend__api__streams__traffic_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        107 => {
             wire__crate__backend__api__proxies__unfix_proxy_impl(port, ptr, rust_vec_len, data_len)
         }
-        100 => {
+        108 => {
             wire__crate__backend__api__control__update_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        101 => {
+        109 => {
             wire__crate__backend__api__control__upgrade_core_impl(port, ptr, rust_vec_len, data_len)
         }
-        102 => {
+        110 => {
             wire__crate__backend__api__control__upgrade_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        103 => {
+        111 => {
             wire__crate__backend__api__control__upgrade_ui_impl(port, ptr, rust_vec_len, data_len)
         }
-        104 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
-        105 => {
+        112 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
+        113 => {
             wire__crate__backend__api__control__version_info_impl(port, ptr, rust_vec_len, data_len)
         }
-        106 => wire__crate__backend__api__types__version_info_default_impl(
+        114 => wire__crate__backend__api__types__version_info_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -6239,6 +6766,59 @@ impl flutter_rust_bridge::IntoIntoDart<crate::utils::error::MihomoError>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::diagnostics::NetworkQualityProgress {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.phase.into_into_dart().into_dart(),
+            self.download_capacity.into_into_dart().into_dart(),
+            self.upload_capacity.into_into_dart().into_dart(),
+            self.download_rpm.into_into_dart().into_dart(),
+            self.upload_rpm.into_into_dart().into_dart(),
+            self.idle_latency_ms.into_into_dart().into_dart(),
+            self.elapsed_ms.into_into_dart().into_dart(),
+            self.is_final.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+            self.download_capacity_accuracy.into_into_dart().into_dart(),
+            self.upload_capacity_accuracy.into_into_dart().into_dart(),
+            self.download_rpm_accuracy.into_into_dart().into_dart(),
+            self.upload_rpm_accuracy.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::diagnostics::NetworkQualityProgress
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::diagnostics::NetworkQualityProgress>
+    for crate::backend::api::diagnostics::NetworkQualityProgress
+{
+    fn into_into_dart(self) -> crate::backend::api::diagnostics::NetworkQualityProgress {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::diagnostics::OutboundEntry {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.tag.into_into_dart().into_dart(),
+            self.outbound_type.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::diagnostics::OutboundEntry
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::diagnostics::OutboundEntry>
+    for crate::backend::api::diagnostics::OutboundEntry
+{
+    fn into_into_dart(self) -> crate::backend::api::diagnostics::OutboundEntry {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyCatalog {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6476,6 +7056,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::RulesSummary>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::diagnostics::StunTestProgress {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.phase.into_into_dart().into_dart(),
+            self.external_addr.into_into_dart().into_dart(),
+            self.latency_ms.into_into_dart().into_dart(),
+            self.nat_mapping.into_into_dart().into_dart(),
+            self.nat_filtering.into_into_dart().into_dart(),
+            self.is_final.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+            self.nat_type_supported.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::diagnostics::StunTestProgress
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::diagnostics::StunTestProgress>
+    for crate::backend::api::diagnostics::StunTestProgress
+{
+    fn into_into_dart(self) -> crate::backend::api::diagnostics::StunTestProgress {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscaleEndpointStatus {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6535,6 +7142,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::Tailscale
     for crate::backend::api::tailscale::TailscalePeer
 {
     fn into_into_dart(self) -> crate::backend::api::tailscale::TailscalePeer {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::tailscale::TailscalePingUpdate {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.latency_ms.into_into_dart().into_dart(),
+            self.is_direct.into_into_dart().into_dart(),
+            self.endpoint.into_into_dart().into_dart(),
+            self.derp_region_id.into_into_dart().into_dart(),
+            self.derp_region_code.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::tailscale::TailscalePingUpdate
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::tailscale::TailscalePingUpdate>
+    for crate::backend::api::tailscale::TailscalePingUpdate
+{
+    fn into_into_dart(self) -> crate::backend::api::tailscale::TailscalePingUpdate {
         self
     }
 }
@@ -6615,6 +7247,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::VersionInfo {
             self.supports_cache_flush.into_into_dart().into_dart(),
             self.supports_memory.into_into_dart().into_dart(),
             self.supports_tailscale.into_into_dart().into_dart(),
+            self.supports_diagnostics.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6676,7 +7309,43 @@ impl SseEncode
 
 impl SseEncode
     for StreamSink<
+        crate::backend::api::diagnostics::NetworkQualityProgress,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
         crate::backend::api::types::ProxyDelayEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::backend::api::diagnostics::StunTestProgress,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::backend::api::tailscale::TailscalePingUpdate,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -6895,6 +7564,13 @@ impl SseEncode for crate::backend::api::types::CoreConfig {
     }
 }
 
+impl SseEncode for f64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for crate::backend::api::types::GroupDelayEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6963,6 +7639,16 @@ impl SseEncode for Vec<crate::backend::api::types::LogEntry> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::backend::api::types::LogEntry>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::backend::api::diagnostics::OutboundEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::backend::api::diagnostics::OutboundEntry>::sse_encode(item, serializer);
         }
     }
 }
@@ -7122,6 +7808,25 @@ impl SseEncode for crate::utils::error::MihomoError {
     }
 }
 
+impl SseEncode for crate::backend::api::diagnostics::NetworkQualityProgress {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.phase, serializer);
+        <i64>::sse_encode(self.download_capacity, serializer);
+        <i64>::sse_encode(self.upload_capacity, serializer);
+        <i32>::sse_encode(self.download_rpm, serializer);
+        <i32>::sse_encode(self.upload_rpm, serializer);
+        <i32>::sse_encode(self.idle_latency_ms, serializer);
+        <i64>::sse_encode(self.elapsed_ms, serializer);
+        <bool>::sse_encode(self.is_final, serializer);
+        <String>::sse_encode(self.error, serializer);
+        <i32>::sse_encode(self.download_capacity_accuracy, serializer);
+        <i32>::sse_encode(self.upload_capacity_accuracy, serializer);
+        <i32>::sse_encode(self.download_rpm_accuracy, serializer);
+        <i32>::sse_encode(self.upload_rpm_accuracy, serializer);
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7169,6 +7874,14 @@ impl SseEncode for Option<Vec<u8>> {
         if let Some(value) = self {
             <Vec<u8>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::backend::api::diagnostics::OutboundEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.tag, serializer);
+        <String>::sse_encode(self.outbound_type, serializer);
     }
 }
 
@@ -7290,6 +8003,20 @@ impl SseEncode for crate::backend::api::types::RulesSummary {
     }
 }
 
+impl SseEncode for crate::backend::api::diagnostics::StunTestProgress {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.phase, serializer);
+        <String>::sse_encode(self.external_addr, serializer);
+        <i32>::sse_encode(self.latency_ms, serializer);
+        <i32>::sse_encode(self.nat_mapping, serializer);
+        <i32>::sse_encode(self.nat_filtering, serializer);
+        <bool>::sse_encode(self.is_final, serializer);
+        <String>::sse_encode(self.error, serializer);
+        <bool>::sse_encode(self.nat_type_supported, serializer);
+    }
+}
+
 impl SseEncode for crate::backend::api::tailscale::TailscaleEndpointStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7333,6 +8060,18 @@ impl SseEncode for crate::backend::api::tailscale::TailscalePeer {
         <Vec<String>>::sse_encode(self.ssh_host_keys, serializer);
         <bool>::sse_encode(self.sharee_node, serializer);
         <i64>::sse_encode(self.last_seen, serializer);
+    }
+}
+
+impl SseEncode for crate::backend::api::tailscale::TailscalePingUpdate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.latency_ms, serializer);
+        <bool>::sse_encode(self.is_direct, serializer);
+        <String>::sse_encode(self.endpoint, serializer);
+        <i32>::sse_encode(self.derp_region_id, serializer);
+        <String>::sse_encode(self.derp_region_code, serializer);
+        <String>::sse_encode(self.error, serializer);
     }
 }
 
@@ -7412,6 +8151,7 @@ impl SseEncode for crate::backend::api::types::VersionInfo {
         <bool>::sse_encode(self.supports_cache_flush, serializer);
         <bool>::sse_encode(self.supports_memory, serializer);
         <bool>::sse_encode(self.supports_tailscale, serializer);
+        <bool>::sse_encode(self.supports_diagnostics, serializer);
     }
 }
 

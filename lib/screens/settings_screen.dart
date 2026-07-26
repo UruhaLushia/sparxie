@@ -14,6 +14,7 @@ import '../utils.dart';
 import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
+import 'diagnostics_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
 import 'tailscale_screen.dart';
@@ -55,6 +56,7 @@ class SettingsScreen extends StatelessWidget {
         session.supportsExternalResources,
         session.supportsRules,
         session.supportsTailscale,
+        session.supportsDiagnostics,
       ]),
       builder: (context, _) {
         final isCards = prefs.navLayout == NavLayout.cards;
@@ -64,6 +66,8 @@ class SettingsScreen extends StatelessWidget {
             session.supportsRules.value && !isCards && !railManagesPages;
         final showTailscale =
             session.supportsTailscale.value && !isCards && !railManagesPages;
+        final showDiagnostics =
+            session.supportsDiagnostics.value && !isCards && !railManagesPages;
         final showCoreActions =
             !railManagesPages && session.supportsCoreActions.value;
         // 核心配置 / 外部资源 are hero cards in cards layout and rail items in
@@ -125,6 +129,13 @@ class SettingsScreen extends StatelessWidget {
               title: 'Tailscale',
               subtitle: '状态与认证',
               onTap: () => _push(context, TailscaleScreen(store: store)),
+            ),
+          if (showDiagnostics)
+            _Tile(
+              icon: Icons.network_check_outlined,
+              title: '网络工具',
+              subtitle: '网络质量 / STUN 测试',
+              onTap: () => _push(context, DiagnosticsScreen(store: store)),
             ),
           if (showResources)
             _Tile(
