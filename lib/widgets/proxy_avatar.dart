@@ -5,12 +5,16 @@ import 'rust_icon_image.dart';
 /// Circular proxy avatar — image when [icon] is non-empty, otherwise a
 /// color-tinted letter chip derived from [name].
 class ProxyAvatar extends StatelessWidget {
-  const ProxyAvatar({super.key, required this.name, this.icon = ''});
+  const ProxyAvatar({
+    super.key,
+    required this.name,
+    this.icon = '',
+    this.size = 44,
+  });
 
   final String name;
   final String icon;
-
-  static const double _size = 44;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +26,9 @@ class ProxyAvatar extends StatelessWidget {
     // straight to display res aliases edges in one harsh step (jagged); the
     // cap keeps a huge source from wasting memory.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cachePx = (_size * dpr * 2).round().clamp(1, 256);
+    final cachePx = (size * dpr * 2).round().clamp(1, 256);
     return SizedBox.square(
-      dimension: _size,
+      dimension: size,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: hasIcon
@@ -35,11 +39,12 @@ class ProxyAvatar extends StatelessWidget {
                   height: cachePx,
                 ),
                 fit: BoxFit.cover,
-                width: _size,
-                height: _size,
+                width: size,
+                height: size,
                 gaplessPlayback: true,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, _, _) => _LetterChip(name: name, color: color),
+                errorBuilder: (_, _, _) =>
+                    _LetterChip(name: name, color: color),
                 frameBuilder: (_, child, frame, wasSync) {
                   if (wasSync || frame != null) return child;
                   return _LetterChip(name: name, color: color);

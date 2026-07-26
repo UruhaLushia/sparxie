@@ -18,6 +18,10 @@ enum ProxiesSort {
 /// Visual layout of the primary navigation chrome.
 enum NavLayout { cards, standard, floating }
 
+/// How the proxies screen renders groups: the classic pinned-header list or
+/// Surge-style gradient cards that expand into an overlay.
+enum ProxiesLayout { list, cards }
+
 /// Where the delay-test URL comes from when testing a group.
 ///
 /// `group` first tries the group's own `testUrl`/`tester` from the backend
@@ -109,6 +113,8 @@ class AppPrefs extends ChangeNotifier {
   static const _kProxiesColumns = 'proxiesColumns';
   static const _kProxiesShowGroupIcons = 'proxiesShowGroupIcons';
   static const _kProxiesShowHiddenGroups = 'proxiesShowHiddenGroups';
+  static const _kProxiesLayout = 'proxiesLayout';
+  static const _kProxiesCardColored = 'proxiesCardColored';
   static const _kNavLayout = 'navLayout';
   static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
   static const _kDelayTestUrl = 'delayTestUrl';
@@ -136,6 +142,8 @@ class AppPrefs extends ChangeNotifier {
   static const defaultProxiesColumns = 0;
   static const defaultProxiesShowGroupIcons = true;
   static const defaultProxiesShowHiddenGroups = false;
+  static const defaultProxiesLayout = ProxiesLayout.list;
+  static const defaultProxiesCardColored = false;
 
   static const defaultNavLayout = NavLayout.cards;
   static const defaultAutoCloseOnSwitch = true;
@@ -226,6 +234,22 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setProxiesShowHiddenGroups(bool value) async {
     if (value == proxiesShowHiddenGroups) return;
     _put(_kProxiesShowHiddenGroups, value);
+  }
+
+  ProxiesLayout get proxiesLayout =>
+      _decodeProxiesLayout(_str(_kProxiesLayout, defaultProxiesLayout.name));
+
+  Future<void> setProxiesLayout(ProxiesLayout value) async {
+    if (value == proxiesLayout) return;
+    _put(_kProxiesLayout, value.name);
+  }
+
+  bool get proxiesCardColored =>
+      _bool(_kProxiesCardColored, defaultProxiesCardColored);
+
+  Future<void> setProxiesCardColored(bool value) async {
+    if (value == proxiesCardColored) return;
+    _put(_kProxiesCardColored, value);
   }
 
   NavLayout get navLayout =>
@@ -414,6 +438,14 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultProxiesSort;
+  }
+
+  static ProxiesLayout _decodeProxiesLayout(String? raw) {
+    if (raw == null) return defaultProxiesLayout;
+    for (final v in ProxiesLayout.values) {
+      if (v.name == raw) return v;
+    }
+    return defaultProxiesLayout;
   }
 
   static NavLayout _decodeNavLayout(String? raw) {

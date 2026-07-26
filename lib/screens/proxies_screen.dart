@@ -8,6 +8,7 @@ import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../widgets/proxies_settings_menu.dart';
+import '../widgets/proxy_group_card.dart';
 import '../widgets/proxy_group_header.dart';
 import '../widgets/proxy_node_tile.dart';
 
@@ -309,20 +310,28 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
               },
             ),
             Expanded(
-              child: _ProxiesBody(
-                session: widget.session,
-                prefs: widget.prefs,
-                testingGroups: _testingGroup,
-                expanded: _expanded,
-                searchOpen: _searchOpen,
-                searchControllers: _searchCtls,
-                onToggle: _toggle,
-                onToggleSearch: _toggleSearch,
-                onSearchChanged: () => setState(() {}),
-                onSelect: _select,
-                onTestGroup: _testGroup,
-                onTestNode: _testNode,
-              ),
+              child: widget.prefs.proxiesLayout == ProxiesLayout.cards
+                  ? _ProxyCardsBody(
+                      session: widget.session,
+                      prefs: widget.prefs,
+                      onSelect: _select,
+                      onTestGroup: _testGroup,
+                      onTestNode: _testNode,
+                    )
+                  : _ProxiesBody(
+                      session: widget.session,
+                      prefs: widget.prefs,
+                      testingGroups: _testingGroup,
+                      expanded: _expanded,
+                      searchOpen: _searchOpen,
+                      searchControllers: _searchCtls,
+                      onToggle: _toggle,
+                      onToggleSearch: _toggleSearch,
+                      onSearchChanged: () => setState(() {}),
+                      onSelect: _select,
+                      onTestGroup: _testGroup,
+                      onTestNode: _testNode,
+                    ),
             ),
           ],
         ),
@@ -672,6 +681,76 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     if (width >= 800) return 3;
     if (width >= 520) return 2;
     return 1;
+  }
+}
+
+class _ProxyCardsBody extends StatelessWidget {
+  const _ProxyCardsBody({
+    required this.session,
+    required this.prefs,
+    required this.onSelect,
+    required this.onTestGroup,
+    required this.onTestNode,
+  });
+
+  final MihomoSession session;
+  final AppPrefs prefs;
+  final void Function(ProxyGroup, String) onSelect;
+  final Future<void> Function(ProxyGroup) onTestGroup;
+  final void Function(ProxyGroup, String) onTestNode;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: session.proxies,
+      builder: (context, _) {
+        final groups = session.proxies.groups;
+        if (groups.isEmpty) {
+          return Center(
+            child: Text('暂无代理组', style: Theme.of(context).textTheme.bodyMedium),
+          );
+        }
+        return GridView.builder(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 190,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            mainAxisExtent: 96,
+          ),
+          itemCount: groups.length,
+          itemBuilder: (context, index) {
+            final group = groups[index];
+            return ProxyGroupCard(
+              key: ValueKey(group.name),
+              group: group,
+              showIcon: prefs.proxiesShowGroupIcons,
+              colored: prefs.proxiesCardColored,
+              onTap: () {
+                if (group.memberCount > 0) {
+                  unawaited(session.ensureProxyGroupMembers(group.name, 0, 0));
+                }
+                showProxyGroupCardDetail(
+                  context,
+                  session: session,
+                  group: group,
+                  showIcon: prefs.proxiesShowGroupIcons,
+                  colored: prefs.proxiesCardColored,
+                  onTestGroup: () => onTestGroup(group),
+                  onSelect: (name) => onSelect(group, name),
+                  onTestNode: (name) => onTestNode(group, name),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }
 

@@ -76,6 +76,18 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       children: [
                         _SettingsRow(
+                          label: '布局样式',
+                          trailing: _LayoutSegmented(prefs: prefs),
+                        ),
+                        if (prefs.proxiesLayout == ProxiesLayout.cards)
+                          _SettingsRow(
+                            label: '卡片渐变配色',
+                            trailing: Switch(
+                              value: prefs.proxiesCardColored,
+                              onChanged: prefs.setProxiesCardColored,
+                            ),
+                          ),
+                        _SettingsRow(
                           label: '代理节点展示列数',
                           trailing: _ColumnsDropdown(prefs: prefs),
                         ),
@@ -188,6 +200,28 @@ class _SettingsRow extends StatelessWidget {
           trailing,
         ],
       ),
+    );
+  }
+}
+
+class _LayoutSegmented extends StatelessWidget {
+  const _LayoutSegmented({required this.prefs});
+  final AppPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<ProxiesLayout>(
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      showSelectedIcon: false,
+      segments: const [
+        ButtonSegment(value: ProxiesLayout.list, label: Text('列表')),
+        ButtonSegment(value: ProxiesLayout.cards, label: Text('卡片')),
+      ],
+      selected: {prefs.proxiesLayout},
+      onSelectionChanged: (s) => prefs.setProxiesLayout(s.first),
     );
   }
 }
