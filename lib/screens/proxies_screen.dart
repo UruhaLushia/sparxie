@@ -28,9 +28,11 @@ class ProxiesScreen extends StatefulWidget {
 }
 
 class _ProxiesScreenState extends State<ProxiesScreen> {
-  String _filter = '';
   final Set<String> _testingGroup = <String>{};
   final Set<String> _expanded = <String>{};
+  final Set<String> _searchOpen = <String>{};
+  final Map<String, TextEditingController> _searchCtls =
+      <String, TextEditingController>{};
 
   @override
   void initState() {
@@ -42,6 +44,9 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   @override
   void dispose() {
     widget.prefs.removeListener(_onPrefs);
+    for (final c in _searchCtls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -53,7 +58,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   void _syncProxyCatalogOptions() {
     widget.session.setProxyCatalogOptions(
       includeHidden: widget.prefs.proxiesShowHiddenGroups,
-      filter: _filter,
       memberSort: _memberSort(widget.prefs.proxiesSort),
     );
   }
@@ -69,12 +73,33 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     setState(() {
       if (_expanded.remove(name)) {
         widget.session.proxies.releaseGroupMembers(name);
+        if (_searchOpen.remove(name)) _searchCtls[name]?.clear();
       } else {
         _expanded.add(name);
         expanded = true;
       }
     });
     if (expanded) unawaited(widget.session.ensureProxyGroupMembers(name, 0, 0));
+  }
+
+  void _toggleSearch(ProxyGroup group) {
+    final name = group.name;
+    var opened = false;
+    setState(() {
+      if (_searchOpen.remove(name)) {
+        _searchCtls[name]?.clear();
+      } else {
+        _searchOpen.add(name);
+        _searchCtls.putIfAbsent(name, TextEditingController.new);
+        _expanded.add(name);
+        opened = true;
+      }
+    });
+    if (opened && group.memberCount > 0) {
+      unawaited(
+        widget.session.ensureProxyGroupMembers(name, 0, group.memberCount - 1),
+      );
+    }
   }
 
   rust.BackendTarget? _target() {
@@ -243,20 +268,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         title: const Text('代理组'),
         actions: [
           IconButton(
-            tooltip: '搜索',
-            icon: const Icon(Icons.search),
-            onPressed: () async {
-              final result = await showDialog<String>(
-                context: context,
-                builder: (_) => _SearchDialog(initial: _filter),
-              );
-              if (result != null) {
-                setState(() => _filter = result);
-                _syncProxyCatalogOptions();
-              }
-            },
-          ),
-          IconButton(
             tooltip: '刷新',
             onPressed: widget.session.refreshProxies,
             icon: const Icon(Icons.refresh),
@@ -268,29 +279,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         bottom: false,
         child: Column(
           children: [
-            if (_filter.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
-                  children: [
-                    const Icon(Icons.filter_alt, size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '筛选:$_filter',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _filter = '');
-                        _syncProxyCatalogOptions();
-                      },
-                      child: const Text('清除'),
-                    ),
-                  ],
-                ),
-              ),
             ValueListenableBuilder<String?>(
               valueListenable: widget.session.error,
               builder: (_, err, _) {
@@ -326,7 +314,11 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                 prefs: widget.prefs,
                 testingGroups: _testingGroup,
                 expanded: _expanded,
+                searchOpen: _searchOpen,
+                searchControllers: _searchCtls,
                 onToggle: _toggle,
+                onToggleSearch: _toggleSearch,
+                onSearchChanged: () => setState(() {}),
                 onSelect: _select,
                 onTestGroup: _testGroup,
                 onTestNode: _testNode,
@@ -345,7 +337,11 @@ class _ProxiesBody extends StatefulWidget {
     required this.prefs,
     required this.testingGroups,
     required this.expanded,
+    required this.searchOpen,
+    required this.searchControllers,
     required this.onToggle,
+    required this.onToggleSearch,
+    required this.onSearchChanged,
     required this.onSelect,
     required this.onTestGroup,
     required this.onTestNode,
@@ -355,7 +351,11 @@ class _ProxiesBody extends StatefulWidget {
   final AppPrefs prefs;
   final Set<String> testingGroups;
   final Set<String> expanded;
+  final Set<String> searchOpen;
+  final Map<String, TextEditingController> searchControllers;
   final ValueChanged<String> onToggle;
+  final ValueChanged<ProxyGroup> onToggleSearch;
+  final VoidCallback onSearchChanged;
   final void Function(ProxyGroup, String) onSelect;
   final void Function(ProxyGroup) onTestGroup;
   final void Function(ProxyGroup, String) onTestNode;
@@ -365,9 +365,15 @@ class _ProxiesBody extends StatefulWidget {
 }
 
 class _ProxiesBodyState extends State<_ProxiesBody> {
+  static const double _tileExtent = 60;
+  static const double _tileSpacing = 8;
+  static const double _emptyExtent = 48;
+
   late List<ProxyGroup> _groups;
   final Map<String, _PendingMemberRange> _pendingMemberLoads = {};
+  final ScrollController _scroll = ScrollController();
   bool _memberLoadScheduled = false;
+  int _cols = 1;
 
   @override
   void initState() {
@@ -390,6 +396,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   void dispose() {
     widget.session.proxies.removeListener(_recompute);
     _pendingMemberLoads.clear();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -433,20 +440,107 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     });
   }
 
+  String _queryFor(String name) {
+    if (!widget.searchOpen.contains(name)) return '';
+    final text = widget.searchControllers[name]?.text ?? '';
+    return text.trim().toLowerCase();
+  }
+
+  double _gridExtentFor(ProxyGroup group) {
+    final query = _queryFor(group.name);
+    var count = group.memberCount;
+    if (query.isNotEmpty) {
+      count = 0;
+      for (var i = 0; i < group.memberCount; i++) {
+        final member = group.memberAt(i);
+        if (member != null && member.name.toLowerCase().contains(query)) {
+          count++;
+        }
+      }
+    }
+    if (count == 0) return _emptyExtent;
+    final rows = (count + _cols - 1) ~/ _cols;
+    return rows * (_tileExtent + _tileSpacing) + 16;
+  }
+
+  Future<void> _waitForFullMembers(ProxyGroup group) async {
+    bool loaded() {
+      for (var i = 0; i < group.memberCount; i++) {
+        if (group.memberAt(i) == null) return false;
+      }
+      return true;
+    }
+
+    // ensureProxyGroupMembers only queues (returns early) while another load
+    // for the group is in flight, so a single await isn't enough.
+    final deadline = DateTime.now().add(const Duration(seconds: 3));
+    while (mounted && !loaded() && DateTime.now().isBefore(deadline)) {
+      await widget.session.ensureProxyGroupMembers(
+        group.name,
+        0,
+        group.memberCount - 1,
+      );
+      if (loaded()) return;
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+  }
+
+  Future<void> _locate(ProxyGroup group) async {
+    if (!widget.expanded.contains(group.name)) widget.onToggle(group.name);
+    await _waitForFullMembers(group);
+    if (!mounted) return;
+    final now = group.hidesExactNow ? '' : group.now.value;
+    final query = _queryFor(group.name);
+    var row = -1;
+    var seen = 0;
+    if (now.isNotEmpty) {
+      for (var i = 0; i < group.memberCount; i++) {
+        final member = group.memberAt(i);
+        if (member == null) continue;
+        if (query.isNotEmpty && !member.name.toLowerCase().contains(query)) {
+          continue;
+        }
+        if (member.name == now) {
+          row = seen ~/ _cols;
+          break;
+        }
+        seen++;
+      }
+    }
+    // The target's own header pins at the viewport top, so its extent cancels
+    // out of the offset — only preceding groups contribute.
+    var offset = 8.0;
+    for (final g in _groups) {
+      if (identical(g, group)) break;
+      offset += ProxyGroupHeader.extentFor(
+        searchOpen: widget.searchOpen.contains(g.name),
+      );
+      if (widget.expanded.contains(g.name)) offset += _gridExtentFor(g);
+    }
+    if (row >= 0) offset += 8 + row * (_tileExtent + _tileSpacing);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scroll.hasClients) return;
+    unawaited(
+      _scroll.animateTo(
+        offset.clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_groups.isEmpty) {
       return Center(
-        child: Text(
-          widget.session.proxies.groups.isEmpty ? '暂无代理组' : '没有匹配的项',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        child: Text('暂无代理组', style: Theme.of(context).textTheme.bodyMedium),
       );
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = _resolveColumns(constraints.maxWidth);
+        _cols = _resolveColumns(constraints.maxWidth);
         return CustomScrollView(
+          controller: _scroll,
           slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             for (final group in _groups)
@@ -460,50 +554,20 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                         showIcon: widget.prefs.proxiesShowGroupIcons,
                         testing: widget.testingGroups.contains(group.name),
                         expanded: widget.expanded.contains(group.name),
+                        searchOpen: widget.searchOpen.contains(group.name),
+                        searchController: widget.searchControllers[group.name],
                         onToggle: () => widget.onToggle(group.name),
                         onTest: () => widget.onTestGroup(group),
+                        onToggleSearch: () => widget.onToggleSearch(group),
+                        onSearchChanged: (_) => widget.onSearchChanged(),
+                        onLocate: () => unawaited(_locate(group)),
                       ),
                     ),
                   ),
-                  // SliverGrid virtualizes — only viewport-intersecting tiles
-                  // build, so a 200-node group expands instantly.
                   if (widget.expanded.contains(group.name))
                     ValueListenableBuilder<int>(
                       valueListenable: group.membersVersion,
-                      builder: (_, _, _) => SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                        sliver: SliverGrid.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: cols,
-                                mainAxisSpacing: 8,
-                                crossAxisSpacing: 8,
-                                mainAxisExtent: 60,
-                              ),
-                          itemCount: group.memberCount,
-                          itemBuilder: (context, index) {
-                            final member = group.memberAt(index);
-                            if (member == null) {
-                              _queueMemberLoad(group.name, index);
-                              return const _ProxyNodePlaceholder();
-                            }
-                            return ProxyNodeTile(
-                              key: ValueKey('${group.name}::${member.name}'),
-                              name: member.name,
-                              type: member.type,
-                              delay: member.delay,
-                              selectable: group.canSelectMembers,
-                              showSelection: !group.hidesExactNow,
-                              nowListenable: group.now,
-                              fixedListenable: group.fixed,
-                              onSelect: () =>
-                                  widget.onSelect(group, member.name),
-                              onTestDelay: () =>
-                                  widget.onTestNode(group, member.name),
-                            );
-                          },
-                        ),
-                      ),
+                      builder: (_, _, _) => _membersSliver(group),
                     ),
                 ],
               ),
@@ -516,6 +580,88 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
           ],
         );
       },
+    );
+  }
+
+  Widget _membersSliver(ProxyGroup group) {
+    final query = _queryFor(group.name);
+    if (query.isEmpty) {
+      // SliverGrid virtualizes — only viewport-intersecting tiles build,
+      // so a 200-node group expands instantly.
+      return SliverPadding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        sliver: SliverGrid.builder(
+          gridDelegate: _gridDelegate(),
+          itemCount: group.memberCount,
+          itemBuilder: (context, index) {
+            final member = group.memberAt(index);
+            if (member == null) {
+              _queueMemberLoad(group.name, index);
+              return const _ProxyNodePlaceholder();
+            }
+            return _tile(group, member);
+          },
+        ),
+      );
+    }
+    final matched = <ProxyMember>[];
+    var loaded = true;
+    for (var i = 0; i < group.memberCount; i++) {
+      final member = group.memberAt(i);
+      if (member == null) {
+        loaded = false;
+        continue;
+      }
+      if (member.name.toLowerCase().contains(query)) matched.add(member);
+    }
+    if (!loaded) {
+      _queueMemberLoad(group.name, 0);
+      _queueMemberLoad(group.name, group.memberCount - 1);
+    }
+    if (matched.isEmpty) {
+      return SliverToBoxAdapter(
+        child: SizedBox(
+          height: _emptyExtent,
+          child: Center(
+            child: Text(
+              loaded ? '无匹配节点' : '加载中…',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ),
+      );
+    }
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      sliver: SliverGrid.builder(
+        gridDelegate: _gridDelegate(),
+        itemCount: matched.length,
+        itemBuilder: (context, index) => _tile(group, matched[index]),
+      ),
+    );
+  }
+
+  SliverGridDelegateWithFixedCrossAxisCount _gridDelegate() {
+    return SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: _cols,
+      mainAxisSpacing: _tileSpacing,
+      crossAxisSpacing: _tileSpacing,
+      mainAxisExtent: _tileExtent,
+    );
+  }
+
+  Widget _tile(ProxyGroup group, ProxyMember member) {
+    return ProxyNodeTile(
+      key: ValueKey('${group.name}::${member.name}'),
+      name: member.name,
+      type: member.type,
+      delay: member.delay,
+      selectable: group.canSelectMembers,
+      showSelection: !group.hidesExactNow,
+      nowListenable: group.now,
+      fixedListenable: group.fixed,
+      onSelect: () => widget.onSelect(group, member.name),
+      onTestDelay: () => widget.onTestNode(group, member.name),
     );
   }
 
@@ -553,56 +699,6 @@ class _ProxyNodePlaceholder extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
       ),
-    );
-  }
-}
-
-class _SearchDialog extends StatefulWidget {
-  const _SearchDialog({required this.initial});
-  final String initial;
-
-  @override
-  State<_SearchDialog> createState() => _SearchDialogState();
-}
-
-class _SearchDialogState extends State<_SearchDialog> {
-  late final TextEditingController _ctl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctl = TextEditingController(text: widget.initial);
-  }
-
-  @override
-  void dispose() {
-    _ctl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('搜索'),
-      content: TextField(
-        controller: _ctl,
-        autofocus: true,
-        decoration: const InputDecoration(
-          hintText: '组名或节点',
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (v) => Navigator.pop(context, v.trim()),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, ''),
-          child: const Text('清除'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _ctl.text.trim()),
-          child: const Text('应用'),
-        ),
-      ],
     );
   }
 }
