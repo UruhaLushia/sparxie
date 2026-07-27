@@ -651,7 +651,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           body: Builder(
             builder: (context) {
               final data = MediaQuery.of(context);
-              const navBarExtra = 90.0; // 64 bar + 6 pad + 20 top gap
+              const navBarExtra = 82.0; // 56 bar + 6 pad + 20 top gap
               return MediaQuery(
                 data: data.copyWith(
                   padding: data.padding.copyWith(

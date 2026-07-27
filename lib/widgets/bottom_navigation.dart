@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
@@ -128,7 +129,7 @@ class FloatingBottomNavBar extends StatelessWidget {
   final List<AppNavDestination> destinations;
   final NavBarStyle style;
 
-  static const double _height = 64;
+  static const double _height = 56;
   static const double _horizontalInset = 24;
 
   @override
@@ -199,6 +200,57 @@ class FloatingBottomNavBar extends StatelessWidget {
 Color _indicatorColor(ColorScheme scheme, bool isDark) =>
     scheme.primaryContainer.withValues(alpha: isDark ? 0.6 : 0.9);
 
+const double _navDragActivationDistance = 26;
+const Duration _navAnimationDuration = Duration(milliseconds: 220);
+
+double _dragEdgeStrength(double alignment) =>
+    ((alignment.abs() - 0.72) / 0.28).clamp(0.0, 1.0).toDouble();
+
+class _HorizontalDragActivation {
+  double? _origin;
+
+  void begin(double position) {
+    _origin = position;
+  }
+
+  bool accepts(double position) {
+    final origin = _origin ?? position;
+    _origin = origin;
+    return (position - origin).abs() >= _navDragActivationDistance;
+  }
+
+  void reset() {
+    _origin = null;
+  }
+}
+
+class _ElasticDragIndicator extends StatelessWidget {
+  const _ElasticDragIndicator({
+    required this.strength,
+    required this.duration,
+    required this.child,
+  });
+
+  final double strength;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: strength),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Transform.scale(
+        scaleX: 1 + value * 0.035,
+        scaleY: 1 - value * 0.025,
+        child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
 class BottomNavBarItems extends StatelessWidget {
   const BottomNavBarItems({
     super.key,
@@ -221,11 +273,16 @@ class BottomNavBarItems extends StatelessWidget {
       ? SizedBox(width: _cellWidth, child: child)
       : Expanded(child: child);
 
-  Widget _labeledItem(int index, ColorScheme scheme, Color selectedColor) {
+  Widget _labeledItem(
+    int index,
+    ColorScheme scheme,
+    Color selectedColor, {
+    int? activeIndex,
+  }) {
     return _LabeledNavItem(
       icon: destinations[index].icon,
       label: destinations[index].label,
-      selected: index == selectedIndex,
+      selected: index == (activeIndex ?? selectedIndex),
       onTap: () => onSelected(index),
       selectedColor: selectedColor,
       unselectedColor: scheme.onSurfaceVariant,
@@ -236,14 +293,29 @@ class BottomNavBarItems extends StatelessWidget {
     ColorScheme scheme,
     Color selectedColor, {
     bool fill = false,
+    int? activeIndex,
   }) {
     return Row(
       mainAxisSize: fill || !shrinkWrap ? MainAxisSize.max : MainAxisSize.min,
       children: [
         for (var i = 0; i < destinations.length; i++)
           fill
-              ? Expanded(child: _labeledItem(i, scheme, selectedColor))
-              : _cell(_labeledItem(i, scheme, selectedColor)),
+              ? Expanded(
+                  child: _labeledItem(
+                    i,
+                    scheme,
+                    selectedColor,
+                    activeIndex: activeIndex,
+                  ),
+                )
+              : _cell(
+                  _labeledItem(
+                    i,
+                    scheme,
+                    selectedColor,
+                    activeIndex: activeIndex,
+                  ),
+                ),
       ],
     );
   }
@@ -254,29 +326,24 @@ class BottomNavBarItems extends StatelessWidget {
     final isDark = scheme.brightness == Brightness.dark;
     return switch (style) {
       NavBarStyle.capsule => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          spacing: shrinkWrap ? 2 : 0,
-          children: [
-            for (var i = 0; i < destinations.length; i++)
-              _CapsuleNavItem(
-                icon: destinations[i].icon,
-                label: destinations[i].label,
-                selected: i == selectedIndex,
-                onTap: () => onSelected(i),
-                scheme: scheme,
-                isDark: isDark,
-              ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: _CapsuleNavBar(
+          destinations: destinations,
+          selectedIndex: selectedIndex,
+          onSelected: onSelected,
+          shrinkWrap: shrinkWrap,
         ),
       ),
       NavBarStyle.pill => _PillNavBar(
         destinationCount: destinations.length,
         selectedIndex: selectedIndex,
         onSelected: onSelected,
-        child: _labeledRow(scheme, scheme.onPrimaryContainer, fill: true),
+        childBuilder: (activeIndex) => _labeledRow(
+          scheme,
+          scheme.onPrimaryContainer,
+          fill: true,
+          activeIndex: activeIndex,
+        ),
       ),
       NavBarStyle.tint => _labeledRow(scheme, scheme.primary),
       NavBarStyle.m3 => Row(
@@ -304,13 +371,13 @@ class _PillNavBar extends StatefulWidget {
     required this.destinationCount,
     required this.selectedIndex,
     required this.onSelected,
-    required this.child,
+    required this.childBuilder,
   });
 
   final int destinationCount;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
-  final Widget child;
+  final Widget Function(int activeIndex) childBuilder;
 
   @override
   State<_PillNavBar> createState() => _PillNavBarState();
@@ -320,10 +387,11 @@ class _PillNavBarState extends State<_PillNavBar> {
   static const double _indicatorInset = 3;
   static const double _indicatorExtraWidth = 12;
   static const double _contentInset = _indicatorExtraWidth / 2;
-  static const double _indicatorHeight = 58;
+  static const double _indicatorHeight = 50;
 
   int? _dragIndex;
   double? _dragCenter;
+  final _dragActivation = _HorizontalDragActivation();
 
   int _indexAt(double position, double width) {
     final contentWidth = width - _contentInset * 2;
@@ -357,6 +425,15 @@ class _PillNavBarState extends State<_PillNavBar> {
     unawaited(HapticFeedback.selectionClick());
   }
 
+  void _handleDragUpdate(Offset position, double width) {
+    if (_dragIndex == null) {
+      if (!_dragActivation.accepts(position.dx)) return;
+      _startDrag(position, width);
+      return;
+    }
+    _updateDrag(position, width);
+  }
+
   void _updateDrag(Offset position, double width) {
     final index = _indexAt(position.dx, width);
     final changedIndex = index != _dragIndex;
@@ -376,22 +453,44 @@ class _PillNavBarState extends State<_PillNavBar> {
   }
 
   void _resetDrag() {
+    _dragActivation.reset();
+    if (_dragIndex == null && _dragCenter == null) return;
     setState(() {
       _dragIndex = null;
       _dragCenter = null;
     });
   }
 
-  Widget _indicator(ColorScheme scheme, bool isDark, double width) {
+  @override
+  void didUpdateWidget(covariant _PillNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.destinationCount != widget.destinationCount) {
+      _dragIndex = null;
+      _dragCenter = null;
+      _dragActivation.reset();
+    }
+  }
+
+  Widget _indicator(
+    ColorScheme scheme,
+    bool isDark,
+    double width,
+    double edgeStrength,
+    Duration duration,
+  ) {
     return SizedBox(
       width: width,
       height: _indicatorHeight,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: _indicatorInset),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: _indicatorColor(scheme, isDark),
-            borderRadius: BorderRadius.circular(999),
+        child: _ElasticDragIndicator(
+          strength: edgeStrength,
+          duration: duration,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _indicatorColor(scheme, isDark),
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
         ),
       ),
@@ -420,14 +519,21 @@ class _PillNavBarState extends State<_PillNavBar> {
                   2 *
                       (indicatorCenter - indicatorWidth / 2) /
                       (width - indicatorWidth);
+        final dragging = _dragCenter != null;
+        final edgeStrength = dragging
+            ? _dragEdgeStrength(indicatorAlignment)
+            : 0.0;
+        final animationDuration = dragging
+            ? Duration.zero
+            : _navAnimationDuration;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
           dragStartBehavior: DragStartBehavior.down,
           onHorizontalDragStart: (details) =>
-              _startDrag(details.localPosition, width),
+              _dragActivation.begin(details.localPosition.dx),
           onHorizontalDragUpdate: (details) =>
-              _updateDrag(details.localPosition, width),
+              _handleDragUpdate(details.localPosition, width),
           onHorizontalDragEnd: (_) => _finishDrag(),
           onHorizontalDragCancel: _resetDrag,
           child: SizedBox(
@@ -435,22 +541,270 @@ class _PillNavBarState extends State<_PillNavBar> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _dragCenter == null
-                    ? AnimatedAlign(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment(indicatorAlignment, 0),
-                        child: _indicator(scheme, isDark, indicatorWidth),
-                      )
-                    : Align(
-                        alignment: Alignment(indicatorAlignment, 0),
-                        child: _indicator(scheme, isDark, indicatorWidth),
-                      ),
+                AnimatedAlign(
+                  duration: animationDuration,
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment(indicatorAlignment, 0),
+                  child: _indicator(
+                    scheme,
+                    isDark,
+                    indicatorWidth,
+                    edgeStrength,
+                    animationDuration,
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: _contentInset,
                   ),
-                  child: widget.child,
+                  child: widget.childBuilder(
+                    _dragIndex ?? widget.selectedIndex,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CapsuleNavBar extends StatefulWidget {
+  const _CapsuleNavBar({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.shrinkWrap,
+  });
+
+  final List<AppNavDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final bool shrinkWrap;
+
+  @override
+  State<_CapsuleNavBar> createState() => _CapsuleNavBarState();
+}
+
+class _CapsuleNavBarState extends State<_CapsuleNavBar> {
+  static const double _unselectedWidth = 52;
+  static const double _minimumUnselectedWidth = 44;
+  static const double _selectedHorizontalPadding = 10;
+  static const double _iconSize = 21;
+  static const double _iconLabelGap = 6;
+
+  int? _dragIndex;
+  double? _dragPosition;
+  final _dragActivation = _HorizontalDragActivation();
+
+  int _indexAt(
+    double position,
+    double selectedWidth,
+    double unselectedWidth,
+    int activeIndex,
+  ) {
+    var offset = 0.0;
+    for (var i = 0; i < widget.destinations.length; i++) {
+      final itemWidth = i == activeIndex ? selectedWidth : unselectedWidth;
+      if (position < offset + itemWidth) return i;
+      offset += itemWidth;
+    }
+    return widget.destinations.length - 1;
+  }
+
+  void _startDrag(int index, double position) {
+    setState(() {
+      _dragIndex = index;
+      _dragPosition = position;
+    });
+    unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _handleDragUpdate(
+    double position,
+    int Function(double position) indexAt,
+  ) {
+    if (_dragIndex == null) {
+      if (!_dragActivation.accepts(position)) return;
+      _startDrag(indexAt(position), position);
+      return;
+    }
+    _updateDrag(indexAt(position), position);
+  }
+
+  void _updateDrag(int index, double position) {
+    final changedIndex = index != _dragIndex;
+    setState(() {
+      _dragIndex = index;
+      _dragPosition = position;
+    });
+    if (changedIndex) unawaited(HapticFeedback.selectionClick());
+  }
+
+  void _finishDrag() {
+    final index = _dragIndex;
+    if (index != null && index != widget.selectedIndex) {
+      widget.onSelected(index);
+    }
+    _resetDrag();
+  }
+
+  void _resetDrag() {
+    _dragActivation.reset();
+    if (_dragIndex == null && _dragPosition == null) return;
+    setState(() {
+      _dragIndex = null;
+      _dragPosition = null;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _CapsuleNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.destinations.length != widget.destinations.length) {
+      _dragIndex = null;
+      _dragPosition = null;
+      _dragActivation.reset();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.destinations.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    final labelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0,
+      color: scheme.onPrimaryContainer,
+    );
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final selectedWidths = <double>[];
+    for (final destination in widget.destinations) {
+      final painter = TextPainter(
+        text: TextSpan(text: destination.label, style: labelStyle),
+        maxLines: 1,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      selectedWidths.add(
+        _selectedHorizontalPadding * 2 +
+            _iconSize +
+            _iconLabelGap +
+            painter.width,
+      );
+    }
+    final naturalWidth =
+        selectedWidths.reduce(math.max) +
+        _unselectedWidth * (widget.destinations.length - 1);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final requestedWidth = widget.shrinkWrap || !constraints.hasBoundedWidth
+            ? naturalWidth
+            : constraints.maxWidth;
+        final width = constraints.constrainWidth(requestedWidth);
+        if (width <= 0) return const SizedBox.shrink();
+        final activeIndex = (_dragIndex ?? widget.selectedIndex)
+            .clamp(0, widget.destinations.length - 1)
+            .toInt();
+        final minimumSelectedWidth = math.min(_unselectedWidth, width);
+        final availableSelectedWidth = widget.destinations.length == 1
+            ? width
+            : width -
+                  _minimumUnselectedWidth * (widget.destinations.length - 1);
+        final maximumSelectedWidth = availableSelectedWidth
+            .clamp(minimumSelectedWidth, width)
+            .toDouble();
+        final selectedWidth = selectedWidths[activeIndex]
+            .clamp(minimumSelectedWidth, maximumSelectedWidth)
+            .toDouble();
+        final unselectedWidth = widget.destinations.length == 1
+            ? 0.0
+            : (width - selectedWidth) / (widget.destinations.length - 1);
+        int indexAt(double position) => _indexAt(
+          position.clamp(0, width).toDouble(),
+          selectedWidth,
+          unselectedWidth,
+          activeIndex,
+        );
+        final dragPosition = _dragPosition;
+        final indicatorLeft = dragPosition == null
+            ? activeIndex * unselectedWidth
+            : (dragPosition - selectedWidth / 2)
+                  .clamp(0, width - selectedWidth)
+                  .toDouble();
+        final positionDuration = dragPosition == null
+            ? _navAnimationDuration
+            : Duration.zero;
+        final edgeStrength = dragPosition == null
+            ? 0.0
+            : _dragEdgeStrength(dragPosition / width * 2 - 1);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: (details) =>
+              _dragActivation.begin(details.localPosition.dx),
+          onHorizontalDragUpdate: (details) =>
+              _handleDragUpdate(details.localPosition.dx, indexAt),
+          onHorizontalDragEnd: (_) => _finishDrag(),
+          onHorizontalDragCancel: _resetDrag,
+          child: SizedBox(
+            width: width,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedPositioned(
+                  left: indicatorLeft,
+                  top: 0,
+                  bottom: 0,
+                  width: selectedWidth,
+                  duration: positionDuration,
+                  curve: Curves.easeOutCubic,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 42,
+                        child: _ElasticDragIndicator(
+                          strength: edgeStrength,
+                          duration: positionDuration,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _indicatorColor(scheme, isDark),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < widget.destinations.length; i++)
+                      AnimatedContainer(
+                        width: i == activeIndex
+                            ? selectedWidth
+                            : unselectedWidth,
+                        height: double.infinity,
+                        duration: _navAnimationDuration,
+                        curve: Curves.easeOutCubic,
+                        child: _CapsuleNavItem(
+                          destination: widget.destinations[i],
+                          selected: i == activeIndex,
+                          onTap: () => widget.onSelected(i),
+                          itemWidth: i == activeIndex
+                              ? selectedWidth
+                              : unselectedWidth,
+                          labelStyle: labelStyle,
+                          scheme: scheme,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -463,65 +817,86 @@ class _PillNavBarState extends State<_PillNavBar> {
 
 class _CapsuleNavItem extends StatelessWidget {
   const _CapsuleNavItem({
-    required this.icon,
-    required this.label,
+    required this.destination,
     required this.selected,
     required this.onTap,
+    required this.itemWidth,
+    required this.labelStyle,
     required this.scheme,
-    required this.isDark,
   });
 
-  final IconData icon;
-  final String label;
+  final AppNavDestination destination;
   final bool selected;
   final VoidCallback onTap;
+  final double itemWidth;
+  final TextStyle labelStyle;
   final ColorScheme scheme;
-  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            horizontal: selected ? 14 : 10,
-            vertical: 9,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? _indicatorColor(scheme, isDark)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 22, color: fg),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.centerLeft,
-                child: selected
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: fg,
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+    final foreground = selected
+        ? scheme.onPrimaryContainer
+        : scheme.onSurfaceVariant;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: ClipRect(
+            child: AnimatedContainer(
+              width: selected ? itemWidth : 42,
+              height: 42,
+              duration: _navAnimationDuration,
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: selected
+                    ? _CapsuleNavBarState._selectedHorizontalPadding
+                    : 0,
               ),
-            ],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    destination.icon,
+                    size: _CapsuleNavBarState._iconSize,
+                    color: foreground,
+                  ),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(end: selected ? 1 : 0),
+                    duration: _navAnimationDuration,
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) => ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: value,
+                        child: Opacity(
+                          opacity: ((value - 0.95) / 0.05)
+                              .clamp(0.0, 1.0)
+                              .toDouble(),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: _CapsuleNavBarState._iconLabelGap,
+                      ),
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.clip,
+                        style: labelStyle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -551,30 +926,46 @@ class _LabeledNavItem extends StatelessWidget {
     final fg = selected
         ? selectedColor
         : unselectedColor.withValues(alpha: 0.72);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: selected ? 1.12 : 1,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              child: Icon(icon, size: 22, color: fg),
-            ),
-            const SizedBox(height: 3),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 180),
-              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                fontSize: 10,
-                color: fg,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: selected ? 1.12 : 1,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(end: fg),
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, color, child) =>
+                      Icon(icon, size: 22, color: color),
+                ),
               ),
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ],
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 180),
+                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  fontSize: 10,
+                  color: fg,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
