@@ -508,11 +508,11 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
         padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth.clamp(0.0, 520.0);
+            final width = constraints.maxWidth.clamp(0.0, 480.0);
             final cols = ((width - 24) / 260).ceil().clamp(1, 4);
             final count = group.memberCount;
             final rows = count == 0 ? 1 : (count + cols - 1) ~/ cols;
-            final maxHeight = constraints.maxHeight.clamp(0.0, 720.0);
+            final maxHeight = constraints.maxHeight.clamp(0.0, 520.0);
             final height = (rows * 72.0 + 76).clamp(0.0, maxHeight);
             _detailSize = Size(width, height);
             return Center(
