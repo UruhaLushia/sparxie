@@ -30,6 +30,7 @@ import 'screens/tailscale_screen.dart';
 import 'session.dart';
 import 'src/rust/frb_generated.dart';
 import 'utils.dart';
+import 'widgets/bottom_navigation.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'window_state.dart';
 
@@ -320,7 +321,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     return false;
   }
 
-  List<_Dest> _destinationsFor(
+  List<AppNavDestination> _destinationsFor(
     NavLayout layout, {
     required bool isCompact,
     required bool supportsCoreConfig,
@@ -335,33 +336,49 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final showOnStandardWide = isStandardLike && !isCompact;
     return [
       if (isStandardLike)
-        const _Dest(icon: Icons.space_dashboard_outlined, label: '概览'),
-      const _Dest(icon: Icons.account_tree_outlined, label: '代理组'),
-      if (isStandardLike) const _Dest(icon: Icons.lan_outlined, label: '连接'),
+        const AppNavDestination(
+          icon: Icons.space_dashboard_outlined,
+          label: '概览',
+        ),
+      const AppNavDestination(icon: Icons.account_tree_outlined, label: '代理组'),
+      if (isStandardLike)
+        const AppNavDestination(icon: Icons.lan_outlined, label: '连接'),
       if (showOnStandardWide && supportsCoreConfig)
-        const _Dest(icon: Icons.memory_outlined, label: '核心配置'),
-      const _Dest(icon: Icons.terminal, label: '日志'),
+        const AppNavDestination(icon: Icons.memory_outlined, label: '核心配置'),
+      const AppNavDestination(icon: Icons.terminal, label: '日志'),
       if (showOnStandardWide && supportsExternalResources)
-        const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
+        const AppNavDestination(icon: Icons.cloud_outlined, label: '外部资源'),
       if (showOnStandardWide && supportsCoreActions)
-        const _Dest(icon: Icons.build_outlined, label: '核心操作'),
+        const AppNavDestination(icon: Icons.build_outlined, label: '核心操作'),
       if (showOnStandardWide && supportsRules)
-        const _Dest(icon: Icons.rule, label: '分流规则'),
+        const AppNavDestination(icon: Icons.rule, label: '分流规则'),
       if (showOnStandardWide && supportsTailscale)
-        const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
+        const AppNavDestination(
+          icon: Icons.vpn_lock_outlined,
+          label: 'Tailscale',
+        ),
       if (showOnStandardWide && supportsDiagnostics)
-        const _Dest(icon: Icons.network_check_outlined, label: '网络工具'),
+        const AppNavDestination(
+          icon: Icons.network_check_outlined,
+          label: '网络工具',
+        ),
       if (layout == NavLayout.cards && supportsExternalResources)
-        const _Dest(icon: Icons.cloud_outlined, label: '外部资源'),
+        const AppNavDestination(icon: Icons.cloud_outlined, label: '外部资源'),
       if (layout == NavLayout.cards && supportsTailscale)
-        const _Dest(icon: Icons.vpn_lock_outlined, label: 'Tailscale'),
+        const AppNavDestination(
+          icon: Icons.vpn_lock_outlined,
+          label: 'Tailscale',
+        ),
       if (layout == NavLayout.cards && supportsDiagnostics)
-        const _Dest(icon: Icons.network_check_outlined, label: '网络工具'),
-      const _Dest(icon: Icons.more_horiz, label: '其他'),
+        const AppNavDestination(
+          icon: Icons.network_check_outlined,
+          label: '网络工具',
+        ),
+      const AppNavDestination(icon: Icons.more_horiz, label: '其他'),
     ];
   }
 
-  Widget _buildPage(_Dest dest) {
+  Widget _buildPage(AppNavDestination dest) {
     return switch (dest.label) {
       '概览' => DashboardScreen(store: widget.store, session: widget.session),
       '代理组' => ProxiesScreen(
@@ -394,7 +411,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   NavLayout? _stackLayout;
   List<String>? _stackLabels;
   List<Widget>? _stackPages;
-  List<Widget> _ensureStackPages(NavLayout layout, List<_Dest> destinations) {
+  List<Widget> _ensureStackPages(
+    NavLayout layout,
+    List<AppNavDestination> destinations,
+  ) {
     final labels = [for (final d in destinations) d.label];
     if (_stackLayout != layout ||
         _stackPages == null ||
@@ -464,7 +484,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildWideStandard(List<_Dest> destinations) {
+  Widget _buildWideStandard(List<AppNavDestination> destinations) {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -474,7 +494,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           // safe-area inset so the fit count matches what actually renders.
           final topInset = MediaQuery.paddingOf(context).top;
           final fit =
-              ((constraints.maxHeight - topInset) / _SideRail.itemHeight)
+              ((constraints.maxHeight - topInset) /
+                      SideNavigationRail.itemHeight)
                   .floor()
                   .clamp(2, n);
           final shownLeading = fit >= n ? otherIndex : fit - 1;
@@ -524,7 +545,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
           return Row(
             children: [
-              _SideRail(
+              SideNavigationRail(
                 destinations: [for (final i in visibleReal) destinations[i]],
                 selectedIndex: visibleReal.indexOf(effectiveIndex),
                 onSelected: (pos) => setState(() => _index = visibleReal[pos]),
@@ -540,7 +561,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildWideCards(List<_Dest> destinations) {
+  Widget _buildWideCards(List<AppNavDestination> destinations) {
     final scheme = Theme.of(context).colorScheme;
     final pages = _ensureStackPages(NavLayout.cards, destinations);
     final supportsRules = widget.session.supportsRules.value;
@@ -590,7 +611,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildCompactStandard(List<_Dest> destinations) {
+  Widget _buildCompactStandard(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.standard, destinations);
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
@@ -608,7 +629,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               top: false,
               child: SizedBox(
                 height: 64,
-                child: _NavBarItems(
+                child: BottomNavBarItems(
                   style: widget.prefs.navBarStyle,
                   destinations: destinations,
                   selectedIndex: _index,
@@ -622,7 +643,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildCompactFloating(List<_Dest> destinations) {
+  Widget _buildCompactFloating(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.floating, destinations);
     return Stack(
       children: [
@@ -630,7 +651,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           body: Builder(
             builder: (context) {
               final data = MediaQuery.of(context);
-              const navBarExtra = 88.0; // 56 bar + 12 pad + 20 top gap
+              const navBarExtra = 94.0; // 64 bar + 10 pad + 20 top gap
               return MediaQuery(
                 data: data.copyWith(
                   padding: data.padding.copyWith(
@@ -649,7 +670,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           left: 0,
           right: 0,
           bottom: 0,
-          child: _FloatingNavBar(
+          child: FloatingBottomNavBar(
             selectedIndex: _index,
             onSelected: (i) => setState(() => _index = i),
             destinations: destinations,
@@ -660,7 +681,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildCompactLauncher(BuildContext context, List<_Dest> destinations) {
+  Widget _buildCompactLauncher(
+    BuildContext context,
+    List<AppNavDestination> destinations,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLow,
@@ -676,7 +700,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           onSelected: (i) => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => _buildPage(destinations[i])),
           ),
-          // No main area on phone — push a route instead.
           onKernelTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) =>
@@ -714,118 +737,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 }
 
-/// Side rail for wide standard layout. Items are a fixed height and packed
-/// from the top, so spacing never changes; leftover space appears only at the
-/// bottom, and only once every fitting item is already shown. The caller sizes
-/// the visible set to [_SideRail.itemHeight].
-class _SideRail extends StatelessWidget {
-  const _SideRail({
-    required this.destinations,
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-
-  /// Fixed per-item height; the fit calculation in [_buildWideStandard] uses
-  /// this same value so the rail never under- or over-fills.
-  static const double itemHeight = 64;
-
-  final List<_Dest> destinations;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // Absorb a landscape left display cutout into the rail's own left padding
-    // so the nav column keeps its full content width (centered) instead of
-    // being squeezed — which shifted icons right and truncated labels.
-    final leftInset = MediaQuery.paddingOf(context).left;
-    return Container(
-      width: 84 + leftInset,
-      padding: EdgeInsets.only(left: leftInset),
-      child: SafeArea(
-        left: false,
-        right: false,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < destinations.length; i++)
-              SizedBox(
-                height: itemHeight,
-                child: _SideRailItem(
-                  icon: destinations[i].icon,
-                  label: destinations[i].label,
-                  selected: i == selectedIndex,
-                  onTap: () => onSelected(i),
-                  scheme: scheme,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SideRailItem extends StatelessWidget {
-  const _SideRailItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.scheme,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final ColorScheme scheme;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
-    // Selected state and the press ripple share one rounded-rect shape over
-    // the whole item, so the ripple no longer splashes past an icon-only pill.
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Material(
-        color: selected ? scheme.secondaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(icon, size: 22, color: fg),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: fg,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _NavCardGrid extends StatelessWidget {
   const _NavCardGrid({
     required this.store,
@@ -845,7 +756,7 @@ class _NavCardGrid extends StatelessWidget {
 
   final ControllerStore store;
   final MihomoSession session;
-  final List<_Dest> destinations;
+  final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final VoidCallback onKernelTap;
@@ -921,7 +832,7 @@ class _NavCardGrid extends StatelessWidget {
             onTap: onConnectionsTap,
           ),
           const SizedBox(height: 12),
-          ...(_buildNavRows(context)),
+          ..._buildNavRows(context),
         ],
       ),
     );
@@ -965,16 +876,12 @@ class _NavCardGrid extends StatelessWidget {
     return rows;
   }
 
-  Widget? _badgeFor(int i) {
-    final dest = destinations[i];
-    switch (dest.label) {
-      case '代理组':
-        return _GroupCountBadge(session: session);
-      case '连接':
-        return _ConnectionCountBadge(session: session);
-      default:
-        return null;
-    }
+  Widget? _badgeFor(int index) {
+    return switch (destinations[index].label) {
+      '代理组' => _GroupCountBadge(session: session),
+      '连接' => _ConnectionCountBadge(session: session),
+      _ => null,
+    };
   }
 }
 
@@ -985,6 +892,7 @@ class _StatusHeroCard extends StatelessWidget {
     this.selected = false,
     this.onTap,
   });
+
   final ControllerStore store;
   final MihomoSession session;
   final bool selected;
@@ -1094,6 +1002,7 @@ class _TrafficHeroCard extends StatelessWidget {
     this.selected = false,
     this.onTap,
   });
+
   final MihomoSession session;
   final bool selected;
   final VoidCallback? onTap;
@@ -1131,14 +1040,14 @@ class _TrafficHeroCard extends StatelessWidget {
                   RepaintBoundary(
                     child: ValueListenableBuilder<rust.TrafficSample>(
                       valueListenable: session.traffic,
-                      builder: (_, t, _) => Column(
+                      builder: (_, sample, _) => Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '${formatBytes(t.up)}/s',
+                                '${formatBytes(sample.up)}/s',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(width: 4),
@@ -1154,7 +1063,7 @@ class _TrafficHeroCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '${formatBytes(t.down)}/s',
+                                '${formatBytes(sample.down)}/s',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(width: 4),
@@ -1486,394 +1395,4 @@ class _FadeThroughIndexedStackState extends State<_FadeThroughIndexedStack>
       children: [for (final i in order) _wrap(i)],
     );
   }
-}
-
-class _FloatingNavBar extends StatelessWidget {
-  const _FloatingNavBar({
-    required this.selectedIndex,
-    required this.onSelected,
-    required this.destinations,
-    required this.style,
-  });
-
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-  final List<_Dest> destinations;
-  final NavBarStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
-    final bottomPadding = MediaQuery.paddingOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 12 + bottomPadding),
-      child: Center(
-        heightFactor: 1,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? scheme.surfaceContainerHigh.withValues(alpha: 0.68)
-                    : scheme.surfaceContainer.withValues(alpha: 0.74),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.black.withValues(alpha: 0.08),
-                  width: 0.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                    blurRadius: 16,
-                    spreadRadius: -2,
-                    offset: const Offset(0, 4),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: SizedBox(
-                  height: 56,
-                  child: _NavBarItems(
-                    style: style,
-                    destinations: destinations,
-                    selectedIndex: selectedIndex,
-                    onSelected: onSelected,
-                    shrinkWrap: true,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Color _navIndicatorColor(ColorScheme scheme, bool isDark) =>
-    scheme.primaryContainer.withValues(alpha: isDark ? 0.6 : 0.9);
-
-class _NavBarItems extends StatelessWidget {
-  const _NavBarItems({
-    required this.style,
-    required this.destinations,
-    required this.selectedIndex,
-    required this.onSelected,
-    this.shrinkWrap = false,
-  });
-
-  final NavBarStyle style;
-  final List<_Dest> destinations;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  /// True for the floating bar: the row hugs its content (fixed-width cells)
-  /// instead of stretching edge to edge.
-  final bool shrinkWrap;
-
-  static const double _cellWidth = 68;
-
-  Widget _cell(Widget child) => shrinkWrap
-      ? SizedBox(width: _cellWidth, child: child)
-      : Expanded(child: child);
-
-  Widget _labeledRow(ColorScheme scheme, Color selectedColor) {
-    return Row(
-      mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
-      children: [
-        for (var i = 0; i < destinations.length; i++)
-          _cell(
-            _LabeledNavItem(
-              icon: destinations[i].icon,
-              label: destinations[i].label,
-              selected: i == selectedIndex,
-              onTap: () => onSelected(i),
-              selectedColor: selectedColor,
-              unselectedColor: scheme.onSurfaceVariant,
-            ),
-          ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
-    return switch (style) {
-      NavBarStyle.capsule => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          spacing: shrinkWrap ? 2 : 0,
-          children: [
-            for (var i = 0; i < destinations.length; i++)
-              _CapsuleNavItem(
-                icon: destinations[i].icon,
-                label: destinations[i].label,
-                selected: i == selectedIndex,
-                onTap: () => onSelected(i),
-                scheme: scheme,
-                isDark: isDark,
-              ),
-          ],
-        ),
-      ),
-      NavBarStyle.pill => Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedAlign(
-              alignment: Alignment(
-                destinations.length == 1
-                    ? 0
-                    : -1 + 2 * selectedIndex / (destinations.length - 1),
-                0,
-              ),
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              child: FractionallySizedBox(
-                widthFactor: 1 / destinations.length,
-                heightFactor: 1,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: Center(
-                    child: SizedBox(
-                      height: 44,
-                      width: double.infinity,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer.withValues(
-                            alpha: isDark ? 0.6 : 0.9,
-                          ),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          _labeledRow(scheme, scheme.onPrimaryContainer),
-        ],
-      ),
-      NavBarStyle.tint => _labeledRow(scheme, scheme.primary),
-      NavBarStyle.m3 => Row(
-        mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          for (var i = 0; i < destinations.length; i++)
-            _cell(
-              _M3NavItem(
-                icon: destinations[i].icon,
-                label: destinations[i].label,
-                selected: i == selectedIndex,
-                onTap: () => onSelected(i),
-                scheme: scheme,
-                isDark: isDark,
-              ),
-            ),
-        ],
-      ),
-    };
-  }
-}
-
-class _CapsuleNavItem extends StatelessWidget {
-  const _CapsuleNavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.scheme,
-    required this.isDark,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final ColorScheme scheme;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            horizontal: selected ? 14 : 10,
-            vertical: 9,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? _navIndicatorColor(scheme, isDark)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 22, color: fg),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.centerLeft,
-                child: selected
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: fg,
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LabeledNavItem extends StatelessWidget {
-  const _LabeledNavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.selectedColor,
-    required this.unselectedColor,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Color selectedColor;
-  final Color unselectedColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = selected
-        ? selectedColor
-        : unselectedColor.withValues(alpha: 0.72);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: selected ? 1.12 : 1,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              child: Icon(icon, size: 22, color: fg),
-            ),
-            const SizedBox(height: 3),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 180),
-              style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                fontSize: 10,
-                color: fg,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-              ),
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _M3NavItem extends StatelessWidget {
-  const _M3NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.scheme,
-    required this.isDark,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final ColorScheme scheme;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-              decoration: BoxDecoration(
-                color: selected
-                    ? _navIndicatorColor(scheme, isDark)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? scheme.onPrimaryContainer
-                    : scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 10,
-                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Dest {
-  const _Dest({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
 }
