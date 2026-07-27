@@ -20,6 +20,7 @@ pub struct ProxyGroupEntry {
     pub member_count: u32,
     pub members_hash: u32,
     pub now: String,
+    pub now_delay: i32,
     pub test_url: String,
     pub fixed: String,
 }

@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -16,12 +17,15 @@ mod cache;
 mod parse;
 mod types;
 
+const PROVIDER_NODES_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
 /// Structured proxy + group catalog. Rust parses mihomo's `/proxies`, applies
 /// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), caches full
 /// group members in Rust, and returns only group summaries to Dart.
 pub async fn proxy_catalog(
     target: MihomoTarget,
     include_hidden: bool,
+    resolve_provider_current_delay: bool,
     filter: String,
 ) -> Result<ProxyCatalog, MihomoError> {
     let client = target.client()?;
@@ -35,6 +39,9 @@ pub async fn proxy_catalog(
     let mut name_ids = HashMap::new();
     let mut icon_urls = Vec::new();
     let mut seen_icons = HashSet::new();
+    let previous_nodes = cache::node_details(&target);
+    let previous_provider_nodes_checked_at = cache::provider_nodes_checked_at(&target);
+    let mut has_provider_current = false;
 
     let filter = filter.trim();
     let filter = if filter.is_ascii() {
@@ -67,6 +74,16 @@ pub async fn proxy_catalog(
         }
         let member_count = members.len();
         let icon = field_or(data, "icon", "");
+        let now = field_or(data, "now", "");
+        let top_level_node = proxies.get(now.as_str());
+        let cached_node = previous_nodes.get(now.as_str());
+        let now_delay = top_level_node
+            .map(proxy_delay)
+            .or_else(|| cached_node.map(|node| node.delay))
+            .unwrap_or(-1);
+        if resolve_provider_current_delay && !now.is_empty() && top_level_node.is_none() {
+            has_provider_current = true;
+        }
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
         cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
@@ -77,11 +94,36 @@ pub async fn proxy_catalog(
                 icon,
                 member_count: member_count.min(u32::MAX as usize) as u32,
                 members_hash,
-                now: field_or(data, "now", ""),
+                now,
+                now_delay,
                 test_url: first_field(data, &["testUrl", "tester"]),
                 fixed: field_or(data, "fixed", ""),
             },
         ));
+    }
+
+    let provider_refresh_due = previous_provider_nodes_checked_at
+        .is_none_or(|checked_at| checked_at.elapsed() >= PROVIDER_NODES_REFRESH_INTERVAL);
+    let refresh_provider_nodes = has_provider_current && provider_refresh_due;
+    let provider_nodes_checked_at = if refresh_provider_nodes {
+        Some(Instant::now())
+    } else {
+        previous_provider_nodes_checked_at
+    };
+    let fresh_provider_nodes = if refresh_provider_nodes {
+        provider_nodes(&client).await.ok()
+    } else {
+        None
+    };
+    if let Some(nodes) = fresh_provider_nodes.as_ref() {
+        for (_, group) in &mut groups {
+            if proxies.contains_key(group.now.as_str()) {
+                continue;
+            }
+            if let Some(node) = nodes.get(group.now.as_str()) {
+                group.now_delay = node.delay;
+            }
+        }
     }
 
     let group_positions: HashMap<&str, usize> = global_all
@@ -99,13 +141,18 @@ pub async fn proxy_catalog(
     for (name, id) in name_ids {
         names[id] = name;
     }
-    let previous_nodes = cache::node_details(&target);
     let mut nodes = Vec::with_capacity(names.len());
     for name in &names {
         nodes.push(
             proxies
                 .get(name)
                 .map(cached_node)
+                .or_else(|| {
+                    fresh_provider_nodes
+                        .as_ref()
+                        .and_then(|nodes| nodes.get(name))
+                        .cloned()
+                })
                 .or_else(|| previous_nodes.get(name).cloned()),
         );
     }
@@ -117,6 +164,7 @@ pub async fn proxy_catalog(
             nodes,
             groups: cached_groups,
             filter: filter.into_owned(),
+            provider_nodes_checked_at,
         },
     );
 
@@ -149,6 +197,15 @@ async fn provider_nodes(
         }
     }
     Ok(out)
+}
+
+async fn refresh_cached_provider_nodes(target: &MihomoTarget) -> Result<(), MihomoError> {
+    cache::mark_provider_nodes_checked(target, Instant::now());
+    let client = target.client()?;
+    if let Ok(nodes) = provider_nodes(&client).await {
+        cache::merge_nodes(target, nodes);
+    }
+    Ok(())
 }
 
 fn cached_node(data: &Value) -> CachedNode {
@@ -192,20 +249,14 @@ pub async fn proxy_group_members(
         refresh_cached_catalog(&target).await?;
     }
     if cache::group_needs_provider_nodes(&target, &group) {
-        let client = target.client()?;
-        if let Ok(nodes) = provider_nodes(&client).await {
-            cache::merge_nodes(&target, nodes);
-        }
+        refresh_cached_provider_nodes(&target).await?;
     }
     if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
         return Ok(entries);
     }
     refresh_cached_catalog(&target).await?;
     if cache::group_needs_provider_nodes(&target, &group) {
-        let client = target.client()?;
-        if let Ok(nodes) = provider_nodes(&client).await {
-            cache::merge_nodes(&target, nodes);
-        }
+        refresh_cached_provider_nodes(&target).await?;
     }
     Ok(cache::member_entries(&target, &group, offset, limit, member_sort).unwrap_or_default())
 }
@@ -222,7 +273,7 @@ pub(crate) async fn cached_group_member_names(
 
 async fn refresh_cached_catalog(target: &MihomoTarget) -> Result<(), MihomoError> {
     let filter = cache::cached_filter(target).unwrap_or_default();
-    let _ = proxy_catalog(target.clone(), true, filter).await?;
+    let _ = proxy_catalog(target.clone(), true, false, filter).await?;
     Ok(())
 }
 
@@ -238,10 +289,7 @@ pub(crate) async fn cached_node_providers(
         refresh_cached_catalog(&target).await?;
     }
     if cache::names_need_provider_nodes(&target, &names) {
-        let client = target.client()?;
-        if let Ok(nodes) = provider_nodes(&client).await {
-            cache::merge_nodes(&target, nodes);
-        }
+        refresh_cached_provider_nodes(&target).await?;
     }
     Ok(cache::node_providers(&target, &names))
 }

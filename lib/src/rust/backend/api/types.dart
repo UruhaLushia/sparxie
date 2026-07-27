@@ -519,6 +519,7 @@ class ProxyGroupEntry {
   final int memberCount;
   final int membersHash;
   final String now;
+  final int nowDelay;
   final String testUrl;
   final String fixed;
 
@@ -530,6 +531,7 @@ class ProxyGroupEntry {
     required this.memberCount,
     required this.membersHash,
     required this.now,
+    required this.nowDelay,
     required this.testUrl,
     required this.fixed,
   });
@@ -546,6 +548,7 @@ class ProxyGroupEntry {
       memberCount.hashCode ^
       membersHash.hashCode ^
       now.hashCode ^
+      nowDelay.hashCode ^
       testUrl.hashCode ^
       fixed.hashCode;
 
@@ -561,6 +564,7 @@ class ProxyGroupEntry {
           memberCount == other.memberCount &&
           membersHash == other.membersHash &&
           now == other.now &&
+          nowDelay == other.nowDelay &&
           testUrl == other.testUrl &&
           fixed == other.fixed;
 }

@@ -42,6 +42,7 @@ class ProxiesNotifier extends ChangeNotifier {
           memberCount: entry.memberCount,
           membersHash: entry.membersHash,
           now: entry.now,
+          nowDelay: entry.nowDelay,
           testUrl: entry.testUrl,
           fixed: entry.fixed,
         );
@@ -62,6 +63,7 @@ class ProxiesNotifier extends ChangeNotifier {
           shapeChanged = true;
         }
         existing._setNow(entry.now);
+        existing._setNowDelay(entry.nowDelay);
         existing._setTestUrl(entry.testUrl);
         existing._setFixed(entry.fixed);
         ordered.add(existing);
@@ -209,6 +211,7 @@ class ProxyGroup {
     required this._memberCount,
     required this._membersHash,
     required String now,
+    required int nowDelay,
     required String testUrl,
     required String fixed,
   }) : _type = type, // ignore: prefer_initializing_formals
@@ -217,6 +220,8 @@ class ProxyGroup {
        _testUrl = testUrl, // ignore: prefer_initializing_formals
        // ignore: prefer_initializing_formals
        now = ValueNotifier<String>(now),
+       // ignore: prefer_initializing_formals
+       nowDelay = ValueNotifier<int>(nowDelay),
        fixed = ValueNotifier<String>(fixed),
        _membersVersion = ValueNotifier<int>(0);
 
@@ -245,6 +250,7 @@ class ProxyGroup {
   int get memberCount => _memberCount;
 
   final ValueNotifier<String> now;
+  final ValueNotifier<int> nowDelay;
 
   /// Name of the pinned (fixed) member, empty if not pinned. Listening to
   /// this lets the node tiles light up the pin icon without rebuilding the
@@ -275,7 +281,19 @@ class ProxyGroup {
   }
 
   void _setNow(String value) {
-    if (now.value != value) now.value = value;
+    if (now.value == value) return;
+    now.value = value;
+    for (final member in _members) {
+      if (member.name == value) {
+        _setNowDelay(member.delay.value);
+        return;
+      }
+    }
+    _setNowDelay(-1);
+  }
+
+  void _setNowDelay(int value) {
+    if (nowDelay.value != value) nowDelay.value = value;
   }
 
   void _setTestUrl(String value) {
@@ -288,6 +306,7 @@ class ProxyGroup {
 
   void _dispose() {
     now.dispose();
+    nowDelay.dispose();
     fixed.dispose();
     _membersVersion.dispose();
     for (final member in _members) {
@@ -330,6 +349,14 @@ class ProxyGroup {
   }
 
   bool _setMemberWindow(int offset, List<rust.ProxyMemberEntry> entries) {
+    if (!hidesExactNow) {
+      for (final entry in entries) {
+        if (entry.name == now.value) {
+          _setNowDelay(entry.delay);
+          break;
+        }
+      }
+    }
     final same =
         offset == _memberOffset &&
         _members.length == entries.length &&
@@ -366,12 +393,17 @@ class ProxyGroup {
   }
 
   void _setVisibleDelay(String name, int delay) {
+    if (!hidesExactNow && now.value == name) _setNowDelay(delay);
     for (final member in _members) {
       if (member.name == name) member._setDelay(delay);
     }
   }
 
   void _applyVisibleDelays(Map<String, int> delayByName) {
+    if (!hidesExactNow) {
+      final delay = delayByName[now.value];
+      if (delay != null) _setNowDelay(delay);
+    }
     for (final member in _members) {
       final delay = delayByName[member.name];
       if (delay != null) member._setDelay(delay);

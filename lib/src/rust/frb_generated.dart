@@ -289,6 +289,7 @@ abstract class RustLibApi extends BaseApi {
   Future<ProxyCatalog> crateBackendApiProxiesProxyCatalog({
     required BackendTarget target,
     required bool includeHidden,
+    required bool resolveProviderCurrentDelay,
     required String filter,
   });
 
@@ -2172,6 +2173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<ProxyCatalog> crateBackendApiProxiesProxyCatalog({
     required BackendTarget target,
     required bool includeHidden,
+    required bool resolveProviderCurrentDelay,
     required String filter,
   }) {
     return handler.executeNormal(
@@ -2180,6 +2182,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_backend_target(target, serializer);
           sse_encode_bool(includeHidden, serializer);
+          sse_encode_bool(resolveProviderCurrentDelay, serializer);
           sse_encode_String(filter, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -2193,7 +2196,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_mihomo_error,
         ),
         constMeta: kCrateBackendApiProxiesProxyCatalogConstMeta,
-        argValues: [target, includeHidden, filter],
+        argValues: [target, includeHidden, resolveProviderCurrentDelay, filter],
         apiImpl: this,
       ),
     );
@@ -2202,7 +2205,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateBackendApiProxiesProxyCatalogConstMeta =>
       const TaskConstMeta(
         debugName: "proxy_catalog",
-        argNames: ["target", "includeHidden", "filter"],
+        argNames: [
+          "target",
+          "includeHidden",
+          "resolveProviderCurrentDelay",
+          "filter",
+        ],
       );
 
   @override
@@ -5082,8 +5090,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProxyGroupEntry dco_decode_proxy_group_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProxyGroupEntry(
       name: dco_decode_String(arr[0]),
       proxyType: dco_decode_String(arr[1]),
@@ -5092,8 +5100,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       memberCount: dco_decode_u_32(arr[4]),
       membersHash: dco_decode_u_32(arr[5]),
       now: dco_decode_String(arr[6]),
-      testUrl: dco_decode_String(arr[7]),
-      fixed: dco_decode_String(arr[8]),
+      nowDelay: dco_decode_i_32(arr[7]),
+      testUrl: dco_decode_String(arr[8]),
+      fixed: dco_decode_String(arr[9]),
     );
   }
 
@@ -6111,6 +6120,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_memberCount = sse_decode_u_32(deserializer);
     var var_membersHash = sse_decode_u_32(deserializer);
     var var_now = sse_decode_String(deserializer);
+    var var_nowDelay = sse_decode_i_32(deserializer);
     var var_testUrl = sse_decode_String(deserializer);
     var var_fixed = sse_decode_String(deserializer);
     return ProxyGroupEntry(
@@ -6121,6 +6131,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       memberCount: var_memberCount,
       membersHash: var_membersHash,
       now: var_now,
+      nowDelay: var_nowDelay,
       testUrl: var_testUrl,
       fixed: var_fixed,
     );
@@ -7166,6 +7177,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.memberCount, serializer);
     sse_encode_u_32(self.membersHash, serializer);
     sse_encode_String(self.now, serializer);
+    sse_encode_i_32(self.nowDelay, serializer);
     sse_encode_String(self.testUrl, serializer);
     sse_encode_String(self.fixed, serializer);
   }

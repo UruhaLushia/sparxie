@@ -174,6 +174,19 @@ fn catalog_from_groups(target: &SingBoxTarget, groups: Groups, filter: String) -
     let mut cached = HashMap::new();
     for group in groups.group {
         let name_matches = needle.is_empty() || group.tag.to_lowercase().contains(&needle);
+        let now = group.selected.clone();
+        let now_delay = group
+            .items
+            .iter()
+            .find(|item| item.tag.as_str() == now.as_str())
+            .map(|item| {
+                if item.url_test_delay <= 0 {
+                    -1
+                } else {
+                    item.url_test_delay
+                }
+            })
+            .unwrap_or(-1);
         let members = group
             .items
             .into_iter()
@@ -206,7 +219,8 @@ fn catalog_from_groups(target: &SingBoxTarget, groups: Groups, filter: String) -
             selectable: group.selectable,
             member_count: names.len().min(u32::MAX as usize) as u32,
             members_hash: member_hash(&names),
-            now: group.selected,
+            now,
+            now_delay,
             ..Default::default()
         });
     }

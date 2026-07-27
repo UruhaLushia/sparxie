@@ -1894,6 +1894,7 @@ fn wire__crate__backend__api__proxies__proxy_catalog_impl(
             let api_target =
                 <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
             let api_include_hidden = <bool>::sse_decode(&mut deserializer);
+            let api_resolve_provider_current_delay = <bool>::sse_decode(&mut deserializer);
             let api_filter = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
@@ -1902,6 +1903,7 @@ fn wire__crate__backend__api__proxies__proxy_catalog_impl(
                         let output_ok = crate::backend::api::proxies::proxy_catalog(
                             api_target,
                             api_include_hidden,
+                            api_resolve_provider_current_delay,
                             api_filter,
                         )
                         .await?;
@@ -5430,6 +5432,7 @@ impl SseDecode for crate::backend::api::types::ProxyGroupEntry {
         let mut var_memberCount = <u32>::sse_decode(deserializer);
         let mut var_membersHash = <u32>::sse_decode(deserializer);
         let mut var_now = <String>::sse_decode(deserializer);
+        let mut var_nowDelay = <i32>::sse_decode(deserializer);
         let mut var_testUrl = <String>::sse_decode(deserializer);
         let mut var_fixed = <String>::sse_decode(deserializer);
         return crate::backend::api::types::ProxyGroupEntry {
@@ -5440,6 +5443,7 @@ impl SseDecode for crate::backend::api::types::ProxyGroupEntry {
             member_count: var_memberCount,
             members_hash: var_membersHash,
             now: var_now,
+            now_delay: var_nowDelay,
             test_url: var_testUrl,
             fixed: var_fixed,
         };
@@ -6895,6 +6899,7 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyGroupEnt
             self.member_count.into_into_dart().into_dart(),
             self.members_hash.into_into_dart().into_dart(),
             self.now.into_into_dart().into_dart(),
+            self.now_delay.into_into_dart().into_dart(),
             self.test_url.into_into_dart().into_dart(),
             self.fixed.into_into_dart().into_dart(),
         ]
@@ -7925,6 +7930,7 @@ impl SseEncode for crate::backend::api::types::ProxyGroupEntry {
         <u32>::sse_encode(self.member_count, serializer);
         <u32>::sse_encode(self.members_hash, serializer);
         <String>::sse_encode(self.now, serializer);
+        <i32>::sse_encode(self.now_delay, serializer);
         <String>::sse_encode(self.test_url, serializer);
         <String>::sse_encode(self.fixed, serializer);
     }

@@ -133,6 +133,7 @@ impl From<crate::clash::api::ProxyGroupEntry> for ProxyGroupEntry {
             member_count: value.member_count,
             members_hash: value.members_hash,
             now: value.now,
+            now_delay: value.now_delay,
             test_url: value.test_url,
             fixed: value.fixed,
         }

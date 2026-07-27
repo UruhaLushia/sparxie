@@ -146,7 +146,7 @@ class ProxyGroupCard extends StatelessWidget {
         tag: 'proxy-group-card-${group.name}',
         child: _CardSurface(
           style: style,
-          radius: 20,
+          radius: showIcon ? 20 : 16,
           child: InkWell(
             onTap: onTap,
             child: _collapsedContent(group, showIcon, style),
@@ -163,12 +163,13 @@ String _subtitle(ProxyGroup group, String now) {
 }
 
 Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
+  if (!showIcon) return _compactCollapsedContent(group, style);
   return Padding(
     padding: const EdgeInsets.all(10),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showIcon) ProxyAvatar(name: group.name, icon: group.icon, size: 32),
+        ProxyAvatar(name: group.name, icon: group.icon, size: 32),
         const Spacer(),
         ValueListenableBuilder<String>(
           valueListenable: group.now,
@@ -197,6 +198,101 @@ Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
         ),
       ],
     ),
+  );
+}
+
+Widget _compactCollapsedContent(ProxyGroup group, _CardStyle style) {
+  return ValueListenableBuilder<String>(
+    valueListenable: group.now,
+    builder: (_, now, _) {
+      final displayNow = group.hidesExactNow ? '*' : (now.isEmpty ? '-' : now);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.name,
+                          style: TextStyle(
+                            color: style.title,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        Text(
+                          group.type.toUpperCase(),
+                          style: TextStyle(
+                            color: style.subtitle,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${group.memberCount}',
+                        style: TextStyle(
+                          color: style.title,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '节点',
+                        style: TextStyle(color: style.subtitle, fontSize: 8),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 3),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    displayNow,
+                    style: TextStyle(
+                      color: style.title,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (!group.hidesExactNow && now.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  _DelayPill(
+                    delay: group.nowDelay,
+                    untestedColor: style.pillUntested,
+                    onTap: null,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      );
+    },
   );
 }
 

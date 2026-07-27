@@ -49,13 +49,18 @@ pub async fn proxy_catalog(
         if meta.hidden && !include_hidden {
             continue;
         }
+        let now = selected_policy(&client, &name).await.unwrap_or_default();
+        let now_delay = members
+            .iter()
+            .find(|member| member.entry.name.as_str() == now.as_str())
+            .map(|member| member.entry.delay)
+            .unwrap_or(-1);
         if !needle.is_empty() && !name.to_lowercase().contains(&needle) {
             members.retain(|member| member.entry.name.to_lowercase().contains(&needle));
             if members.is_empty() {
                 continue;
             }
         }
-        let now = selected_policy(&client, &name).await.unwrap_or_default();
         let names: Vec<String> = members
             .iter()
             .map(|member| member.entry.name.clone())
@@ -70,6 +75,7 @@ pub async fn proxy_catalog(
             member_count: members.len().min(u32::MAX as usize) as u32,
             members_hash,
             now,
+            now_delay,
             test_url: String::new(),
             fixed: String::new(),
         });

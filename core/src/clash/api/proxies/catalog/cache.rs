@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use flutter_rust_bridge::frb;
 
@@ -32,6 +33,7 @@ pub(super) struct CachedCatalog {
     pub(super) nodes: Vec<Option<CachedNode>>,
     pub(super) groups: HashMap<String, CachedGroup>,
     pub(super) filter: String,
+    pub(super) provider_nodes_checked_at: Option<Instant>,
 }
 
 impl CachedCatalog {
@@ -90,6 +92,16 @@ pub(super) fn replace_catalog(target: &MihomoTarget, catalog: CachedCatalog) {
 
 pub(super) fn cached_filter(target: &MihomoTarget) -> Option<String> {
     with_catalog(target, |catalog| catalog.filter.clone())
+}
+
+pub(super) fn provider_nodes_checked_at(target: &MihomoTarget) -> Option<Instant> {
+    with_catalog(target, |catalog| catalog.provider_nodes_checked_at).flatten()
+}
+
+pub(super) fn mark_provider_nodes_checked(target: &MihomoTarget, checked_at: Instant) {
+    let _ = with_catalog(target, |catalog| {
+        catalog.provider_nodes_checked_at = Some(checked_at);
+    });
 }
 
 pub(super) fn has_catalog(target: &MihomoTarget) -> bool {
@@ -165,14 +177,22 @@ pub(super) fn merge_nodes(target: &MihomoTarget, incoming: HashMap<String, Cache
                     *slot = Some(node.clone());
                     changed = true;
                 }
-                Some(existing) if node.provider.is_some() && existing.provider != node.provider => {
-                    existing.provider = node.provider.clone();
-                    if existing.proxy_type == "Proxy" {
-                        existing.proxy_type.clone_from(&node.proxy_type);
+                Some(existing) => {
+                    let mut node_changed = false;
+                    if node.provider.is_some() && existing.provider != node.provider {
+                        existing.provider = node.provider.clone();
+                        node_changed = true;
                     }
-                    changed = true;
+                    if existing.proxy_type == "Proxy" && existing.proxy_type != node.proxy_type {
+                        existing.proxy_type.clone_from(&node.proxy_type);
+                        node_changed = true;
+                    }
+                    if existing.delay != node.delay {
+                        existing.delay = node.delay;
+                        node_changed = true;
+                    }
+                    changed |= node_changed;
                 }
-                _ => {}
             }
         }
         if changed {

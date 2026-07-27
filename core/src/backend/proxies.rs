@@ -93,16 +93,18 @@ pub async fn unfix_proxy(target: BackendTarget, name: String) -> Result<(), Miho
 pub async fn proxy_catalog(
     target: BackendTarget,
     include_hidden: bool,
+    resolve_provider_current_delay: bool,
     filter: String,
 ) -> Result<ProxyCatalog, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => {
-            Ok(
-                crate::clash::api::proxy_catalog(target.clash(), include_hidden, filter)
-                    .await?
-                    .into(),
-            )
-        }
+        BackendType::Clash => Ok(crate::clash::api::proxy_catalog(
+            target.clash(),
+            include_hidden,
+            resolve_provider_current_delay,
+            filter,
+        )
+        .await?
+        .into()),
         BackendType::Surge => {
             crate::surge::api::proxy_catalog(target.surge(), include_hidden, filter).await
         }

@@ -59,6 +59,9 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   void _syncProxyCatalogOptions() {
     widget.session.setProxyCatalogOptions(
       includeHidden: widget.prefs.proxiesShowHiddenGroups,
+      resolveProviderCurrentDelay:
+          widget.prefs.proxiesLayout == ProxiesLayout.cards &&
+          !widget.prefs.proxiesShowGroupIcons,
       memberSort: _memberSort(widget.prefs.proxiesSort),
     );
   }
@@ -717,11 +720,11 @@ class _ProxyCardsBody extends StatelessWidget {
             16,
             16 + MediaQuery.paddingOf(context).bottom,
           ),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 190,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            mainAxisExtent: 96,
+            mainAxisExtent: prefs.proxiesShowGroupIcons ? 96 : 90,
           ),
           itemCount: groups.length,
           itemBuilder: (context, index) {

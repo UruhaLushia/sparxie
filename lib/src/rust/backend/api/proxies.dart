@@ -53,10 +53,12 @@ Future<void> unfixProxy({
 Future<ProxyCatalog> proxyCatalog({
   required BackendTarget target,
   required bool includeHidden,
+  required bool resolveProviderCurrentDelay,
   required String filter,
 }) => RustLib.instance.api.crateBackendApiProxiesProxyCatalog(
   target: target,
   includeHidden: includeHidden,
+  resolveProviderCurrentDelay: resolveProviderCurrentDelay,
   filter: filter,
 );
 
