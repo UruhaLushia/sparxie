@@ -4,6 +4,7 @@
 # Usage:
 #   ./scripts/build-ios-ipa.sh
 #   OUTPUT_DIR=out ./scripts/build-ios-ipa.sh
+#   IOS_BUILD_NUMBER=123 ./scripts/build-ios-ipa.sh
 
 set -euo pipefail
 
@@ -13,6 +14,7 @@ PROJECT_ROOT="$(pwd)"
 : "${OUTPUT_DIR:=build/ios/ipa}"
 : "${IOS_RUST_TARGET:=aarch64-apple-ios}"
 : "${IPA_NAME:=sparxie-ios.ipa}"
+: "${IOS_BUILD_NUMBER:=$(awk -F+ '/^version:/ { print $2; exit }' pubspec.yaml)}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -47,7 +49,7 @@ echo ">>> Fetching Flutter dependencies"
 flutter pub get
 
 echo ">>> Building unsigned iOS app"
-flutter build ios --release --no-codesign
+flutter build ios --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
 
 APP_BUNDLE="$(find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | head -n1)"
 if [[ -z "$APP_BUNDLE" || ! -d "$APP_BUNDLE" ]]; then

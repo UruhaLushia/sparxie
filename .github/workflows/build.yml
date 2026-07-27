@@ -312,7 +312,7 @@ jobs:
 
       - name: iOS — unsigned IPA
         if: matrix.kind == 'ios'
-        run: OUTPUT_DIR=out ./scripts/build-ios-ipa.sh
+        run: OUTPUT_DIR=out IOS_BUILD_NUMBER=$GITHUB_RUN_NUMBER ./scripts/build-ios-ipa.sh
 
       - uses: actions/upload-artifact@v7
         with:
@@ -372,3 +372,99 @@ jobs:
           tag_name: pre-release
           prerelease: true
           files: release/*
+
+  publish-altstore-source:
+    name: publish AltStore source
+    if: always() && (needs.release.result == 'success' || needs.pre-release.result == 'success')
+    needs: [release, pre-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: altstore-source
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: ios
+          path: ${{ runner.temp }}/ios
+
+      - name: Generate and publish source
+        env:
+          IPA_PATH: ${{ runner.temp }}/ios/sparxie-ios.ipa
+          RELEASE_LABEL: ${{ github.event_name == 'workflow_dispatch' && '预发布版' || '正式版' }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && 'pre-release' || github.ref_name }}
+          SOURCE_BRANCH: altstore
+          SOURCE_FILE: ${{ github.event_name == 'workflow_dispatch' && 'pre-release.json' || 'release.json' }}
+          SOURCE_NAME: ${{ github.event_name == 'workflow_dispatch' && 'Sparxie Pre-release' || 'Sparxie' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_spec=$(awk '/^version:/ { print $2; exit }' pubspec.yaml)
+          version=${version_spec%%+*}
+          build=$GITHUB_RUN_NUMBER
+          size=$(stat --format=%s "$IPA_PATH")
+          released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          repository_url="https://github.com/$GITHUB_REPOSITORY"
+          icon_url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/assets/icon.jpg"
+          download_url="$repository_url/releases/download/$RELEASE_TAG/sparxie-ios.ipa"
+
+          if git ls-remote --exit-code --heads origin "$SOURCE_BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$SOURCE_BRANCH"
+            git switch --force-create "$SOURCE_BRANCH" FETCH_HEAD
+          else
+            git switch --orphan "$SOURCE_BRANCH"
+            git rm -rf --ignore-unmatch .
+          fi
+
+          jq -n \
+            --arg source_name "$SOURCE_NAME" \
+            --arg release_label "$RELEASE_LABEL" \
+            --arg website "$repository_url" \
+            --arg icon_url "$icon_url" \
+            --arg version "$version" \
+            --arg build "$build" \
+            --arg released_at "$released_at" \
+            --arg download_url "$download_url" \
+            --argjson size "$size" \
+            '{
+              name: $source_name,
+              subtitle: ("Sparxie " + $release_label),
+              iconURL: $icon_url,
+              website: $website,
+              tintColor: "#0A84FF",
+              apps: [{
+                name: "Sparxie",
+                bundleIdentifier: "zip.atri.sparxie",
+                developerName: "Sparxie",
+                subtitle: "跨平台代理控制器",
+                localizedDescription: "Flutter UI + Rust 后端的跨平台代理控制器。",
+                iconURL: $icon_url,
+                tintColor: "#0A84FF",
+                category: "utilities",
+                versions: [{
+                  version: $version,
+                  buildVersion: $build,
+                  date: $released_at,
+                  localizedDescription: $release_label,
+                  downloadURL: $download_url,
+                  size: $size,
+                  minOSVersion: "13.0"
+                }],
+                appPermissions: {
+                  entitlements: [],
+                  privacy: {}
+                }
+              }],
+              news: []
+            }' > "$SOURCE_FILE"
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$SOURCE_FILE"
+          if ! git diff --cached --quiet; then
+            git commit -m "Update $RELEASE_LABEL AltStore source"
+            git push origin "HEAD:$SOURCE_BRANCH"
+          fi

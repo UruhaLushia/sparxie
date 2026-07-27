@@ -2,6 +2,22 @@
 
 跨平台代理控制器。Flutter UI + Rust 后端，通过 flutter_rust_bridge 在进程内直连
 
+## 下载
+
+### 正式版
+
+<h1 align="left">
+<a href="https://stikstore.app/altdirect/?url=https://raw.githubusercontent.com/UruhaLushia/sparxie/altstore/release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
+<a href="https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
+</h1>
+
+### 预发布版
+
+<h1 align="left">
+<a href="https://stikstore.app/altdirect/?url=https://raw.githubusercontent.com/UruhaLushia/sparxie/altstore/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
+<a href="https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
+</h1>
+
 ## 支持的后端类型
 
 | 类型 | 应用 / 后端 | 支持内容 |
