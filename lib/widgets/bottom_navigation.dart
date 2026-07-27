@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -140,7 +141,7 @@ class FloatingBottomNavBar extends StatelessWidget {
         _horizontalInset,
         0,
         _horizontalInset,
-        10 + bottomPadding,
+        6 + bottomPadding,
       ),
       child: Center(
         heightFactor: 1,
@@ -316,26 +317,35 @@ class _PillNavBar extends StatefulWidget {
 }
 
 class _PillNavBarState extends State<_PillNavBar> {
-  static const double _indicatorInset = 4;
-  static const double _indicatorHeight = 52;
+  static const double _indicatorInset = 3;
+  static const double _indicatorExtraWidth = 12;
+  static const double _contentInset = _indicatorExtraWidth / 2;
+  static const double _indicatorHeight = 58;
 
   int? _dragIndex;
   double? _dragCenter;
 
   int _indexAt(double position, double width) {
-    final cellWidth = width / widget.destinationCount;
-    return (position / cellWidth)
+    final contentWidth = width - _contentInset * 2;
+    final cellWidth = contentWidth / widget.destinationCount;
+    return ((position - _contentInset) / cellWidth)
         .floor()
         .clamp(0, widget.destinationCount - 1)
         .toInt();
   }
 
   double _centerFor(int index, double width) =>
-      (index + 0.5) * width / widget.destinationCount;
+      _contentInset +
+      (index + 0.5) * (width - _contentInset * 2) / widget.destinationCount;
+
+  double _indicatorWidth(double width) {
+    final cellWidth = (width - _contentInset * 2) / widget.destinationCount;
+    return (cellWidth + _indicatorExtraWidth).clamp(0, width).toDouble();
+  }
 
   double _clampCenter(double position, double width) {
-    final halfCell = width / widget.destinationCount / 2;
-    return position.clamp(halfCell, width - halfCell).toDouble();
+    final halfWidth = _indicatorWidth(width) / 2;
+    return position.clamp(halfWidth, width - halfWidth).toDouble();
   }
 
   void _startDrag(Offset position, double width) {
@@ -357,9 +367,11 @@ class _PillNavBarState extends State<_PillNavBar> {
     if (changedIndex) unawaited(HapticFeedback.selectionClick());
   }
 
-  void _finishDrag(double position, double width) {
-    final index = _indexAt(position, width);
-    if (index != widget.selectedIndex) widget.onSelected(index);
+  void _finishDrag() {
+    final index = _dragIndex;
+    if (index != null && index != widget.selectedIndex) {
+      widget.onSelected(index);
+    }
     _resetDrag();
   }
 
@@ -370,22 +382,16 @@ class _PillNavBarState extends State<_PillNavBar> {
     });
   }
 
-  Widget _indicator(ColorScheme scheme, bool isDark) {
-    return FractionallySizedBox(
-      widthFactor: 1 / widget.destinationCount,
-      heightFactor: 1,
+  Widget _indicator(ColorScheme scheme, bool isDark, double width) {
+    return SizedBox(
+      width: width,
+      height: _indicatorHeight,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: _indicatorInset),
-        child: Center(
-          child: SizedBox(
-            height: _indicatorHeight,
-            width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _indicatorColor(scheme, isDark),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _indicatorColor(scheme, isDark),
+            borderRadius: BorderRadius.circular(999),
           ),
         ),
       ),
@@ -401,24 +407,29 @@ class _PillNavBarState extends State<_PillNavBar> {
       builder: (context, constraints) {
         final width = constraints.hasBoundedWidth
             ? constraints.maxWidth
-            : BottomNavBarItems._cellWidth * widget.destinationCount;
-        if (width <= 0) return const SizedBox.shrink();
-        final cellWidth = width / widget.destinationCount;
+            : BottomNavBarItems._cellWidth * widget.destinationCount +
+                  _contentInset * 2;
+        if (width <= _contentInset * 2) return const SizedBox.shrink();
+        final indicatorWidth = _indicatorWidth(width);
         final indicatorCenter =
-            _dragCenter ?? _centerFor(widget.selectedIndex, width);
+            _dragCenter ??
+            _clampCenter(_centerFor(widget.selectedIndex, width), width);
         final indicatorAlignment = widget.destinationCount == 1
             ? 0.0
-            : -1 + 2 * (indicatorCenter - cellWidth / 2) / (width - cellWidth);
+            : -1 +
+                  2 *
+                      (indicatorCenter - indicatorWidth / 2) /
+                      (width - indicatorWidth);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
-          onLongPressStart: (details) =>
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: (details) =>
               _startDrag(details.localPosition, width),
-          onLongPressMoveUpdate: (details) =>
+          onHorizontalDragUpdate: (details) =>
               _updateDrag(details.localPosition, width),
-          onLongPressEnd: (details) =>
-              _finishDrag(details.localPosition.dx, width),
-          onLongPressCancel: _resetDrag,
+          onHorizontalDragEnd: (_) => _finishDrag(),
+          onHorizontalDragCancel: _resetDrag,
           child: SizedBox(
             width: width,
             child: Stack(
@@ -429,13 +440,18 @@ class _PillNavBarState extends State<_PillNavBar> {
                         duration: const Duration(milliseconds: 220),
                         curve: Curves.easeOutCubic,
                         alignment: Alignment(indicatorAlignment, 0),
-                        child: _indicator(scheme, isDark),
+                        child: _indicator(scheme, isDark, indicatorWidth),
                       )
                     : Align(
                         alignment: Alignment(indicatorAlignment, 0),
-                        child: _indicator(scheme, isDark),
+                        child: _indicator(scheme, isDark, indicatorWidth),
                       ),
-                widget.child,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: _contentInset,
+                  ),
+                  child: widget.child,
+                ),
               ],
             ),
           ),
