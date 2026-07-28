@@ -362,13 +362,10 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                   horizontalPadding,
                   16 + MediaQuery.paddingOf(context).bottom,
                 ),
-                child: DecoratedBox(
+                child: Container(
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: scheme.outlineVariant.withValues(alpha: 0.72),
-                    ),
                     boxShadow: [
                       BoxShadow(
                         color: scheme.shadow.withValues(alpha: 0.06),
@@ -377,6 +374,12 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                         offset: const Offset(0, 6),
                       ),
                     ],
+                  ),
+                  foregroundDecoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.72),
+                    ),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(22),
