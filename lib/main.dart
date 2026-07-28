@@ -158,22 +158,93 @@ ThemeData _appTheme({
   required bool useAutomaticColors,
   required bool pureBlack,
 }) {
-  final generated = ColorScheme.fromSeed(
+  var scheme = ColorScheme.fromSeed(
     seedColor: seedColor,
     brightness: brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
   );
+  scheme = _applyThemeColorCoverage(
+    scheme,
+    seedColor,
+    preserveSeedPrimary: !useAutomaticColors,
+  );
+  if (pureBlack && brightness == Brightness.dark) {
+    scheme = _pureBlackScheme(scheme);
+  }
+  final base = ThemeData(
+    colorScheme: scheme,
+    useMaterial3: true,
+    scaffoldBackgroundColor: scheme.surface,
+    canvasColor: scheme.surface,
+    cardColor: scheme.surfaceContainerLow,
+    dividerColor: scheme.outlineVariant,
+    focusColor: scheme.primary.withValues(alpha: 0.12),
+    hoverColor: scheme.primary.withValues(alpha: 0.06),
+    highlightColor: scheme.primary.withValues(alpha: 0.08),
+    splashColor: scheme.primary.withValues(alpha: 0.1),
+  );
+  return _applyFontSet(base, userFonts);
+}
+
+ColorScheme _applyThemeColorCoverage(
+  ColorScheme scheme,
+  Color seedColor, {
+  required bool preserveSeedPrimary,
+}) {
+  final dark = scheme.brightness == Brightness.dark;
+  final neutral = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: scheme.brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+  );
+  Color tint(Color base, double lightOpacity, double darkOpacity) =>
+      Color.alphaBlend(
+        seedColor.withValues(alpha: dark ? darkOpacity : lightOpacity),
+        base,
+      );
   final onSeed =
       ThemeData.estimateBrightnessForColor(seedColor) == Brightness.dark
       ? Colors.white
       : Colors.black;
-  var scheme = useAutomaticColors
-      ? generated
-      : generated.copyWith(primary: seedColor, onPrimary: onSeed);
-  if (pureBlack && brightness == Brightness.dark) {
-    scheme = _pureBlackScheme(scheme);
-  }
-  final base = ThemeData(colorScheme: scheme, useMaterial3: true);
-  return _applyFontSet(base, userFonts);
+  final surface = dark ? neutral.surface : Colors.white;
+  final surfaceDim = dark ? tint(neutral.surfaceDim, 0, 0.015) : Colors.white;
+  final surfaceBright = dark ? neutral.surfaceBright : Colors.white;
+  final surfaceContainerLowest = dark
+      ? neutral.surfaceContainerLowest
+      : Colors.white;
+  final surfaceContainerLow = dark
+      ? tint(neutral.surfaceContainerLow, 0, 0.015)
+      : tint(Colors.white, 0.01, 0);
+  final surfaceContainer = dark
+      ? tint(neutral.surfaceContainer, 0, 0.025)
+      : tint(Colors.white, 0.025, 0);
+  final surfaceContainerHigh = dark
+      ? tint(neutral.surfaceContainerHigh, 0, 0.04)
+      : tint(Colors.white, 0.04, 0);
+  final surfaceContainerHighest = dark
+      ? tint(neutral.surfaceContainerHighest, 0, 0.055)
+      : tint(Colors.white, 0.06, 0);
+  return scheme.copyWith(
+    primary: preserveSeedPrimary ? seedColor : scheme.primary,
+    onPrimary: preserveSeedPrimary ? onSeed : scheme.onPrimary,
+    secondaryContainer: tint(scheme.secondaryContainer, 0.03, 0.05),
+    tertiaryContainer: tint(scheme.tertiaryContainer, 0.02, 0.03),
+    surface: surface,
+    onSurface: neutral.onSurface,
+    surfaceDim: surfaceDim,
+    surfaceBright: surfaceBright,
+    surfaceContainerLowest: surfaceContainerLowest,
+    surfaceContainerLow: surfaceContainerLow,
+    surfaceContainer: surfaceContainer,
+    surfaceContainerHigh: surfaceContainerHigh,
+    surfaceContainerHighest: surfaceContainerHighest,
+    onSurfaceVariant: neutral.onSurfaceVariant,
+    outline: tint(neutral.outline, 0.03, 0.03),
+    outlineVariant: tint(neutral.outlineVariant, 0.06, 0.045),
+    inverseSurface: neutral.inverseSurface,
+    onInverseSurface: neutral.onInverseSurface,
+    surfaceTint: seedColor,
+  );
 }
 
 ColorScheme _pureBlackScheme(ColorScheme scheme) => scheme.copyWith(

@@ -72,25 +72,39 @@ class CompactControlStyle {
   }) {
     final dark = brightness == Brightness.dark;
     final effectiveSelectedSeed = selectedSeedColor ?? seedColor;
+    final neutral = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+    );
     final onSeed =
         ThemeData.estimateBrightnessForColor(effectiveSelectedSeed) ==
             Brightness.dark
         ? Colors.white
         : Colors.black;
-    final background = Color.alphaBlend(
-      seedColor.withValues(alpha: dark ? 0.16 : 0.1),
-      dark ? const Color(0xff211f26) : const Color(0xfff3f1f8),
-    );
+    final background = dark
+        ? Color.alphaBlend(
+            seedColor.withValues(alpha: 0.1),
+            neutral.surfaceContainerHigh,
+          )
+        : Color.alphaBlend(
+            seedColor.withValues(alpha: 0.07),
+            const Color(0xfff7fafc),
+          );
     final radius = BorderRadius.all(Radius.circular(borderRadius));
     final switchHeight = (controlHeight * 0.6).clamp(20.0, 28.0);
     return CompactControlStyle(
       backgroundColor: background,
       selectedBackgroundColor: effectiveSelectedSeed,
+      foregroundColor: neutral.onSurface,
       selectedForegroundColor: onSeed,
+      hoverColor: seedColor.withValues(alpha: dark ? 0.12 : 0.08),
+      pressedColor: seedColor.withValues(alpha: dark ? 0.18 : 0.12),
       focusColor: effectiveSelectedSeed,
       switchActiveTrackColor: effectiveSelectedSeed,
       switchActiveThumbColor: onSeed,
       switchInactiveTrackColor: background,
+      switchInactiveThumbColor: neutral.surface,
       switchOutlineColor: seedColor.withValues(alpha: 0.55),
       borderRadius: radius,
       indicatorBorderRadius: BorderRadius.all(
