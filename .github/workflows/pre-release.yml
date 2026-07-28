@@ -28,7 +28,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
 
       - name: Delete current release assets
         uses: 8Mi-Tech/delete-release-assets-action@main

@@ -85,7 +85,7 @@ jobs:
       - name: Fetch Flutter deps
         run: flutter pub get
 
-      - name: Build macOS bundle
+      - name: Build macOS DMG
         if: matrix.kind == 'macos'
         run: |
           (cd core && cargo build --release --target ${{ matrix.rust_target }})
@@ -96,8 +96,21 @@ jobs:
             "$APP"
           test -x "$APP/Contents/Frameworks/sparxie.framework/sparxie"
           codesign --verify --deep --strict --verbose=4 "$APP"
+
           mkdir -p out
-          ditto -c -k --sequesterRsrc --keepParent "$APP" out/sparxie-macos-${{ matrix.arch }}.zip
+          DMG_ROOT="$RUNNER_TEMP/sparxie-dmg"
+          DMG_PATH="out/sparxie-macos-${{ matrix.arch }}.dmg"
+          rm -rf "$DMG_ROOT"
+          mkdir -p "$DMG_ROOT"
+          ditto "$APP" "$DMG_ROOT/$(basename "$APP")"
+          ln -s /Applications "$DMG_ROOT/Applications"
+          hdiutil create \
+            -volname Sparxie \
+            -srcfolder "$DMG_ROOT" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+          hdiutil verify "$DMG_PATH"
 
       - name: Build unsigned IPA
         if: matrix.kind == 'ios'
