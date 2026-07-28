@@ -433,6 +433,7 @@ Future<void> showProxyGroupCardDetail(
   return Navigator.of(context).push(
     PageRouteBuilder<void>(
       opaque: false,
+      allowSnapshotting: false,
       barrierDismissible: true,
       barrierLabel: '关闭',
       barrierColor: Colors.black.withValues(alpha: 0.45),
@@ -662,13 +663,29 @@ class _FlightSnapshot extends StatefulWidget {
   State<_FlightSnapshot> createState() => _FlightSnapshotState();
 }
 
-class _FlightSnapshotState extends State<_FlightSnapshot> {
-  final SnapshotController _controller = SnapshotController(
-    allowSnapshotting: true,
-  );
+class _FlightSnapshotState extends State<_FlightSnapshot>
+    with WidgetsBindingObserver {
+  late final SnapshotController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _controller = SnapshotController(
+      allowSnapshotting:
+          lifecycleState == null || lifecycleState == AppLifecycleState.resumed,
+    );
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _controller.allowSnapshotting = state == AppLifecycleState.resumed;
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

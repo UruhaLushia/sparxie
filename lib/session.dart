@@ -354,7 +354,11 @@ class MihomoSession {
   /// out of that limbo.
   void reconnect() {
     if (_target == null) return;
-    _resubscribeAll();
+    // Resuming is not a controller switch. Keep UI caches and notifier
+    // identities alive so open routes remain valid while streams reconnect.
+    _cancelAll();
+    isStreaming.value = false;
+    _startLiveUpdates();
   }
 
   void _onStoreChange() {
@@ -421,13 +425,18 @@ class MihomoSession {
       return;
     }
     _clearError();
+    _startLiveUpdates();
+    // Version is build-time fixed; one probe per controller switch is enough.
+    unawaited(_probeVersion());
+    unawaited(_probeRuleCount());
+  }
+
+  void _startLiveUpdates() {
     _subscribeTraffic();
     _subscribeConnections();
     _subscribeLogs();
     _startProxiesPoll();
-    // Version is build-time fixed; one probe per controller switch is enough.
-    unawaited(_probeVersion());
-    unawaited(_probeRuleCount());
+    if (supportsMemory.value) _subscribeMemory();
   }
 
   void _cancelAll() {
