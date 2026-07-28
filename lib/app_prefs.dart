@@ -187,11 +187,11 @@ class AppPrefs extends ChangeNotifier {
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
   static const defaultAllowInsecureOnlineResources = false;
-  static const defaultGlobalThemeColor = 0xff2563eb;
+  static const defaultGlobalThemeColor = 0xff66ccff;
   static const defaultAutomaticColor = false;
   static const defaultPureBlackMode = false;
   static const defaultAppThemeMode = AppThemeMode.system;
-  static const defaultCompactThemeColor = 0xff2563eb;
+  static const defaultCompactThemeColor = 0xff66ccff;
   static const defaultCompactBorderRadius = 12.0;
   static const defaultCompactControlHeight = 40.0;
   static const defaultCompactWidthScale = 1.0;

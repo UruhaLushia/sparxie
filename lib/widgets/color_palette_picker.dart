@@ -22,7 +22,7 @@ class _ColorPaletteDialog extends StatefulWidget {
 
 class _ColorPaletteDialogState extends State<_ColorPaletteDialog> {
   static const _presets = [
-    Color(0xff2563eb),
+    Color(0xff66ccff),
     Color(0xff7c3aed),
     Color(0xffdb2777),
     Color(0xffdc2626),
