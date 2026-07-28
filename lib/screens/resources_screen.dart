@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/section_panel.dart';
 
 class ResourcesScreen extends StatefulWidget {
@@ -64,7 +65,10 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     );
     if (widget.compact) return body;
     return Scaffold(
-      appBar: AppBar(title: const Text('外部资源')),
+      appBar: AppBar(
+        title: const Text('外部资源'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: body,
     );
   }

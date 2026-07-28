@@ -7,6 +7,7 @@ import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/proxies_settings_menu.dart';
 import '../widgets/proxy_group_card.dart';
 import '../widgets/proxy_group_header.dart';
@@ -270,6 +271,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('代理组'),
+        flexibleSpace: const DesktopAppBarDragArea(),
         actions: [
           IconButton(
             tooltip: '刷新',

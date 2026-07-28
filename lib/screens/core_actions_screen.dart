@@ -4,6 +4,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/section_panel.dart';
 
 /// Standalone page for one-shot backend core actions: reload / restart /
@@ -88,7 +89,10 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('核心操作')),
+      appBar: AppBar(
+        title: const Text('核心操作'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListenableBuilder(

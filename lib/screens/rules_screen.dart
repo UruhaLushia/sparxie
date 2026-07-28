@@ -6,6 +6,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
 
 /// Read-only view of the active backend's routing rules.
 ///
@@ -279,6 +280,7 @@ class _RulesScreenState extends State<RulesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('分流规则'),
+        flexibleSpace: const DesktopAppBarDragArea(),
         actions: [
           IconButton(
             tooltip: '刷新',

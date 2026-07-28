@@ -12,6 +12,7 @@ import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
 import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
@@ -165,7 +166,7 @@ class SettingsScreen extends StatelessWidget {
               final horizontal = constraints.maxWidth > maxContentWidth
                   ? (constraints.maxWidth - maxContentWidth) / 2
                   : 0.0;
-              return CustomScrollView(
+              final content = CustomScrollView(
                 slivers: [
                   if (compact)
                     const SliverAppBar.large(pinned: true, title: Text('更多'))
@@ -212,6 +213,19 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                ],
+              );
+              if (!compact) return content;
+              return Stack(
+                children: [
+                  content,
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: kToolbarHeight,
+                    child: DesktopAppBarDragArea(),
                   ),
                 ],
               );
@@ -358,7 +372,10 @@ class BackendSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('后端设置')),
+      appBar: AppBar(
+        title: const Text('后端设置'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -392,7 +409,10 @@ class AppSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('应用设置')),
+      appBar: AppBar(
+        title: const Text('应用设置'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(

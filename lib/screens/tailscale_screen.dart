@@ -9,6 +9,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/section_panel.dart';
 
 class TailscaleScreen extends StatefulWidget {
@@ -198,7 +199,10 @@ class _TailscaleScreenState extends State<TailscaleScreen> {
   Widget build(BuildContext context) {
     final status = _status;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tailscale')),
+      appBar: AppBar(
+        title: const Text('Tailscale'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(

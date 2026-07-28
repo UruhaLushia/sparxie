@@ -7,6 +7,7 @@ import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
 
 /// Renders the buffer owned by `MihomoSession` (`session.logs`). The
 /// WebSocket is opened on controller connect — independent of this widget's
@@ -135,6 +136,7 @@ class _LogsScreenState extends State<LogsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('日志'),
+        flexibleSpace: const DesktopAppBarDragArea(),
         actions: [
           ValueListenableBuilder<bool>(
             valueListenable: logs.paused,

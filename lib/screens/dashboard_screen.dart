@@ -4,6 +4,7 @@ import '../controller.dart' as ctl;
 import '../session.dart';
 import '../utils.dart';
 import '../widgets/backend_switcher.dart';
+import '../widgets/desktop_title_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -106,6 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: scheme.surfaceContainerLowest,
         scrolledUnderElevation: 0,
+        flexibleSpace: const DesktopAppBarDragArea(),
         title: Row(
           children: [
             Flexible(

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
+import '../platform_capabilities.dart';
 import '../widgets/color_palette_picker.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
 import '../widgets/section_panel.dart';
 
 /// Global theme and per-component appearance settings.
@@ -15,7 +17,10 @@ class ThemeSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('主题设置')),
+      appBar: AppBar(
+        title: const Text('主题设置'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: ListenableBuilder(
         listenable: prefs,
         builder: (context, _) {
@@ -61,6 +66,40 @@ class ThemeSettingsScreen extends StatelessWidget {
                       onSelectionChanged: (selection) =>
                           prefs.setAppThemeMode(selection.first),
                     ),
+                    if (supportsCustomTitleBar) ...[
+                      const Divider(height: 24),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '窗口标题栏',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      CompactSegmentedButton<DesktopTitleBarMode>(
+                        expanded: true,
+                        segments: const [
+                          ButtonSegment(
+                            value: DesktopTitleBarMode.system,
+                            label: Text('系统'),
+                            icon: Icon(Icons.web_asset_outlined),
+                          ),
+                          ButtonSegment(
+                            value: DesktopTitleBarMode.custom,
+                            label: Text('自绘'),
+                            icon: Icon(Icons.dashboard_customize_outlined),
+                          ),
+                          ButtonSegment(
+                            value: DesktopTitleBarMode.hidden,
+                            label: Text('完全隐藏'),
+                            icon: Icon(Icons.visibility_off_outlined),
+                          ),
+                        ],
+                        selected: {prefs.desktopTitleBarMode},
+                        onSelectionChanged: (selection) =>
+                            prefs.setDesktopTitleBarMode(selection.first),
+                      ),
+                    ],
                     const Divider(height: 24),
                     CompactSwitch.tile(
                       contentPadding: EdgeInsets.zero,
@@ -295,6 +334,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
       backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
         title: Text('${widget.kind.label}样式'),
+        flexibleSpace: const DesktopAppBarDragArea(),
         actions: [
           TextButton(onPressed: _reset, child: const Text('重置')),
           const SizedBox(width: 8),

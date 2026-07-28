@@ -33,6 +33,7 @@ import 'system_accent_color.dart';
 import 'utils.dart';
 import 'widgets/bottom_navigation.dart';
 import 'widgets/compact_controls.dart';
+import 'widgets/desktop_title_bar.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'window_state.dart';
 
@@ -41,11 +42,14 @@ Future<void> main() async {
   _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.
   final config = await JsonStore.load();
+  final prefs = await AppPrefs.load(config);
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
-  await WindowState.bind(config);
+  final windowState = await WindowState.bind(
+    config,
+    titleBarHidden: prefs.desktopTitleBarMode != DesktopTitleBarMode.system,
+  );
   await _initRust();
-  final prefs = await AppPrefs.load(config);
   final systemAccentColor = await SystemAccentColor.load(
     enabled: prefs.automaticColor,
   );
@@ -67,9 +71,19 @@ Future<void> main() async {
   final session = MihomoSession(store)
     ..setConnectionsInterval(prefs.connectionsRefreshMs);
   var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
+  var titleBarMode = prefs.desktopTitleBarMode;
   prefs.addListener(() {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
     systemAccentColor.setEnabled(prefs.automaticColor);
+    final nextTitleBarMode = prefs.desktopTitleBarMode;
+    if (nextTitleBarMode != titleBarMode) {
+      titleBarMode = nextTitleBarMode;
+      unawaited(
+        windowState?.setTitleBarHidden(
+          nextTitleBarMode != DesktopTitleBarMode.system,
+        ),
+      );
+    }
     final next = prefs.allowInsecureOnlineResources;
     if (next != allowInsecureOnlineResources) {
       allowInsecureOnlineResources = next;
@@ -414,13 +428,19 @@ class MihomoControllerApp extends StatelessWidget {
               );
             }
 
-            return CompactControlTheme(
-              buttonStyle: styleFor(CompactControlKind.button),
-              searchStyle: styleFor(CompactControlKind.search),
-              segmentedStyle: styleFor(CompactControlKind.segmented),
-              switchStyle: styleFor(CompactControlKind.toggle),
-              navigationBarStyle: styleFor(CompactControlKind.navigationBar),
-              child: _SystemBarStyle(child: child ?? const SizedBox.shrink()),
+            return DesktopTitleBarFrame(
+              showTitleBar:
+                  prefs.desktopTitleBarMode == DesktopTitleBarMode.custom,
+              enableContentDragging:
+                  prefs.desktopTitleBarMode != DesktopTitleBarMode.system,
+              child: CompactControlTheme(
+                buttonStyle: styleFor(CompactControlKind.button),
+                searchStyle: styleFor(CompactControlKind.search),
+                segmentedStyle: styleFor(CompactControlKind.segmented),
+                switchStyle: styleFor(CompactControlKind.toggle),
+                navigationBarStyle: styleFor(CompactControlKind.navigationBar),
+                child: _SystemBarStyle(child: child ?? const SizedBox.shrink()),
+              ),
             );
           },
           home: HomeShell(store: store, prefs: prefs, session: session),

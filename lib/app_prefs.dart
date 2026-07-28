@@ -37,6 +37,8 @@ enum CompactControlKind { navigationBar, button, search, segmented, toggle }
 
 enum AppThemeMode { system, light, dark }
 
+enum DesktopTitleBarMode { system, custom, hidden }
+
 /// How the proxies screen renders groups: the classic pinned-header list or
 /// Surge-style gradient cards that expand into an overlay.
 enum ProxiesLayout { list, cards }
@@ -158,6 +160,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kAutomaticColor = 'automaticColor';
   static const _kPureBlackMode = 'pureBlackMode';
   static const _kAppThemeMode = 'appThemeMode';
+  static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -191,6 +194,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultAutomaticColor = false;
   static const defaultPureBlackMode = false;
   static const defaultAppThemeMode = AppThemeMode.system;
+  static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
   static const defaultCompactThemeColor = 0xff66ccff;
   static const defaultCompactBorderRadius = 12.0;
   static const defaultCompactControlHeight = 40.0;
@@ -541,6 +545,15 @@ class AppPrefs extends ChangeNotifier {
     _put(_kAppThemeMode, value.name);
   }
 
+  DesktopTitleBarMode get desktopTitleBarMode => _decodeDesktopTitleBarMode(
+    _str(_kDesktopTitleBarMode, defaultDesktopTitleBarMode.name),
+  );
+
+  Future<void> setDesktopTitleBarMode(DesktopTitleBarMode value) async {
+    if (value == desktopTitleBarMode) return;
+    _put(_kDesktopTitleBarMode, value.name);
+  }
+
   String _compactKey(CompactControlKind kind, String property) =>
       'compact.${kind.name}.$property';
 
@@ -760,6 +773,13 @@ class AppPrefs extends ChangeNotifier {
       if (value.name == raw) return value;
     }
     return defaultAppThemeMode;
+  }
+
+  static DesktopTitleBarMode _decodeDesktopTitleBarMode(String? raw) {
+    for (final value in DesktopTitleBarMode.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultDesktopTitleBarMode;
   }
 
   static ProxiesLayout _decodeProxiesLayout(String? raw) {

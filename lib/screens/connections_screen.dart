@@ -14,6 +14,7 @@ import '../widgets/connection_group_header.dart';
 import '../widgets/connection_tile.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/connections_settings_menu.dart';
+import '../widgets/desktop_title_bar.dart';
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -293,6 +294,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const DesktopAppBarDragArea(),
         title: Row(
           children: [
             const Text('连接'),

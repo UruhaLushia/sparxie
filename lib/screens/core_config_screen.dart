@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../widgets/basic_config_panel.dart';
+import '../widgets/desktop_title_bar.dart';
 
 class CoreConfigScreen extends StatelessWidget {
   const CoreConfigScreen({super.key, required this.store, this.prefs});
@@ -18,7 +19,10 @@ class CoreConfigScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final hideMode = prefs?.navLayout == NavLayout.cards;
     return Scaffold(
-      appBar: AppBar(title: const Text('核心配置')),
+      appBar: AppBar(
+        title: const Text('核心配置'),
+        flexibleSpace: const DesktopAppBarDragArea(),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(
