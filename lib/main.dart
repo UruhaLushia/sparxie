@@ -328,7 +328,7 @@ class MihomoControllerApp extends StatelessWidget {
                 );
               }
               return CompactControlStyle.fromSeed(
-                seedColor: Color(prefs.compactThemeColor(kind)),
+                seedColor: Color(prefs.effectiveCompactThemeColor(kind)),
                 selectedSeedColor: navigationBar
                     ? Color(prefs.navigationInnerThemeColor)
                     : null,

@@ -560,6 +560,29 @@ class AppPrefs extends ChangeNotifier {
     _int(_compactKey(kind, 'color'), defaultCompactThemeColor),
   );
 
+  bool compactColorFollowsGlobal(CompactControlKind kind) {
+    final key = _compactStyleKey(kind, 'followGlobalColor');
+    final legacyKey = _compactKey(kind, 'followGlobalColor');
+    final hasCustomColor =
+        _s.containsKey(_compactStyleKey(kind, 'color')) ||
+        _s.containsKey(_compactKey(kind, 'color'));
+    return _bool(key, _bool(legacyKey, !hasCustomColor));
+  }
+
+  int effectiveCompactThemeColor(CompactControlKind kind) =>
+      compactColorFollowsGlobal(kind)
+      ? globalThemeColor
+      : compactThemeColor(kind);
+
+  Future<void> setCompactColorFollowsGlobal(
+    CompactControlKind kind,
+    bool value,
+  ) async {
+    final key = _compactStyleKey(kind, 'followGlobalColor');
+    if (_s[key] == value) return;
+    _put(key, value);
+  }
+
   Future<void> setCompactThemeColor(CompactControlKind kind, int value) async {
     final key = _compactStyleKey(kind, 'color');
     if (_s[key] == value) return;
@@ -617,7 +640,7 @@ class AppPrefs extends ChangeNotifier {
     _navigationInnerKey('color'),
     _int(
       _compactKey(CompactControlKind.navigationBar, 'innerColor'),
-      compactThemeColor(CompactControlKind.navigationBar),
+      effectiveCompactThemeColor(CompactControlKind.navigationBar),
     ),
   );
 
@@ -703,6 +726,7 @@ class AppPrefs extends ChangeNotifier {
       'innerBorderRadius',
       'innerHeight',
       'innerWidthScale',
+      'followGlobalColor',
     ]) {
       _s.remove(_compactKey(kind, property));
     }
@@ -713,6 +737,7 @@ class AppPrefs extends ChangeNotifier {
         'height',
         'widthScale',
         'heightOffset',
+        'followGlobalColor',
       ]) {
         _s.remove(_navigationInnerKey(property));
         _s.remove(_compactStyleKey(kind, property));

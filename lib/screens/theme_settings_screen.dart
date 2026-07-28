@@ -141,9 +141,14 @@ class ThemeSettingsScreen extends StatelessWidget {
                       _ComponentTile(
                         kind: CompactControlKind.values[i],
                         color: Color(
-                          prefs.compactThemeColor(CompactControlKind.values[i]),
+                          prefs.effectiveCompactThemeColor(
+                            CompactControlKind.values[i],
+                          ),
                         ),
                         colorEnabled: !automaticColor,
+                        followsGlobal: prefs.compactColorFollowsGlobal(
+                          CompactControlKind.values[i],
+                        ),
                         onTap: () => Navigator.push<void>(
                           context,
                           MaterialPageRoute(
@@ -195,6 +200,7 @@ class ComponentStyleScreen extends StatefulWidget {
 
 class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   late Color _color;
+  late bool _followGlobalColor;
   late double _radius;
   late double _height;
   late double _widthScale;
@@ -218,6 +224,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
 
   void _load() {
     _color = Color(widget.prefs.compactThemeColor(widget.kind));
+    _followGlobalColor = widget.prefs.compactColorFollowsGlobal(widget.kind);
     _radius = widget.prefs.compactBorderRadius(widget.kind);
     _height = widget.prefs.compactControlHeight(widget.kind);
     _widthScale = widget.prefs.compactWidthScale(widget.kind);
@@ -239,6 +246,9 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   CompactControlStyle _style(BuildContext context) {
     final automaticColor = widget.prefs.automaticColor;
     final navigationBar = widget.kind == CompactControlKind.navigationBar;
+    final outerColor = _followGlobalColor
+        ? Color(widget.prefs.globalThemeColor)
+        : _color;
     if (automaticColor) {
       return CompactControlStyle.fromColorScheme(
         colorScheme: Theme.of(context).colorScheme,
@@ -252,8 +262,12 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
       );
     }
     return CompactControlStyle.fromSeed(
-      seedColor: _color,
-      selectedSeedColor: navigationBar ? _innerColor : null,
+      seedColor: outerColor,
+      selectedSeedColor: navigationBar
+          ? _innerColorFollowsOuter
+                ? outerColor
+                : _innerColor
+          : null,
       brightness: Theme.of(context).brightness,
       borderRadius: _radius,
       controlHeight: _height,
@@ -439,10 +453,33 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                       icon: Icons.crop_square_rounded,
                                       label: '外层',
                                     ),
+                                  CompactSwitch.tile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('跟随全局主题色'),
+                                    value: _followGlobalColor,
+                                    onChanged: automaticColor
+                                        ? null
+                                        : (value) {
+                                            setState(
+                                              () => _followGlobalColor = value,
+                                            );
+                                            widget.prefs
+                                                .setCompactColorFollowsGlobal(
+                                                  widget.kind,
+                                                  value,
+                                                );
+                                          },
+                                  ),
                                   _ColorTile(
                                     title: navigationBar ? '外层颜色' : '组件颜色',
-                                    color: _color,
-                                    enabled: !automaticColor,
+                                    color: _followGlobalColor
+                                        ? Color(widget.prefs.globalThemeColor)
+                                        : _color,
+                                    enabled:
+                                        !automaticColor && !_followGlobalColor,
+                                    disabledLabel: automaticColor
+                                        ? '由自动取色控制'
+                                        : '跟随全局主题色',
                                     onTap: () => _pickColor(context),
                                   ),
                                   if (automaticColor)
@@ -856,12 +893,14 @@ class _ColorTile extends StatelessWidget {
     required this.color,
     required this.enabled,
     required this.onTap,
+    this.disabledLabel = '由自动取色控制',
   });
 
   final String title;
   final Color color;
   final bool enabled;
   final VoidCallback onTap;
+  final String disabledLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -893,7 +932,7 @@ class _ColorTile extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          enabled ? '#${_hex(color)}' : '由自动取色控制',
+                          enabled ? '#${_hex(color)}' : disabledLabel,
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: scheme.onSurfaceVariant,
                             fontFeatures: const [FontFeature.tabularFigures()],
@@ -935,12 +974,14 @@ class _ComponentTile extends StatelessWidget {
     required this.kind,
     required this.color,
     required this.colorEnabled,
+    required this.followsGlobal,
     required this.onTap,
   });
 
   final CompactControlKind kind;
   final Color color;
   final bool colorEnabled;
+  final bool followsGlobal;
   final VoidCallback onTap;
 
   @override
@@ -949,7 +990,13 @@ class _ComponentTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Icon(kind.icon),
       title: Text(kind.label),
-      subtitle: Text(colorEnabled ? '#${_hex(color)}' : '自动取色'),
+      subtitle: Text(
+        !colorEnabled
+            ? '自动取色'
+            : followsGlobal
+            ? '跟随全局'
+            : '#${_hex(color)}',
+      ),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
