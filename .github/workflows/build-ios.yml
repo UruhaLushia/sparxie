@@ -1,0 +1,54 @@
+name: Build iOS
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: stable
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Cache pub
+        uses: actions/cache@v5
+        with:
+          path: .dart_tool
+          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            dart-tool-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Build unsigned IPA
+        run: OUTPUT_DIR=out IOS_BUILD_NUMBER=$GITHUB_RUN_NUMBER ./scripts/build-ios-ipa.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios
+          path: out/*
+          if-no-files-found: error

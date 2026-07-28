@@ -1,0 +1,48 @@
+name: Verify Generated Bindings
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: stable
+  FRB_VERSION: '2.12.0'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Install frb_codegen
+        run: cargo install --locked flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+
+      - name: Regenerate FFI bindings
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Format generated bindings
+        run: |
+          cargo fmt --manifest-path core/Cargo.toml
+          dart format lib/src/rust
+
+      - name: Check generated bindings are committed
+        run: git diff --exit-code -- core/src/frb_generated.rs lib/src/rust

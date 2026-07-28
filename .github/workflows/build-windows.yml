@@ -1,0 +1,98 @@
+name: Build Windows
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: stable
+
+jobs:
+  build:
+    name: windows-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x86_64
+            flutter_channel: stable
+            rust_target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            arch: arm64
+            flutter_channel: master
+            rust_target: aarch64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ matrix.flutter_channel }}
+          cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.rust_target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Cache pub
+        uses: actions/cache@v5
+        with:
+          path: .dart_tool
+          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            dart-tool-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Build bundle and portable archive
+        shell: bash
+        run: |
+          (cd core && cargo build --release)
+          flutter build windows --release
+          BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
+          cp core/target/release/sparxie.dll "$BUNDLE/"
+          mkdir -p out
+          ZIP="$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip"
+          (cd "$BUNDLE" && 7z a "$ZIP" .)
+          : > .portable
+          7z a "$ZIP" .portable
+          rm -f .portable
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $raw     = (Get-Content pubspec.yaml | Select-String '^version:').Line
+          $version = ($raw -split ':\s+')[1] -split '\+' | Select-Object -First 1
+          $bundle  = (Get-ChildItem build\windows\*\runner\Release -Directory | Select-Object -First 1).FullName
+          $issArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'arm64' } else { 'x64compatible' }
+          & $iscc `
+              /DMyAppVersion="$version" `
+              /DMyAppBundleDir="$bundle" `
+              /DMyAppArch="$issArch" `
+              "/DMyAppOutputDir=$env:GITHUB_WORKSPACE\out" `
+              /DMyAppOutputFilename="sparxie-windows-${{ matrix.arch }}-setup" `
+              windows\installer.iss
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-${{ matrix.arch }}
+          path: out/*
+          if-no-files-found: error

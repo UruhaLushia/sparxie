@@ -1,0 +1,131 @@
+name: Build macOS
+
+on:
+  workflow_call:
+    inputs:
+      include_intel:
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      include_intel:
+        description: Build the Intel x86_64 artifact
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: stable
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - id: matrix
+        env:
+          INCLUDE_INTEL: ${{ inputs.include_intel }}
+        shell: bash
+        run: |
+          value='[
+            {"os":"macos-26","label":"macos-arm64","arch":"arm64","rust_target":"aarch64-apple-darwin"}
+          ]'
+          if [[ "$GITHUB_REF" == refs/tags/v* || "$INCLUDE_INTEL" == true ]]; then
+            value=$(jq -c '. + [{"os":"macos-26-intel","label":"macos-x86_64","arch":"x86_64","rust_target":"x86_64-apple-darwin"}]' <<<"$value")
+          fi
+          echo "value=$(jq -c . <<<"$value")" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.label }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.rust_target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Cache pub
+        uses: actions/cache@v5
+        with:
+          path: .dart_tool
+          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            dart-tool-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache CocoaPods
+        if: matrix.arch == 'x86_64'
+        uses: actions/cache@v5
+        with:
+          path: macos/Pods
+          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache Xcode DerivedData
+        if: matrix.arch == 'x86_64'
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: xcode-dd-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', 'macos/Podfile') }}
+          restore-keys: |
+            xcode-dd-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Fetch Flutter deps
+        run: flutter pub get
+
+      - name: Build DMG
+        run: |
+          (cd core && cargo build --release --target ${{ matrix.rust_target }})
+          flutter build macos --release
+          APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
+          ./scripts/package-macos-rust-framework.sh \
+            core/target/${{ matrix.rust_target }}/release/libsparxie.dylib \
+            "$APP"
+          test -x "$APP/Contents/Frameworks/sparxie.framework/sparxie"
+          codesign --verify --deep --strict --verbose=4 "$APP"
+
+          mkdir -p out
+          DMG_ROOT="$RUNNER_TEMP/sparxie-dmg"
+          DMG_PATH="out/sparxie-macos-${{ matrix.arch }}.dmg"
+          rm -rf "$DMG_ROOT"
+          mkdir -p "$DMG_ROOT"
+          ditto "$APP" "$DMG_ROOT/$(basename "$APP")"
+          ln -s /Applications "$DMG_ROOT/Applications"
+          hdiutil create \
+            -volname Sparxie \
+            -srcfolder "$DMG_ROOT" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+          hdiutil verify "$DMG_PATH"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.label }}
+          path: out/*
+          if-no-files-found: error
