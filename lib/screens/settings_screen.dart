@@ -11,6 +11,7 @@ import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/compact_controls.dart';
 import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
@@ -18,8 +19,9 @@ import 'diagnostics_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
 import 'tailscale_screen.dart';
+import 'theme_settings_screen.dart';
 
-/// "其他" — aggregator page that lists every settings/config destination
+/// "更多" — aggregator page that lists every settings/config destination
 /// as a tile. Each tile pushes a dedicated screen.
 ///
 /// [extras] are navigation destinations that overflowed the standard-layout
@@ -29,7 +31,7 @@ import 'tailscale_screen.dart';
 /// [railManagesPages] is true in wide standard layout, where 核心配置 /
 /// 外部资源 / 核心操作 / 分流规则 can be rail destinations (or [extras] when they
 /// overflow) — so their static tiles are suppressed here to avoid a second
-/// path to the same page. 后端设置 / 应用设置 always live here.
+/// path to the same page. 后端设置 / 主题设置 / 应用设置 always live here.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
@@ -78,26 +80,9 @@ class SettingsScreen extends StatelessWidget {
         final showResources =
             showCoreResources && session.supportsExternalResources.value;
 
-        // Overflow rail items lead the list, then the settings tiles — one
-        // flat section, no separate 导航 grouping.
-        final tiles = <Widget>[
+        final pageTiles = <Widget>[
           for (final e in extras)
             _Tile(icon: e.icon, title: e.label, onTap: e.onTap),
-          _Tile(
-            icon: Icons.dns_outlined,
-            title: '后端设置',
-            subtitle: '管理后端实例',
-            onTap: () => _push(context, BackendSettingsScreen(store: store)),
-          ),
-          _Tile(
-            icon: Icons.app_settings_alt_outlined,
-            title: '应用设置',
-            subtitle: '导航布局等',
-            onTap: () => _push(
-              context,
-              AppSettingsScreen(prefs: prefs, session: session),
-            ),
-          ),
           if (showCore)
             _Tile(
               icon: Icons.memory_outlined,
@@ -106,11 +91,13 @@ class SettingsScreen extends StatelessWidget {
               onTap: () =>
                   _push(context, CoreConfigScreen(store: store, prefs: prefs)),
             ),
+        ];
+        final toolTiles = <Widget>[
           if (showCoreActions)
             _Tile(
               icon: Icons.build_outlined,
               title: '核心操作',
-              subtitle: '重载 / 重启 / 升级、清空缓存',
+              subtitle: '重载、重启、升级与缓存维护',
               onTap: () => _push(
                 context,
                 CoreActionsScreen(store: store, session: session),
@@ -118,63 +105,117 @@ class SettingsScreen extends StatelessWidget {
             ),
           if (showRules)
             _Tile(
-              icon: Icons.rule,
+              icon: Icons.rule_outlined,
               title: '分流规则',
               subtitle: '查看与筛选当前规则',
               onTap: () => _push(context, RulesScreen(store: store)),
-            ),
-          if (showTailscale)
-            _Tile(
-              icon: Icons.vpn_lock_outlined,
-              title: 'Tailscale',
-              subtitle: '状态与认证',
-              onTap: () => _push(context, TailscaleScreen(store: store)),
             ),
           if (showDiagnostics)
             _Tile(
               icon: Icons.network_check_outlined,
               title: '网络工具',
-              subtitle: '网络质量 / STUN 测试',
+              subtitle: '网络质量与 STUN 测试',
               onTap: () => _push(context, DiagnosticsScreen(store: store)),
+            ),
+          if (showTailscale)
+            _Tile(
+              icon: Icons.vpn_lock_outlined,
+              title: 'Tailscale',
+              subtitle: '状态、认证与网络信息',
+              onTap: () => _push(context, TailscaleScreen(store: store)),
             ),
           if (showResources)
             _Tile(
               icon: Icons.cloud_outlined,
               title: '外部资源',
-              subtitle: '代理订阅 / 规则集',
+              subtitle: '代理订阅与规则集',
               onTap: () => _push(context, ResourcesScreen(store: store)),
             ),
         ];
+        final settingsTiles = <Widget>[
+          _Tile(
+            icon: Icons.dns_outlined,
+            title: '后端设置',
+            subtitle: '管理后端实例与连接方式',
+            onTap: () => _push(context, BackendSettingsScreen(store: store)),
+          ),
+          _Tile(
+            icon: Icons.palette_outlined,
+            title: '主题设置',
+            subtitle: '主题颜色与组件外观',
+            onTap: () => _push(context, ThemeSettingsScreen(prefs: prefs)),
+          ),
+          _Tile(
+            icon: Icons.app_settings_alt_outlined,
+            title: '应用设置',
+            subtitle: '字体与缓存设置',
+            onTap: () => _push(
+              context,
+              AppSettingsScreen(prefs: prefs, session: session),
+            ),
+          ),
+        ];
 
         return Scaffold(
-          appBar: AppBar(title: const Text('其他')),
-          body: SafeArea(
-            bottom: false,
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + MediaQuery.paddingOf(context).bottom,
-              ),
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: SectionPanel(
-                    title: '配置',
-                    icon: Icons.tune,
-                    child: Column(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 600;
+              final maxContentWidth = compact ? constraints.maxWidth : 640.0;
+              final horizontal = constraints.maxWidth > maxContentWidth
+                  ? (constraints.maxWidth - maxContentWidth) / 2
+                  : 0.0;
+              return CustomScrollView(
+                slivers: [
+                  if (compact)
+                    const SliverAppBar.large(pinned: true, title: Text('更多'))
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        28,
+                        horizontal,
+                        8,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: Text(
+                          '更多',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: EdgeInsets.only(
+                      left: horizontal,
+                      right: horizontal,
+                      bottom: 16 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    sliver: SliverList.list(
                       children: [
-                        for (var i = 0; i < tiles.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          tiles[i],
-                        ],
+                        if (pageTiles.isNotEmpty)
+                          _SettingsGroup(
+                            title: '页面',
+                            carded: !compact,
+                            children: pageTiles,
+                          ),
+                        if (toolTiles.isNotEmpty)
+                          _SettingsGroup(
+                            title: '工具',
+                            carded: !compact,
+                            children: toolTiles,
+                          ),
+                        _SettingsGroup(
+                          title: '设置',
+                          carded: !compact,
+                          children: settingsTiles,
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -200,19 +241,105 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: const Icon(Icons.chevron_right),
+      minTileHeight: 76,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      leading: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 22,
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+      title: Text(title, style: theme.textTheme.titleMedium),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      hoverColor: theme.colorScheme.primary.withValues(alpha: 0.06),
       onTap: onTap,
     );
   }
 }
 
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.title,
+    required this.children,
+    required this.carded,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final bool carded;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(carded ? 4 : 20, 22, 20, 10),
+          child: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(carded ? 16 : 0),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: carded
+                  ? theme.colorScheme.surfaceContainerLow
+                  : theme.colorScheme.surface,
+              border: carded
+                  ? Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(
+                        alpha: 0.55,
+                      ),
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(carded ? 16 : 0),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0)
+                    Divider(height: 1, indent: 76, endIndent: carded ? 16 : 0),
+                  children[i],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// A navigation destination that overflowed the standard-layout rail and is
-/// surfaced in the "其他" page's 导航 section instead.
+/// surfaced in the "更多" page's 页面 section instead.
 class SettingsExtra {
   const SettingsExtra({
     required this.icon,
@@ -308,55 +435,6 @@ class AppSettingsPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('导航布局', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              SegmentedButton<NavLayout>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: NavLayout.cards,
-                    label: Text('卡片'),
-                    icon: Icon(Icons.dashboard_outlined),
-                  ),
-                  ButtonSegment(
-                    value: NavLayout.standard,
-                    label: Text('标准'),
-                    icon: Icon(Icons.view_sidebar_outlined),
-                  ),
-                  ButtonSegment(
-                    value: NavLayout.floating,
-                    label: Text('悬浮'),
-                    icon: Icon(Icons.panorama_fish_eye_outlined),
-                  ),
-                ],
-                selected: {prefs.navLayout},
-                onSelectionChanged: (s) => prefs.setNavLayout(s.first),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '卡片：窄屏网格入口、宽屏卡片侧栏；标准：底栏 / 侧栏；悬浮：圆角悬浮底栏。',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              if (prefs.navLayout != NavLayout.cards) ...[
-                const SizedBox(height: 12),
-                Text('底栏样式', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
-                SegmentedButton<NavBarStyle>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: NavBarStyle.capsule,
-                      label: Text('胶囊'),
-                    ),
-                    ButtonSegment(value: NavBarStyle.pill, label: Text('药丸')),
-                    ButtonSegment(value: NavBarStyle.tint, label: Text('素色')),
-                    ButtonSegment(value: NavBarStyle.m3, label: Text('M3')),
-                  ],
-                  selected: {prefs.navBarStyle},
-                  onSelectionChanged: (s) => prefs.setNavBarStyle(s.first),
-                ),
-              ],
-              const Divider(height: 24),
               if (showFontSettings) ...[
                 _FontRow(prefs: prefs),
                 const Divider(height: 24),
@@ -807,7 +885,7 @@ class _OnlineResourcesRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
+    return CompactSwitch.tile(
       contentPadding: EdgeInsets.zero,
       title: const Text('跳过在线资源证书验证'),
       subtitle: const Text('用于图标 URL 等在线资源;不影响后端连接设置'),
@@ -1410,7 +1488,7 @@ class _EditDialogState extends State<_EditDialog> {
               ],
               if (_scheme == _Scheme.https) ...[
                 const SizedBox(height: 4),
-                SwitchListTile(
+                CompactSwitch.tile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('跳过证书验证'),
                   subtitle: Text(_tlsSkipSubtitle),

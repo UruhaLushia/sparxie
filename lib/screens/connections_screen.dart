@@ -12,6 +12,7 @@ import '../utils.dart';
 import '../widgets/connection_detail_sheet.dart';
 import '../widgets/connection_group_header.dart';
 import '../widgets/connection_tile.dart';
+import '../widgets/compact_controls.dart';
 import '../widgets/connections_settings_menu.dart';
 
 class ConnectionsScreen extends StatefulWidget {
@@ -385,12 +386,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       listenable: widget.session.connections,
                       builder: (context, _) {
                         final cn = widget.session.connections;
-                        return SegmentedButton<ConnectionsTab>(
-                          showSelectedIcon: false,
-                          style: const ButtonStyle(
-                            visualDensity: VisualDensity.compact,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                        return CompactSegmentedButton<ConnectionsTab>(
                           segments: [
                             ButtonSegment(
                               value: ConnectionsTab.active,
@@ -406,37 +402,21 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                         );
                       },
                     );
-                    final filter = TextField(
+                    final filter = CompactSearchField(
                       controller: _filterController,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        suffixIcon: _filterController.text.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: '清除筛选',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () {
-                                  _filterController.clear();
-                                  _setFilter('');
-                                },
-                                icon: const Icon(Icons.close, size: 18),
-                              ),
-                        hintText: '筛选',
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
+                      hintText: '筛选',
                       onChanged: _setFilter,
+                      onClear: () {
+                        _filterController.clear();
+                        _setFilter('');
+                      },
                     );
                     final sortField = ListenableBuilder(
                       listenable: widget.prefs,
-                      builder: (context, _) => PopupMenuButton<ConnectionsSort>(
-                        tooltip: '排序字段',
-                        position: PopupMenuPosition.under,
-                        initialValue: widget.prefs.connectionsSort,
+                      builder: (context, _) => CompactMenuButton(
+                        value: widget.prefs.connectionsSort,
+                        label: _sortLabel(widget.prefs.connectionsSort),
+                        semanticLabel: '排序字段',
                         onSelected: widget.prefs.setConnectionsSort,
                         itemBuilder: (_) => [
                           for (final s in ConnectionsSort.values)
@@ -446,38 +426,16 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                               child: Text(_sortLabel(s)),
                             ),
                         ],
-                        child: Container(
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                _sortLabel(widget.prefs.connectionsSort),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.expand_more, size: 18),
-                            ],
-                          ),
-                        ),
                       ),
                     );
                     final direction = ListenableBuilder(
                       listenable: widget.prefs,
-                      builder: (context, _) => IconButton(
-                        tooltip: widget.prefs.connectionsSortAsc ? '升序' : '降序',
+                      builder: (context, _) => CompactIconButton(
+                        semanticLabel: widget.prefs.connectionsSortAsc
+                            ? '升序'
+                            : '降序',
                         onPressed: () => widget.prefs.setConnectionsSortAsc(
                           !widget.prefs.connectionsSortAsc,
-                        ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.surfaceContainerHighest,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
                         ),
                         icon: Icon(
                           widget.prefs.connectionsSortAsc

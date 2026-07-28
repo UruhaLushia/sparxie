@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import '../widgets/compact_controls.dart';
 
 /// Read-only view of the active backend's routing rules.
 ///
@@ -292,14 +293,9 @@ class _RulesScreenState extends State<RulesScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: '筛选 规则 / 类型 / 出站',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  suffixText: '$_filtered/$_total',
-                ),
+              child: CompactSearchField(
+                hintText: '筛选 规则 / 类型 / 出站',
+                suffixText: '$_filtered/$_total',
                 onChanged: _onFilterChanged,
               ),
             ),
@@ -424,11 +420,7 @@ class _RuleTile extends StatelessWidget {
                     ),
                   ),
                   if (rule.hasExtra)
-                    Switch(
-                      value: !rule.disabled,
-                      onChanged: onToggle,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                    CompactSwitch(value: !rule.disabled, onChanged: onToggle),
                 ],
               ),
               const SizedBox(height: 2),

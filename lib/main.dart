@@ -29,8 +29,10 @@ import 'screens/settings_screen.dart';
 import 'screens/tailscale_screen.dart';
 import 'session.dart';
 import 'src/rust/frb_generated.dart';
+import 'system_accent_color.dart';
 import 'utils.dart';
 import 'widgets/bottom_navigation.dart';
+import 'widgets/compact_controls.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'window_state.dart';
 
@@ -44,6 +46,9 @@ Future<void> main() async {
   await WindowState.bind(config);
   await _initRust();
   final prefs = await AppPrefs.load(config);
+  final systemAccentColor = await SystemAccentColor.load(
+    enabled: prefs.automaticColor,
+  );
   await ImportedFonts.cleanup(prefs.importedFonts);
   await ImportedFonts.loadAll(prefs.importedFonts);
   // Hand the platform's app cache dir to Rust so it can persist proxy
@@ -64,6 +69,7 @@ Future<void> main() async {
   var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
   prefs.addListener(() {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
+    systemAccentColor.setEnabled(prefs.automaticColor);
     final next = prefs.allowInsecureOnlineResources;
     if (next != allowInsecureOnlineResources) {
       allowInsecureOnlineResources = next;
@@ -74,7 +80,14 @@ Future<void> main() async {
       );
     }
   });
-  runApp(MihomoControllerApp(store: store, prefs: prefs, session: session));
+  runApp(
+    MihomoControllerApp(
+      store: store,
+      prefs: prefs,
+      session: session,
+      systemAccentColor: systemAccentColor,
+    ),
+  );
 }
 
 Future<void> _initRust() {
@@ -142,16 +155,37 @@ ThemeData _appTheme({
   required Brightness brightness,
   required Color seedColor,
   required List<String> userFonts,
+  required bool useAutomaticColors,
+  required bool pureBlack,
 }) {
-  final base = ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: brightness,
-    ),
-    useMaterial3: true,
+  final generated = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: brightness,
   );
+  final onSeed =
+      ThemeData.estimateBrightnessForColor(seedColor) == Brightness.dark
+      ? Colors.white
+      : Colors.black;
+  var scheme = useAutomaticColors
+      ? generated
+      : generated.copyWith(primary: seedColor, onPrimary: onSeed);
+  if (pureBlack && brightness == Brightness.dark) {
+    scheme = _pureBlackScheme(scheme);
+  }
+  final base = ThemeData(colorScheme: scheme, useMaterial3: true);
   return _applyFontSet(base, userFonts);
 }
+
+ColorScheme _pureBlackScheme(ColorScheme scheme) => scheme.copyWith(
+  surface: Colors.black,
+  surfaceDim: Colors.black,
+  surfaceBright: const Color(0xff1c1c1c),
+  surfaceContainerLowest: Colors.black,
+  surfaceContainerLow: const Color(0xff050505),
+  surfaceContainer: const Color(0xff0a0a0a),
+  surfaceContainerHigh: const Color(0xff101010),
+  surfaceContainerHighest: const Color(0xff181818),
+);
 
 ThemeData _applyFontSet(ThemeData base, List<String> userFonts) {
   if (userFonts.isEmpty) return base;
@@ -217,18 +251,26 @@ class MihomoControllerApp extends StatelessWidget {
     required this.store,
     required this.prefs,
     required this.session,
+    required this.systemAccentColor,
   });
 
   final ControllerStore store;
   final AppPrefs prefs;
   final MihomoSession session;
+  final SystemAccentColor systemAccentColor;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: prefs,
+      listenable: Listenable.merge([prefs, systemAccentColor]),
       builder: (context, _) {
         final uiFonts = prefs.uiFontFamilies;
+        final globalSeed = Color(prefs.globalThemeColor);
+        final useAutomaticColor = prefs.automaticColor;
+        final effectiveSeed = useAutomaticColor
+            ? systemAccentColor.color ??
+                  const Color(AppPrefs.defaultGlobalThemeColor)
+            : globalSeed;
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',
@@ -239,18 +281,77 @@ class MihomoControllerApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('zh', 'CN')],
+          themeMode: switch (prefs.appThemeMode) {
+            AppThemeMode.system => ThemeMode.system,
+            AppThemeMode.light => ThemeMode.light,
+            AppThemeMode.dark => ThemeMode.dark,
+          },
           theme: _appTheme(
             brightness: Brightness.light,
-            seedColor: const Color(0xff2563eb),
+            seedColor: effectiveSeed,
             userFonts: uiFonts,
+            useAutomaticColors: useAutomaticColor,
+            pureBlack: false,
           ),
           darkTheme: _appTheme(
             brightness: Brightness.dark,
-            seedColor: const Color(0xff60a5fa),
+            seedColor: effectiveSeed,
             userFonts: uiFonts,
+            useAutomaticColors: useAutomaticColor,
+            pureBlack: prefs.pureBlackMode,
           ),
-          builder: (context, child) =>
-              _SystemBarStyle(child: child ?? const SizedBox.shrink()),
+          builder: (context, child) {
+            CompactControlStyle styleFor(CompactControlKind kind) {
+              final radius = prefs.compactBorderRadius(kind);
+              final height = prefs.compactControlHeight(kind);
+              final widthScale = prefs.compactWidthScale(kind);
+              final navigationBar = kind == CompactControlKind.navigationBar;
+              final innerRadius = navigationBar
+                  ? prefs.navigationInnerBorderRadius
+                  : radius;
+              final innerHeight = navigationBar
+                  ? prefs.navigationInnerHeight
+                  : height;
+              final innerWidthScale = navigationBar
+                  ? prefs.navigationInnerWidthScale
+                  : widthScale;
+              if (useAutomaticColor) {
+                return CompactControlStyle.fromColorScheme(
+                  colorScheme: Theme.of(context).colorScheme,
+                  borderRadius: radius,
+                  controlHeight: height,
+                  widthScale: widthScale,
+                  indicatorBorderRadius: innerRadius,
+                  indicatorHeight: innerHeight,
+                  indicatorWidthScale: innerWidthScale,
+                  floatingHeightOffset: prefs.navigationFloatingHeightOffset,
+                );
+              }
+              return CompactControlStyle.fromSeed(
+                seedColor: Color(prefs.compactThemeColor(kind)),
+                selectedSeedColor: navigationBar
+                    ? Color(prefs.navigationInnerThemeColor)
+                    : null,
+                brightness: Theme.of(context).brightness,
+                borderRadius: radius,
+                controlHeight: height,
+                widthScale: widthScale,
+                indicatorBorderRadius: innerRadius,
+                indicatorHeight: innerHeight,
+                indicatorWidthScale: innerWidthScale,
+                floatingHeightOffset: prefs.navigationFloatingHeightOffset,
+              );
+            }
+
+            return CompactControlTheme(
+              buttonStyle: styleFor(CompactControlKind.button),
+              searchStyle: styleFor(CompactControlKind.search),
+              segmentedStyle: styleFor(CompactControlKind.segmented),
+              switchStyle: styleFor(CompactControlKind.toggle),
+              navigationBarStyle: styleFor(CompactControlKind.navigationBar),
+              child: _SystemBarStyle(child: child ?? const SizedBox.shrink()),
+            );
+          },
           home: HomeShell(store: store, prefs: prefs, session: session),
         );
       },
@@ -374,7 +475,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           icon: Icons.network_check_outlined,
           label: '网络工具',
         ),
-      const AppNavDestination(icon: Icons.more_horiz, label: '其他'),
+      const AppNavDestination(icon: Icons.more_horiz, label: '更多'),
     ];
   }
 
@@ -505,7 +606,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             otherIndex,
           ];
 
-          // Destinations that didn't fit become tiles on the 其他 page; they
+          // Destinations that didn't fit become tiles on the 更多 page; they
           // push a full route (with its own AppBar + back button) rather than
           // swapping the IndexedStack, so navigation is unambiguous.
           final extras = <SettingsExtra>[
@@ -521,7 +622,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               ),
           ];
 
-          // If the current page overflowed (no longer a rail item), show 其他
+          // If the current page overflowed (no longer a rail item), show 更多
           // instead — its list links to the overflowed page. Growing the
           // window back makes _index a visible rail item again, restoring it.
           final effectiveIndex = visibleReal.contains(_index)
@@ -615,6 +716,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final pages = _ensureStackPages(NavLayout.standard, destinations);
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
+    final navigationStyle = CompactControlTheme.navigationBarOf(context);
     return Scaffold(
       extendBody: true,
       body: _FadeThroughIndexedStack(index: _index, children: pages),
@@ -622,15 +724,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: ColoredBox(
-            color: isDark
-                ? scheme.surface.withValues(alpha: 0.6)
-                : scheme.surface.withValues(alpha: 0.7),
+            color: navigationStyle
+                .background(context)
+                .withValues(alpha: isDark ? 0.76 : 0.86),
             child: SafeArea(
               top: false,
               child: SizedBox(
-                height: 64,
+                height: navigationStyle.buttonHeight,
                 child: BottomNavBarItems(
                   style: widget.prefs.navBarStyle,
+                  styleConfig: navigationStyle,
                   destinations: destinations,
                   selectedIndex: _index,
                   onSelected: (i) => setState(() => _index = i),
@@ -645,13 +748,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildCompactFloating(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.floating, destinations);
+    final navigationStyle = CompactControlTheme.navigationBarOf(context);
     return Stack(
       children: [
         Scaffold(
           body: Builder(
             builder: (context) {
               final data = MediaQuery.of(context);
-              const navBarExtra = 82.0; // 56 bar + 6 pad + 20 top gap
+              final navBarExtra =
+                  navigationStyle.buttonHeight +
+                  26 +
+                  navigationStyle.floatingHeightOffset.clamp(0, 20);
               return MediaQuery(
                 data: data.copyWith(
                   padding: data.padding.copyWith(

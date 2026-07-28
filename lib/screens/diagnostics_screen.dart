@@ -6,6 +6,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
+import '../widgets/compact_controls.dart';
 import '../widgets/section_panel.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
@@ -260,14 +261,19 @@ class _QualityPanelState extends State<_QualityPanel> {
                 selected: _http3,
                 onSelected: _running ? null : (v) => setState(() => _http3 = v),
               ),
-              for (final seconds in const [20, 30, 60])
-                ChoiceChip(
-                  label: Text('${seconds}s'),
-                  selected: _maxRuntime == seconds,
-                  onSelected: _running || _maxRuntime == seconds
-                      ? null
-                      : (_) => setState(() => _maxRuntime = seconds),
-                ),
+              CompactSegmentedButton<int>(
+                segments: [
+                  for (final seconds in const [20, 30, 60])
+                    ButtonSegment(
+                      value: seconds,
+                      enabled: !_running,
+                      label: Text('${seconds}s'),
+                    ),
+                ],
+                selected: {_maxRuntime},
+                onSelectionChanged: (selection) =>
+                    setState(() => _maxRuntime = selection.first),
+              ),
             ],
           ),
           if (_running) ...[

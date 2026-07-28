@@ -1,8 +1,11 @@
 #include "flutter_window.h"
 
+#include <dwmapi.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "flutter/standard_method_codec.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -25,6 +28,26 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  system_colors_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "zip.atri.sparxie/system_colors",
+          &flutter::StandardMethodCodec::GetInstance());
+  system_colors_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() != "getAccentColor") {
+          result->NotImplemented();
+          return;
+        }
+        DWORD color = 0;
+        BOOL opaque_blend = FALSE;
+        if (FAILED(DwmGetColorizationColor(&color, &opaque_blend))) {
+          result->Success();
+          return;
+        }
+        result->Success(flutter::EncodableValue(static_cast<int64_t>(color)));
+      });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -41,6 +64,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    system_colors_channel_.reset();
     flutter_controller_ = nullptr;
   }
 

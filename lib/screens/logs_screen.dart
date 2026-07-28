@@ -6,6 +6,7 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/compact_controls.dart';
 
 /// Renders the buffer owned by `MihomoSession` (`session.logs`). The
 /// WebSocket is opened on controller connect — independent of this widget's
@@ -162,57 +163,25 @@ class _LogsScreenState extends State<LogsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: SizedBox(
-                          height: 40,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.search, size: 20),
-                              prefixIconConstraints: BoxConstraints(
-                                minWidth: 40,
-                                minHeight: 40,
-                              ),
-                              hintText: '过滤消息内容',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 8),
-                            ),
-                            onChanged: _setFilter,
-                          ),
+                        child: CompactSearchField(
+                          hintText: '过滤消息内容',
+                          onChanged: _setFilter,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox(
+                      CompactMenuButton<String>(
                         width: 80,
-                        height: 40,
-                        child: PopupMenuButton<String>(
-                          initialValue: widget.session.logsLevel,
-                          tooltip: '日志等级',
-                          position: PopupMenuPosition.under,
-                          padding: EdgeInsets.zero,
-                          onSelected: _setLevel,
-                          itemBuilder: (_) => [
-                            for (final level in levels)
-                              PopupMenuItem(
-                                value: level,
-                                child: Text(_levelLabel(level)),
-                              ),
-                          ],
-                          child: Container(
-                            height: 40,
-                            padding: const EdgeInsets.only(left: 10, right: 6),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: scheme.outline),
-                              borderRadius: BorderRadius.circular(4),
+                        value: widget.session.logsLevel,
+                        label: _levelLabel(widget.session.logsLevel),
+                        semanticLabel: '日志等级',
+                        onSelected: _setLevel,
+                        itemBuilder: (_) => [
+                          for (final level in levels)
+                            PopupMenuItem(
+                              value: level,
+                              child: Text(_levelLabel(level)),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(_levelLabel(widget.session.logsLevel)),
-                                const Icon(Icons.arrow_drop_down, size: 18),
-                              ],
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),

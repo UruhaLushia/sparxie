@@ -10,6 +10,7 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  FlMethodChannel* system_colors_channel;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -17,6 +18,38 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+}
+
+static FlMethodResponse* get_system_accent_color(GtkWidget* widget) {
+  GtkStyleContext* context = gtk_widget_get_style_context(widget);
+  const gchar* color_names[] = {"accent_bg_color", "accent_color",
+                                "theme_selected_bg_color",
+                                "selected_bg_color"};
+  GdkRGBA color;
+  for (const gchar* name : color_names) {
+    if (!gtk_style_context_lookup_color(context, name, &color)) continue;
+    const guint64 alpha = static_cast<guint64>(color.alpha * 255 + 0.5);
+    const guint64 red = static_cast<guint64>(color.red * 255 + 0.5);
+    const guint64 green = static_cast<guint64>(color.green * 255 + 0.5);
+    const guint64 blue = static_cast<guint64>(color.blue * 255 + 0.5);
+    g_autoptr(FlValue) value = fl_value_new_int(
+        static_cast<int64_t>((alpha << 24) | (red << 16) | (green << 8) | blue));
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(value));
+  }
+  return FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+}
+
+static void system_colors_method_call_cb(FlMethodChannel* /*channel*/,
+                                         FlMethodCall* method_call,
+                                         gpointer user_data) {
+  GtkWidget* widget = GTK_WIDGET(user_data);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (strcmp(fl_method_call_get_name(method_call), "getAccentColor") == 0) {
+    response = get_system_accent_color(widget);
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  fl_method_call_respond(method_call, response, nullptr);
 }
 
 // Implements GApplication::activate.
@@ -73,6 +106,15 @@ static void my_application_activate(GApplication* application) {
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
 
+  FlEngine* engine = fl_view_get_engine(view);
+  FlBinaryMessenger* messenger = fl_engine_get_binary_messenger(engine);
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->system_colors_channel = fl_method_channel_new(
+      messenger, "zip.atri.sparxie/system_colors", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->system_colors_channel, system_colors_method_call_cb,
+      g_object_ref(window), g_object_unref);
+
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
@@ -120,6 +162,7 @@ static void my_application_shutdown(GApplication* application) {
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+  g_clear_object(&self->system_colors_channel);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

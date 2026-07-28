@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.BinaryMessenger
@@ -14,6 +15,7 @@ import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
     private val channel = "zip.atri.sparxie/process_icons"
+    private val systemColorsChannel = "zip.atri.sparxie/system_colors"
     private val iconSize = 256
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -36,6 +38,19 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(messenger, systemColorsChannel).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getAccentColor" -> result.success(systemAccentColor())
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun systemAccentColor(): Long? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        return resources.getColor(android.R.color.system_accent1_500, theme)
+            .toLong() and 0xffffffffL
     }
 
     private fun iconPng(pkg: String): ByteArray? {

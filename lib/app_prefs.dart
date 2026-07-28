@@ -33,6 +33,10 @@ enum NavBarStyle {
   m3,
 }
 
+enum CompactControlKind { navigationBar, button, search, segmented, toggle }
+
+enum AppThemeMode { system, light, dark }
+
 /// How the proxies screen renders groups: the classic pinned-header list or
 /// Surge-style gradient cards that expand into an overlay.
 enum ProxiesLayout { list, cards }
@@ -150,6 +154,10 @@ class AppPrefs extends ChangeNotifier {
   static const _kUiFontFamilies = 'uiFontFamilies';
   static const _kImportedFonts = 'importedFonts';
   static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
+  static const _kGlobalThemeColor = 'globalThemeColor';
+  static const _kAutomaticColor = 'automaticColor';
+  static const _kPureBlackMode = 'pureBlackMode';
+  static const _kAppThemeMode = 'appThemeMode';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -179,6 +187,48 @@ class AppPrefs extends ChangeNotifier {
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
   static const defaultAllowInsecureOnlineResources = false;
+  static const defaultGlobalThemeColor = 0xff2563eb;
+  static const defaultAutomaticColor = false;
+  static const defaultPureBlackMode = false;
+  static const defaultAppThemeMode = AppThemeMode.system;
+  static const defaultCompactThemeColor = 0xff2563eb;
+  static const defaultCompactBorderRadius = 12.0;
+  static const defaultCompactControlHeight = 40.0;
+  static const defaultCompactWidthScale = 1.0;
+  static const defaultNavigationInnerWidthScale = 1.0;
+  static const defaultNavigationFloatingHeightOffset = 0.0;
+
+  double _defaultCompactRadius(CompactControlKind kind) =>
+      kind == CompactControlKind.navigationBar
+      ? 28
+      : defaultCompactBorderRadius;
+
+  double _defaultCompactHeight(CompactControlKind kind) =>
+      kind == CompactControlKind.navigationBar
+      ? navLayout == NavLayout.floating
+            ? 56
+            : 64
+      : defaultCompactControlHeight;
+
+  double get _defaultNavigationInnerBorderRadius => switch (navBarStyle) {
+    NavBarStyle.capsule => 21,
+    NavBarStyle.pill => 25,
+    NavBarStyle.tint => 14,
+    NavBarStyle.m3 => 14,
+  };
+
+  double get _defaultNavigationInnerHeight => switch (navBarStyle) {
+    NavBarStyle.capsule => 42,
+    NavBarStyle.pill => 50,
+    NavBarStyle.tint => 26,
+    NavBarStyle.m3 => 26,
+  };
+
+  static double _minimumCompactHeight(CompactControlKind kind) =>
+      kind == CompactControlKind.navigationBar ? 52 : 32;
+
+  static double _maximumCompactHeight(CompactControlKind kind) =>
+      kind == CompactControlKind.navigationBar ? 76 : 52;
 
   static Future<AppPrefs> load(JsonStore store) async => AppPrefs._(store);
 
@@ -187,6 +237,11 @@ class AppPrefs extends ChangeNotifier {
   int _int(String key, int fallback) {
     final v = _s[key];
     return v is int ? v : (v is num ? v.toInt() : fallback);
+  }
+
+  double _double(String key, double fallback) {
+    final v = _s[key];
+    return v is num ? v.toDouble() : fallback;
   }
 
   bool _bool(String key, bool fallback) {
@@ -457,12 +512,229 @@ class AppPrefs extends ChangeNotifier {
     _put(_kAllowInsecureOnlineResources, value);
   }
 
+  int get globalThemeColor => _int(_kGlobalThemeColor, defaultGlobalThemeColor);
+
+  Future<void> setGlobalThemeColor(int value) async {
+    if (value == globalThemeColor) return;
+    _put(_kGlobalThemeColor, value);
+  }
+
+  bool get automaticColor => _bool(_kAutomaticColor, defaultAutomaticColor);
+
+  Future<void> setAutomaticColor(bool value) async {
+    if (value == automaticColor) return;
+    _put(_kAutomaticColor, value);
+  }
+
+  bool get pureBlackMode => _bool(_kPureBlackMode, defaultPureBlackMode);
+
+  Future<void> setPureBlackMode(bool value) async {
+    if (value == pureBlackMode) return;
+    _put(_kPureBlackMode, value);
+  }
+
+  AppThemeMode get appThemeMode =>
+      _decodeAppThemeMode(_str(_kAppThemeMode, defaultAppThemeMode.name));
+
+  Future<void> setAppThemeMode(AppThemeMode value) async {
+    if (value == appThemeMode) return;
+    _put(_kAppThemeMode, value.name);
+  }
+
+  String _compactKey(CompactControlKind kind, String property) =>
+      'compact.${kind.name}.$property';
+
+  String _navigationInnerKey(String property, [NavBarStyle? style]) =>
+      'compact.navigationBar.inner.${(style ?? navBarStyle).name}.$property';
+
+  String _compactStyleKey(
+    CompactControlKind kind,
+    String property, [
+    NavBarStyle? style,
+  ]) => kind == CompactControlKind.navigationBar
+      ? 'compact.navigationBar.outer.${(style ?? navBarStyle).name}.$property'
+      : _compactKey(kind, property);
+
+  int compactThemeColor(CompactControlKind kind) => _int(
+    _compactStyleKey(kind, 'color'),
+    _int(_compactKey(kind, 'color'), defaultCompactThemeColor),
+  );
+
+  Future<void> setCompactThemeColor(CompactControlKind kind, int value) async {
+    final key = _compactStyleKey(kind, 'color');
+    if (_s[key] == value) return;
+    _put(key, value);
+  }
+
+  double compactBorderRadius(CompactControlKind kind) => _double(
+    _compactStyleKey(kind, 'borderRadius'),
+    _double(_compactKey(kind, 'borderRadius'), _defaultCompactRadius(kind)),
+  ).clamp(0, 36);
+
+  Future<void> setCompactBorderRadius(
+    CompactControlKind kind,
+    double value,
+  ) async {
+    final next = value.clamp(0, 36).toDouble();
+    final key = _compactStyleKey(kind, 'borderRadius');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  double compactControlHeight(CompactControlKind kind) => _double(
+    _compactStyleKey(kind, 'height'),
+    _double(_compactKey(kind, 'height'), _defaultCompactHeight(kind)),
+  ).clamp(_minimumCompactHeight(kind), _maximumCompactHeight(kind));
+
+  Future<void> setCompactControlHeight(
+    CompactControlKind kind,
+    double value,
+  ) async {
+    final next = value
+        .clamp(_minimumCompactHeight(kind), _maximumCompactHeight(kind))
+        .toDouble();
+    final key = _compactStyleKey(kind, 'height');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  double compactWidthScale(CompactControlKind kind) => _double(
+    _compactStyleKey(kind, 'widthScale'),
+    _double(_compactKey(kind, 'widthScale'), defaultCompactWidthScale),
+  ).clamp(0.75, 1.5);
+
+  Future<void> setCompactWidthScale(
+    CompactControlKind kind,
+    double value,
+  ) async {
+    final next = value.clamp(0.75, 1.5).toDouble();
+    final key = _compactStyleKey(kind, 'widthScale');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  int get navigationInnerThemeColor => _int(
+    _navigationInnerKey('color'),
+    _int(
+      _compactKey(CompactControlKind.navigationBar, 'innerColor'),
+      compactThemeColor(CompactControlKind.navigationBar),
+    ),
+  );
+
+  bool get hasNavigationInnerThemeColor =>
+      _s.containsKey(_navigationInnerKey('color')) ||
+      _s.containsKey(
+        _compactKey(CompactControlKind.navigationBar, 'innerColor'),
+      );
+
+  Future<void> setNavigationInnerThemeColor(int value) async {
+    final key = _navigationInnerKey('color');
+    if (_s[key] == value) return;
+    _put(key, value);
+  }
+
+  double get navigationInnerBorderRadius => _double(
+    _navigationInnerKey('borderRadius'),
+    _double(
+      _compactKey(CompactControlKind.navigationBar, 'innerBorderRadius'),
+      _defaultNavigationInnerBorderRadius,
+    ),
+  ).clamp(0, 36);
+
+  Future<void> setNavigationInnerBorderRadius(double value) async {
+    final next = value.clamp(0, 36).toDouble();
+    final key = _navigationInnerKey('borderRadius');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  double get navigationInnerHeight => _double(
+    _navigationInnerKey('height'),
+    _double(
+      _compactKey(CompactControlKind.navigationBar, 'innerHeight'),
+      _defaultNavigationInnerHeight,
+    ),
+  ).clamp(24, 68);
+
+  Future<void> setNavigationInnerHeight(double value) async {
+    final next = value.clamp(24, 68).toDouble();
+    final key = _navigationInnerKey('height');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  double get navigationInnerWidthScale => _double(
+    _navigationInnerKey('widthScale'),
+    _double(
+      _compactKey(CompactControlKind.navigationBar, 'innerWidthScale'),
+      defaultNavigationInnerWidthScale,
+    ),
+  ).clamp(0.75, 1.5);
+
+  Future<void> setNavigationInnerWidthScale(double value) async {
+    final next = value.clamp(0.75, 1.5).toDouble();
+    final key = _navigationInnerKey('widthScale');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  double get navigationFloatingHeightOffset => _double(
+    _compactStyleKey(CompactControlKind.navigationBar, 'heightOffset'),
+    defaultNavigationFloatingHeightOffset,
+  ).clamp(-20, 20);
+
+  Future<void> setNavigationFloatingHeightOffset(double value) async {
+    final next = value.clamp(-20, 20).toDouble();
+    final key = _compactStyleKey(
+      CompactControlKind.navigationBar,
+      'heightOffset',
+    );
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  Future<void> resetCompactStyle(CompactControlKind kind) async {
+    for (final property in const [
+      'color',
+      'borderRadius',
+      'height',
+      'widthScale',
+      'innerColor',
+      'innerBorderRadius',
+      'innerHeight',
+      'innerWidthScale',
+    ]) {
+      _s.remove(_compactKey(kind, property));
+    }
+    if (kind == CompactControlKind.navigationBar) {
+      for (final property in const [
+        'color',
+        'borderRadius',
+        'height',
+        'widthScale',
+        'heightOffset',
+      ]) {
+        _s.remove(_navigationInnerKey(property));
+        _s.remove(_compactStyleKey(kind, property));
+      }
+    }
+    _store.scheduleSave();
+    notifyListeners();
+  }
+
   static ProxiesSort _decodeSort(String? raw) {
     if (raw == null) return defaultProxiesSort;
     for (final v in ProxiesSort.values) {
       if (v.name == raw) return v;
     }
     return defaultProxiesSort;
+  }
+
+  static AppThemeMode _decodeAppThemeMode(String? raw) {
+    for (final value in AppThemeMode.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultAppThemeMode;
   }
 
   static ProxiesLayout _decodeProxiesLayout(String? raw) {
