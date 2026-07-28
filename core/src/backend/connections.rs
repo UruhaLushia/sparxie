@@ -5,8 +5,8 @@ use crate::MihomoError;
 use crate::frb_generated::StreamSink;
 
 use super::{
-    BackendTarget, BackendType, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame,
-    ConnectionsListKind, ConnectionsSort,
+    BackendTarget, BackendType, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionWindow,
+    ConnectionsFrame, ConnectionsListKind, ConnectionsSort,
 };
 use super::{clash_conn_sort, clash_group_sort, clash_list_kind};
 
@@ -121,38 +121,47 @@ pub async fn fetch_connection_window(
     kind: ConnectionsListKind,
     offset: u32,
     limit: u32,
-) -> Vec<Connection> {
+    query: String,
+) -> ConnectionWindow {
     match target.backend_type {
-        BackendType::Clash => crate::clash::state::connections::fetch_window(
-            target.clash(),
-            interval_ms,
-            clash_list_kind(kind),
-            offset,
-            limit,
-        )
-        .await
-        .into_iter()
-        .map(Into::into)
-        .collect(),
+        BackendType::Clash => {
+            let (total, rows) = crate::clash::state::connections::fetch_window(
+                target.clash(),
+                interval_ms,
+                clash_list_kind(kind),
+                offset,
+                limit,
+                query,
+            )
+            .await;
+            ConnectionWindow {
+                total,
+                rows: rows.into_iter().map(Into::into).collect(),
+            }
+        }
         BackendType::Surge => {
-            crate::surge::state::connections::fetch_window(
+            let (total, rows) = crate::surge::state::connections::fetch_window(
                 target.surge(),
                 interval_ms,
                 kind,
                 offset,
                 limit,
+                query,
             )
-            .await
+            .await;
+            ConnectionWindow { total, rows }
         }
         BackendType::SingBox => {
-            crate::sing_box::state::connections::fetch_window(
+            let (total, rows) = crate::sing_box::state::connections::fetch_window(
                 target.sing_box(),
                 interval_ms,
                 kind,
                 offset,
                 limit,
+                query,
             )
-            .await
+            .await;
+            ConnectionWindow { total, rows }
         }
     }
 }
@@ -163,6 +172,7 @@ pub async fn fetch_connection_groups(
     kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
+    query: String,
 ) -> Vec<ConnectionGroup> {
     match target.backend_type {
         BackendType::Clash => crate::clash::state::connections::fetch_groups(
@@ -171,6 +181,7 @@ pub async fn fetch_connection_groups(
             clash_list_kind(kind),
             clash_group_sort(sort),
             asc,
+            query,
         )
         .await
         .into_iter()
@@ -183,6 +194,7 @@ pub async fn fetch_connection_groups(
                 kind,
                 sort,
                 asc,
+                query,
             )
             .await
         }
@@ -193,6 +205,7 @@ pub async fn fetch_connection_groups(
                 kind,
                 sort,
                 asc,
+                query,
             )
             .await
         }
@@ -205,6 +218,7 @@ pub async fn fetch_connection_group_members(
     kind: ConnectionsListKind,
     group: String,
     limit: u32,
+    query: String,
 ) -> Vec<Connection> {
     match target.backend_type {
         BackendType::Clash => crate::clash::state::connections::fetch_group_connections(
@@ -213,6 +227,7 @@ pub async fn fetch_connection_group_members(
             clash_list_kind(kind),
             group,
             limit,
+            query,
         )
         .await
         .into_iter()
@@ -225,6 +240,7 @@ pub async fn fetch_connection_group_members(
                 kind,
                 group,
                 limit,
+                query,
             )
             .await
         }
@@ -235,6 +251,7 @@ pub async fn fetch_connection_group_members(
                 kind,
                 group,
                 limit,
+                query,
             )
             .await
         }

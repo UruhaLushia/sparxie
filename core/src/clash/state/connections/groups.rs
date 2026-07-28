@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::ordering::sort_groups;
 use super::types::{Connection, ConnectionGroup, ConnectionGroupSort};
@@ -13,12 +13,25 @@ pub(super) fn connection_groups<'a, I>(
     connections: I,
     sort: ConnectionGroupSort,
     asc: bool,
+    query: &str,
 ) -> Vec<ConnectionGroup>
 where
     I: IntoIterator<Item = &'a Connection>,
 {
+    let connections: Vec<&Connection> = connections.into_iter().collect();
+    let matching_groups = (!query.is_empty()).then(|| {
+        connections
+            .iter()
+            .filter(|conn| conn.matches_query(query))
+            .map(|conn| group_key(conn))
+            .collect::<HashSet<_>>()
+    });
     let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
-    for conn in connections {
+    for conn in connections.into_iter().filter(|conn| {
+        matching_groups
+            .as_ref()
+            .is_none_or(|groups| groups.contains(&group_key(conn)))
+    }) {
         let gkey = group_key(conn);
         let group = groups
             .entry(gkey)
@@ -44,13 +57,17 @@ pub(super) fn group_connections_by_order(
     sorted_ids: &[String],
     group: &str,
     limit: u32,
+    query: &str,
 ) -> Vec<Connection> {
     let mut rows = Vec::new();
     for id in sorted_ids {
         if rows.len() >= limit as usize {
             break;
         }
-        let Some(conn) = active.get(id).filter(|conn| conn_in_group(conn, group)) else {
+        let Some(conn) = active
+            .get(id)
+            .filter(|conn| conn_in_group(conn, group) && conn.matches_query(query))
+        else {
             continue;
         };
         rows.push(conn.clone());

@@ -115,20 +115,26 @@ pub async fn fetch_window(
     kind: ConnectionsListKind,
     offset: u32,
     limit: u32,
-) -> Vec<Connection> {
+    query: String,
+) -> (u32, Vec<Connection>) {
     let Some(slot) = slot_for(&target, interval_ms).await else {
-        return Vec::new();
+        return (0, Vec::new());
     };
+    let query = query.trim().to_lowercase();
     let state = slot.state.lock().expect("surge connections state poisoned");
     let mut rows: Vec<Connection> = match kind {
         ConnectionsListKind::Active => state.active.values().cloned().collect(),
         ConnectionsListKind::Closed => state.closed.iter().rev().cloned().collect(),
     };
     sort_rows(&mut rows, state.sort, state.asc);
-    rows.into_iter()
+    rows.retain(|row| row.matches_query(&query));
+    let total = rows.len() as u32;
+    let window = rows
+        .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .collect()
+        .collect();
+    (total, window)
 }
 
 pub async fn fetch_groups(
@@ -137,6 +143,7 @@ pub async fn fetch_groups(
     kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
+    query: String,
 ) -> Vec<ConnectionGroup> {
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
@@ -147,7 +154,18 @@ pub async fn fetch_groups(
         ConnectionsListKind::Active => state.active.values().collect(),
         ConnectionsListKind::Closed => state.closed.iter().rev().collect(),
     };
-    for row in rows {
+    let query = query.trim().to_lowercase();
+    let matching_groups = (!query.is_empty()).then(|| {
+        rows.iter()
+            .filter(|row| row.matches_query(&query))
+            .map(|row| connection_group_key(row))
+            .collect::<HashSet<_>>()
+    });
+    for row in rows.into_iter().filter(|row| {
+        matching_groups
+            .as_ref()
+            .is_none_or(|groups| groups.contains(&connection_group_key(row)))
+    }) {
         let key = connection_group_key(row);
         let entry = groups
             .entry(key.clone())
@@ -180,6 +198,7 @@ pub async fn fetch_group_connections(
     kind: ConnectionsListKind,
     group: String,
     limit: u32,
+    query: String,
 ) -> Vec<Connection> {
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
@@ -200,6 +219,8 @@ pub async fn fetch_group_connections(
             .cloned()
             .collect(),
     };
+    let query = query.trim().to_lowercase();
+    rows.retain(|row| row.matches_query(&query));
     sort_rows(&mut rows, state.sort, state.asc);
     rows.into_iter().take(limit as usize).collect()
 }

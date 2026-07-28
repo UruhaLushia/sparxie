@@ -161,18 +161,6 @@ class ConnectionRow {
     return '$connType(${network.toUpperCase()})';
   }
 
-  bool matches(String needle) {
-    final n = needle.toLowerCase();
-    if (host.toLowerCase().contains(n)) return true;
-    if (chainsLabel.toLowerCase().contains(n)) return true;
-    if (rule.toLowerCase().contains(n)) return true;
-    if (rulePayload.toLowerCase().contains(n)) return true;
-    if (network.toLowerCase().contains(n)) return true;
-    if (process.toLowerCase().contains(n)) return true;
-    if (processPath.toLowerCase().contains(n)) return true;
-    return false;
-  }
-
   factory ConnectionRow.fromConnection(rust.Connection c) {
     final fallbackHost = c.host.isNotEmpty
         ? c.host
@@ -266,10 +254,11 @@ class ConnectionGroupSummary {
 }
 
 typedef WindowFetcher =
-    Future<List<rust.Connection>> Function(
+    Future<rust.ConnectionWindow> Function(
       ConnectionsTab tab,
       int offset,
       int limit,
+      String query,
     );
 
 typedef GroupsFetcher =
@@ -277,6 +266,7 @@ typedef GroupsFetcher =
       ConnectionsTab tab,
       rust.ConnectionGroupSort sort,
       bool asc,
+      String query,
     );
 
 typedef GroupMembersFetcher =
@@ -284,6 +274,7 @@ typedef GroupMembersFetcher =
       ConnectionsTab tab,
       String groupKey,
       int limit,
+      String query,
     );
 
 /// Virtual paging: Rust holds the full sorted list, Dart only ever holds the
@@ -332,6 +323,10 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   int _activeCount = 0;
   int _closedCount = 0;
+  String _query = '';
+  int _filteredCount = 0;
+  bool _filterLoading = false;
+  int _filterRevision = 0;
 
   ConnectionsTab _visibleTab = ConnectionsTab.active;
   Timer? _refetchTimer;
@@ -370,6 +365,7 @@ class ConnectionListNotifier extends ChangeNotifier {
       _scheduleGroupsRefresh(force: true);
     } else {
       _disposeGroups();
+      if (hasFilter) _prepareInitialWindow();
     }
     notifyListeners();
   }
@@ -377,9 +373,18 @@ class ConnectionListNotifier extends ChangeNotifier {
   void setVisibleTab(ConnectionsTab tab) {
     if (tab == _visibleTab) return;
     _visibleTab = tab;
-    if (!_grouped) return;
-    _disposeGroups();
-    _scheduleGroupsRefresh(force: true);
+    if (hasFilter) {
+      _filterRevision++;
+      _filteredCount = 0;
+      _filterLoading = true;
+      _clearWindow(tab);
+    }
+    if (_grouped) {
+      _disposeGroups();
+      _scheduleGroupsRefresh(force: true);
+    } else {
+      _prepareInitialWindow();
+    }
     notifyListeners();
   }
 
@@ -414,10 +419,46 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   int get activeCount => _activeCount;
   int get closedCount => _closedCount;
+  bool get hasFilter => _query.isNotEmpty;
+  bool get filterLoading => _filterLoading;
+  ConnectionsTab get visibleTab => _visibleTab;
+  int visibleCount(ConnectionsTab tab) => hasFilter && tab == _visibleTab
+      ? _filteredCount
+      : tab == ConnectionsTab.active
+      ? _activeCount
+      : _closedCount;
   int get windowOverscan => _windowOverscan;
 
   int activeWindowOffset() => _activeOffset;
   int closedWindowOffset() => _closedOffset;
+
+  void setFilter(String value) {
+    final query = value.trim().toLowerCase();
+    if (query == _query) return;
+    _query = query;
+    _filterRevision++;
+    _filteredCount = 0;
+    _filterLoading = query.isNotEmpty;
+    _clearWindow(_visibleTab);
+    if (_grouped) _disposeGroups();
+    if (_grouped) {
+      _scheduleGroupsRefresh(force: true);
+    } else {
+      _prepareInitialWindow();
+    }
+    notifyListeners();
+  }
+
+  void _prepareInitialWindow() {
+    if (_visibleTab == ConnectionsTab.active) {
+      _activeOffset = 0;
+      _activeLimit = 30;
+    } else {
+      _closedOffset = 0;
+      _closedLimit = 30;
+    }
+    _scheduleRefetch(force: true);
+  }
 
   /// Returns the row at `index` within the full list, if it falls inside
   /// the current cached window. Outside the window → null (the screen
@@ -467,7 +508,8 @@ class ConnectionListNotifier extends ChangeNotifier {
   /// Ensure the cached rows cover `[firstIndex, lastIndex]`, plus overscan.
   void ensureWindow(ConnectionsTab tab, int firstIndex, int lastIndex) {
     _visibleTab = tab;
-    final total = tab == ConnectionsTab.active ? _activeCount : _closedCount;
+    if (hasFilter && _filterLoading) return;
+    final total = visibleCount(tab);
     if (total == 0) {
       _clearWindow(tab);
       return;
@@ -530,6 +572,14 @@ class ConnectionListNotifier extends ChangeNotifier {
       _refreshGroupsAgain = true;
       return;
     }
+    if (force) {
+      _groupsTimer?.cancel();
+      _groupsTimer = null;
+      final force = _pendingGroupsForce;
+      _pendingGroupsForce = false;
+      unawaited(_runGroupsRefresh(force: force));
+      return;
+    }
     _groupsTimer?.cancel();
     _groupsTimer = Timer(_refetchDebounce, () {
       _groupsTimer = null;
@@ -588,17 +638,27 @@ class ConnectionListNotifier extends ChangeNotifier {
     if (fetcher == null || !_grouped) return;
     final tab = _visibleTab;
     final revision = _groupsRevision;
+    final filterRevision = _filterRevision;
+    final query = _query;
     final List<rust.ConnectionGroup> fresh;
     try {
-      fresh = await fetcher(tab, _groupSort, _groupSortAsc);
+      fresh = await fetcher(tab, _groupSort, _groupSortAsc, query);
     } catch (_) {
       return;
     }
-    if (!_grouped || tab != _visibleTab || revision != _groupsRevision) return;
+    if (!_grouped ||
+        tab != _visibleTab ||
+        revision != _groupsRevision ||
+        filterRevision != _filterRevision) {
+      return;
+    }
+    final wasLoading = _filterLoading;
+    if (query.isNotEmpty) _filterLoading = false;
     _applyGroups(fresh, force: force);
     for (final key in _expandedGroups.toList()) {
       _refetchGroupMembers(key);
     }
+    if (wasLoading && !_filterLoading) notifyListeners();
   }
 
   void _applyGroups(List<rust.ConnectionGroup> fresh, {required bool force}) {
@@ -655,14 +715,17 @@ class ConnectionListNotifier extends ChangeNotifier {
     if (fetcher == null || !_expandedGroups.contains(groupKey)) return;
     final tab = _visibleTab;
     final revision = _groupsRevision;
+    final filterRevision = _filterRevision;
+    final query = _query;
     final List<rust.Connection> rows;
     try {
-      rows = await fetcher(tab, groupKey, _groupMemberCap);
+      rows = await fetcher(tab, groupKey, _groupMemberCap, query);
     } catch (_) {
       return;
     }
     if (tab != _visibleTab ||
         revision != _groupsRevision ||
+        filterRevision != _filterRevision ||
         !_expandedGroups.contains(groupKey)) {
       return;
     }
@@ -725,17 +788,19 @@ class ConnectionListNotifier extends ChangeNotifier {
     WindowFetcher fetcher, {
     required bool force,
   }) async {
-    final total = tab == ConnectionsTab.active ? _activeCount : _closedCount;
-    if (total == 0) {
+    final total = visibleCount(tab);
+    if (total == 0 && !hasFilter) {
       _clearWindow(tab);
       return;
     }
     final offset = tab == ConnectionsTab.active ? _activeOffset : _closedOffset;
     final limit = tab == ConnectionsTab.active ? _activeLimit : _closedLimit;
     if (limit <= 0) return;
+    final filterRevision = _filterRevision;
+    final query = _query;
     try {
-      final rows = await fetcher(tab, offset, limit);
-      _applyWindow(tab, offset, limit, rows);
+      final window = await fetcher(tab, offset, limit, query);
+      _applyWindow(tab, offset, limit, filterRevision, query, window);
     } catch (_) {
       // Silent — next frame retriggers.
     }
@@ -745,7 +810,9 @@ class ConnectionListNotifier extends ChangeNotifier {
     ConnectionsTab tab,
     int expectedOffset,
     int expectedLimit,
-    List<rust.Connection> rows,
+    int filterRevision,
+    String query,
+    rust.ConnectionWindow window,
   ) {
     // Stale response from a window that's since shifted? Drop it.
     final currentOffset = tab == ConnectionsTab.active
@@ -754,7 +821,25 @@ class ConnectionListNotifier extends ChangeNotifier {
     final currentLimit = tab == ConnectionsTab.active
         ? _activeLimit
         : _closedLimit;
-    if (expectedOffset != currentOffset || expectedLimit != currentLimit) {
+    if (expectedOffset != currentOffset ||
+        expectedLimit != currentLimit ||
+        filterRevision != _filterRevision ||
+        query != _query) {
+      return;
+    }
+
+    if (window.total > 0 && expectedOffset >= window.total) {
+      final nextOffset = (window.total - expectedLimit)
+          .clamp(0, window.total)
+          .toInt();
+      if (tab == ConnectionsTab.active) {
+        _activeOffset = nextOffset;
+      } else {
+        _closedOffset = nextOffset;
+      }
+      if (query.isNotEmpty) _filteredCount = window.total;
+      _scheduleRefetch(force: true);
+      notifyListeners();
       return;
     }
 
@@ -767,7 +852,7 @@ class ConnectionListNotifier extends ChangeNotifier {
 
     // Patch existing rows in place (volatile counters), and insert
     // brand-new ones.
-    for (final c in rows) {
+    for (final c in window.rows) {
       newIds.add(c.id);
       final existing = rowMap[c.id];
       if (existing != null) {
@@ -783,10 +868,18 @@ class ConnectionListNotifier extends ChangeNotifier {
     _retainRows(rowMap, newIds);
 
     final orderChanged = !_listEq(ids, newIds);
+    final countChanged = query.isNotEmpty && _filteredCount != window.total;
+    final wasLoading = _filterLoading;
+    if (query.isNotEmpty) {
+      _filteredCount = window.total;
+      _filterLoading = false;
+    }
     if (orderChanged) {
       ids
         ..clear()
         ..addAll(newIds);
+    }
+    if (orderChanged || countChanged || (wasLoading && !_filterLoading)) {
       notifyListeners();
     }
   }
@@ -800,6 +893,11 @@ class ConnectionListNotifier extends ChangeNotifier {
       _retireRow(active);
       _activeWindowIds.remove(id);
       if (_activeCount > 0) _activeCount--;
+      if (hasFilter &&
+          _visibleTab == ConnectionsTab.active &&
+          _filteredCount > 0) {
+        _filteredCount--;
+      }
       changed = true;
     }
     final closed = _closedRows.remove(id);
@@ -807,6 +905,11 @@ class ConnectionListNotifier extends ChangeNotifier {
       _retireRow(closed);
       _closedWindowIds.remove(id);
       if (_closedCount > 0) _closedCount--;
+      if (hasFilter &&
+          _visibleTab == ConnectionsTab.closed &&
+          _filteredCount > 0) {
+        _filteredCount--;
+      }
       changed = true;
     }
     if (changed) notifyListeners();
@@ -852,6 +955,9 @@ class ConnectionListNotifier extends ChangeNotifier {
     _closedOffset = 0;
     _activeCount = 0;
     _closedCount = 0;
+    _filteredCount = 0;
+    _filterLoading = hasFilter;
+    _filterRevision++;
     _refetchTimer?.cancel();
     _groupsTimer?.cancel();
     _pendingRefetchForce = false;

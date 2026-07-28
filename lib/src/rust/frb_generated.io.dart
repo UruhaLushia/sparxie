@@ -110,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionGroupSort dco_decode_connection_group_sort(dynamic raw);
 
   @protected
+  ConnectionWindow dco_decode_connection_window(dynamic raw);
+
+  @protected
   ConnectionsFrame dco_decode_connections_frame(dynamic raw);
 
   @protected
@@ -374,6 +377,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionGroupSort sse_decode_connection_group_sort(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ConnectionWindow sse_decode_connection_window(SseDeserializer deserializer);
 
   @protected
   ConnectionsFrame sse_decode_connections_frame(SseDeserializer deserializer);
@@ -692,6 +698,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_connection_group_sort(
     ConnectionGroupSort self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_connection_window(
+    ConnectionWindow self,
     SseSerializer serializer,
   );
 

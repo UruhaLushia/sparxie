@@ -123,30 +123,70 @@ pub async fn fetch_window(
     kind: ConnectionsListKind,
     offset: u32,
     limit: u32,
-) -> Vec<Connection> {
+    query: String,
+) -> (u32, Vec<Connection>) {
     let Some(slot) = slot_for(&target, interval_ms).await else {
-        return Vec::new();
+        return (0, Vec::new());
     };
+    let query = query.trim().to_lowercase();
     let mut state = slot.state.lock().expect("connections state poisoned");
     match kind {
         ConnectionsListKind::Active => {
             ensure_sorted_active_ids(&mut state);
-            state
+            if query.is_empty() {
+                let total = state.sorted_active_ids.len() as u32;
+                let window = state
+                    .sorted_active_ids
+                    .iter()
+                    .skip(offset as usize)
+                    .take(limit as usize)
+                    .filter_map(|id| state.active.get(id).cloned())
+                    .collect();
+                return (total, window);
+            }
+            let rows: Vec<_> = state
                 .sorted_active_ids
                 .iter()
+                .filter_map(|id| state.active.get(id))
+                .filter(|conn| conn.matches_query(&query))
+                .collect();
+            let total = rows.len() as u32;
+            let window = rows
+                .into_iter()
                 .skip(offset as usize)
                 .take(limit as usize)
-                .filter_map(|id| state.active.get(id).cloned())
-                .collect()
+                .cloned()
+                .collect();
+            (total, window)
         }
-        ConnectionsListKind::Closed => state
-            .closed
-            .iter()
-            .rev()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .cloned()
-            .collect(),
+        ConnectionsListKind::Closed => {
+            if query.is_empty() {
+                let total = state.closed.len() as u32;
+                let window = state
+                    .closed
+                    .iter()
+                    .rev()
+                    .skip(offset as usize)
+                    .take(limit as usize)
+                    .cloned()
+                    .collect();
+                return (total, window);
+            }
+            let rows: Vec<_> = state
+                .closed
+                .iter()
+                .rev()
+                .filter(|conn| conn.matches_query(&query))
+                .collect();
+            let total = rows.len() as u32;
+            let window = rows
+                .into_iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .cloned()
+                .collect();
+            (total, window)
+        }
     }
 }
 
@@ -157,14 +197,25 @@ pub async fn fetch_groups(
     kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
+    query: String,
 ) -> Vec<ConnectionGroup> {
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
     let state = slot.state.lock().expect("connections state poisoned");
     match kind {
-        ConnectionsListKind::Active => connection_groups(state.active.values(), sort, asc),
-        ConnectionsListKind::Closed => connection_groups(state.closed.iter().rev(), sort, asc),
+        ConnectionsListKind::Active => connection_groups(
+            state.active.values(),
+            sort,
+            asc,
+            &query.trim().to_lowercase(),
+        ),
+        ConnectionsListKind::Closed => connection_groups(
+            state.closed.iter().rev(),
+            sort,
+            asc,
+            &query.trim().to_lowercase(),
+        ),
     }
 }
 
@@ -175,21 +226,29 @@ pub async fn fetch_group_connections(
     kind: ConnectionsListKind,
     group: String,
     limit: u32,
+    query: String,
 ) -> Vec<Connection> {
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
     let mut state = slot.state.lock().expect("connections state poisoned");
+    let query = query.trim().to_lowercase();
     match kind {
         ConnectionsListKind::Active => {
             ensure_sorted_active_ids(&mut state);
-            group_connections_by_order(&state.active, &state.sorted_active_ids, &group, limit)
+            group_connections_by_order(
+                &state.active,
+                &state.sorted_active_ids,
+                &group,
+                limit,
+                &query,
+            )
         }
         ConnectionsListKind::Closed => state
             .closed
             .iter()
             .rev()
-            .filter(|conn| conn_in_group(conn, &group))
+            .filter(|conn| conn_in_group(conn, &group) && conn.matches_query(&query))
             .take(limit as usize)
             .cloned()
             .collect(),

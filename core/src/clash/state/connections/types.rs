@@ -36,6 +36,41 @@ pub struct Connection {
     pub is_closed: bool,
 }
 
+impl Connection {
+    pub(super) fn matches_query(&self, query: &str) -> bool {
+        if query.is_empty() {
+            return true;
+        }
+        let contains = |value: &str| value.to_lowercase().contains(query);
+        contains(&self.host)
+            || contains(&self.network)
+            || contains(&self.conn_type)
+            || contains(&self.source_ip)
+            || self.source_port.to_string().contains(query)
+            || format!("{}:{}", self.source_ip, self.source_port).contains(query)
+            || contains(&self.destination_ip)
+            || self.destination_port.to_string().contains(query)
+            || format!("{}:{}", self.destination_ip, self.destination_port).contains(query)
+            || contains(&self.inbound_ip)
+            || self.inbound_port.to_string().contains(query)
+            || format!("{}:{}", self.inbound_ip, self.inbound_port).contains(query)
+            || contains(&self.inbound_name)
+            || contains(&self.dns_mode)
+            || self.uid.to_string().contains(query)
+            || contains(&self.process)
+            || contains(&self.process_path)
+            || contains(&self.special_proxy)
+            || contains(&self.special_rules)
+            || contains(&self.remote_destination)
+            || contains(&self.sniff_host)
+            || contains(&self.rule)
+            || contains(&self.rule_payload)
+            || contains(&self.start)
+            || self.chains.iter().any(|value| contains(value))
+            || self.connection_logs.iter().any(|value| contains(value))
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ConnectionsTotals {
     pub upload: u64,

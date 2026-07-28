@@ -49,18 +49,20 @@ Stream<ConnectionsFrame> connectionsStream({
   intervalMs: intervalMs,
 );
 
-Future<List<Connection>> fetchConnectionWindow({
+Future<ConnectionWindow> fetchConnectionWindow({
   required BackendTarget target,
   required int intervalMs,
   required ConnectionsListKind kind,
   required int offset,
   required int limit,
+  required String query,
 }) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionWindow(
   target: target,
   intervalMs: intervalMs,
   kind: kind,
   offset: offset,
   limit: limit,
+  query: query,
 );
 
 Future<List<ConnectionGroup>> fetchConnectionGroups({
@@ -69,12 +71,14 @@ Future<List<ConnectionGroup>> fetchConnectionGroups({
   required ConnectionsListKind kind,
   required ConnectionGroupSort sort,
   required bool asc,
+  required String query,
 }) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionGroups(
   target: target,
   intervalMs: intervalMs,
   kind: kind,
   sort: sort,
   asc: asc,
+  query: query,
 );
 
 Future<List<Connection>> fetchConnectionGroupMembers({
@@ -83,6 +87,7 @@ Future<List<Connection>> fetchConnectionGroupMembers({
   required ConnectionsListKind kind,
   required String group,
   required int limit,
+  required String query,
 }) =>
     RustLib.instance.api.crateBackendApiConnectionsFetchConnectionGroupMembers(
       target: target,
@@ -90,6 +95,7 @@ Future<List<Connection>> fetchConnectionGroupMembers({
       kind: kind,
       group: group,
       limit: limit,
+      query: query,
     );
 
 Future<void> setConnectionsSort({

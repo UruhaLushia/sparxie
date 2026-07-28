@@ -82,13 +82,14 @@ class MihomoSession {
     groupMembersFetcher: _fetchConnectionGroupMembers,
   );
 
-  Future<List<rust.Connection>> _fetchConnectionWindow(
+  Future<rust.ConnectionWindow> _fetchConnectionWindow(
     ConnectionsTab tab,
     int offset,
     int limit,
+    String query,
   ) async {
     final t = _target;
-    if (t == null) return const [];
+    if (t == null) return const rust.ConnectionWindow(total: 0, rows: []);
     return rust.fetchConnectionWindow(
       target: t,
       intervalMs: _connectionsIntervalMs,
@@ -97,6 +98,7 @@ class MihomoSession {
           : rust.ConnectionsListKind.closed,
       offset: offset,
       limit: limit,
+      query: query,
     );
   }
 
@@ -104,6 +106,7 @@ class MihomoSession {
     ConnectionsTab tab,
     rust.ConnectionGroupSort sort,
     bool asc,
+    String query,
   ) async {
     final t = _target;
     if (t == null) return const [];
@@ -115,6 +118,7 @@ class MihomoSession {
           : rust.ConnectionsListKind.closed,
       sort: sort,
       asc: asc,
+      query: query,
     );
   }
 
@@ -122,6 +126,7 @@ class MihomoSession {
     ConnectionsTab tab,
     String groupKey,
     int limit,
+    String query,
   ) async {
     final t = _target;
     if (t == null) return const [];
@@ -133,6 +138,7 @@ class MihomoSession {
           : rust.ConnectionsListKind.closed,
       group: groupKey,
       limit: limit,
+      query: query,
     );
   }
 

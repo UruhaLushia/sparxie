@@ -30,9 +30,77 @@ class ConnectionsScreen extends StatefulWidget {
   State<ConnectionsScreen> createState() => _ConnectionsScreenState();
 }
 
+class _TabListTransitionScope extends InheritedWidget {
+  const _TabListTransitionScope({
+    required this.animation,
+    required super.child,
+  });
+
+  final Animation<double> animation;
+
+  static _TabListTransitionScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_TabListTransitionScope>();
+
+  @override
+  bool updateShouldNotify(_TabListTransitionScope oldWidget) =>
+      animation != oldWidget.animation;
+}
+
+class _TabSwitchDirectionScope extends InheritedWidget {
+  const _TabSwitchDirectionScope({
+    required this.direction,
+    required super.child,
+  });
+
+  final int direction;
+
+  static _TabSwitchDirectionScope of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_TabSwitchDirectionScope>()!;
+
+  @override
+  bool updateShouldNotify(_TabSwitchDirectionScope oldWidget) =>
+      direction != oldWidget.direction;
+}
+
+class _StaggeredTabItem extends StatelessWidget {
+  const _StaggeredTabItem({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = _TabListTransitionScope.maybeOf(context);
+    if (scope == null) return child;
+    final direction = _TabSwitchDirectionScope.of(context).direction;
+    final slot = math.min(index, 7);
+    return AnimatedBuilder(
+      animation: scope.animation,
+      child: child,
+      builder: (context, child) {
+        final incoming = scope.animation.status != AnimationStatus.reverse;
+        final start = incoming ? 0.28 + slot * 0.02 : 0.68 - slot * 0.02;
+        final end = incoming ? start + 0.3 : math.min(start + 0.3, 0.99);
+        final raw = Interval(start, end).transform(scope.animation.value);
+        final progress = Curves.easeInOutCubic.transform(raw);
+        final offset = (incoming ? 0.1 : -0.07) * direction * (1 - progress);
+        return Opacity(
+          opacity: progress,
+          child: FractionalTranslation(
+            translation: Offset(offset, 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
   String _filter = '';
   ConnectionsTab _tab = ConnectionsTab.active;
+  int _tabDirection = 1;
+  final TextEditingController _filterController = TextEditingController();
 
   rust.BackendTarget? _target() {
     final c = widget.store.active;
@@ -46,11 +114,13 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     widget.prefs.addListener(_onPrefsChanged);
     _pushSortToBackend();
     _syncGrouping();
+    widget.session.connections.setFilter(_filter);
   }
 
   @override
   void dispose() {
     widget.prefs.removeListener(_onPrefsChanged);
+    _filterController.dispose();
     super.dispose();
   }
 
@@ -109,8 +179,19 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   void _setTab(ConnectionsTab tab) {
     if (tab == _tab) return;
+    _tabDirection = tab.index > _tab.index ? 1 : -1;
     widget.session.connections.setVisibleTab(tab);
     setState(() => _tab = tab);
+  }
+
+  Widget _tabTransition(Widget child, Animation<double> animation) {
+    return _TabListTransitionScope(animation: animation, child: child);
+  }
+
+  void _setFilter(String value) {
+    final next = value.trim();
+    widget.session.connections.setFilter(next);
+    setState(() => _filter = next);
   }
 
   Future<void> _close(String id) async {
@@ -317,17 +398,29 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       },
                     );
                     final filter = TextField(
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search, size: 18),
+                      controller: _filterController,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        suffixIcon: _filterController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: '清除筛选',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () {
+                                  _filterController.clear();
+                                  _setFilter('');
+                                },
+                                icon: const Icon(Icons.close, size: 18),
+                              ),
                         hintText: '筛选',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 8,
                         ),
                       ),
-                      onChanged: (v) => setState(() => _filter = v.trim()),
+                      onChanged: _setFilter,
                     );
                     final sortField = ListenableBuilder(
                       listenable: widget.prefs,
@@ -454,23 +547,43 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 listenable: widget.prefs,
                 builder: (context, _) {
                   final grouped = widget.prefs.connectionsGroupByProcess;
-                  if (grouped) {
-                    return _GroupedConnectionsList(
-                      session: widget.session,
-                      prefs: widget.prefs,
-                      tab: _tab,
-                      filter: _filter,
-                      onTap: _showDetail,
-                      onClose: _close,
-                    );
-                  }
-                  return _ConnectionsList(
-                    session: widget.session,
-                    prefs: widget.prefs,
-                    tab: _tab,
-                    filter: _filter,
-                    onTap: _showDetail,
-                    onClose: _close,
+                  final content = grouped
+                      ? _GroupedConnectionsList(
+                          session: widget.session,
+                          prefs: widget.prefs,
+                          tab: _tab,
+                          filter: _filter,
+                          onTap: _showDetail,
+                          onClose: _close,
+                        )
+                      : _ConnectionsList(
+                          session: widget.session,
+                          prefs: widget.prefs,
+                          tab: _tab,
+                          filter: _filter,
+                          onTap: _showDetail,
+                          onClose: _close,
+                        );
+                  return ClipRect(
+                    child: _TabSwitchDirectionScope(
+                      direction: _tabDirection,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 420),
+                        reverseDuration: const Duration(milliseconds: 420),
+                        switchInCurve: Curves.linear,
+                        switchOutCurve: Curves.linear,
+                        transitionBuilder: _tabTransition,
+                        layoutBuilder: (currentChild, previousChildren) =>
+                            Stack(
+                              fit: StackFit.expand,
+                              children: [...previousChildren, ?currentChild],
+                            ),
+                        child: KeyedSubtree(
+                          key: ValueKey(_tab),
+                          child: content,
+                        ),
+                      ),
+                    ),
                   );
                 },
               ),
@@ -540,7 +653,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
       oldWidget.session.connections.removeListener(_onChange);
       widget.session.connections.addListener(_onChange);
     }
-    if (oldWidget.tab != widget.tab) {
+    if (oldWidget.tab != widget.tab || oldWidget.filter != widget.filter) {
       // Tab switch — jump scroll to top so the user starts at index 0
       // of the new list, and prefetch its head window.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -562,7 +675,9 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   void _onChange() {
-    if (!mounted) return;
+    if (!mounted || widget.session.connections.visibleTab != widget.tab) {
+      return;
+    }
     setState(() {});
     _scheduleEnsureWindow();
   }
@@ -582,7 +697,10 @@ class _ConnectionsListState extends State<_ConnectionsList> {
 
   /// Ask the notifier to cache only the visible range plus a small overscan.
   void _ensureWindow() {
-    if (!_scrollController.hasClients) return;
+    if (!_scrollController.hasClients ||
+        widget.session.connections.visibleTab != widget.tab) {
+      return;
+    }
     final pos = _scrollController.position;
     final firstIndex = (pos.pixels / _rowHeight).floor();
     final lastIndex =
@@ -592,9 +710,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
 
   int _totalCount() {
     final cn = widget.session.connections;
-    return widget.tab == ConnectionsTab.active
-        ? cn.activeCount
-        : cn.closedCount;
+    return cn.visibleCount(widget.tab);
   }
 
   @override
@@ -608,15 +724,21 @@ class _ConnectionsListState extends State<_ConnectionsList> {
     _rowHeight = fixedPart + textPart * math.max(1.0, textScale);
 
     final total = _totalCount();
+    if (widget.session.connections.filterLoading) {
+      return const SizedBox.expand();
+    }
     if (total == 0) {
       return Center(
         child: Text(
-          widget.tab == ConnectionsTab.active ? '暂无连接' : '暂无已关闭连接',
+          widget.filter.isNotEmpty
+              ? '没有匹配的连接'
+              : widget.tab == ConnectionsTab.active
+              ? '暂无连接'
+              : '暂无已关闭连接',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
     }
-    final filter = widget.filter;
     // Local backend only: the process paths in /connections refer to the
     // backend host, so resolving icons for a remote controller is wrong.
     final processIcons = widget.session.isLocalBackend
@@ -643,20 +765,20 @@ class _ConnectionsListState extends State<_ConnectionsList> {
             itemBuilder: (context, index) {
               final cn = widget.session.connections;
               final row = cn.rowAt(widget.tab, index);
-              // When a filter is active, hide rows that don't match.
-              final visible =
-                  filter.isEmpty || (row != null && row.matches(filter));
-              return _RowSlot(
-                // Same key for the same row id keeps state across frames so
-                // the AnimatedSwitcher inside doesn't re-trigger transitions.
-                key: ValueKey(row?.id ?? 'idx::$index'),
-                row: visible ? row : null,
-                duration: _animDuration,
-                processIcons: processIcons,
-                showIcon: showIcon,
-                showAppName: showAppName,
-                onTap: row == null ? null : () => widget.onTap(row),
-                onClose: row == null ? null : () => widget.onClose(row.id),
+              return _StaggeredTabItem(
+                index: index,
+                child: _RowSlot(
+                  // Same key for the same row id keeps state across frames so
+                  // the AnimatedSwitcher inside doesn't re-trigger transitions.
+                  key: ValueKey(row?.id ?? 'idx::$index'),
+                  row: row,
+                  duration: _animDuration,
+                  processIcons: processIcons,
+                  showIcon: showIcon,
+                  showAppName: showAppName,
+                  onTap: row == null ? null : () => widget.onTap(row),
+                  onClose: row == null ? null : () => widget.onClose(row.id),
+                ),
               );
             },
           );
@@ -787,17 +909,9 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   }
 
   void _onChange() {
-    if (mounted) setState(() {});
-  }
-
-  bool _matches(ConnectionGroupSummary g) {
-    final f = widget.filter;
-    if (f.isEmpty) return true;
-    final n = f.toLowerCase();
-    return g.label.toLowerCase().contains(n) ||
-        g.process.toLowerCase().contains(n) ||
-        g.processPath.toLowerCase().contains(n) ||
-        g.sourceIp.toLowerCase().contains(n);
+    if (mounted && widget.session.connections.visibleTab == widget.tab) {
+      setState(() {});
+    }
   }
 
   Future<void> _closeGroup(ConnectionGroupSummary g) async {
@@ -859,7 +973,10 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   @override
   Widget build(BuildContext context) {
     final cn = widget.session.connections;
-    final groups = cn.groups.where(_matches).toList(growable: false);
+    final groups = cn.groups;
+    if (cn.filterLoading) {
+      return const SizedBox.expand();
+    }
     if (groups.isEmpty) {
       return Center(
         child: Text(
@@ -867,7 +984,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
               ? widget.tab == ConnectionsTab.active
                     ? '暂无连接'
                     : '暂无已关闭连接'
-              : '没有匹配的进程',
+              : '没有匹配的连接',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
@@ -882,25 +999,28 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       child: CustomScrollView(
         slivers: [
           const SliverToBoxAdapter(child: SizedBox(height: 4)),
-          for (final group in groups)
+          for (final (groupIndex, group) in groups.indexed)
             MultiSliver(
               pushPinnedChildren: true,
               children: [
                 SliverPinnedHeader(
-                  child: RepaintBoundary(
-                    child: ConnectionGroupHeader(
-                      summary: group,
-                      expanded: cn.isExpanded(group.key),
-                      onToggle: () => cn.toggleGroup(group.key),
-                      onCloseAll: widget.tab == ConnectionsTab.active
-                          ? () => _closeGroup(group)
-                          : null,
-                      onClearAll: widget.tab == ConnectionsTab.closed
-                          ? () => _clearClosedGroup(group)
-                          : null,
-                      processIcons: processIcons,
-                      showIcon: showIcon,
-                      showAppName: showAppName,
+                  child: _StaggeredTabItem(
+                    index: groupIndex,
+                    child: RepaintBoundary(
+                      child: ConnectionGroupHeader(
+                        summary: group,
+                        expanded: cn.isExpanded(group.key),
+                        onToggle: () => cn.toggleGroup(group.key),
+                        onCloseAll: widget.tab == ConnectionsTab.active
+                            ? () => _closeGroup(group)
+                            : null,
+                        onClearAll: widget.tab == ConnectionsTab.closed
+                            ? () => _clearClosedGroup(group)
+                            : null,
+                        processIcons: processIcons,
+                        showIcon: showIcon,
+                        showAppName: showAppName,
+                      ),
                     ),
                   ),
                 ),
@@ -917,19 +1037,22 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                             if (row == null) {
                               return const SizedBox(height: 60);
                             }
-                            return Padding(
-                              key: ValueKey('grp::${group.key}::${row.id}'),
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: ConnectionTile(
-                                row: row,
-                                // Members sit under the group's process
-                                // header, so the per-row icon and process
-                                // prefix are redundant.
-                                showIcon: false,
-                                hideProcess: true,
-                                compact: true,
-                                onTap: () => widget.onTap(row),
-                                onClose: () => widget.onClose(row.id),
+                            return _StaggeredTabItem(
+                              index: groupIndex + index + 1,
+                              child: Padding(
+                                key: ValueKey('grp::${group.key}::${row.id}'),
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: ConnectionTile(
+                                  row: row,
+                                  // Members sit under the group's process
+                                  // header, so the per-row icon and process
+                                  // prefix are redundant.
+                                  showIcon: false,
+                                  hideProcess: true,
+                                  compact: true,
+                                  onTap: () => widget.onTap(row),
+                                  onClose: () => widget.onClose(row.id),
+                                ),
                               ),
                             );
                           },
