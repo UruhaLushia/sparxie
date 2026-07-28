@@ -5,6 +5,7 @@
 #   XCARCHIVE_ZIP, MOBILEPROVISION_PATH, IOS_BUILD_NUMBER, KEYCHAIN_PASSWORD
 # Optional:
 #   OUTPUT_DIR=out, IPA_NAME=sparxie-ios-testflight.ipa
+#   REWRITE_ARCHIVE_BUILD_NUMBER=false
 
 set -euo pipefail
 
@@ -17,6 +18,7 @@ PROJECT_ROOT="$(pwd)"
 : "${KEYCHAIN_PASSWORD:?KEYCHAIN_PASSWORD is required}"
 : "${OUTPUT_DIR:=out}"
 : "${IPA_NAME:=sparxie-ios-testflight.ipa}"
+: "${REWRITE_ARCHIVE_BUILD_NUMBER:=false}"
 
 EXPECTED_BUNDLE_ID="zip.atri.sparxie"
 EXPECTED_TEAM_ID="7P8CLHDH5G"
@@ -35,6 +37,11 @@ require_cmd ditto
 require_cmd plutil
 require_cmd security
 require_cmd xcodebuild
+require_cmd xcrun
+
+test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.3"
+test "$(xcodebuild -version | sed -n '2p')" = "Build version 17C529"
+test "$(xcrun --sdk iphoneos --show-sdk-version)" = "26.2"
 
 if [[ "$XCARCHIVE_ZIP" != /* ]]; then
   XCARCHIVE_ZIP="$PROJECT_ROOT/$XCARCHIVE_ZIP"
@@ -49,6 +56,13 @@ fi
 test -s "$XCARCHIVE_ZIP"
 test -s "$MOBILEPROVISION_PATH"
 [[ "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+case "$REWRITE_ARCHIVE_BUILD_NUMBER" in
+  true | false) ;;
+  *)
+    echo "REWRITE_ARCHIVE_BUILD_NUMBER must be true or false." >&2
+    exit 1
+    ;;
+esac
 
 task_temp_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 work_dir="$(mktemp -d "$task_temp_root/sparxie-export.XXXXXX")"
@@ -114,15 +128,51 @@ fi
 archive_unpack_dir="$work_dir/archive"
 mkdir -p "$archive_unpack_dir"
 ditto -x -k "$XCARCHIVE_ZIP" "$archive_unpack_dir"
-xcarchive="$(find "$archive_unpack_dir" -maxdepth 1 -type d -name '*.xcarchive' | head -n1)"
-test -n "$xcarchive"
+shopt -s nullglob
+xcarchives=("$archive_unpack_dir"/*.xcarchive)
+shopt -u nullglob
+test "${#xcarchives[@]}" -eq 1
+xcarchive="${xcarchives[0]}"
+test -d "$xcarchive"
 
-archive_app="$(find "$xcarchive/Products/Applications" -maxdepth 1 -type d -name '*.app' | head -n1)"
-test -n "$archive_app"
+shopt -s nullglob
+archive_apps=("$xcarchive/Products/Applications"/*.app)
+shopt -u nullglob
+test "${#archive_apps[@]}" -eq 1
+archive_app="${archive_apps[0]}"
+test -d "$archive_app"
 archive_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$archive_app/Info.plist")"
 archive_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$archive_app/Info.plist")"
 test "$archive_bundle_id" = "$EXPECTED_BUNDLE_ID"
-test "$archive_build_number" = "$IOS_BUILD_NUMBER"
+
+if [[ "$REWRITE_ARCHIVE_BUILD_NUMBER" == "true" ]]; then
+  if [[ -e "$archive_app/_CodeSignature" || -L "$archive_app/_CodeSignature" ]]; then
+    echo "Refusing to rewrite a signed archive: _CodeSignature is present." >&2
+    exit 1
+  fi
+  if codesign -d "$archive_app" >/dev/null 2>&1; then
+    echo "Refusing to rewrite a signed archive: the app has a code signature." >&2
+    exit 1
+  fi
+
+  archive_info_plist="$xcarchive/Info.plist"
+  test -f "$archive_info_plist"
+  /usr/libexec/PlistBuddy \
+    -c "Set :CFBundleVersion $IOS_BUILD_NUMBER" \
+    "$archive_app/Info.plist"
+  /usr/libexec/PlistBuddy \
+    -c "Set :ApplicationProperties:CFBundleVersion $IOS_BUILD_NUMBER" \
+    "$archive_info_plist"
+
+  archive_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$archive_app/Info.plist")"
+  archive_metadata_build_number="$(
+    /usr/libexec/PlistBuddy -c 'Print :ApplicationProperties:CFBundleVersion' "$archive_info_plist"
+  )"
+  test "$archive_build_number" = "$IOS_BUILD_NUMBER"
+  test "$archive_metadata_build_number" = "$IOS_BUILD_NUMBER"
+else
+  test "$archive_build_number" = "$IOS_BUILD_NUMBER"
+fi
 
 export_options="$work_dir/ExportOptions.plist"
 plutil -create xml1 "$export_options"
@@ -146,8 +196,12 @@ xcodebuild -exportArchive \
   -exportPath "$export_dir" \
   -exportOptionsPlist "$export_options"
 
-exported_ipa="$(find "$export_dir" -maxdepth 1 -type f -name '*.ipa' | head -n1)"
-test -n "$exported_ipa"
+shopt -s nullglob
+exported_ipas=("$export_dir"/*.ipa)
+shopt -u nullglob
+test "${#exported_ipas[@]}" -eq 1
+exported_ipa="${exported_ipas[0]}"
+test -f "$exported_ipa"
 mkdir -p "$OUTPUT_DIR"
 output_ipa="$OUTPUT_DIR/$IPA_NAME"
 cp "$exported_ipa" "$output_ipa"
@@ -155,8 +209,12 @@ cp "$exported_ipa" "$output_ipa"
 signed_unpack_dir="$work_dir/signed"
 mkdir -p "$signed_unpack_dir"
 ditto -x -k "$output_ipa" "$signed_unpack_dir"
-signed_app="$(find "$signed_unpack_dir/Payload" -maxdepth 1 -type d -name '*.app' | head -n1)"
-test -n "$signed_app"
+shopt -s nullglob
+signed_apps=("$signed_unpack_dir/Payload"/*.app)
+shopt -u nullglob
+test "${#signed_apps[@]}" -eq 1
+signed_app="${signed_apps[0]}"
+test -d "$signed_app"
 
 signed_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$signed_app/Info.plist")"
 signed_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$signed_app/Info.plist")"

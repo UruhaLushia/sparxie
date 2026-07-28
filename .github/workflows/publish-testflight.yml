@@ -1,0 +1,768 @@
+name: Publish TestFlight
+
+on:
+  workflow_run:
+    workflows: [Release, Pre-release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful Release or Pre-release run containing ios-xcarchive
+        required: true
+        type: string
+      upload:
+        description: Upload after signing and App Store Connect validation
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  ASC_APP_ID: '6781533588'
+  EXPECTED_BUNDLE_ID: zip.atri.sparxie
+
+jobs:
+  verify-source:
+    name: Verify source workflow run
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.verify.outputs.source_run_id }}
+      source_run_attempt: ${{ steps.verify.outputs.source_run_attempt }}
+      source_sha: ${{ steps.verify.outputs.source_sha }}
+      source_head_branch: ${{ steps.verify.outputs.source_head_branch }}
+      source_path: ${{ steps.verify.outputs.source_path }}
+      should_upload: ${{ steps.verify.outputs.should_upload }}
+    steps:
+      - name: Verify source run and artifact
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          AUTOMATIC_RUN_ID: ${{ github.event.workflow_run.id }}
+          MANUAL_RUN_ID: ${{ inputs.source_run_id }}
+          MANUAL_UPLOAD: ${{ inputs.upload }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CURRENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+            source_run_id="$AUTOMATIC_RUN_ID"
+            should_upload=true
+          else
+            source_run_id="$MANUAL_RUN_ID"
+            should_upload="${MANUAL_UPLOAD:-false}"
+            test "$CURRENT_REF" = "refs/heads/$DEFAULT_BRANCH"
+          fi
+          [[ "$source_run_id" =~ ^[1-9][0-9]*$ ]]
+          [[ "$should_upload" == true || "$should_upload" == false ]]
+
+          source_json="$(gh api "repos/$CURRENT_REPOSITORY/actions/runs/$source_run_id")"
+          source_repository="$(jq -r '.repository.full_name' <<<"$source_json")"
+          source_conclusion="$(jq -r '.conclusion' <<<"$source_json")"
+          source_event="$(jq -r '.event' <<<"$source_json")"
+          source_path="$(jq -r '.path' <<<"$source_json")"
+          source_path="${source_path%%@*}"
+          source_head_branch="$(jq -r '.head_branch // ""' <<<"$source_json")"
+          source_sha="$(jq -r '.head_sha' <<<"$source_json")"
+          source_run_attempt="$(jq -r '.run_attempt' <<<"$source_json")"
+
+          test "$source_repository" = "$CURRENT_REPOSITORY"
+          test "$source_conclusion" = success
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$source_run_attempt" =~ ^[1-9][0-9]*$ ]]
+
+          case "$source_path:$source_event" in
+            .github/workflows/release.yml:push)
+              [[ "$source_head_branch" == v* ]]
+              ;;
+            .github/workflows/pre-release.yml:workflow_dispatch)
+              test "$source_head_branch" = "$DEFAULT_BRANCH"
+              ;;
+            *)
+              printf '::error::Run %s is not an allowed Release or Pre-release source.\n' \
+                "$source_run_id"
+              exit 1
+              ;;
+          esac
+
+          artifacts_json="$(
+            gh api "repos/$CURRENT_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100"
+          )"
+          artifact_count="$(
+            jq '[.artifacts[] | select(.name == "ios-xcarchive" and .expired == false)] | length' \
+              <<<"$artifacts_json"
+          )"
+          test "$artifact_count" = 1
+
+          {
+            printf 'source_run_id=%s\n' "$source_run_id"
+            printf 'source_run_attempt=%s\n' "$source_run_attempt"
+            printf 'source_sha=%s\n' "$source_sha"
+            printf 'source_head_branch=%s\n' "$source_head_branch"
+            printf 'source_path=%s\n' "$source_path"
+            printf 'should_upload=%s\n' "$should_upload"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            printf '## TestFlight source\n\n'
+            printf -- '- Workflow: `%s`\n' "$source_path"
+            printf -- '- Run: `%s` (attempt `%s`)\n' "$source_run_id" "$source_run_attempt"
+            printf -- '- Commit: `%s`\n' "$source_sha"
+            printf -- '- Upload: `%s`\n' "$should_upload"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out trusted verification script
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download unsigned xcarchive for preflight
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-xcarchive
+          path: ${{ runner.temp }}/sparxie-testflight-preflight-${{ github.run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.verify.outputs.source_run_id }}
+
+      - name: Verify manifest and archive digest before credentials
+        shell: bash
+        env:
+          SOURCE_DIR: ${{ runner.temp }}/sparxie-testflight-preflight-${{ github.run_id }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ steps.verify.outputs.source_run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.verify.outputs.source_run_attempt }}
+          SOURCE_SHA: ${{ steps.verify.outputs.source_sha }}
+          SOURCE_HEAD_BRANCH: ${{ steps.verify.outputs.source_head_branch }}
+          SOURCE_PATH: ${{ steps.verify.outputs.source_path }}
+        run: |
+          set -euo pipefail
+          python3 ./scripts/verify-ios-xcarchive.py \
+            --manifest "$SOURCE_DIR/ios-xcarchive-manifest.json" \
+            --artifact-directory "$SOURCE_DIR" \
+            --repository "$CURRENT_REPOSITORY" \
+            --run-id "$SOURCE_RUN_ID" \
+            --run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --head-sha "$SOURCE_SHA" \
+            --source-path "$SOURCE_PATH" \
+            --source-head-branch "$SOURCE_HEAD_BRANCH" \
+            --bundle-id "$EXPECTED_BUNDLE_ID" \
+            >/dev/null
+
+  publish:
+    name: Sign, validate, and publish
+    needs: verify-source
+    if: needs.verify-source.result == 'success'
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    environment: testflight
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      SOURCE_RUN_ID: ${{ needs.verify-source.outputs.source_run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ needs.verify-source.outputs.source_run_attempt }}
+      SOURCE_SHA: ${{ needs.verify-source.outputs.source_sha }}
+      SOURCE_HEAD_BRANCH: ${{ needs.verify-source.outputs.source_head_branch }}
+      SOURCE_PATH: ${{ needs.verify-source.outputs.source_path }}
+      SHOULD_UPLOAD: ${{ needs.verify-source.outputs.should_upload }}
+    steps:
+      - name: Check out trusted publishing scripts
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download unsigned xcarchive
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-xcarchive
+          path: ${{ runner.temp }}/sparxie-testflight-source-${{ github.run_id }}-${{ github.run_attempt }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.verify-source.outputs.source_run_id }}
+
+      - name: Verify xcarchive manifest
+        shell: bash
+        env:
+          SOURCE_DIR: ${{ runner.temp }}/sparxie-testflight-source-${{ github.run_id }}-${{ github.run_attempt }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          manifest_path="$SOURCE_DIR/ios-xcarchive-manifest.json"
+          archive_path="$(
+            python3 ./scripts/verify-ios-xcarchive.py \
+              --manifest "$manifest_path" \
+              --artifact-directory "$SOURCE_DIR" \
+              --repository "$CURRENT_REPOSITORY" \
+              --run-id "$SOURCE_RUN_ID" \
+              --run-attempt "$SOURCE_RUN_ATTEMPT" \
+              --head-sha "$SOURCE_SHA" \
+              --source-path "$SOURCE_PATH" \
+              --source-head-branch "$SOURCE_HEAD_BRANCH" \
+              --bundle-id "$EXPECTED_BUNDLE_ID"
+          )"
+
+          printf 'XCARCHIVE_ZIP=%s\n' "$archive_path" >> "$GITHUB_ENV"
+          printf 'XCARCHIVE_MANIFEST=%s\n' "$manifest_path" >> "$GITHUB_ENV"
+
+      - name: Verify local Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$DEVELOPER_DIR/usr/bin/xcodebuild"
+          test "$(xcodebuild -version | sed -n '1p')" = 'Xcode 26.3'
+          test "$(xcodebuild -version | sed -n '2p')" = 'Build version 17C529'
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = '26.2'
+
+      - name: Find publisher state from an earlier attempt
+        id: prior-state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=testflight-state&per_page=100"
+          )"
+          count="$(
+            printf '%s' "$response" |
+              python3 -c 'import json, sys; print(sum(not item.get("expired", False) for item in json.load(sys.stdin).get("artifacts", [])))'
+          )"
+          [[ "$count" =~ ^[0-9]+$ ]]
+          if (( count > 1 )); then
+            printf '::error::Found %s unexpired publisher state artifacts.\n' "$count"
+            exit 1
+          fi
+          if (( count == 1 )); then
+            printf 'has_state=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'has_state=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore publisher state from an earlier attempt
+        if: steps.prior-state.outputs.has_state == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: testflight-state
+          path: ${{ runner.temp }}/sparxie-testflight-state-${{ github.run_id }}-${{ github.run_attempt }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+
+      - name: Select TestFlight build number
+        id: select-build
+        shell: bash
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          RESTORED_STATE_DIR: ${{ runner.temp }}/sparxie-testflight-state-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          test -n "$ASC_API_KEY_BASE64"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+          [[ "$SHOULD_UPLOAD" == true || "$SHOULD_UPLOAD" == false ]]
+
+          manifest_values="$(
+            python3 -c '
+          import json
+          import sys
+          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+          print("{}\t{}".format(manifest["run_attempt"], manifest["archive_sha256"]))
+          ' "$XCARCHIVE_MANIFEST"
+          )"
+          IFS=$'\t' read -r source_archive_attempt source_archive_sha256 <<< "$manifest_values"
+          [[ "$source_archive_attempt" =~ ^[1-9][0-9]*$ ]]
+          [[ "$source_archive_sha256" =~ ^[0-9a-f]{64}$ ]]
+
+          task_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-testflight.XXXXXX")"
+          printf 'TESTFLIGHT_TASK_DIR=%s\n' "$task_dir" >> "$GITHUB_ENV"
+          private_keys_dir="$task_dir/private_keys"
+          profile_path="$task_dir/Sparxie.mobileprovision"
+          signed_ipa="$task_dir/out/sparxie-ios-testflight.ipa"
+          state_path="$task_dir/testflight-state.json"
+          mkdir -p "$private_keys_dir"
+
+          printf '%s' "$ASC_API_KEY_BASE64" |
+            base64 --decode > "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+
+          restored_state="$RESTORED_STATE_DIR/testflight-state.json"
+          if [[ -s "$restored_state" ]]; then
+            build_number="$(
+              SOURCE_RUN_ID="$SOURCE_RUN_ID" \
+              SOURCE_SHA="$SOURCE_SHA" \
+              SOURCE_ARCHIVE_ATTEMPT="$source_archive_attempt" \
+              SOURCE_ARCHIVE_SHA256="$source_archive_sha256" \
+              SHOULD_UPLOAD="$SHOULD_UPLOAD" \
+              PUBLISHER_RUN_ID="$GITHUB_RUN_ID" \
+              python3 - "$restored_state" <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              state = json.load(handle)
+          expected = {
+              "schema_version": 1,
+              "publisher_run_id": int(os.environ["PUBLISHER_RUN_ID"]),
+              "source_run_id": int(os.environ["SOURCE_RUN_ID"]),
+              "source_sha": os.environ["SOURCE_SHA"],
+              "source_archive_attempt": int(os.environ["SOURCE_ARCHIVE_ATTEMPT"]),
+              "source_archive_sha256": os.environ["SOURCE_ARCHIVE_SHA256"],
+              "upload": os.environ["SHOULD_UPLOAD"] == "true",
+          }
+          for key, value in expected.items():
+              if state.get(key) != value:
+                  raise SystemExit(
+                      f"publisher state field {key!r} was {state.get(key)!r}, expected {value!r}"
+                  )
+          build_number = str(state.get("build_number", ""))
+          if not build_number.isdigit() or int(build_number) < 1:
+              raise SystemExit("publisher state has an invalid build number")
+          upload_started = state.get("upload_started")
+          if not isinstance(upload_started, bool):
+              raise SystemExit("publisher state has an invalid upload_started flag")
+          print(f"{build_number}\t{str(upload_started).lower()}")
+          PY
+            )"
+            IFS=$'\t' read -r build_number upload_started <<< "$build_number"
+            cp "$restored_state" "$state_path"
+          else
+            api_key_path="$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+            jwt_output="$(
+              xcrun altool --generate-jwt \
+                --api-key "$ASC_KEY_ID" \
+                --api-issuer "$ASC_ISSUER_ID" \
+                --p8-file-path "$api_key_path" 2>&1
+            )"
+            jwt="$(
+              printf '%s\n' "$jwt_output" |
+                grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+                tail -n 1
+            )"
+            test -n "$jwt"
+
+            asc_max=0
+            next_url="https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&limit=200"
+            while [[ -n "$next_url" ]]; do
+              response="$(
+                curl --fail-with-body --silent --show-error \
+                  -H "Authorization: Bearer $jwt" \
+                  "$next_url"
+              )"
+              page_max="$(
+                printf '%s' "$response" | python3 -c '
+          import json
+          import sys
+          payload = json.load(sys.stdin)
+          numbers = []
+          for item in payload.get("data", []):
+              value = item.get("attributes", {}).get("version", "")
+              if value.isdigit():
+                  numbers.append(int(value))
+          print(max(numbers, default=0))
+          '
+              )"
+              if (( page_max > asc_max )); then
+                asc_max="$page_max"
+              fi
+              next_url="$(
+                printf '%s' "$response" |
+                  python3 -c 'import json, sys; print(json.load(sys.stdin).get("links", {}).get("next") or "")'
+              )"
+            done
+
+            high_water=0
+            high_water_file="$HOME/.sparxie-ci/testflight-build-number"
+            if [[ "$SHOULD_UPLOAD" == true && -e "$high_water_file" ]]; then
+              high_water="$(<"$high_water_file")"
+              if ! [[ "$high_water" =~ ^[0-9]+$ ]]; then
+                printf '::error::Invalid TestFlight high-water file: %s\n' "$high_water_file"
+                exit 1
+              fi
+            fi
+
+            if (( high_water > asc_max )); then
+              build_number=$((high_water + 1))
+            else
+              build_number=$((asc_max + 1))
+            fi
+            (( build_number > 0 ))
+
+            if [[ "$SHOULD_UPLOAD" == true ]]; then
+              high_water_dir="$(dirname "$high_water_file")"
+              mkdir -p "$high_water_dir"
+              high_water_temp="$(mktemp "$high_water_dir/.testflight-build-number.XXXXXX")"
+              printf '%s\n' "$build_number" > "$high_water_temp"
+              chmod 600 "$high_water_temp"
+              mv -f "$high_water_temp" "$high_water_file"
+            fi
+
+            SOURCE_RUN_ID="$SOURCE_RUN_ID" \
+            SOURCE_SHA="$SOURCE_SHA" \
+            SOURCE_ARCHIVE_ATTEMPT="$source_archive_attempt" \
+            SOURCE_ARCHIVE_SHA256="$source_archive_sha256" \
+            SHOULD_UPLOAD="$SHOULD_UPLOAD" \
+            PUBLISHER_RUN_ID="$GITHUB_RUN_ID" \
+            BUILD_NUMBER="$build_number" \
+            python3 - <<'PY' > "$state_path"
+          import json
+          import os
+          import sys
+
+          state = {
+              "schema_version": 1,
+              "publisher_run_id": int(os.environ["PUBLISHER_RUN_ID"]),
+              "source_run_id": int(os.environ["SOURCE_RUN_ID"]),
+              "source_sha": os.environ["SOURCE_SHA"],
+              "source_archive_attempt": int(os.environ["SOURCE_ARCHIVE_ATTEMPT"]),
+              "source_archive_sha256": os.environ["SOURCE_ARCHIVE_SHA256"],
+              "build_number": int(os.environ["BUILD_NUMBER"]),
+              "upload": os.environ["SHOULD_UPLOAD"] == "true",
+              "upload_started": False,
+          }
+          json.dump(state, sys.stdout, indent=2, sort_keys=True)
+          print()
+          PY
+            upload_started=false
+          fi
+
+          [[ "$build_number" =~ ^[1-9][0-9]*$ ]]
+          python3 -m json.tool "$state_path" >/dev/null
+
+          {
+            printf 'PRIVATE_KEYS_DIR=%s\n' "$private_keys_dir"
+            printf 'MOBILEPROVISION_PATH=%s\n' "$profile_path"
+            printf 'SIGNED_IPA=%s\n' "$signed_ipa"
+            printf 'BUILD_STATE_PATH=%s\n' "$state_path"
+            printf 'IOS_BUILD_NUMBER=%s\n' "$build_number"
+            printf 'UPLOAD_STARTED=%s\n' "$upload_started"
+            printf 'UPLOAD_WAS_STARTED=%s\n' "$upload_started"
+          } >> "$GITHUB_ENV"
+          printf 'build_number=%s\n' "$build_number" >> "$GITHUB_OUTPUT"
+
+          {
+            printf '## TestFlight build number\n\n'
+            printf -- '- Selected: `%s`\n' "$build_number"
+            printf -- '- Upload mode: `%s`\n' "$SHOULD_UPLOAD"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve publisher state
+        uses: actions/upload-artifact@v7
+        with:
+          name: testflight-state
+          path: ${{ env.BUILD_STATE_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+
+      - name: Prepare signing profile
+        shell: bash
+        env:
+          MOBILEPROVISION_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$MOBILEPROVISION_BASE64"
+          printf '%s' "$MOBILEPROVISION_BASE64" |
+            base64 --decode > "$MOBILEPROVISION_PATH"
+          chmod 600 "$MOBILEPROVISION_PATH"
+
+      - name: Export signed IPA
+        shell: bash
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          XCARCHIVE_ZIP="$XCARCHIVE_ZIP" \
+          MOBILEPROVISION_PATH="$MOBILEPROVISION_PATH" \
+          IOS_BUILD_NUMBER="$IOS_BUILD_NUMBER" \
+          KEYCHAIN_PASSWORD="$KEYCHAIN_PASSWORD" \
+          REWRITE_ARCHIVE_BUILD_NUMBER=true \
+          OUTPUT_DIR="$TESTFLIGHT_TASK_DIR/out" \
+            ./scripts/export-testflight-ipa.sh
+
+          test -s "$SIGNED_IPA"
+
+      - name: Validate with App Store Connect
+        shell: bash
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+          test -s "$SIGNED_IPA"
+          test -s "$PRIVATE_KEYS_DIR/AuthKey_${ASC_KEY_ID}.p8"
+
+          API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR" xcrun altool \
+            --validate-app "$SIGNED_IPA" \
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID" \
+            --output-format json
+
+      - name: Preserve signed IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-testflight-signed-${{ github.run_id }}
+          path: ${{ env.SIGNED_IPA }}
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          overwrite: true
+
+      - name: Mark upload as started
+        if: env.SHOULD_UPLOAD == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$BUILD_STATE_PATH" <<'PY'
+          import json
+          import os
+          import sys
+
+          path = sys.argv[1]
+          with open(path, encoding="utf-8") as handle:
+              state = json.load(handle)
+          if state.get("upload") is not True:
+              raise SystemExit("refusing to mark a validation-only state as uploading")
+          state["upload_started"] = True
+          temporary = f"{path}.tmp"
+          with open(temporary, "w", encoding="utf-8") as handle:
+              json.dump(state, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          os.replace(temporary, path)
+          PY
+          printf 'UPLOAD_STARTED=true\n' >> "$GITHUB_ENV"
+
+      - name: Preserve upload-started state
+        if: env.SHOULD_UPLOAD == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: testflight-state
+          path: ${{ env.BUILD_STATE_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+
+      - name: Upload to TestFlight
+        if: env.SHOULD_UPLOAD == 'true'
+        shell: bash
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          api_key_path="$PRIVATE_KEYS_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          test -s "$api_key_path"
+          [[ "$UPLOAD_WAS_STARTED" == true || "$UPLOAD_WAS_STARTED" == false ]]
+
+          generate_jwt() {
+            local jwt_output
+            local jwt
+            jwt_output="$(
+              xcrun altool --generate-jwt \
+                --api-key "$ASC_KEY_ID" \
+                --api-issuer "$ASC_ISSUER_ID" \
+                --p8-file-path "$api_key_path" 2>&1
+            )"
+            jwt="$(
+              printf '%s\n' "$jwt_output" |
+                grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+                tail -n 1
+            )"
+            test -n "$jwt"
+            printf '%s' "$jwt"
+          }
+
+          get_build_status() {
+            local response
+            local jwt
+            jwt="$(generate_jwt)"
+            response="$(
+              curl --fail-with-body --silent --show-error \
+                -H "Authorization: Bearer $jwt" \
+                "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&filter%5Bversion%5D=$IOS_BUILD_NUMBER&limit=1"
+            )"
+            printf '%s' "$response" |
+              python3 -c '
+          import json
+          import sys
+
+          data = json.load(sys.stdin).get("data", [])
+          if not data:
+              print("MISSING")
+          else:
+              print(data[0].get("attributes", {}).get("processingState", "UNKNOWN").upper())
+          '
+          }
+
+          wait_for_valid_build() {
+            local attempts="$1"
+            local status
+            local attempt
+
+            for (( attempt = 1; attempt <= attempts; attempt++ )); do
+              status="$(get_build_status)"
+              printf 'App Store Connect build %s state: %s (%s/%s)\n' \
+                "$IOS_BUILD_NUMBER" "$status" "$attempt" "$attempts"
+              case "$status" in
+                VALID)
+                  return 0
+                  ;;
+                FAILED|INVALID)
+                  printf 'Build %s reached terminal App Store Connect state %s.\n' \
+                    "$IOS_BUILD_NUMBER" "$status" >&2
+                  return 2
+                  ;;
+                PROCESSING|MISSING)
+                  ;;
+                *)
+                  printf 'Unexpected App Store Connect state for build %s: %s\n' \
+                    "$IOS_BUILD_NUMBER" "$status" >&2
+                  return 2
+                  ;;
+              esac
+
+              if (( attempt < attempts )); then
+                sleep 10
+              fi
+            done
+
+            printf 'Build %s did not reach VALID within the polling window.\n' \
+              "$IOS_BUILD_NUMBER" >&2
+            return 1
+          }
+
+          current_status="$(get_build_status)"
+          already_uploaded=false
+          case "$current_status" in
+            VALID)
+              if [[ "$UPLOAD_WAS_STARTED" == true ]]; then
+                already_uploaded=true
+              else
+                printf 'Build-number collision: build %s was already VALID before this workflow uploaded.\n' \
+                  "$IOS_BUILD_NUMBER" >&2
+                exit 1
+              fi
+              ;;
+            PROCESSING)
+              if [[ "$UPLOAD_WAS_STARTED" != true ]]; then
+                printf 'Build-number collision: build %s was already processing before this workflow uploaded.\n' \
+                  "$IOS_BUILD_NUMBER" >&2
+                exit 1
+              fi
+              printf 'Build %s is already processing; waiting for VALID.\n' \
+                "$IOS_BUILD_NUMBER"
+              wait_for_valid_build 180
+              already_uploaded=true
+              ;;
+            FAILED|INVALID)
+              printf 'Build %s already exists in terminal state %s.\n' \
+                "$IOS_BUILD_NUMBER" "$current_status" >&2
+              exit 1
+              ;;
+            MISSING)
+              if [[ "$UPLOAD_WAS_STARTED" == true ]]; then
+                printf 'Retry detected; checking for eventual consistency before uploading again.\n'
+                set +e
+                wait_for_valid_build 90
+                retry_poll_status=$?
+                set -e
+                case "$retry_poll_status" in
+                  0)
+                    already_uploaded=true
+                    ;;
+                  1)
+                    ;;
+                  *)
+                    exit 1
+                    ;;
+                esac
+              fi
+              ;;
+            *)
+              printf 'Unexpected App Store Connect state for build %s: %s\n' \
+                "$IOS_BUILD_NUMBER" "$current_status" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "$already_uploaded" == true ]]; then
+            printf 'Build %s is already VALID; treating this retry as successful.\n' \
+              "$IOS_BUILD_NUMBER"
+          else
+            set +e
+            upload_output="$(
+              API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR" xcrun altool \
+                --upload-package "$SIGNED_IPA" \
+                --api-key "$ASC_KEY_ID" \
+                --api-issuer "$ASC_ISSUER_ID" \
+                --wait \
+                --output-format json 2>&1
+            )"
+            upload_status=$?
+            set -e
+            printf '%s\n' "$upload_output"
+
+            if ! wait_for_valid_build 180; then
+              if (( upload_status != 0 )); then
+                exit "$upload_status"
+              fi
+              exit 1
+            fi
+
+            if (( upload_status != 0 )); then
+              printf 'The upload command failed, but build %s reached VALID in App Store Connect.\n' \
+                "$IOS_BUILD_NUMBER"
+            fi
+          fi
+
+          {
+            printf '## TestFlight upload\n\n'
+            printf -- '- App: `%s`\n' "$EXPECTED_BUNDLE_ID"
+            printf -- '- Build: `%s`\n' "$IOS_BUILD_NUMBER"
+            printf -- '- Status: **VALID**\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record validation-only result
+        if: env.SHOULD_UPLOAD != 'true'
+        shell: bash
+        run: |
+          {
+            printf '## TestFlight validation\n\n'
+            printf -- '- App: `%s`\n' "$EXPECTED_BUNDLE_ID"
+            printf -- '- Build: `%s`\n' "$IOS_BUILD_NUMBER"
+            printf -- '- Status: **validated; not uploaded**\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean signing material
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          SOURCE_DIR: ${{ runner.temp }}/sparxie-testflight-source-${{ github.run_id }}-${{ github.run_attempt }}
+          RESTORED_STATE_DIR: ${{ runner.temp }}/sparxie-testflight-state-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [[ -n "${TESTFLIGHT_TASK_DIR:-}" && \
+                "$TESTFLIGHT_TASK_DIR" = "$RUNNER_TEMP"/sparxie-testflight.* ]]; then
+            rm -rf -- "$TESTFLIGHT_TASK_DIR"
+          fi
+          rm -rf -- "$SOURCE_DIR" "$RESTORED_STATE_DIR"

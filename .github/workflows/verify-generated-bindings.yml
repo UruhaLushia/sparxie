@@ -20,7 +20,7 @@ jobs:
         with:
           channel: stable
           cache: true
-          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+          pub-cache: true
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -28,7 +28,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: core
+          prefix-key: v1-rust
+          key: verify-generated-bindings-x86_64-unknown-linux-gnu
+          workspaces: 'core -> target'
+          save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Fetch Flutter deps
         run: flutter pub get

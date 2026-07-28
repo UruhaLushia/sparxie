@@ -3,106 +3,27 @@ name: Build iOS
 on:
   workflow_call:
     inputs:
-      upload_testflight:
-        description: Export, validate, and upload the build to TestFlight
+      include_xcarchive:
+        description: Preserve the unsigned xcarchive for a later TestFlight run
         required: false
         type: boolean
         default: false
   workflow_dispatch:
     inputs:
-      upload_testflight:
-        description: Export, validate, and upload the build to TestFlight
-        required: true
+      include_xcarchive:
+        description: Preserve the unsigned xcarchive for a later TestFlight run
+        required: false
         type: boolean
         default: false
 
 permissions:
-  actions: read
   contents: read
 
-concurrency:
-  group: ${{ inputs.upload_testflight && 'ios-testflight' || format('build-ios-{0}', github.run_id) }}
-  cancel-in-progress: false
-
 env:
-  ASC_APP_ID: '6781533588'
   RUST_TOOLCHAIN: stable
 
 jobs:
-  prepare-testflight:
-    name: Select TestFlight build number
-    if: inputs.upload_testflight
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 10
-    environment: testflight
-    outputs:
-      build_number: ${{ steps.next-build.outputs.build_number }}
-    steps:
-      - name: Query App Store Connect
-        id: next-build
-        shell: bash
-        env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-        run: |
-          set -euo pipefail
-
-          test -n "$ASC_API_KEY_BASE64"
-          test -n "$ASC_ISSUER_ID"
-          test -n "$ASC_KEY_ID"
-          command -v python3 >/dev/null
-
-          api_key_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-next-build.XXXXXX")"
-          trap 'rm -rf "$api_key_dir"' EXIT
-          api_key_path="$api_key_dir/AuthKey_${ASC_KEY_ID}.p8"
-          printf '%s' "$ASC_API_KEY_BASE64" |
-            base64 --decode > "$api_key_path"
-          chmod 600 "$api_key_path"
-
-          jwt_output="$(
-            xcrun altool --generate-jwt \
-              --api-key "$ASC_KEY_ID" \
-              --api-issuer "$ASC_ISSUER_ID" \
-              --p8-file-path "$api_key_path" 2>&1
-          )"
-          jwt="$(
-            printf '%s\n' "$jwt_output" |
-              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
-              tail -n 1
-          )"
-          test -n "$jwt"
-
-          response="$(
-            curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $jwt" \
-              "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&limit=200"
-          )"
-          next_build="$(
-            printf '%s' "$response" | python3 -c '
-          import json
-          import sys
-
-          payload = json.load(sys.stdin)
-          if payload.get("links", {}).get("next"):
-              raise SystemExit("More than 200 builds exist; pagination is required")
-          versions = []
-          for item in payload.get("data", []):
-              version = item.get("attributes", {}).get("version", "")
-              if version.isdigit():
-                  versions.append(int(version))
-          print(max(versions, default=0) + 1)
-          '
-          )"
-          [[ "$next_build" =~ ^[1-9][0-9]*$ ]]
-
-          printf 'build_number=%s\n' "$next_build" >> "$GITHUB_OUTPUT"
-          printf '## TestFlight build\n\n- Selected build number: `%s`\n' \
-            "$next_build" >> "$GITHUB_STEP_SUMMARY"
-
   build:
-    needs: prepare-testflight
-    if: always() && (needs.prepare-testflight.result == 'success' || needs.prepare-testflight.result == 'skipped')
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
@@ -116,12 +37,13 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
           test "$(xcodebuild -version | sed -n '1p')" = 'Xcode 26.3'
           test "$(xcodebuild -version | sed -n '2p')" = 'Build version 17C529'
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = '26.2'
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
-          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
+          cache: false
+          pub-cache: true
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -130,184 +52,113 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: core
-
-      - name: Cache pub
-        uses: actions/cache@v5
-        with:
-          path: .dart_tool
-          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            dart-tool-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Fetch Flutter deps
-        run: flutter pub get
+          prefix-key: v1-rust
+          key: ios-aarch64-apple-ios-xcode-17C529-sdk-26.2
+          workspaces: 'core -> target'
+          save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Build unsigned iOS artifacts
         shell: bash
         env:
-          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number || github.run_number }}
-          IOS_XCARCHIVE_OUTPUT: ${{ inputs.upload_testflight && 'out/sparxie-ios-unsigned.xcarchive.zip' || '' }}
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
+          IOS_XCARCHIVE_OUTPUT: ${{ inputs.include_xcarchive && 'out/sparxie-ios-unsigned.xcarchive.zip' || '' }}
           OUTPUT_DIR: out
         run: ./scripts/build-ios-ipa.sh
 
-      - uses: actions/upload-artifact@v7
+      - name: Write xcarchive manifest
+        if: inputs.include_xcarchive
+        shell: bash
+        env:
+          PLACEHOLDER_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+
+          archive_zip=out/sparxie-ios-unsigned.xcarchive.zip
+          archive_dir="$(find build/ios/archive -maxdepth 1 -type d -name '*.xcarchive' | head -n 1)"
+          archive_app="$(find "$archive_dir/Products/Applications" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          test -s "$archive_zip"
+          test -n "$archive_dir"
+          test -n "$archive_app"
+
+          if [[ -e "$archive_app/_CodeSignature" || -L "$archive_app/_CodeSignature" ]]; then
+            printf '::error::The xcarchive app unexpectedly contains _CodeSignature.\n'
+            exit 1
+          fi
+          if codesign -d "$archive_app" >/dev/null 2>&1; then
+            printf '::error::The xcarchive app unexpectedly has a code signature.\n'
+            exit 1
+          fi
+
+          bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$archive_app/Info.plist")"
+          marketing_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$archive_app/Info.plist")"
+          archive_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$archive_app/Info.plist")"
+          archive_sha256="$(shasum -a 256 "$archive_zip" | awk '{print $1}')"
+          flutter_version="$(flutter --version --machine | python3 -c 'import json, sys; print(json.load(sys.stdin)["frameworkVersion"])')"
+          rust_version="$(rustc --version)"
+
+          test "$bundle_id" = 'zip.atri.sparxie'
+          test "$archive_build_number" = "$PLACEHOLDER_BUILD_NUMBER"
+
+          REPOSITORY="$GITHUB_REPOSITORY" \
+          RUN_ID="$GITHUB_RUN_ID" \
+          RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+          HEAD_SHA="$GITHUB_SHA" \
+          SOURCE_REF="$GITHUB_REF" \
+          SOURCE_WORKFLOW="$GITHUB_WORKFLOW" \
+          BUNDLE_ID="$bundle_id" \
+          MARKETING_VERSION="$marketing_version" \
+          PLACEHOLDER_BUILD_NUMBER="$archive_build_number" \
+          ARCHIVE_SHA256="$archive_sha256" \
+          FLUTTER_VERSION="$flutter_version" \
+          RUST_VERSION="$rust_version" \
+          python3 - <<'PY' > out/ios-xcarchive-manifest.json
+          import json
+          import os
+          import sys
+
+          manifest = {
+              "schema_version": 1,
+              "repository": os.environ["REPOSITORY"],
+              "run_id": int(os.environ["RUN_ID"]),
+              "run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "head_sha": os.environ["HEAD_SHA"],
+              "ref": os.environ["SOURCE_REF"],
+              "workflow": os.environ["SOURCE_WORKFLOW"],
+              "bundle_id": os.environ["BUNDLE_ID"],
+              "marketing_version": os.environ["MARKETING_VERSION"],
+              "placeholder_build_number": os.environ["PLACEHOLDER_BUILD_NUMBER"],
+              "archive_file": "sparxie-ios-unsigned.xcarchive.zip",
+              "archive_sha256": os.environ["ARCHIVE_SHA256"],
+              "xcode_version": "26.3",
+              "xcode_build": "17C529",
+              "ios_sdk": "26.2",
+              "flutter_version": os.environ["FLUTTER_VERSION"],
+              "rust_version": os.environ["RUST_VERSION"],
+          }
+          json.dump(manifest, sys.stdout, indent=2, sort_keys=True)
+          print()
+          PY
+
+          python3 -m json.tool out/ios-xcarchive-manifest.json >/dev/null
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v7
         with:
           name: ios
           path: out/sparxie-ios.ipa
           if-no-files-found: error
+          compression-level: 0
+          overwrite: true
 
       - name: Upload unsigned xcarchive
-        if: inputs.upload_testflight
+        if: inputs.include_xcarchive
         uses: actions/upload-artifact@v7
         with:
           name: ios-xcarchive
-          path: out/sparxie-ios-unsigned.xcarchive.zip
+          path: |
+            out/sparxie-ios-unsigned.xcarchive.zip
+            out/ios-xcarchive-manifest.json
           if-no-files-found: error
-          retention-days: 3
-
-  publish-testflight:
-    name: Sign and upload TestFlight build
-    needs: [prepare-testflight, build]
-    if: inputs.upload_testflight && needs.prepare-testflight.result == 'success' && needs.build.result == 'success'
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 60
-    environment: testflight
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Download unsigned xcarchive
-        uses: actions/download-artifact@v7
-        with:
-          name: ios-xcarchive
-          path: ${{ runner.temp }}/sparxie-testflight-input-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Export signed IPA
-        shell: bash
-        env:
-          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number }}
-          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
-          MOBILEPROVISION_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
-        run: |
-          set -euo pipefail
-
-          test -n "$IOS_KEYCHAIN_PASSWORD"
-          test -n "$MOBILEPROVISION_BASE64"
-
-          task_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-testflight.XXXXXX")"
-          profile_path="$task_dir/Sparxie.mobileprovision"
-          signed_ipa="$task_dir/out/sparxie-ios-testflight.ipa"
-          printf 'TESTFLIGHT_TASK_DIR=%s\n' "$task_dir" >> "$GITHUB_ENV"
-          printf 'SIGNED_IPA=%s\n' "$signed_ipa" >> "$GITHUB_ENV"
-          printf '%s' "$MOBILEPROVISION_BASE64" |
-            base64 --decode > "$profile_path"
-
-          XCARCHIVE_ZIP="$RUNNER_TEMP/sparxie-testflight-input-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/sparxie-ios-unsigned.xcarchive.zip" \
-          MOBILEPROVISION_PATH="$profile_path" \
-          IOS_BUILD_NUMBER="$IOS_BUILD_NUMBER" \
-          KEYCHAIN_PASSWORD="$IOS_KEYCHAIN_PASSWORD" \
-          OUTPUT_DIR="$task_dir/out" \
-            ./scripts/export-testflight-ipa.sh
-
-          test -s "$signed_ipa"
-
-      - name: Validate with App Store Connect
-        shell: bash
-        env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-        run: |
-          set -euo pipefail
-
-          test -n "$ASC_API_KEY_BASE64"
-          test -n "$ASC_ISSUER_ID"
-          test -n "$ASC_KEY_ID"
-          test -s "$SIGNED_IPA"
-
-          private_keys_dir="$TESTFLIGHT_TASK_DIR/private_keys"
-          mkdir -p "$private_keys_dir"
-          printf '%s' "$ASC_API_KEY_BASE64" |
-            base64 --decode > "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
-          chmod 600 "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
-
-          API_PRIVATE_KEYS_DIR="$private_keys_dir" xcrun altool \
-            --validate-app "$SIGNED_IPA" \
-            --api-key "$ASC_KEY_ID" \
-            --api-issuer "$ASC_ISSUER_ID" \
-            --output-format json
-
-      - name: Preserve signed IPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-testflight-signed-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.SIGNED_IPA }}
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Upload to TestFlight
-        shell: bash
-        env:
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number }}
-        run: |
-          set -euo pipefail
-
-          private_keys_dir="$TESTFLIGHT_TASK_DIR/private_keys"
-          api_key_path="$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
-          test -s "$api_key_path"
-
-          jwt_output="$(
-            xcrun altool --generate-jwt \
-              --api-key "$ASC_KEY_ID" \
-              --api-issuer "$ASC_ISSUER_ID" \
-              --p8-file-path "$api_key_path" 2>&1
-          )"
-          jwt="$(
-            printf '%s\n' "$jwt_output" |
-              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
-              tail -n 1
-          )"
-          test -n "$jwt"
-
-          response="$(
-            curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $jwt" \
-              "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&filter%5Bversion%5D=$IOS_BUILD_NUMBER&limit=1"
-          )"
-          build_exists="$(
-            printf '%s' "$response" |
-              python3 -c 'import json, sys; print("true" if json.load(sys.stdin).get("data") else "false")'
-          )"
-
-          if [[ "$build_exists" = "true" ]]; then
-            printf 'Build %s already exists in App Store Connect; skipping duplicate upload.\n' \
-              "$IOS_BUILD_NUMBER"
-          else
-            API_PRIVATE_KEYS_DIR="$private_keys_dir" xcrun altool \
-              --upload-package "$SIGNED_IPA" \
-              --api-key "$ASC_KEY_ID" \
-              --api-issuer "$ASC_ISSUER_ID" \
-              --wait \
-              --output-format json
-          fi
-
-          {
-            printf '## TestFlight upload\n\n'
-            printf -- '- App: `zip.atri.sparxie`\n'
-            printf -- '- Build: `%s`\n' "$IOS_BUILD_NUMBER"
-            printf -- '- Status: **accepted by App Store Connect**\n'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Clean signing material
-        if: always()
-        continue-on-error: true
-        shell: bash
-        run: |
-          if [[ -n "${TESTFLIGHT_TASK_DIR:-}" && \
-                "$TESTFLIGHT_TASK_DIR" = "$RUNNER_TEMP"/sparxie-testflight.* ]]; then
-            rm -rf -- "$TESTFLIGHT_TASK_DIR"
-          fi
-          input_dir="$RUNNER_TEMP/sparxie-testflight-input-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          rm -rf -- "$input_dir"
+          retention-days: 7
+          compression-level: 0
+          overwrite: true

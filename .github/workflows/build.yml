@@ -2,6 +2,19 @@ name: Build
 
 on:
   workflow_call:
+    inputs:
+      include_ios_xcarchive:
+        description: Preserve the unsigned iOS xcarchive for TestFlight publishing
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      include_ios_xcarchive:
+        description: Preserve the unsigned iOS xcarchive for diagnostics
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,3 +38,5 @@ jobs:
 
   ios:
     uses: ./.github/workflows/build-ios.yml
+    with:
+      include_xcarchive: ${{ inputs.include_ios_xcarchive }}
