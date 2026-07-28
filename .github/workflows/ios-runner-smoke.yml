@@ -62,11 +62,21 @@ jobs:
         if: always()
         shell: bash
         env:
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
           MOBILEPROVISION_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
         run: |
           set -euo pipefail
 
+          test -n "$KEYCHAIN_PASSWORD"
           test -n "$MOBILEPROVISION_BASE64"
+
+          runner_keychain="$(security default-keychain -d user | tr -d ' \"')"
+          test -f "$runner_keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$runner_keychain"
+          security list-keychains -d user -s "$runner_keychain"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$runner_keychain"
 
           signing_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-signing-smoke.XXXXXX")"
           trap 'rm -rf "$signing_dir"' EXIT
