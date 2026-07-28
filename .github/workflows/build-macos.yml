@@ -57,7 +57,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          cache: false
+          pub-cache: true
           pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
 
       - uses: dtolnay/rust-toolchain@master
@@ -68,14 +69,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
-
-      - name: Cache pub
-        uses: actions/cache@v5
-        with:
-          path: .dart_tool
-          key: dart-tool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            dart-tool-${{ runner.os }}-${{ runner.arch }}-
+          key: ${{ matrix.rust_target }}
 
       - name: Cache CocoaPods
         if: matrix.arch == 'x86_64'
