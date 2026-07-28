@@ -23,7 +23,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Inspect host and Apple toolchain
+      - name: Inspect host
         shell: bash
         run: |
           set -euo pipefail
@@ -35,8 +35,6 @@ jobs:
           test "$(uname -m)" = "arm64"
 
           xcode-select -p
-          xcodebuild -version
-          xcodebuild -showsdks
 
           command -v git
           command -v curl
@@ -44,11 +42,28 @@ jobs:
           command -v security
           command -v xcrun
 
+      - name: Inspect Apple toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print
+
+          if ! xcodebuild -version; then
+            printf '::error::A full Xcode installation is not selected. Current developer directory: %s\n' \
+              "$(xcode-select -p)"
+            exit 1
+          fi
+
+          xcodebuild -showsdks
+
       - name: Inspect signing identities
+        if: always()
         shell: bash
         run: security find-identity -v -p codesigning
 
       - name: Check network access
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -59,6 +74,7 @@ jobs:
             https://appstoreconnect.apple.com >/dev/null
 
       - name: Check workspace and temporary storage
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -72,11 +88,16 @@ jobs:
           rm -f "$smoke_file"
 
       - name: Write summary
+        if: always()
         shell: bash
         run: |
           {
-            printf '## iOS Runner smoke test passed\n\n'
+            printf '## iOS Runner smoke test\n\n'
             printf -- '- Host: `%s`\n' "$(sw_vers -productVersion)"
             printf -- '- Architecture: `%s`\n' "$(uname -m)"
-            printf -- '- Xcode: `%s`\n' "$(xcodebuild -version | head -n 1)"
+            if xcodebuild -version >/dev/null 2>&1; then
+              printf -- '- Xcode: `%s`\n' "$(xcodebuild -version | head -n 1)"
+            else
+              printf -- '- Xcode: **not selected** (`%s`)\n' "$(xcode-select -p)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
