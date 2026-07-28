@@ -268,11 +268,17 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   @override
   Widget build(BuildContext context) {
     final style = _style(context);
+    final scheme = Theme.of(context).colorScheme;
     final automaticColor = widget.prefs.automaticColor;
     final navigationBar = widget.kind == CompactControlKind.navigationBar;
     final floatingNavigationBar =
         navigationBar && widget.prefs.navLayout == NavLayout.floating;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = screenWidth > 792
+        ? (screenWidth - 760) / 2
+        : 16.0;
     return Scaffold(
+      backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
         title: Text('${widget.kind.label}样式'),
         actions: [
@@ -284,10 +290,10 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
         children: [
           SizedBox(
             width: double.infinity,
-            height: 82,
+            height: 104,
             child: navigationBar
                 ? Align(
-                    alignment: const Alignment(0, -0.12),
+                    alignment: const Alignment(0, -0.05),
                     child: _preview(style),
                   )
                 : Center(child: _preview(style)),
@@ -297,23 +303,29 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
               top: false,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  16,
-                  4,
-                  16,
+                  horizontalPadding,
+                  0,
+                  horizontalPadding,
                   16 + MediaQuery.paddingOf(context).bottom,
                 ),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(22),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant,
+                      color: scheme.outlineVariant.withValues(alpha: 0.72),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: scheme.shadow.withValues(alpha: 0.06),
+                        blurRadius: 18,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(22),
                     child: Column(
                       children: [
                         AnimatedBuilder(
@@ -323,13 +335,13 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                 ? _scrollController.offset
                                 : 0.0;
                             final progress = (offset / 20).clamp(0.0, 1.0);
-                            final scheme = Theme.of(context).colorScheme;
                             return DecoratedBox(
                               decoration: BoxDecoration(
+                                color: scheme.surfaceContainer,
                                 border: Border(
                                   bottom: BorderSide(
                                     color: scheme.outlineVariant.withValues(
-                                      alpha: 0.45 * progress,
+                                      alpha: 0.35 + 0.35 * progress,
                                     ),
                                   ),
                                 ),
@@ -347,14 +359,28 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                             );
                           },
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                            padding: const EdgeInsets.fromLTRB(20, 15, 20, 14),
                             child: Row(
                               children: [
-                                const Icon(Icons.tune_outlined, size: 20),
-                                const SizedBox(width: 8),
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.tune_outlined,
+                                    size: 18,
+                                    color: scheme.onPrimaryContainer,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
                                 Text(
                                   '外观',
-                                  style: Theme.of(context).textTheme.titleLarge,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                               ],
                             ),
@@ -363,7 +389,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                         Expanded(
                           child: ListView(
                             controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                             children: [
                               Column(
                                 children: [
@@ -409,14 +435,9 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                     const Divider(height: 24),
                                   ],
                                   if (navigationBar)
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '外层',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall,
-                                      ),
+                                    const _StyleSectionHeader(
+                                      icon: Icons.crop_square_rounded,
+                                      label: '外层',
                                     ),
                                   _ColorTile(
                                     title: navigationBar ? '外层颜色' : '组件颜色',
@@ -508,15 +529,10 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                           .setNavigationFloatingHeightOffset,
                                     ),
                                   if (navigationBar) ...[
-                                    const Divider(height: 24),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '内层',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall,
-                                      ),
+                                    const Divider(height: 36),
+                                    const _StyleSectionHeader(
+                                      icon: Icons.toggle_on_outlined,
+                                      label: '内层',
                                     ),
                                     _ColorTile(
                                       title: '内层颜色',
@@ -748,26 +764,86 @@ class _StyleSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(
-              valueLabel,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
+              Container(
+                constraints: const BoxConstraints(minWidth: 58),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  valueLabel,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              activeTrackColor: scheme.primary,
+              inactiveTrackColor: scheme.outlineVariant.withValues(alpha: 0.6),
+              thumbColor: scheme.primary,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+              tickMarkShape: SliderTickMarkShape.noTickMark,
             ),
-          ],
-        ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          divisions: divisions,
-          onChanged: onChanged,
-          onChangeEnd: onChangeEnd,
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+              onChangeEnd: onChangeEnd,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StyleSectionHeader extends StatelessWidget {
+  const _StyleSectionHeader({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: scheme.primary),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: scheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -789,23 +865,67 @@ class _ColorTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      enabled: enabled,
-      title: Text(title),
-      subtitle: Text(enabled ? '#${_hex(color)}' : '由自动取色控制'),
-      trailing: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: enabled ? color : Theme.of(context).colorScheme.primary,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Opacity(
+              opacity: enabled ? 1 : 0.58,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          enabled ? '#${_hex(color)}' : '由自动取色控制',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: enabled ? color : scheme.primary,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: scheme.outline.withValues(alpha: 0.32),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
-      onTap: enabled ? onTap : null,
     );
   }
 }

@@ -83,6 +83,8 @@ class SettingsScreen extends StatelessWidget {
         final pageTiles = <Widget>[
           for (final e in extras)
             _Tile(icon: e.icon, title: e.label, onTap: e.onTap),
+        ];
+        final toolTiles = <Widget>[
           if (showCore)
             _Tile(
               icon: Icons.memory_outlined,
@@ -91,8 +93,6 @@ class SettingsScreen extends StatelessWidget {
               onTap: () =>
                   _push(context, CoreConfigScreen(store: store, prefs: prefs)),
             ),
-        ];
-        final toolTiles = <Widget>[
           if (showCoreActions)
             _Tile(
               icon: Icons.build_outlined,
