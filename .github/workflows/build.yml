@@ -395,9 +395,9 @@ jobs:
           IPA_PATH: ${{ runner.temp }}/ios/sparxie-ios.ipa
           RELEASE_LABEL: ${{ github.event_name == 'workflow_dispatch' && '预发布版' || '正式版' }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && 'pre-release' || github.ref_name }}
-          SOURCE_BRANCH: altstore
           SOURCE_FILE: ${{ github.event_name == 'workflow_dispatch' && 'pre-release.json' || 'release.json' }}
           SOURCE_NAME: ${{ github.event_name == 'workflow_dispatch' && 'Sparxie Pre-release' || 'Sparxie' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -410,14 +410,7 @@ jobs:
           repository_url="https://github.com/$GITHUB_REPOSITORY"
           icon_url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/assets/icon.jpg"
           download_url="$repository_url/releases/download/$RELEASE_TAG/sparxie-ios.ipa"
-
-          if git ls-remote --exit-code --heads origin "$SOURCE_BRANCH" >/dev/null 2>&1; then
-            git fetch origin "$SOURCE_BRANCH"
-            git switch --force-create "$SOURCE_BRANCH" FETCH_HEAD
-          else
-            git switch --orphan "$SOURCE_BRANCH"
-            git rm -rf --ignore-unmatch .
-          fi
+          source_path="$RUNNER_TEMP/$SOURCE_FILE"
 
           jq -n \
             --arg source_name "$SOURCE_NAME" \
@@ -459,12 +452,6 @@ jobs:
                 }
               }],
               news: []
-            }' > "$SOURCE_FILE"
+            }' > "$source_path"
 
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "$SOURCE_FILE"
-          if ! git diff --cached --quiet; then
-            git commit -m "Update $RELEASE_LABEL AltStore source"
-            git push origin "HEAD:$SOURCE_BRANCH"
-          fi
+          gh release upload "$RELEASE_TAG" "$source_path" --clobber

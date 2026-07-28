@@ -7,14 +7,14 @@
 ### 正式版
 
 <h1 align="left">
-<a href="https://stikstore.app/altdirect/?url=https://raw.githubusercontent.com/UruhaLushia/sparxie/altstore/release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
+<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/latest/download/release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
 <a href="https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
 </h1>
 
 ### 预发布版
 
 <h1 align="left">
-<a href="https://stikstore.app/altdirect/?url=https://raw.githubusercontent.com/UruhaLushia/sparxie/altstore/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
+<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/download/pre-release/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
 <a href="https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
 </h1>
 
