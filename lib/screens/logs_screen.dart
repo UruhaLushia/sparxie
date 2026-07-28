@@ -314,10 +314,9 @@ class _LogTile extends StatelessWidget {
                   ),
                 SelectableText(
                   entry.message,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                    height: 1.35,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(height: 1.35),
                 ),
               ],
             ),
