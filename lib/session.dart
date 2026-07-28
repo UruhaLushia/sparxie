@@ -483,13 +483,16 @@ class MihomoSession {
 
   void _restartLogs() {
     _logsEpoch++;
-    _logsSub?.cancel();
+    final previous = _logsSub;
     _logsRetry?.cancel();
     _logsSub = null;
     _logsRetry = null;
     _retryAttempts.remove(_RetryKind.logs);
-    logs.reset();
-    if (_target != null) _subscribeLogs();
+    if (_target != null) {
+      _subscribeLogs(previous: previous);
+    } else {
+      previous?.cancel();
+    }
   }
 
   void _restartProxiesPoll() {
@@ -674,24 +677,35 @@ class MihomoSession {
         );
   }
 
-  void _subscribeLogs() {
+  void _subscribeLogs({StreamSubscription<List<rust.LogEntry>>? previous}) {
     final t = _target;
     if (t == null) return;
     final controller = _activeKey;
     final epoch = _nextStreamEpoch(_RetryKind.logs);
-    // Rust replays its ring buffer on every subscribe, so wipe the mirror
-    // first to avoid stacking duplicates.
-    logs.reset();
+    var receivedSnapshot = false;
+    var previousSub = previous;
     _logsSub = rust
         .logsStream(target: t, level: _logsLevel)
         .listen(
           (entries) {
             if (!_isCurrentStream(_RetryKind.logs, controller, epoch)) return;
+            if (!receivedSnapshot) {
+              unawaited(previousSub?.cancel());
+              previousSub = null;
+            }
             _markStreamHealthy(_RetryKind.logs);
-            logs.addAll(entries);
+            if (!receivedSnapshot) {
+              receivedSnapshot = true;
+              logs.replaceAll(entries);
+            } else {
+              logs.addAll(entries);
+            }
           },
-          onError: (Object e) =>
-              _scheduleRetry(_RetryKind.logs, controller, epoch, e),
+          onError: (Object e) {
+            unawaited(previousSub?.cancel());
+            previousSub = null;
+            _scheduleRetry(_RetryKind.logs, controller, epoch, e);
+          },
           cancelOnError: true,
         );
   }

@@ -1,19 +1,107 @@
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use tokio::sync::{Mutex as AsyncMutex, broadcast};
+
 use crate::MihomoError;
 use crate::backend::api::LogEntry;
-use crate::sing_box::client::SingBoxTarget;
+use crate::backend::retry::RetryBackoff;
+use crate::sing_box::client::{SingBoxTarget, target_key};
 use crate::sing_box::proto::daemon::{LogLevel, log};
+
+const LOGS_CAP: usize = 500;
+
+struct LogSlot {
+    buffer: Mutex<VecDeque<LogEntry>>,
+    sender: broadcast::Sender<LogEntry>,
+}
+
+type SlotMap = HashMap<String, Arc<LogSlot>>;
+
+fn slots() -> &'static AsyncMutex<SlotMap> {
+    static SLOTS: OnceLock<AsyncMutex<SlotMap>> = OnceLock::new();
+    SLOTS.get_or_init(|| AsyncMutex::new(HashMap::new()))
+}
 
 pub async fn subscribe(
     target: SingBoxTarget,
-    _level: &str,
-) -> Result<tonic::Streaming<crate::sing_box::proto::daemon::Log>, MihomoError> {
-    let mut client = target.client().await?;
-    Ok(client.subscribe_log(()).await?.into_inner())
+    level: &str,
+) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
+    let key = target_key(&target);
+    let mut map = slots().lock().await;
+    let slot = if let Some(slot) = map.get(&key) {
+        slot.clone()
+    } else {
+        let (sender, _) = broadcast::channel(64);
+        let slot = Arc::new(LogSlot {
+            buffer: Mutex::new(VecDeque::new()),
+            sender,
+        });
+        map.insert(key.clone(), slot.clone());
+        tokio::spawn(stream_loop(target, key, slot.clone()));
+        slot
+    };
+    drop(map);
+
+    let buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
+    let receiver = slot.sender.subscribe();
+    let snapshot = buffer
+        .iter()
+        .filter(|entry| level_allows(level, &entry.level))
+        .cloned()
+        .collect();
+    Ok((snapshot, receiver))
 }
 
 pub async fn clear(target: SingBoxTarget) -> Result<(), MihomoError> {
+    let key = target_key(&target);
+    if let Some(slot) = slots().lock().await.get(&key) {
+        slot.buffer
+            .lock()
+            .expect("sing-box logs buffer poisoned")
+            .clear();
+    }
     target.client().await?.clear_logs(()).await?;
     Ok(())
+}
+
+async fn stream_loop(target: SingBoxTarget, key: String, slot: Arc<LogSlot>) {
+    let mut backoff = RetryBackoff::new();
+    loop {
+        if slot.sender.receiver_count() == 0 {
+            slots().lock().await.remove(&key);
+            return;
+        }
+        match stream_once(&target, &slot).await {
+            Ok(()) => backoff.reset(),
+            Err(error) => {
+                eprintln!("[backend] sing-box logs stream {key}: {error}");
+                tokio::time::sleep(backoff.next_delay()).await;
+            }
+        }
+    }
+}
+
+async fn stream_once(target: &SingBoxTarget, slot: &LogSlot) -> Result<(), MihomoError> {
+    let mut client = target.client().await?;
+    let mut stream = client.subscribe_log(()).await?.into_inner();
+    loop {
+        let log = tokio::select! {
+            _ = slot.sender.closed() => return Ok(()),
+            log = stream.message() => log?,
+        };
+        let Some(log) = log else { return Ok(()) };
+        for entry in entries(log.messages, "trace") {
+            {
+                let mut buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
+                if buffer.len() >= LOGS_CAP {
+                    buffer.pop_front();
+                }
+                buffer.push_back(entry.clone());
+            }
+            let _ = slot.sender.send(entry);
+        }
+    }
 }
 
 pub fn entries(messages: Vec<log::Message>, filter: &str) -> Vec<LogEntry> {
@@ -45,7 +133,7 @@ fn level_name(level: i32) -> &'static str {
     }
 }
 
-fn level_allows(filter: &str, level: &str) -> bool {
+pub fn level_allows(filter: &str, level: &str) -> bool {
     let Some(filter_rank) = level_rank(filter) else {
         return filter.to_ascii_lowercase() != "silent";
     };

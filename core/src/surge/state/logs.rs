@@ -30,20 +30,15 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
     M.get_or_init(|| AsyncMutex::new(HashMap::new()))
 }
 
-fn normalize_level(level: &str) -> &str {
-    if level.is_empty() { "info" } else { level }
-}
-
-fn slot_key(target: &SurgeTarget, level: &str) -> String {
-    format!("{}|{}", target_key(target), level)
+fn slot_key(target: &SurgeTarget) -> String {
+    target_key(target)
 }
 
 pub async fn subscribe(
     target: SurgeTarget,
     level: &str,
 ) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
-    let level = normalize_level(level).to_string();
-    let key = slot_key(&target, &level);
+    let key = slot_key(&target);
     let mut map = slots().lock().await;
     let slot = if let Some(slot) = map.get(&key) {
         slot.clone()
@@ -54,7 +49,7 @@ pub async fn subscribe(
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
-        tokio::spawn(poll_loop(target, level, key, slot.clone()));
+        tokio::spawn(poll_loop(target, key, slot.clone()));
         slot
     };
     drop(map);
@@ -65,15 +60,15 @@ pub async fn subscribe(
         state
             .buffer
             .iter()
+            .filter(|(_, entry)| level_allows(level, &entry.level))
             .map(|(_, entry)| entry.clone())
             .collect(),
         rx,
     ))
 }
 
-pub async fn clear(target: SurgeTarget, level: &str) {
-    let level = normalize_level(level);
-    let key = slot_key(&target, level);
+pub async fn clear(target: SurgeTarget, _level: &str) {
+    let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
         let mut state = slot.state.lock().expect("surge logs state poisoned");
@@ -82,14 +77,14 @@ pub async fn clear(target: SurgeTarget, level: &str) {
     }
 }
 
-async fn poll_loop(target: SurgeTarget, level: String, key: String, slot: Arc<LogSlot>) {
+async fn poll_loop(target: SurgeTarget, key: String, slot: Arc<LogSlot>) {
     let mut backoff = RetryBackoff::new();
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
             return;
         }
-        match poll_once(&target, &level, &slot).await {
+        match poll_once(&target, &slot).await {
             Ok(()) => {
                 backoff.reset();
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -102,14 +97,11 @@ async fn poll_loop(target: SurgeTarget, level: String, key: String, slot: Arc<Lo
     }
 }
 
-async fn poll_once(target: &SurgeTarget, level: &str, slot: &LogSlot) -> Result<(), MihomoError> {
+async fn poll_once(target: &SurgeTarget, slot: &LogSlot) -> Result<(), MihomoError> {
     let raw = target.client()?.get_json("v1/events").await?;
     let mut entries = parse_events(&raw);
     entries.reverse();
     for entry in entries {
-        if !level_allows(level, &entry.level) {
-            continue;
-        }
         let key = event_key(&entry);
         {
             let mut state = slot.state.lock().expect("surge logs state poisoned");
@@ -165,7 +157,7 @@ fn event_level(raw: &Value, identifier: &str) -> String {
     }
 }
 
-fn level_allows(filter: &str, level: &str) -> bool {
+pub fn level_allows(filter: &str, level: &str) -> bool {
     match filter.to_ascii_lowercase().as_str() {
         "silent" => false,
         "error" | "fatal" => matches!(level, "error" | "fatal"),

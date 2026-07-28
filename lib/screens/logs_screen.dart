@@ -102,6 +102,12 @@ class _LogsScreenState extends State<LogsScreen> {
     widget.session.clearLogs();
   }
 
+  String _levelLabel(String level) => switch (level) {
+    'warning' => 'warn',
+    'silent' => 'off',
+    _ => level,
+  };
+
   void _recomputeVisibleEntries() {
     final all = widget.session.logs.entries;
     if (_filter.isEmpty) {
@@ -153,29 +159,62 @@ class _LogsScreenState extends State<LogsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: '过滤消息内容',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: _setFilter,
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final l in levels)
-                          ChoiceChip(
-                            label: Text(l),
-                            selected: widget.session.logsLevel == l,
-                            onSelected: (_) => _setLevel(l),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 40,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.search, size: 20),
+                              prefixIconConstraints: BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 40,
+                              ),
+                              hintText: '过滤消息内容',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            onChanged: _setFilter,
                           ),
-                      ],
-                    ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 80,
+                        height: 40,
+                        child: PopupMenuButton<String>(
+                          initialValue: widget.session.logsLevel,
+                          tooltip: '日志等级',
+                          position: PopupMenuPosition.under,
+                          padding: EdgeInsets.zero,
+                          onSelected: _setLevel,
+                          itemBuilder: (_) => [
+                            for (final level in levels)
+                              PopupMenuItem(
+                                value: level,
+                                child: Text(_levelLabel(level)),
+                              ),
+                          ],
+                          child: Container(
+                            height: 40,
+                            padding: const EdgeInsets.only(left: 10, right: 6),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: scheme.outline),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(_levelLabel(widget.session.logsLevel)),
+                                const Icon(Icons.arrow_drop_down, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

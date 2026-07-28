@@ -38,17 +38,27 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
     M.get_or_init(|| AsyncMutex::new(HashMap::new()))
 }
 
-fn normalize_level(level: &str) -> &str {
-    if level.is_empty() { "info" } else { level }
-}
-
-fn slot_key(target: &MihomoTarget, level: &str) -> String {
+fn slot_key(target: &MihomoTarget) -> String {
     format!(
-        "{}|{}|{}",
+        "{}|{}",
         target.base_url.trim_end_matches('/'),
         target.secret.as_deref().unwrap_or(""),
-        level,
     )
+}
+
+pub fn level_allows(filter: &str, level: &str) -> bool {
+    let rank = |level: &str| match level.to_ascii_lowercase().as_str() {
+        "debug" => Some(0),
+        "info" => Some(1),
+        "warning" | "warn" => Some(2),
+        "error" | "fatal" | "panic" => Some(3),
+        "silent" => None,
+        _ => Some(1),
+    };
+    let Some(filter_rank) = rank(if filter.is_empty() { "info" } else { filter }) else {
+        return false;
+    };
+    rank(level).is_some_and(|level_rank| level_rank >= filter_rank)
 }
 
 /// Snapshot + receiver are taken under one lock so the ingest task can't
@@ -57,8 +67,7 @@ pub async fn subscribe(
     target: MihomoTarget,
     level: &str,
 ) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
-    let level = normalize_level(level).to_string();
-    let key = slot_key(&target, &level);
+    let key = slot_key(&target);
     let mut map = slots().lock().await;
     let slot = if let Some(s) = map.get(&key) {
         s.clone()
@@ -69,27 +78,30 @@ pub async fn subscribe(
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
-        tokio::spawn(stream_loop(target, level, key, slot.clone()));
+        tokio::spawn(stream_loop(target, key, slot.clone()));
         slot
     };
     drop(map);
 
     let buf = slot.buffer.lock().expect("logs buffer poisoned");
     let rx = slot.sender.subscribe();
-    let snapshot: Vec<LogEntry> = buf.iter().cloned().collect();
+    let snapshot: Vec<LogEntry> = buf
+        .iter()
+        .filter(|entry| level_allows(level, &entry.level))
+        .cloned()
+        .collect();
     Ok((snapshot, rx))
 }
 
-pub async fn clear(target: MihomoTarget, level: &str) {
-    let level = normalize_level(level);
-    let key = slot_key(&target, level);
+pub async fn clear(target: MihomoTarget, _level: &str) {
+    let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
         slot.buffer.lock().expect("logs buffer poisoned").clear();
     }
 }
 
-async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc<LogSlot>) {
+async fn stream_loop(target: MihomoTarget, key: String, slot: Arc<LogSlot>) {
     // Capture the target's stop generation; bail if Dart stops it (a dead
     // upstream produces no frames, so the sink-failure path never fires).
     let base = crate::clash::state::stop::base_key(&target);
@@ -107,7 +119,7 @@ async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc
                 return;
             }
         }
-        match stream_once(&target, &level, &base, start_gen, &slot).await {
+        match stream_once(&target, &base, start_gen, &slot).await {
             Ok(()) => backoff.reset(),
             Err(error) => {
                 eprintln!("[mihomo_backend] logs stream {key}: {error}");
@@ -121,7 +133,6 @@ async fn stream_loop(target: MihomoTarget, level: String, key: String, slot: Arc
 
 async fn stream_once(
     target: &MihomoTarget,
-    level: &str,
     base: &str,
     start_gen: u64,
     slot: &LogSlot,
@@ -131,8 +142,7 @@ async fn stream_once(
         target.secret.clone(),
         target.allow_insecure,
     )?;
-    let path = format!("logs?level={level}&format=structured");
-    let mut ws = client.open_ws(&path).await?;
+    let mut ws = client.open_ws("logs?level=debug&format=structured").await?;
     let mut ticks = crate::clash::state::stop::ticks();
     loop {
         // Tear down promptly on either signal: the last subscriber dropping

@@ -88,16 +88,18 @@ pub async fn logs_stream(
         BackendType::Clash => {
             let (snapshot, rx) =
                 crate::clash::state::logs::subscribe(target.clash(), &level).await?;
-            if !snapshot.is_empty()
-                && sink
-                    .add(snapshot.into_iter().map(Into::into).collect())
-                    .is_err()
+            if sink
+                .add(snapshot.into_iter().map(Into::into).collect())
+                .is_err()
             {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(sample) = item else { continue };
+                if !crate::clash::state::logs::level_allows(&level, &sample.level) {
+                    continue;
+                }
                 if sink.add(vec![sample.into()]).is_err() {
                     break;
                 }
@@ -107,12 +109,15 @@ pub async fn logs_stream(
         BackendType::Surge => {
             let (snapshot, rx) =
                 crate::surge::state::logs::subscribe(target.surge(), &level).await?;
-            if !snapshot.is_empty() && sink.add(snapshot).is_err() {
+            if sink.add(snapshot).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(sample) = item else { continue };
+                if !crate::surge::state::logs::level_allows(&level, &sample.level) {
+                    continue;
+                }
                 if sink.add(vec![sample]).is_err() {
                     break;
                 }
@@ -120,11 +125,18 @@ pub async fn logs_stream(
             Ok(())
         }
         BackendType::SingBox => {
-            let mut stream =
+            let (snapshot, rx) =
                 crate::sing_box::state::logs::subscribe(target.sing_box(), &level).await?;
-            while let Some(log) = stream.message().await? {
-                let entries = crate::sing_box::state::logs::entries(log.messages, &level);
-                if !entries.is_empty() && sink.add(entries).is_err() {
+            if sink.add(snapshot).is_err() {
+                return Ok(());
+            }
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok(sample) = item else { continue };
+                if !crate::sing_box::state::logs::level_allows(&level, &sample.level) {
+                    continue;
+                }
+                if sink.add(vec![sample]).is_err() {
                     break;
                 }
             }
