@@ -166,10 +166,14 @@ class SettingsScreen extends StatelessWidget {
               final horizontal = constraints.maxWidth > maxContentWidth
                   ? (constraints.maxWidth - maxContentWidth) / 2
                   : 0.0;
-              final content = CustomScrollView(
+              return CustomScrollView(
                 slivers: [
                   if (compact)
-                    const SliverAppBar.large(pinned: true, title: Text('更多'))
+                    const SliverAppBar(
+                      pinned: true,
+                      title: Text('更多'),
+                      flexibleSpace: DesktopAppBarDragArea(),
+                    )
                   else
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
@@ -213,19 +217,6 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                ],
-              );
-              if (!compact) return content;
-              return Stack(
-                children: [
-                  content,
-                  const Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: kToolbarHeight,
-                    child: DesktopAppBarDragArea(),
                   ),
                 ],
               );
