@@ -1,0 +1,82 @@
+name: iOS Self-Hosted Runner Smoke Test
+
+on:
+  push:
+    branches:
+      - ci/ios-runner-smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-runner-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Mac mini environment check
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Inspect host and Apple toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sw_vers
+          uname -m
+          sysctl -n machdep.cpu.brand_string
+
+          test "$(uname -m)" = "arm64"
+
+          xcode-select -p
+          xcodebuild -version
+          xcodebuild -showsdks
+
+          command -v git
+          command -v curl
+          command -v codesign
+          command -v security
+          command -v xcrun
+
+      - name: Inspect signing identities
+        shell: bash
+        run: security find-identity -v -p codesigning
+
+      - name: Check network access
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error --max-time 20 \
+            https://api.github.com/meta >/dev/null
+          curl --silent --show-error --head --max-time 20 \
+            https://appstoreconnect.apple.com >/dev/null
+
+      - name: Check workspace and temporary storage
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          df -h /
+          df -h "$RUNNER_TEMP"
+
+          smoke_file="$RUNNER_TEMP/sparxie-runner-smoke-${GITHUB_RUN_ID}"
+          printf 'ok\n' > "$smoke_file"
+          test "$(<"$smoke_file")" = "ok"
+          rm -f "$smoke_file"
+
+      - name: Write summary
+        shell: bash
+        run: |
+          {
+            printf '## iOS Runner smoke test passed\n\n'
+            printf -- '- Host: `%s`\n' "$(sw_vers -productVersion)"
+            printf -- '- Architecture: `%s`\n' "$(uname -m)"
+            printf -- '- Xcode: `%s`\n' "$(xcodebuild -version | head -n 1)"
+          } >> "$GITHUB_STEP_SUMMARY"
