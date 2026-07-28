@@ -172,10 +172,25 @@ jobs:
             base64 --decode > "$api_key_path"
           chmod 600 "$api_key_path"
 
-          API_PRIVATE_KEYS_DIR="$api_key_dir" xcrun altool \
-            --list-providers \
-            --api-key "$ASC_KEY_ID" \
-            --api-issuer "$ASC_ISSUER_ID" >/dev/null
+          jwt_output="$(
+            xcrun altool --generate-jwt \
+              --api-key "$ASC_KEY_ID" \
+              --api-issuer "$ASC_ISSUER_ID" \
+              --p8-file-path "$api_key_path" 2>&1
+          )"
+          jwt="$(
+            printf '%s\n' "$jwt_output" |
+              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+              tail -n 1
+          )"
+          test -n "$jwt"
+
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $jwt" \
+              'https://api.appstoreconnect.apple.com/v1/apps?limit=1'
+          )"
+          test -n "$response"
 
           printf 'App Store Connect API authentication succeeded.\n'
           printf -- '- App Store Connect API: **authenticated**\n' \
