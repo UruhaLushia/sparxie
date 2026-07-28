@@ -150,6 +150,37 @@ jobs:
             printf -- '- Signing certificate: `%s`\n' "$profile_certificate_sha1"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify App Store Connect API credentials
+        if: always()
+        shell: bash
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          test -n "$ASC_API_KEY_BASE64"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+
+          api_key_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-asc-api.XXXXXX")"
+          trap 'rm -rf "$api_key_dir"' EXIT
+
+          api_key_path="$api_key_dir/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_API_KEY_BASE64" |
+            base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          API_PRIVATE_KEYS_DIR="$api_key_dir" xcrun altool \
+            --list-providers \
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID" >/dev/null
+
+          printf 'App Store Connect API authentication succeeded.\n'
+          printf -- '- App Store Connect API: **authenticated**\n' \
+            >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check network access
         if: always()
         shell: bash
