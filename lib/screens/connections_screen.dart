@@ -63,10 +63,15 @@ class _TabSwitchDirectionScope extends InheritedWidget {
 }
 
 class _StaggeredTabItem extends StatelessWidget {
-  const _StaggeredTabItem({required this.index, required this.child});
+  const _StaggeredTabItem({
+    required this.index,
+    required this.child,
+    this.delayedEntry = false,
+  });
 
   final int index;
   final Widget child;
+  final bool delayedEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +84,11 @@ class _StaggeredTabItem extends StatelessWidget {
       child: child,
       builder: (context, child) {
         final incoming = scope.animation.status != AnimationStatus.reverse;
-        final start = incoming ? 0.28 + slot * 0.02 : 0.68 - slot * 0.02;
+        final start = incoming
+            ? delayedEntry
+                  ? 0.6
+                  : 0.28 + slot * 0.02
+            : 0.68 - slot * 0.02;
         final end = incoming ? start + 0.3 : math.min(start + 0.3, 0.99);
         final raw = Interval(start, end).transform(scope.animation.value);
         final progress = Curves.easeInOutCubic.transform(raw);
@@ -728,14 +737,18 @@ class _ConnectionsListState extends State<_ConnectionsList> {
       return const SizedBox.expand();
     }
     if (total == 0) {
-      return Center(
-        child: Text(
-          widget.filter.isNotEmpty
-              ? '没有匹配的连接'
-              : widget.tab == ConnectionsTab.active
-              ? '暂无连接'
-              : '暂无已关闭连接',
-          style: Theme.of(context).textTheme.bodyMedium,
+      return _StaggeredTabItem(
+        index: 0,
+        delayedEntry: true,
+        child: Center(
+          child: Text(
+            widget.filter.isNotEmpty
+                ? '没有匹配的连接'
+                : widget.tab == ConnectionsTab.active
+                ? '暂无连接'
+                : '暂无已关闭连接',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       );
     }
@@ -978,14 +991,18 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       return const SizedBox.expand();
     }
     if (groups.isEmpty) {
-      return Center(
-        child: Text(
-          widget.filter.isEmpty
-              ? widget.tab == ConnectionsTab.active
-                    ? '暂无连接'
-                    : '暂无已关闭连接'
-              : '没有匹配的连接',
-          style: Theme.of(context).textTheme.bodyMedium,
+      return _StaggeredTabItem(
+        index: 0,
+        delayedEntry: true,
+        child: Center(
+          child: Text(
+            widget.filter.isEmpty
+                ? widget.tab == ConnectionsTab.active
+                      ? '暂无连接'
+                      : '暂无已关闭连接'
+                : '没有匹配的连接',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       );
     }
