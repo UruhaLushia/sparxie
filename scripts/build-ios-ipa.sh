@@ -5,6 +5,7 @@
 #   ./scripts/build-ios-ipa.sh
 #   OUTPUT_DIR=out ./scripts/build-ios-ipa.sh
 #   IOS_BUILD_NUMBER=123 ./scripts/build-ios-ipa.sh
+#   IOS_XCARCHIVE_OUTPUT=out/sparxie-ios-unsigned.xcarchive.zip ./scripts/build-ios-ipa.sh
 
 set -euo pipefail
 
@@ -15,6 +16,7 @@ PROJECT_ROOT="$(pwd)"
 : "${IOS_RUST_TARGET:=aarch64-apple-ios}"
 : "${IPA_NAME:=sparxie-ios.ipa}"
 : "${IOS_BUILD_NUMBER:=$(awk -F+ '/^version:/ { print $2; exit }' pubspec.yaml)}"
+: "${IOS_XCARCHIVE_OUTPUT:=}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -48,12 +50,27 @@ fi
 echo ">>> Fetching Flutter dependencies"
 flutter pub get
 
-echo ">>> Building unsigned iOS app"
-flutter build ios --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
+if [[ -n "$IOS_XCARCHIVE_OUTPUT" ]]; then
+  echo ">>> Building unsigned iOS archive"
+  flutter build ipa --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
 
-APP_BUNDLE="$(find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | head -n1)"
+  shopt -s nullglob
+  XCARCHIVES=(build/ios/archive/*.xcarchive)
+  shopt -u nullglob
+  if [[ "${#XCARCHIVES[@]}" -ne 1 ]]; then
+    echo "Expected exactly one iOS archive under build/ios/archive" >&2
+    exit 1
+  fi
+  XCARCHIVE="${XCARCHIVES[0]}"
+  APP_BUNDLE="$(find "$XCARCHIVE/Products/Applications" -maxdepth 1 -type d -name '*.app' | head -n1)"
+else
+  echo ">>> Building unsigned iOS app"
+  flutter build ios --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
+  APP_BUNDLE="$(find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | head -n1)"
+fi
+
 if [[ -z "$APP_BUNDLE" || ! -d "$APP_BUNDLE" ]]; then
-  echo "No iOS app bundle found under build/ios/iphoneos" >&2
+  echo "No iOS app bundle found in the build output" >&2
   exit 1
 fi
 
@@ -94,3 +111,20 @@ rm -f "$IPA_PATH"
 )
 
 echo ">>> IPA: $IPA_PATH"
+
+if [[ -n "$IOS_XCARCHIVE_OUTPUT" ]]; then
+  if [[ "$IOS_XCARCHIVE_OUTPUT" = /* ]]; then
+    XCARCHIVE_ZIP="$IOS_XCARCHIVE_OUTPUT"
+  else
+    XCARCHIVE_ZIP="$PROJECT_ROOT/$IOS_XCARCHIVE_OUTPUT"
+  fi
+
+  mkdir -p "$(dirname "$XCARCHIVE_ZIP")"
+  rm -f "$XCARCHIVE_ZIP"
+  (
+    cd "$(dirname "$XCARCHIVE")"
+    ditto -c -k --sequesterRsrc --keepParent \
+      "$(basename "$XCARCHIVE")" "$XCARCHIVE_ZIP"
+  )
+  echo ">>> XCArchive: $XCARCHIVE_ZIP"
+fi

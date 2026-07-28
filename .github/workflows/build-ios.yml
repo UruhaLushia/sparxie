@@ -2,21 +2,120 @@ name: Build iOS
 
 on:
   workflow_call:
+    inputs:
+      upload_testflight:
+        description: Export, validate, and upload the build to TestFlight
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: Export, validate, and upload the build to TestFlight
+        required: true
+        type: boolean
+        default: false
 
 permissions:
+  actions: read
   contents: read
 
+concurrency:
+  group: ${{ inputs.upload_testflight && 'ios-testflight' || format('build-ios-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 env:
+  ASC_APP_ID: '6781533588'
   RUST_TOOLCHAIN: stable
 
 jobs:
+  prepare-testflight:
+    name: Select TestFlight build number
+    if: inputs.upload_testflight
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
+    environment: testflight
+    outputs:
+      build_number: ${{ steps.next-build.outputs.build_number }}
+    steps:
+      - name: Query App Store Connect
+        id: next-build
+        shell: bash
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          test -n "$ASC_API_KEY_BASE64"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+          command -v python3 >/dev/null
+
+          api_key_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-next-build.XXXXXX")"
+          trap 'rm -rf "$api_key_dir"' EXIT
+          api_key_path="$api_key_dir/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_API_KEY_BASE64" |
+            base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          jwt_output="$(
+            xcrun altool --generate-jwt \
+              --api-key "$ASC_KEY_ID" \
+              --api-issuer "$ASC_ISSUER_ID" \
+              --p8-file-path "$api_key_path" 2>&1
+          )"
+          jwt="$(
+            printf '%s\n' "$jwt_output" |
+              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+              tail -n 1
+          )"
+          test -n "$jwt"
+
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $jwt" \
+              "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&limit=200"
+          )"
+          next_build="$(
+            printf '%s' "$response" | python3 -c '
+          import json
+          import sys
+
+          payload = json.load(sys.stdin)
+          if payload.get("links", {}).get("next"):
+              raise SystemExit("More than 200 builds exist; pagination is required")
+          versions = []
+          for item in payload.get("data", []):
+              version = item.get("attributes", {}).get("version", "")
+              if version.isdigit():
+                  versions.append(int(version))
+          print(max(versions, default=0) + 1)
+          '
+          )"
+          [[ "$next_build" =~ ^[1-9][0-9]*$ ]]
+
+          printf 'build_number=%s\n' "$next_build" >> "$GITHUB_OUTPUT"
+          printf '## TestFlight build\n\n- Selected build number: `%s`\n' \
+            "$next_build" >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    needs: prepare-testflight
+    if: always() && (needs.prepare-testflight.result == 'success' || needs.prepare-testflight.result == 'skipped')
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Select Xcode 26.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          test "$(xcodebuild -version | sed -n '1p')" = 'Xcode 26.3'
+          test "$(xcodebuild -version | sed -n '2p')" = 'Build version 17C529'
 
       - uses: subosito/flutter-action@v2
         with:
@@ -44,11 +143,171 @@ jobs:
       - name: Fetch Flutter deps
         run: flutter pub get
 
-      - name: Build unsigned IPA
-        run: OUTPUT_DIR=out IOS_BUILD_NUMBER=$GITHUB_RUN_NUMBER ./scripts/build-ios-ipa.sh
+      - name: Build unsigned iOS artifacts
+        shell: bash
+        env:
+          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number || github.run_number }}
+          IOS_XCARCHIVE_OUTPUT: ${{ inputs.upload_testflight && 'out/sparxie-ios-unsigned.xcarchive.zip' || '' }}
+          OUTPUT_DIR: out
+        run: ./scripts/build-ios-ipa.sh
 
       - uses: actions/upload-artifact@v7
         with:
           name: ios
-          path: out/*
+          path: out/sparxie-ios.ipa
           if-no-files-found: error
+
+      - name: Upload unsigned xcarchive
+        if: inputs.upload_testflight
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-xcarchive
+          path: out/sparxie-ios-unsigned.xcarchive.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  publish-testflight:
+    name: Sign and upload TestFlight build
+    needs: [prepare-testflight, build]
+    if: inputs.upload_testflight && needs.prepare-testflight.result == 'success' && needs.build.result == 'success'
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 60
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download unsigned xcarchive
+        uses: actions/download-artifact@v7
+        with:
+          name: ios-xcarchive
+          path: ${{ runner.temp }}/sparxie-testflight-input-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Export signed IPA
+        shell: bash
+        env:
+          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          MOBILEPROVISION_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          test -n "$IOS_KEYCHAIN_PASSWORD"
+          test -n "$MOBILEPROVISION_BASE64"
+
+          task_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-testflight.XXXXXX")"
+          profile_path="$task_dir/Sparxie.mobileprovision"
+          signed_ipa="$task_dir/out/sparxie-ios-testflight.ipa"
+          printf 'TESTFLIGHT_TASK_DIR=%s\n' "$task_dir" >> "$GITHUB_ENV"
+          printf 'SIGNED_IPA=%s\n' "$signed_ipa" >> "$GITHUB_ENV"
+          printf '%s' "$MOBILEPROVISION_BASE64" |
+            base64 --decode > "$profile_path"
+
+          XCARCHIVE_ZIP="$RUNNER_TEMP/sparxie-testflight-input-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/sparxie-ios-unsigned.xcarchive.zip" \
+          MOBILEPROVISION_PATH="$profile_path" \
+          IOS_BUILD_NUMBER="$IOS_BUILD_NUMBER" \
+          KEYCHAIN_PASSWORD="$IOS_KEYCHAIN_PASSWORD" \
+          OUTPUT_DIR="$task_dir/out" \
+            ./scripts/export-testflight-ipa.sh
+
+          test -s "$signed_ipa"
+
+      - name: Validate with App Store Connect
+        shell: bash
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          test -n "$ASC_API_KEY_BASE64"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+          test -s "$SIGNED_IPA"
+
+          private_keys_dir="$TESTFLIGHT_TASK_DIR/private_keys"
+          mkdir -p "$private_keys_dir"
+          printf '%s' "$ASC_API_KEY_BASE64" |
+            base64 --decode > "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+
+          API_PRIVATE_KEYS_DIR="$private_keys_dir" xcrun altool \
+            --validate-app "$SIGNED_IPA" \
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID" \
+            --output-format json
+
+      - name: Preserve signed IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-testflight-signed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.SIGNED_IPA }}
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload to TestFlight
+        shell: bash
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          IOS_BUILD_NUMBER: ${{ needs.prepare-testflight.outputs.build_number }}
+        run: |
+          set -euo pipefail
+
+          private_keys_dir="$TESTFLIGHT_TASK_DIR/private_keys"
+          api_key_path="$private_keys_dir/AuthKey_${ASC_KEY_ID}.p8"
+          test -s "$api_key_path"
+
+          jwt_output="$(
+            xcrun altool --generate-jwt \
+              --api-key "$ASC_KEY_ID" \
+              --api-issuer "$ASC_ISSUER_ID" \
+              --p8-file-path "$api_key_path" 2>&1
+          )"
+          jwt="$(
+            printf '%s\n' "$jwt_output" |
+              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+              tail -n 1
+          )"
+          test -n "$jwt"
+
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $jwt" \
+              "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&filter%5Bversion%5D=$IOS_BUILD_NUMBER&limit=1"
+          )"
+          build_exists="$(
+            printf '%s' "$response" |
+              python3 -c 'import json, sys; print("true" if json.load(sys.stdin).get("data") else "false")'
+          )"
+
+          if [[ "$build_exists" = "true" ]]; then
+            printf 'Build %s already exists in App Store Connect; skipping duplicate upload.\n' \
+              "$IOS_BUILD_NUMBER"
+          else
+            API_PRIVATE_KEYS_DIR="$private_keys_dir" xcrun altool \
+              --upload-package "$SIGNED_IPA" \
+              --api-key "$ASC_KEY_ID" \
+              --api-issuer "$ASC_ISSUER_ID" \
+              --wait \
+              --output-format json
+          fi
+
+          {
+            printf '## TestFlight upload\n\n'
+            printf -- '- App: `zip.atri.sparxie`\n'
+            printf -- '- Build: `%s`\n' "$IOS_BUILD_NUMBER"
+            printf -- '- Status: **accepted by App Store Connect**\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean signing material
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [[ -n "${TESTFLIGHT_TASK_DIR:-}" && \
+                "$TESTFLIGHT_TASK_DIR" = "$RUNNER_TEMP"/sparxie-testflight.* ]]; then
+            rm -rf -- "$TESTFLIGHT_TASK_DIR"
+          fi
+          input_dir="$RUNNER_TEMP/sparxie-testflight-input-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rm -rf -- "$input_dir"
