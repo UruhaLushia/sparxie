@@ -1,0 +1,100 @@
+name: Publish AltStore Source
+
+on:
+  workflow_call:
+    inputs:
+      release_label:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+      source_file:
+        required: true
+        type: string
+      source_name:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: altstore-source
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: ios
+          path: ${{ runner.temp }}/ios
+
+      - name: Generate and publish source
+        env:
+          IPA_PATH: ${{ runner.temp }}/ios/sparxie-ios.ipa
+          RELEASE_LABEL: ${{ inputs.release_label }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_FILE: ${{ inputs.source_file }}
+          SOURCE_NAME: ${{ inputs.source_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_spec=$(awk '/^version:/ { print $2; exit }' pubspec.yaml)
+          version=${version_spec%%+*}
+          build=$GITHUB_RUN_NUMBER
+          size=$(stat --format=%s "$IPA_PATH")
+          released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          repository_url="https://github.com/$GITHUB_REPOSITORY"
+          icon_url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/assets/icon.jpg"
+          download_url="$repository_url/releases/download/$RELEASE_TAG/sparxie-ios.ipa"
+          source_path="$RUNNER_TEMP/$SOURCE_FILE"
+
+          jq -n \
+            --arg source_name "$SOURCE_NAME" \
+            --arg release_label "$RELEASE_LABEL" \
+            --arg website "$repository_url" \
+            --arg icon_url "$icon_url" \
+            --arg version "$version" \
+            --arg build "$build" \
+            --arg released_at "$released_at" \
+            --arg download_url "$download_url" \
+            --argjson size "$size" \
+            '{
+              name: $source_name,
+              subtitle: ("Sparxie " + $release_label),
+              iconURL: $icon_url,
+              website: $website,
+              tintColor: "#0A84FF",
+              apps: [{
+                name: "Sparxie",
+                bundleIdentifier: "zip.atri.sparxie",
+                developerName: "Sparxie",
+                subtitle: "跨平台代理控制器",
+                localizedDescription: "Flutter UI + Rust 后端的跨平台代理控制器。",
+                iconURL: $icon_url,
+                tintColor: "#0A84FF",
+                category: "utilities",
+                versions: [{
+                  version: $version,
+                  buildVersion: $build,
+                  date: $released_at,
+                  localizedDescription: $release_label,
+                  downloadURL: $download_url,
+                  size: $size,
+                  minOSVersion: "13.0"
+                }],
+                appPermissions: {
+                  entitlements: [],
+                  privacy: {}
+                }
+              }],
+              news: []
+            }' > "$source_path"
+
+          gh release upload "$RELEASE_TAG" "$source_path" --clobber

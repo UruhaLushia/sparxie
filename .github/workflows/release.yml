@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          ls -la release/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+
+  publish-altstore-source:
+    needs: publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-altstore-source.yml
+    with:
+      release_label: 正式版
+      release_tag: ${{ github.ref_name }}
+      source_file: release.json
+      source_name: Sparxie
+    secrets: inherit
