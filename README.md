@@ -16,6 +16,7 @@
 <h1 align="left">
 <a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/download/pre-release/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
 <a href="https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
+<a href="https://testflight.apple.com/join/gqSJZE1M" target="_blank" ><img src="./assets/testflight.png" alt="Available on TestFlight" height="62"></a>
 </h1>
 
 ## 支持的后端类型
