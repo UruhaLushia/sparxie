@@ -4,20 +4,31 @@
 
 ## 下载
 
-### 正式版
+[正式版发布页](https://github.com/UruhaLushia/sparxie/releases/latest) · [预发布版发布页](https://github.com/UruhaLushia/sparxie/releases/tag/pre-release)
 
-<h1 align="left">
-<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/latest/download/release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
-<a href="https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
-</h1>
+| OS | Arch | 正式版 | 预发布版 |
+|---|---|---|---|
+| 🤖 Android | ARM64 (`arm64-v8a`) | [APK](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-android-arm64-v8a.apk) | [APK](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-android-arm64-v8a.apk) |
+| 🤖 Android | x86_64 | [APK](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-android-x86_64.apk) | [APK](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-android-x86_64.apk) |
+| 🤖 Android | 通用 | [APK](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-android-universal.apk) | [APK](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-android-universal.apk) |
+| 🐧 Linux | ARM64 | [DEB](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-linux-arm64.deb) · [RPM](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-linux-arm64.rpm) | [DEB](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-linux-arm64.deb) · [RPM](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-linux-arm64.rpm) |
+| 🐧 Linux | x86_64 | [DEB](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-linux-x86_64.deb) · [RPM](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-linux-x86_64.rpm) | [DEB](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-linux-x86_64.deb) · [RPM](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-linux-x86_64.rpm) |
+| 🪟 Windows | ARM64 | [安装版](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-windows-arm64-setup.exe) · [便携版](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-windows-arm64.zip) | [安装版](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-windows-arm64-setup.exe) · [便携版](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-windows-arm64.zip) |
+| 🪟 Windows | x86_64 | [安装版](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-windows-x86_64-setup.exe) · [便携版](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-windows-x86_64.zip) | [安装版](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-windows-x86_64-setup.exe) · [便携版](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-windows-x86_64.zip) |
+| 🍎 macOS | ARM64（Apple Silicon） | [ZIP](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-macos-arm64.zip) | [ZIP](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-macos-arm64.zip) |
+| 🍎 macOS | x86_64（Intel） | [ZIP](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-macos-x86_64.zip) | — |
+| 📱 iOS / iPadOS | ARM64 | [IPA](https://github.com/UruhaLushia/sparxie/releases/latest/download/sparxie-ios.ipa) | [IPA](https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-ios.ipa) |
 
-### 预发布版
+### iOS 其他安装方式
 
-<h1 align="left">
-<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/download/pre-release/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200"></a>
-<a href="https://github.com/UruhaLushia/sparxie/releases/download/pre-release/sparxie-ios.ipa" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200"></a>
-<a href="https://testflight.apple.com/join/gqSJZE1M" target="_blank" ><img src="./assets/testflight.png" alt="Available on TestFlight" height="62"></a>
-</h1>
+#### 正式版
+
+<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/latest/download/release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" height="60"></a>
+
+#### 预发布版
+
+<a href="https://stikstore.app/altdirect/?url=https://github.com/UruhaLushia/sparxie/releases/download/pre-release/pre-release.json" target="_blank"><img src="https://github.com/StikStore/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" height="60"></a>
+<a href="https://testflight.apple.com/join/gqSJZE1M" target="_blank"><img src="./assets/testflight.png" alt="Available on TestFlight" height="60"></a>
 
 ## 支持的后端类型
 
