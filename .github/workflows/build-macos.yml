@@ -1,7 +1,19 @@
-name: Build Apple Platforms
+name: Build macOS
 
 on:
   workflow_call:
+    inputs:
+      include_intel:
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      include_intel:
+        description: Build the Intel x86_64 artifact
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -16,14 +28,15 @@ jobs:
       matrix: ${{ steps.matrix.outputs.value }}
     steps:
       - id: matrix
+        env:
+          INCLUDE_INTEL: ${{ inputs.include_intel }}
         shell: bash
         run: |
           value='[
-            {"os":"macos-26","label":"macos-arm64","kind":"macos","arch":"arm64","rust_target":"aarch64-apple-darwin"},
-            {"os":"macos-26","label":"ios","kind":"ios","rust_target":"aarch64-apple-ios"}
+            {"os":"macos-26","label":"macos-arm64","arch":"arm64","rust_target":"aarch64-apple-darwin"}
           ]'
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            value=$(jq -c '. + [{"os":"macos-26-intel","label":"macos-x86_64","kind":"macos","arch":"x86_64","rust_target":"x86_64-apple-darwin"}]' <<<"$value")
+          if [[ "$GITHUB_REF" == refs/tags/v* || "$INCLUDE_INTEL" == true ]]; then
+            value=$(jq -c '. + [{"os":"macos-26-intel","label":"macos-x86_64","arch":"x86_64","rust_target":"x86_64-apple-darwin"}]' <<<"$value")
           fi
           echo "value=$(jq -c . <<<"$value")" >> "$GITHUB_OUTPUT"
 
@@ -65,7 +78,7 @@ jobs:
             dart-tool-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache CocoaPods
-        if: matrix.kind == 'macos' && matrix.arch == 'x86_64'
+        if: matrix.arch == 'x86_64'
         uses: actions/cache@v5
         with:
           path: macos/Pods
@@ -74,7 +87,7 @@ jobs:
             pods-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache Xcode DerivedData
-        if: matrix.kind == 'macos' && matrix.arch == 'x86_64'
+        if: matrix.arch == 'x86_64'
         uses: actions/cache@v5
         with:
           path: ~/Library/Developer/Xcode/DerivedData
@@ -85,8 +98,7 @@ jobs:
       - name: Fetch Flutter deps
         run: flutter pub get
 
-      - name: Build macOS DMG
-        if: matrix.kind == 'macos'
+      - name: Build DMG
         run: |
           (cd core && cargo build --release --target ${{ matrix.rust_target }})
           flutter build macos --release
@@ -111,10 +123,6 @@ jobs:
             -format UDZO \
             "$DMG_PATH"
           hdiutil verify "$DMG_PATH"
-
-      - name: Build unsigned IPA
-        if: matrix.kind == 'ios'
-        run: OUTPUT_DIR=out IOS_BUILD_NUMBER=$GITHUB_RUN_NUMBER ./scripts/build-ios-ipa.sh
 
       - uses: actions/upload-artifact@v7
         with:
