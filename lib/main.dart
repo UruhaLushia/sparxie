@@ -249,16 +249,20 @@ ThemeData _appTheme({
       surfaceTintColor: Colors.transparent,
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: surfaceTheme.surfaceColor(scheme.surfaceContainerHigh),
+      backgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerHigh,
+      ),
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      backgroundColor: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
-      modalBackgroundColor: surfaceTheme.surfaceColor(
+      backgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerLow,
+      ),
+      modalBackgroundColor: surfaceTheme.modalSurfaceColor(
         scheme.surfaceContainerLow,
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: surfaceTheme.surfaceColor(scheme.surfaceContainerHigh),
+      color: surfaceTheme.modalSurfaceColor(scheme.surfaceContainerHigh),
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {

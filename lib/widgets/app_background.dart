@@ -12,6 +12,7 @@ import '../platform_capabilities.dart';
 class AppSurfaceTheme extends ThemeExtension<AppSurfaceTheme> {
   static const compactAcrylicBlurScale = 0.65;
   static const compactAcrylicVeil = 0.06;
+  static const minimumModalOpacity = 0.94;
 
   const AppSurfaceTheme({
     required this.enabled,
@@ -60,6 +61,11 @@ class AppSurfaceTheme extends ThemeExtension<AppSurfaceTheme> {
     // with the remaining transparency so low-opacity surfaces do not turn
     // nearly black over dark image regions, while high opacity barely changes.
     return tinted.withValues(alpha: effectiveSurfaceOpacity(lift));
+  }
+
+  Color modalSurfaceColor(Color base) {
+    final lift = math.max(0.0, minimumModalOpacity - opacity);
+    return surfaceColor(base, lift);
   }
 
   Color pageColor(Color fallback) => enabled ? Colors.transparent : fallback;
