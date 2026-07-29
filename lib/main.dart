@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -15,6 +16,7 @@ import 'app_prefs.dart';
 import 'background_image_store.dart';
 import 'config_store.dart';
 import 'controller.dart';
+import 'controller_uri_import.dart';
 import 'imported_fonts.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
@@ -43,6 +45,7 @@ import 'window_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final appLinks = AppLinks();
   _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.
   final config = await JsonStore.load();
@@ -114,6 +117,7 @@ Future<void> main() async {
       prefs: prefs,
       session: session,
       systemAccentColor: systemAccentColor,
+      appLinks: appLinks,
     ),
   );
 }
@@ -410,18 +414,22 @@ class MihomoControllerApp extends StatefulWidget {
     required this.prefs,
     required this.session,
     required this.systemAccentColor,
+    required this.appLinks,
   });
 
   final ControllerStore store;
   final AppPrefs prefs;
   final MihomoSession session;
   final SystemAccentColor systemAccentColor;
+  final AppLinks appLinks;
 
   @override
   State<MihomoControllerApp> createState() => _MihomoControllerAppState();
 }
 
 class _MihomoControllerAppState extends State<MihomoControllerApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final ControllerUriImporter _controllerUriImporter;
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
   int? _themeSeed;
@@ -437,6 +445,22 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   AppPrefs get prefs => widget.prefs;
   MihomoSession get session => widget.session;
   SystemAccentColor get systemAccentColor => widget.systemAccentColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllerUriImporter = ControllerUriImporter(
+      widget.appLinks,
+      store: store,
+      navigatorKey: _navigatorKey,
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _controllerUriImporter.dispose();
+    super.dispose();
+  }
 
   @override
   void reassemble() {
@@ -526,6 +550,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
           surfaceBlur: surfaceBlur,
         );
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',
           scrollBehavior: const _AppScrollBehavior(),

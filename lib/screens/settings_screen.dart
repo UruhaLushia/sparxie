@@ -1046,6 +1046,23 @@ class BackendSettingsPanel extends StatefulWidget {
   State<BackendSettingsPanel> createState() => _BackendSettingsPanelState();
 }
 
+Future<ctl.ControllerDraft?> showControllerEditorDialog(
+  BuildContext context, {
+  ctl.Controller? existing,
+  ctl.ControllerDraft? initial,
+  bool importMode = false,
+}) {
+  assert(existing == null || initial == null);
+  return showDialog<ctl.ControllerDraft>(
+    context: context,
+    builder: (_) => _EditDialog(
+      existing: existing,
+      initial: initial,
+      importMode: importMode,
+    ),
+  );
+}
+
 class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   @override
   void initState() {
@@ -1112,19 +1129,13 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   }
 
   Future<void> _edit({ctl.Controller? existing}) async {
-    final result = await showDialog<_EditResult>(
-      context: context,
-      builder: (_) => _EditDialog(existing: existing),
+    final result = await showControllerEditorDialog(
+      context,
+      existing: existing,
     );
     if (result == null) return;
     if (existing == null) {
-      await widget.store.add(
-        name: result.name,
-        type: result.type,
-        baseUrl: result.baseUrl,
-        secret: result.secret,
-        allowInsecure: result.allowInsecure,
-      );
+      await widget.store.addDraft(result);
     } else {
       await widget.store.update(
         existing.id,
@@ -1217,24 +1228,11 @@ class _ControllerTile extends StatelessWidget {
   }
 }
 
-class _EditResult {
-  _EditResult({
-    required this.name,
-    required this.type,
-    required this.baseUrl,
-    required this.secret,
-    required this.allowInsecure,
-  });
-  final String name;
-  final ctl.BackendType type;
-  final String baseUrl;
-  final String secret;
-  final bool allowInsecure;
-}
-
 class _EditDialog extends StatefulWidget {
-  const _EditDialog({this.existing});
+  const _EditDialog({this.existing, this.initial, this.importMode = false});
   final ctl.Controller? existing;
+  final ctl.ControllerDraft? initial;
+  final bool importMode;
 
   @override
   State<_EditDialog> createState() => _EditDialogState();
@@ -1315,14 +1313,17 @@ class _EditDialogState extends State<_EditDialog> {
   void initState() {
     super.initState();
     final c = widget.existing;
-    _name = TextEditingController(text: c?.name ?? '');
-    _type = c?.type ?? ctl.BackendType.clash;
-    final (scheme, addr) = _decompose(c?.baseUrl ?? 'http://127.0.0.1:9090');
+    final initial = widget.initial;
+    _name = TextEditingController(text: c?.name ?? initial?.name ?? '');
+    _type = c?.type ?? initial?.type ?? ctl.BackendType.clash;
+    final (scheme, addr) = _decompose(
+      c?.baseUrl ?? initial?.baseUrl ?? 'http://127.0.0.1:9090',
+    );
     final allowed = _isSchemeAllowed(scheme);
     _scheme = allowed ? scheme : _Scheme.http;
     _address = TextEditingController(text: allowed ? addr : _defaultTcpAddress);
-    _secret = TextEditingController(text: c?.secret ?? '');
-    _allowInsecure = c?.allowInsecure ?? false;
+    _secret = TextEditingController(text: c?.secret ?? initial?.secret ?? '');
+    _allowInsecure = c?.allowInsecure ?? initial?.allowInsecure ?? false;
   }
 
   void _setType(ctl.BackendType type) {
@@ -1457,7 +1458,7 @@ class _EditDialogState extends State<_EditDialog> {
     final isNew = widget.existing == null;
     return AlertDialog(
       scrollable: true,
-      title: Text(isNew ? '新增后端' : '编辑后端'),
+      title: Text(widget.importMode ? '导入目标服务' : (isNew ? '新增后端' : '编辑后端')),
       content: SizedBox(
         width: 360,
         child: Form(
@@ -1467,7 +1468,7 @@ class _EditDialogState extends State<_EditDialog> {
             children: [
               TextFormField(
                 controller: _name,
-                autofocus: true,
+                autofocus: !widget.importMode,
                 decoration: const InputDecoration(
                   labelText: '名称',
                   hintText: '例如：家用机',
@@ -1570,7 +1571,7 @@ class _EditDialogState extends State<_EditDialog> {
             if (_formKey.currentState?.validate() != true) return;
             Navigator.pop(
               context,
-              _EditResult(
+              ctl.ControllerDraft(
                 name: _name.text.trim(),
                 type: _type,
                 baseUrl: _composeUrl(),
@@ -1580,7 +1581,7 @@ class _EditDialogState extends State<_EditDialog> {
               ),
             );
           },
-          child: Text(isNew ? '添加' : '保存'),
+          child: Text(widget.importMode ? '导入' : (isNew ? '添加' : '保存')),
         ),
       ],
     );

@@ -40,6 +40,17 @@ yay -S sparxie-bin
 | Surge | Surge | 策略组、策略选择、连接、规则、流量、出站模式、DNS 刷新可用；核心管理、Provider 管理、内存流不可用 |
 | sing-box | sing-box | 状态信息 (协程/内存)、代理组、节点、连接、日志、tailscale 状态 (基于 1.14.0-alpha.31) |
 
+## URI Scheme 导入
+
+可通过 `sparxie://install-target` 打开确认窗口并导入目标服务：
+
+```text
+sparxie://install-target?url=http%3A%2F%2F192.168.1.2%3A9090&name=Home&type=clash&secret=token
+```
+
+`url` 为必填项；`name`、`secret`、`allowInsecure` 可选。`type` 支持
+`clash`（默认，也接受 `mihomo`）、`surge` 和 `sing-box`。所有参数均应进行 URL 编码。
+
 ## 平台
 
 | 平台 | 状态 |
