@@ -208,6 +208,18 @@ class CompactControlStyle {
   TextStyle? labelStyle(BuildContext context) =>
       textStyle ?? Theme.of(context).textTheme.labelMedium;
 
+  CompactControlStyle withSurfaceOpacity(double opacity) {
+    Color? fade(Color? color, [double lift = 0]) =>
+        color?.withValues(alpha: (opacity + lift).clamp(0.05, 1.0).toDouble());
+
+    return copyWith(
+      backgroundColor: fade(backgroundColor),
+      selectedBackgroundColor: fade(selectedBackgroundColor, 0.08),
+      switchActiveTrackColor: fade(switchActiveTrackColor, 0.08),
+      switchInactiveTrackColor: fade(switchInactiveTrackColor),
+    );
+  }
+
   CompactControlStyle copyWith({
     Color? backgroundColor,
     Color? selectedBackgroundColor,

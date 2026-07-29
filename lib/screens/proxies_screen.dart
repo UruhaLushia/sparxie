@@ -7,11 +7,15 @@ import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/active_listenable_builder.dart';
+import '../widgets/app_background.dart';
 import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
 import '../widgets/proxies_settings_menu.dart';
 import '../widgets/proxy_group_card.dart';
 import '../widgets/proxy_group_header.dart';
 import '../widgets/proxy_node_tile.dart';
+import '../widgets/route_app_bar.dart';
 
 class ProxiesScreen extends StatefulWidget {
   const ProxiesScreen({
@@ -35,12 +39,28 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   final Set<String> _searchOpen = <String>{};
   final Map<String, TextEditingController> _searchCtls =
       <String, TextEditingController>{};
+  ({
+    bool includeHidden,
+    ProxiesLayout layout,
+    bool showGroupIcons,
+    ProxiesSort sort,
+    int columns,
+    bool cardColored,
+  })?
+  _prefsSnapshot;
+  var _active = true;
 
   @override
   void initState() {
     super.initState();
-    _syncProxyCatalogOptions();
+    _syncRelevantPrefs();
     widget.prefs.addListener(_onPrefs);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = TickerMode.valuesOf(context).enabled;
   }
 
   @override
@@ -53,8 +73,29 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   }
 
   void _onPrefs() {
-    _syncProxyCatalogOptions();
-    if (mounted) setState(() {});
+    _syncRelevantPrefs();
+  }
+
+  void _syncRelevantPrefs() {
+    final next = (
+      includeHidden: widget.prefs.proxiesShowHiddenGroups,
+      layout: widget.prefs.proxiesLayout,
+      showGroupIcons: widget.prefs.proxiesShowGroupIcons,
+      sort: widget.prefs.proxiesSort,
+      columns: widget.prefs.proxiesColumns,
+      cardColored: widget.prefs.proxiesCardColored,
+    );
+    final previous = _prefsSnapshot;
+    if (previous == next) return;
+    _prefsSnapshot = next;
+    if (previous == null ||
+        previous.includeHidden != next.includeHidden ||
+        previous.layout != next.layout ||
+        previous.showGroupIcons != next.showGroupIcons ||
+        previous.sort != next.sort) {
+      _syncProxyCatalogOptions();
+    }
+    if (previous != null && mounted && _active) setState(() {});
   }
 
   void _syncProxyCatalogOptions() {
@@ -269,76 +310,84 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('代理组'),
-        flexibleSpace: const DesktopAppBarDragArea(),
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            onPressed: widget.session.refreshProxies,
-            icon: const Icon(Icons.refresh),
-          ),
-          ProxiesSettingsMenu(prefs: widget.prefs),
-        ],
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            ValueListenableBuilder<String?>(
-              valueListenable: widget.session.error,
-              builder: (_, err, _) {
-                if (err == null) return const SizedBox.shrink();
-                return Container(
-                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_rounded,
-                        color: colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          err,
-                          style: TextStyle(color: colorScheme.onErrorContainer),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('代理组'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+          actions: [
+            IconButton(
+              tooltip: '刷新',
+              onPressed: widget.session.refreshProxies,
+              icon: const Icon(Icons.refresh),
             ),
-            Expanded(
-              child: widget.prefs.proxiesLayout == ProxiesLayout.cards
-                  ? _ProxyCardsBody(
-                      session: widget.session,
-                      prefs: widget.prefs,
-                      onSelect: _select,
-                      onTestGroup: _testGroup,
-                      onTestNode: _testNode,
-                    )
-                  : _ProxiesBody(
-                      session: widget.session,
-                      prefs: widget.prefs,
-                      testingGroups: _testingGroup,
-                      expanded: _expanded,
-                      searchOpen: _searchOpen,
-                      searchControllers: _searchCtls,
-                      onToggle: _toggle,
-                      onToggleSearch: _toggleSearch,
-                      onSearchChanged: () => setState(() {}),
-                      onSelect: _select,
-                      onTestGroup: _testGroup,
-                      onTestNode: _testNode,
-                    ),
-            ),
+            ProxiesSettingsMenu(prefs: widget.prefs),
           ],
+        ),
+      ),
+      body: AppPageBodyTransition(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              ActiveValueListenableBuilder<String?>(
+                valueListenable: widget.session.error,
+                builder: (_, err, _) {
+                  if (err == null) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_rounded,
+                          color: colorScheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            err,
+                            style: TextStyle(
+                              color: colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Expanded(
+                child: widget.prefs.proxiesLayout == ProxiesLayout.cards
+                    ? _ProxyCardsBody(
+                        session: widget.session,
+                        prefs: widget.prefs,
+                        onSelect: _select,
+                        onTestGroup: _testGroup,
+                        onTestNode: _testNode,
+                      )
+                    : _ProxiesBody(
+                        session: widget.session,
+                        prefs: widget.prefs,
+                        testingGroups: _testingGroup,
+                        expanded: _expanded,
+                        searchOpen: _searchOpen,
+                        searchControllers: _searchCtls,
+                        onToggle: _toggle,
+                        onToggleSearch: _toggleSearch,
+                        onSearchChanged: () => setState(() {}),
+                        onSelect: _select,
+                        onTestGroup: _testGroup,
+                        onTestNode: _testNode,
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -388,6 +437,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   final ScrollController _scroll = ScrollController();
   bool _memberLoadScheduled = false;
   int _cols = 1;
+  var _active = true;
 
   @override
   void initState() {
@@ -407,6 +457,12 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
   void dispose() {
     widget.session.proxies.removeListener(_recompute);
     _pendingMemberLoads.clear();
@@ -415,6 +471,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   void _queueMemberLoad(String group, int index) {
+    if (!_active) return;
     final pending = _pendingMemberLoads[group];
     if (pending == null) {
       _pendingMemberLoads[group] = _PendingMemberRange(index);
@@ -449,9 +506,8 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   void _recompute() {
     final next = widget.session.proxies.groups;
     if (identical(_groups, next)) return;
-    setState(() {
-      _groups = next;
-    });
+    _groups = next;
+    if (_active) setState(() {});
   }
 
   String _queryFor(String name) {
@@ -579,7 +635,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
                     ),
                   ),
                   if (widget.expanded.contains(group.name))
-                    ValueListenableBuilder<int>(
+                    ActiveValueListenableBuilder<int>(
                       valueListenable: group.membersVersion,
                       builder: (_, _, _) => _membersSliver(group),
                     ),
@@ -706,7 +762,7 @@ class _ProxyCardsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: session.proxies,
       builder: (context, _) {
         final groups = session.proxies.groups;
@@ -777,11 +833,16 @@ class _ProxyNodePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        color: surfaceTheme.surfaceColor(
+          scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+        border: surfaceTheme.outlineBorder(
+          scheme.outlineVariant.withValues(alpha: 0.4),
+        ),
       ),
     );
   }

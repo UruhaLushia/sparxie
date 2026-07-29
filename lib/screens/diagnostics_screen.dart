@@ -8,6 +8,7 @@ import '../rust_api.dart' as rust;
 import '../utils.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
+import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
@@ -83,9 +84,13 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   Widget build(BuildContext context) {
     final target = _target;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('网络工具'),
-        flexibleSpace: const DesktopAppBarDragArea(),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('网络工具'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+        ),
       ),
       body: SafeArea(
         bottom: false,

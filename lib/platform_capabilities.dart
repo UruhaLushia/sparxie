@@ -12,3 +12,10 @@ bool get supportsCustomTitleBar =>
       TargetPlatform.windows => true,
       _ => false,
     };
+
+bool get isMobilePlatform =>
+    !kIsWeb &&
+    switch (defaultTargetPlatform) {
+      TargetPlatform.android || TargetPlatform.iOS => true,
+      _ => false,
+    };

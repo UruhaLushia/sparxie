@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_prefs.dart';
+import 'app_background.dart';
 import 'compact_controls/style.dart';
 
 class AppNavDestination {
@@ -33,27 +33,35 @@ class SideNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final leftInset = MediaQuery.paddingOf(context).left;
-    return Container(
-      width: 84 + leftInset,
-      padding: EdgeInsets.only(left: leftInset),
-      child: SafeArea(
-        left: false,
-        right: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < destinations.length; i++)
-              SizedBox(
-                height: itemHeight,
-                child: _SideNavigationRailItem(
-                  destination: destinations[i],
-                  selected: i == selectedIndex,
-                  onTap: () => onSelected(i),
-                  scheme: scheme,
-                ),
+    return AppSurfaceBackdrop(
+      child: ColoredBox(
+        color: surfaceTheme.chromeColor(scheme.surface),
+        child: SizedBox(
+          width: 84 + leftInset,
+          child: Padding(
+            padding: EdgeInsets.only(left: leftInset),
+            child: SafeArea(
+              left: false,
+              right: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    SizedBox(
+                      height: itemHeight,
+                      child: _SideNavigationRailItem(
+                        destination: destinations[i],
+                        selected: i == selectedIndex,
+                        onTap: () => onSelected(i),
+                        scheme: scheme,
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );
@@ -123,12 +131,14 @@ class FloatingBottomNavBar extends StatelessWidget {
     required this.onSelected,
     required this.destinations,
     required this.style,
+    required this.surfaceTheme,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final List<AppNavDestination> destinations;
   final NavBarStyle style;
+  final AppSurfaceTheme surfaceTheme;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +150,59 @@ class FloatingBottomNavBar extends StatelessWidget {
       56.0,
     );
     final isDark = scheme.brightness == Brightness.dark;
+    final background = controlStyle.background(context);
+    final surfaceColor = surfaceTheme.surfaceColor(background);
+    final shadowStrength = surfaceTheme.enabled
+        ? surfaceTheme.effectiveSurfaceOpacity()
+        : 1.0;
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final surface = AppSurfaceBackdrop(
+      borderRadius: controlStyle.borderRadius,
+      surfaceTheme: surfaceTheme,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: controlStyle.borderRadius,
+          border: surfaceTheme.outlineBorder(
+            isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.08),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: (isDark ? 0.3 : 0.08) * shadowStrength,
+              ),
+              blurRadius: 16,
+              spreadRadius: -2,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: (isDark ? 0.12 : 0.03) * shadowStrength,
+              ),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: SizedBox(
+            height: height,
+            child: BottomNavBarItems(
+              style: style,
+              styleConfig: controlStyle,
+              destinations: destinations,
+              selectedIndex: selectedIndex,
+              onSelected: onSelected,
+              shrinkWrap: true,
+            ),
+          ),
+        ),
+      ),
+    );
     return Transform.translate(
       offset: Offset(0, -controlStyle.floatingHeightOffset),
       child: Padding(
@@ -150,60 +212,7 @@ class FloatingBottomNavBar extends StatelessWidget {
           horizontalInset,
           6 + bottomPadding,
         ),
-        child: Center(
-          heightFactor: 1,
-          child: ClipRRect(
-            borderRadius: controlStyle.borderRadius,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: controlStyle
-                      .background(context)
-                      .withValues(alpha: isDark ? 0.76 : 0.84),
-                  borderRadius: controlStyle.borderRadius,
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.08),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.08,
-                      ),
-                      blurRadius: 16,
-                      spreadRadius: -2,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.12 : 0.03,
-                      ),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: SizedBox(
-                    height: height,
-                    child: BottomNavBarItems(
-                      style: style,
-                      styleConfig: controlStyle,
-                      destinations: destinations,
-                      selectedIndex: selectedIndex,
-                      onSelected: onSelected,
-                      shrinkWrap: true,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        child: Center(heightFactor: 1, child: AppBackdropGroup(child: surface)),
       ),
     );
   }

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../session.dart';
 import '../utils.dart';
+import 'active_listenable_builder.dart';
+import 'app_background.dart';
 import 'connection_tag.dart';
 import 'process_icon.dart';
 
@@ -70,6 +72,7 @@ class ConnectionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final timeText = row.start == null ? '' : _ago(row.start!);
     final cache = processIcons;
     final iconKey = _iconKey();
@@ -78,52 +81,69 @@ class ConnectionTile extends StatelessWidget {
         !hideProcess && showAppName && cache != null && iconKey.isNotEmpty;
     if (wantName) cache.requestName(iconKey);
     final verticalPadding = compact ? 7.0 : (wantIcon ? 6.0 : 10.0);
+    const radius = BorderRadius.all(Radius.circular(14));
 
     // Tile chrome rebuilds only on identity change. Bytes line repaints
     // independently when this row's counters tick.
     return RepaintBoundary(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            wantIcon ? 10 : 14,
-            verticalPadding,
-            8,
-            verticalPadding,
-          ),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
+      child: AppSurfaceBackdrop(
+        borderRadius: radius,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(
+              wantIcon ? 10 : 14,
+              verticalPadding,
+              8,
+              verticalPadding,
             ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (wantIcon) ...[
-                ProcessIcon(
-                  cache: cache,
-                  process: row.process,
-                  processPath: row.processPath,
-                  size: 50,
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: wantName
-                              ? ListenableBuilder(
-                                  listenable: cache,
-                                  builder: (context, _) => Text(
-                                    _titleFor(cache.nameFor(iconKey)),
+            decoration: BoxDecoration(
+              color: surfaceTheme.surfaceColor(
+                scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              ),
+              borderRadius: radius,
+              border: surfaceTheme.outlineBorder(
+                scheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (wantIcon) ...[
+                  ProcessIcon(
+                    cache: cache,
+                    process: row.process,
+                    processPath: row.processPath,
+                    size: 50,
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: wantName
+                                ? ActiveListenableBuilder(
+                                    listenable: cache,
+                                    builder: (context, _) => Text(
+                                      _titleFor(cache.nameFor(iconKey)),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.1,
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                : Text(
+                                    _titleFor(null),
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
@@ -133,100 +153,91 @@ class ConnectionTile extends StatelessWidget {
                                         ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                )
-                              : Text(
-                                  _titleFor(null),
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.1,
-                                      ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                        ),
-                        if (timeText.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            timeText,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  height: 1.1,
-                                ),
                           ),
-                        ],
-                        IconButton(
-                          tooltip: '关闭',
-                          onPressed: onClose,
-                          icon: const Icon(Icons.close, size: 18),
-                          visualDensity: VisualDensity.compact,
-                          style: IconButton.styleFrom(
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          padding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (row.protocolLabel.isNotEmpty) ...[
-                            ConnectionTag(
-                              label: row.protocolLabel,
-                              variant: ConnectionTagVariant.dot,
-                              color: scheme.primary,
+                          if (timeText.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              timeText,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.1,
+                                  ),
                             ),
-                            const SizedBox(width: 6),
                           ],
-                          if (row.activeProxy.isNotEmpty) ...[
-                            ConnectionTag(
-                              label: row.activeProxy,
-                              variant: ConnectionTagVariant.bordered,
+                          IconButton(
+                            tooltip: '关闭',
+                            onPressed: onClose,
+                            icon: const Icon(Icons.close, size: 18),
+                            visualDensity: VisualDensity.compact,
+                            style: IconButton.styleFrom(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            const SizedBox(width: 6),
-                          ],
-                          // Only this chip rebuilds each tick; the static chips
-                          // above stay stable to avoid wasted work on long lists.
-                          ValueListenableBuilder<RowBytes>(
-                            valueListenable: row.bytes,
-                            builder: (_, bytes, _) => ConnectionTag(
-                              label:
-                                  '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
-                              variant: ConnectionTagVariant.bordered,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
                             ),
-                          ),
-                          ValueListenableBuilder<RowSpeeds>(
-                            valueListenable: row.speeds,
-                            builder: (_, speeds, _) {
-                              if (speeds.upload == BigInt.zero &&
-                                  speeds.download == BigInt.zero) {
-                                return const SizedBox.shrink();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 6),
-                                child: ConnectionTag(
-                                  label:
-                                      '↑ ${formatBytes(speeds.upload)}/s  ↓ ${formatBytes(speeds.download)}/s',
-                                  variant: ConnectionTagVariant.bordered,
-                                  color: scheme.primary,
-                                ),
-                              );
-                            },
+                            padding: EdgeInsets.zero,
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (row.protocolLabel.isNotEmpty) ...[
+                              ConnectionTag(
+                                label: row.protocolLabel,
+                                variant: ConnectionTagVariant.dot,
+                                color: scheme.primary,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            if (row.activeProxy.isNotEmpty) ...[
+                              ConnectionTag(
+                                label: row.activeProxy,
+                                variant: ConnectionTagVariant.bordered,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            // Only this chip rebuilds each tick; the static chips
+                            // above stay stable to avoid wasted work on long lists.
+                            ActiveValueListenableBuilder<RowBytes>(
+                              valueListenable: row.bytes,
+                              builder: (_, bytes, _) => ConnectionTag(
+                                label:
+                                    '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
+                                variant: ConnectionTagVariant.bordered,
+                              ),
+                            ),
+                            ActiveValueListenableBuilder<RowSpeeds>(
+                              valueListenable: row.speeds,
+                              builder: (_, speeds, _) {
+                                if (speeds.upload == BigInt.zero &&
+                                    speeds.download == BigInt.zero) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: ConnectionTag(
+                                    label:
+                                        '↑ ${formatBytes(speeds.upload)}/s  ↓ ${formatBytes(speeds.download)}/s',
+                                    variant: ConnectionTagVariant.bordered,
+                                    color: scheme.primary,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -9,12 +9,16 @@ import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
+import '../widgets/app_background.dart';
 import '../widgets/connection_detail_sheet.dart';
 import '../widgets/connection_group_header.dart';
 import '../widgets/connection_tile.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/connections_settings_menu.dart';
 import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
+import '../widgets/route_app_bar.dart';
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -111,6 +115,15 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   String _filter = '';
   ConnectionsTab _tab = ConnectionsTab.active;
   int _tabDirection = 1;
+  ({
+    int refreshMs,
+    ConnectionsSort sort,
+    bool sortAsc,
+    bool grouped,
+    GroupSort groupSort,
+    bool groupSortAsc,
+  })?
+  _prefsSnapshot;
   final TextEditingController _filterController = TextEditingController();
 
   rust.BackendTarget? _target() {
@@ -123,8 +136,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   void initState() {
     super.initState();
     widget.prefs.addListener(_onPrefsChanged);
-    _pushSortToBackend();
-    _syncGrouping();
+    _syncRelevantPrefs();
     widget.session.connections.setFilter(_filter);
   }
 
@@ -136,8 +148,33 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   }
 
   void _onPrefsChanged() {
-    _pushSortToBackend();
-    _syncGrouping();
+    _syncRelevantPrefs();
+  }
+
+  void _syncRelevantPrefs() {
+    final next = (
+      refreshMs: widget.prefs.connectionsRefreshMs,
+      sort: widget.prefs.connectionsSort,
+      sortAsc: widget.prefs.connectionsSortAsc,
+      grouped: widget.prefs.connectionsGroupByProcess,
+      groupSort: widget.prefs.connectionsGroupSort,
+      groupSortAsc: widget.prefs.connectionsGroupSortAsc,
+    );
+    final previous = _prefsSnapshot;
+    if (previous == next) return;
+    _prefsSnapshot = next;
+    if (previous == null ||
+        previous.refreshMs != next.refreshMs ||
+        previous.sort != next.sort ||
+        previous.sortAsc != next.sortAsc) {
+      _pushSortToBackend();
+    }
+    if (previous == null ||
+        previous.grouped != next.grouped ||
+        previous.groupSort != next.groupSort ||
+        previous.groupSortAsc != next.groupSortAsc) {
+      _syncGrouping();
+    }
   }
 
   void _syncGrouping() {
@@ -293,271 +330,280 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        flexibleSpace: const DesktopAppBarDragArea(),
-        title: Row(
-          children: [
-            const Text('连接'),
-            const SizedBox(width: 8),
-            ValueListenableBuilder<bool>(
-              valueListenable: widget.session.isStreaming,
-              builder: (_, live, _) => AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: live ? 1 : 0.3,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colorScheme.primary,
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          flexibleSpace: const DesktopAppBarDragArea(),
+          title: Row(
+            children: [
+              const Text('连接'),
+              const SizedBox(width: 8),
+              ActiveValueListenableBuilder<bool>(
+                valueListenable: widget.session.isStreaming,
+                builder: (_, live, _) => AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: live ? 1 : 0.3,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colorScheme.primary,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: ValueListenableBuilder<ConnectionsTotals>(
-                valueListenable: widget.session.connectionsTotals,
-                builder: (_, totals, _) => Text(
-                  '↑${formatBytes(totals.upload)}/↓${formatBytes(totals.download)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+              const SizedBox(width: 10),
+              Flexible(
+                child: ActiveValueListenableBuilder<ConnectionsTotals>(
+                  valueListenable: widget.session.connectionsTotals,
+                  builder: (_, totals, _) => Text(
+                    '↑${formatBytes(totals.upload)}/↓${formatBytes(totals.download)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.only(right: 4),
+          actions: [
+            ActiveValueListenableBuilder<bool>(
+              valueListenable: widget.session.connectionsPaused,
+              builder: (_, paused, _) => IconButton(
+                tooltip: paused ? '继续' : '暂停',
+                visualDensity: VisualDensity.compact,
+                onPressed: () =>
+                    widget.session.connectionsPaused.value = !paused,
+                icon: Icon(paused ? Icons.play_arrow : Icons.pause),
+              ),
             ),
+            ActiveValueListenableBuilder<ConnectionsTotals>(
+              valueListenable: widget.session.connectionsTotals,
+              builder: (_, totals, _) {
+                if (_tab == ConnectionsTab.closed) {
+                  return ActiveListenableBuilder(
+                    listenable: widget.session.connections,
+                    builder: (_, _) {
+                      final n = widget.session.connections.closedCount;
+                      return IconButton(
+                        tooltip: '清空已关闭',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: n == 0 ? null : _clearClosed,
+                        icon: const Icon(Icons.delete_outline),
+                      );
+                    },
+                  );
+                }
+                return IconButton(
+                  tooltip: '关闭所有',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: totals.count == 0
+                      ? null
+                      : () => _closeAll(totals.count),
+                  icon: const Icon(Icons.close),
+                );
+              },
+            ),
+            ConnectionsSettingsMenu(prefs: widget.prefs),
           ],
         ),
-        actionsPadding: const EdgeInsets.only(right: 4),
-        actions: [
-          ValueListenableBuilder<bool>(
-            valueListenable: widget.session.connectionsPaused,
-            builder: (_, paused, _) => IconButton(
-              tooltip: paused ? '继续' : '暂停',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => widget.session.connectionsPaused.value = !paused,
-              icon: Icon(paused ? Icons.play_arrow : Icons.pause),
-            ),
-          ),
-          ValueListenableBuilder<ConnectionsTotals>(
-            valueListenable: widget.session.connectionsTotals,
-            builder: (_, totals, _) {
-              if (_tab == ConnectionsTab.closed) {
-                return ListenableBuilder(
-                  listenable: widget.session.connections,
-                  builder: (_, _) {
-                    final n = widget.session.connections.closedCount;
-                    return IconButton(
-                      tooltip: '清空已关闭',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: n == 0 ? null : _clearClosed,
-                      icon: const Icon(Icons.delete_outline),
-                    );
-                  },
-                );
-              }
-              return IconButton(
-                tooltip: '关闭所有',
-                visualDensity: VisualDensity.compact,
-                onPressed: totals.count == 0
-                    ? null
-                    : () => _closeAll(totals.count),
-                icon: const Icon(Icons.close),
-              );
-            },
-          ),
-          ConnectionsSettingsMenu(prefs: widget.prefs),
-        ],
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // sticky toolbar: tabs + filter + sort field + direction toggle.
-            // On phones the row would overflow, so split into two lines:
-            //   row 1 = filter
-            //   row 2 = tabs + sort + direction
-            RepaintBoundary(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 480;
-                    final tabs = ListenableBuilder(
-                      listenable: widget.session.connections,
-                      builder: (context, _) {
-                        final cn = widget.session.connections;
-                        return CompactSegmentedButton<ConnectionsTab>(
-                          segments: [
-                            ButtonSegment(
-                              value: ConnectionsTab.active,
-                              label: Text('活动 ${cn.activeCount}'),
-                            ),
-                            ButtonSegment(
-                              value: ConnectionsTab.closed,
-                              label: Text('已关闭 ${cn.closedCount}'),
-                            ),
-                          ],
-                          selected: {_tab},
-                          onSelectionChanged: (s) => _setTab(s.first),
-                        );
-                      },
-                    );
-                    final filter = CompactSearchField(
-                      controller: _filterController,
-                      hintText: '筛选',
-                      onChanged: _setFilter,
-                      onClear: () {
-                        _filterController.clear();
-                        _setFilter('');
-                      },
-                    );
-                    final sortField = ListenableBuilder(
-                      listenable: widget.prefs,
-                      builder: (context, _) => CompactMenuButton(
-                        value: widget.prefs.connectionsSort,
-                        label: _sortLabel(widget.prefs.connectionsSort),
-                        semanticLabel: '排序字段',
-                        onSelected: widget.prefs.setConnectionsSort,
-                        itemBuilder: (_) => [
-                          for (final s in ConnectionsSort.values)
-                            CheckedPopupMenuItem<ConnectionsSort>(
-                              value: s,
-                              checked: widget.prefs.connectionsSort == s,
-                              child: Text(_sortLabel(s)),
-                            ),
-                        ],
-                      ),
-                    );
-                    final direction = ListenableBuilder(
-                      listenable: widget.prefs,
-                      builder: (context, _) => CompactIconButton(
-                        semanticLabel: widget.prefs.connectionsSortAsc
-                            ? '升序'
-                            : '降序',
-                        onPressed: () => widget.prefs.setConnectionsSortAsc(
-                          !widget.prefs.connectionsSortAsc,
-                        ),
-                        icon: Icon(
-                          widget.prefs.connectionsSortAsc
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          size: 18,
-                        ),
-                      ),
-                    );
-
-                    if (!compact) {
-                      return Row(
-                        children: [
-                          tabs,
-                          const SizedBox(width: 8),
-                          Expanded(child: filter),
-                          const SizedBox(width: 8),
-                          sortField,
-                          const SizedBox(width: 4),
-                          direction,
-                        ],
+      body: AppPageBodyTransition(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // sticky toolbar: tabs + filter + sort field + direction toggle.
+              // On phones the row would overflow, so split into two lines:
+              //   row 1 = filter
+              //   row 2 = tabs + sort + direction
+              RepaintBoundary(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 480;
+                      final tabs = ActiveListenableBuilder(
+                        listenable: widget.session.connections,
+                        builder: (context, _) {
+                          final cn = widget.session.connections;
+                          return CompactSegmentedButton<ConnectionsTab>(
+                            segments: [
+                              ButtonSegment(
+                                value: ConnectionsTab.active,
+                                label: Text('活动 ${cn.activeCount}'),
+                              ),
+                              ButtonSegment(
+                                value: ConnectionsTab.closed,
+                                label: Text('已关闭 ${cn.closedCount}'),
+                              ),
+                            ],
+                            selected: {_tab},
+                            onSelectionChanged: (s) => _setTab(s.first),
+                          );
+                        },
                       );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        filter,
-                        const SizedBox(height: 8),
-                        Row(
+                      final filter = CompactSearchField(
+                        controller: _filterController,
+                        hintText: '筛选',
+                        onChanged: _setFilter,
+                        onClear: () {
+                          _filterController.clear();
+                          _setFilter('');
+                        },
+                      );
+                      final sortField = ActiveListenableBuilder(
+                        listenable: widget.prefs,
+                        builder: (context, _) => CompactMenuButton(
+                          value: widget.prefs.connectionsSort,
+                          label: _sortLabel(widget.prefs.connectionsSort),
+                          semanticLabel: '排序字段',
+                          onSelected: widget.prefs.setConnectionsSort,
+                          itemBuilder: (_) => [
+                            for (final s in ConnectionsSort.values)
+                              CheckedPopupMenuItem<ConnectionsSort>(
+                                value: s,
+                                checked: widget.prefs.connectionsSort == s,
+                                child: Text(_sortLabel(s)),
+                              ),
+                          ],
+                        ),
+                      );
+                      final direction = ActiveListenableBuilder(
+                        listenable: widget.prefs,
+                        builder: (context, _) => CompactIconButton(
+                          semanticLabel: widget.prefs.connectionsSortAsc
+                              ? '升序'
+                              : '降序',
+                          onPressed: () => widget.prefs.setConnectionsSortAsc(
+                            !widget.prefs.connectionsSortAsc,
+                          ),
+                          icon: Icon(
+                            widget.prefs.connectionsSortAsc
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            size: 18,
+                          ),
+                        ),
+                      );
+
+                      if (!compact) {
+                        return Row(
                           children: [
                             tabs,
-                            const Spacer(),
+                            const SizedBox(width: 8),
+                            Expanded(child: filter),
+                            const SizedBox(width: 8),
                             sortField,
                             const SizedBox(width: 4),
                             direction,
                           ],
-                        ),
-                      ],
-                    );
-                  },
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          filter,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              tabs,
+                              const Spacer(),
+                              sortField,
+                              const SizedBox(width: 4),
+                              direction,
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-            const Divider(height: 1),
-            ValueListenableBuilder<String?>(
-              valueListenable: widget.session.error,
-              builder: (_, err, _) {
-                if (err == null) return const SizedBox.shrink();
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_rounded,
-                        color: colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          err,
-                          style: TextStyle(color: colorScheme.onErrorContainer),
+              const Divider(height: 1),
+              ActiveValueListenableBuilder<String?>(
+                valueListenable: widget.session.error,
+                builder: (_, err, _) {
+                  if (err == null) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_rounded,
+                          color: colorScheme.onErrorContainer,
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: widget.prefs,
-                builder: (context, _) {
-                  final grouped = widget.prefs.connectionsGroupByProcess;
-                  final content = grouped
-                      ? _GroupedConnectionsList(
-                          session: widget.session,
-                          prefs: widget.prefs,
-                          tab: _tab,
-                          filter: _filter,
-                          onTap: _showDetail,
-                          onClose: _close,
-                        )
-                      : _ConnectionsList(
-                          session: widget.session,
-                          prefs: widget.prefs,
-                          tab: _tab,
-                          filter: _filter,
-                          onTap: _showDetail,
-                          onClose: _close,
-                        );
-                  return ClipRect(
-                    child: _TabSwitchDirectionScope(
-                      direction: _tabDirection,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 420),
-                        reverseDuration: const Duration(milliseconds: 420),
-                        switchInCurve: Curves.linear,
-                        switchOutCurve: Curves.linear,
-                        transitionBuilder: _tabTransition,
-                        layoutBuilder: (currentChild, previousChildren) =>
-                            Stack(
-                              fit: StackFit.expand,
-                              children: [...previousChildren, ?currentChild],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            err,
+                            style: TextStyle(
+                              color: colorScheme.onErrorContainer,
                             ),
-                        child: KeyedSubtree(
-                          key: ValueKey(_tab),
-                          child: content,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   );
                 },
               ),
-            ),
-          ],
+              Expanded(
+                child: ActiveListenableBuilder(
+                  listenable: widget.prefs,
+                  builder: (context, _) {
+                    final grouped = widget.prefs.connectionsGroupByProcess;
+                    final content = grouped
+                        ? _GroupedConnectionsList(
+                            session: widget.session,
+                            prefs: widget.prefs,
+                            tab: _tab,
+                            filter: _filter,
+                            onTap: _showDetail,
+                            onClose: _close,
+                          )
+                        : _ConnectionsList(
+                            session: widget.session,
+                            prefs: widget.prefs,
+                            tab: _tab,
+                            filter: _filter,
+                            onTap: _showDetail,
+                            onClose: _close,
+                          );
+                    return ClipRect(
+                      child: _TabSwitchDirectionScope(
+                        direction: _tabDirection,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 420),
+                          reverseDuration: const Duration(milliseconds: 420),
+                          switchInCurve: Curves.linear,
+                          switchOutCurve: Curves.linear,
+                          transitionBuilder: _tabTransition,
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(
+                                fit: StackFit.expand,
+                                children: [...previousChildren, ?currentChild],
+                              ),
+                          child: KeyedSubtree(
+                            key: ValueKey(_tab),
+                            child: content,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -603,6 +649,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   final ScrollController _scrollController = ScrollController();
   // Coalesce ensureWindow calls to one per frame.
   bool _scheduled = false;
+  var _active = true;
 
   @override
   void initState() {
@@ -636,6 +683,15 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = TickerMode.valuesOf(context).enabled;
+    if (_active == active) return;
+    _active = active;
+    if (active) _scheduleEnsureWindow();
+  }
+
+  @override
   void dispose() {
     widget.session.connections.removeListener(_onChange);
     _scrollController.removeListener(_onScroll);
@@ -644,7 +700,9 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   void _onChange() {
-    if (!mounted || widget.session.connections.visibleTab != widget.tab) {
+    if (!mounted ||
+        !_active ||
+        widget.session.connections.visibleTab != widget.tab) {
       return;
     }
     setState(() {});
@@ -656,7 +714,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   void _scheduleEnsureWindow() {
-    if (_scheduled) return;
+    if (!_active || _scheduled) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
@@ -666,7 +724,8 @@ class _ConnectionsListState extends State<_ConnectionsList> {
 
   /// Ask the notifier to cache only the visible range plus a small overscan.
   void _ensureWindow() {
-    if (!_scrollController.hasClients ||
+    if (!_active ||
+        !_scrollController.hasClients ||
         widget.session.connections.visibleTab != widget.tab) {
       return;
     }
@@ -718,7 +777,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
         ? widget.session.processIcons
         : null;
     return RepaintBoundary(
-      child: ListenableBuilder(
+      child: ActiveListenableBuilder(
         listenable: widget.prefs,
         builder: (context, _) {
           final showIcon = widget.prefs.connectionsShowProcessIcon;
@@ -823,10 +882,13 @@ class _RowPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return Container(
       height: 66,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        color: surfaceTheme.surfaceColor(
+          scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        ),
         borderRadius: BorderRadius.circular(14),
       ),
     );
@@ -860,6 +922,8 @@ class _GroupedConnectionsList extends StatefulWidget {
 }
 
 class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
+  var _active = true;
+
   @override
   void initState() {
     super.initState();
@@ -876,13 +940,21 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
   void dispose() {
     widget.session.connections.removeListener(_onChange);
     super.dispose();
   }
 
   void _onChange() {
-    if (mounted && widget.session.connections.visibleTab == widget.tab) {
+    if (mounted &&
+        _active &&
+        widget.session.connections.visibleTab == widget.tab) {
       setState(() {});
     }
   }

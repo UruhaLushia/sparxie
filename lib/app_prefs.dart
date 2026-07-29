@@ -39,6 +39,12 @@ enum AppThemeMode { system, light, dark }
 
 enum DesktopTitleBarMode { system, custom, hidden }
 
+enum AppBackgroundSource { theme, color, image }
+
+enum AppBackgroundFit { cover, focalPoint }
+
+enum AppSurfaceEffect { solid, blur, acrylic }
+
 /// How the proxies screen renders groups: the classic pinned-header list or
 /// Surge-style gradient cards that expand into an overlay.
 enum ProxiesLayout { list, cards }
@@ -161,6 +167,16 @@ class AppPrefs extends ChangeNotifier {
   static const _kPureBlackMode = 'pureBlackMode';
   static const _kAppThemeMode = 'appThemeMode';
   static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
+  static const _kBackgroundSource = 'backgroundSource';
+  static const _kBackgroundColor = 'backgroundColor';
+  static const _kBackgroundImagePath = 'backgroundImagePath';
+  static const _kBackgroundFit = 'backgroundFit';
+  static const _kBackgroundFocalX = 'backgroundFocalX';
+  static const _kBackgroundFocalY = 'backgroundFocalY';
+  static const _kBackgroundZoom = 'backgroundZoom';
+  static const _kSurfaceOpacity = 'surfaceOpacity';
+  static const _kSurfaceEffect = 'surfaceEffect';
+  static const _kSurfaceBlur = 'surfaceBlur';
 
   static const defaultConnectionsRefreshMs = 1000;
   static const defaultProxiesSort = ProxiesSort.original;
@@ -195,6 +211,16 @@ class AppPrefs extends ChangeNotifier {
   static const defaultPureBlackMode = false;
   static const defaultAppThemeMode = AppThemeMode.system;
   static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
+  static const defaultBackgroundSource = AppBackgroundSource.theme;
+  static const defaultBackgroundColor = 0xff18232c;
+  static const defaultBackgroundFit = AppBackgroundFit.cover;
+  static const defaultBackgroundFocalX = 0.0;
+  static const defaultBackgroundFocalY = 0.0;
+  static const defaultBackgroundZoom = 1.0;
+  static const maxBackgroundZoom = 5.0;
+  static const defaultSurfaceOpacity = 0.84;
+  static const defaultSurfaceEffect = AppSurfaceEffect.acrylic;
+  static const defaultSurfaceBlur = 18.0;
   static const defaultCompactThemeColor = 0xff66ccff;
   static const defaultCompactBorderRadius = 12.0;
   static const defaultCompactControlHeight = 40.0;
@@ -265,6 +291,18 @@ class AppPrefs extends ChangeNotifier {
 
   void _put(String key, Object value) {
     _s[key] = value;
+    _store.scheduleSave();
+    notifyListeners();
+  }
+
+  void _putAll(Map<String, Object> values) {
+    var changed = false;
+    for (final MapEntry(:key, :value) in values.entries) {
+      if (_s[key] == value) continue;
+      _s[key] = value;
+      changed = true;
+    }
+    if (!changed) return;
     _store.scheduleSave();
     notifyListeners();
   }
@@ -554,6 +592,118 @@ class AppPrefs extends ChangeNotifier {
     _put(_kDesktopTitleBarMode, value.name);
   }
 
+  AppBackgroundSource get backgroundSource => _decodeBackgroundSource(
+    _str(_kBackgroundSource, defaultBackgroundSource.name),
+  );
+
+  Future<void> setBackgroundSource(AppBackgroundSource value) async {
+    if (value == backgroundSource) return;
+    _put(_kBackgroundSource, value.name);
+  }
+
+  int get backgroundColor => _int(_kBackgroundColor, defaultBackgroundColor);
+
+  Future<void> setBackgroundColor(int value) async {
+    if (value == backgroundColor) return;
+    _put(_kBackgroundColor, value);
+  }
+
+  String get backgroundImagePath => _str(_kBackgroundImagePath, '').trim();
+
+  Future<void> useBackgroundImage(String path) async {
+    final next = path.trim();
+    if (next.isEmpty) return;
+    _putAll({
+      _kBackgroundImagePath: next,
+      _kBackgroundFocalX: defaultBackgroundFocalX,
+      _kBackgroundFocalY: defaultBackgroundFocalY,
+      _kBackgroundZoom: defaultBackgroundZoom,
+      _kBackgroundSource: AppBackgroundSource.image.name,
+    });
+  }
+
+  Future<void> clearBackgroundImage() async {
+    _putAll({
+      _kBackgroundSource: AppBackgroundSource.theme.name,
+      _kBackgroundImagePath: '',
+    });
+  }
+
+  Future<void> resetBackgroundStyle() async {
+    _putAll({
+      _kBackgroundSource: defaultBackgroundSource.name,
+      _kBackgroundColor: defaultBackgroundColor,
+      _kBackgroundImagePath: '',
+      _kBackgroundFit: defaultBackgroundFit.name,
+      _kBackgroundFocalX: defaultBackgroundFocalX,
+      _kBackgroundFocalY: defaultBackgroundFocalY,
+      _kBackgroundZoom: defaultBackgroundZoom,
+      _kSurfaceOpacity: defaultSurfaceOpacity,
+      _kSurfaceEffect: defaultSurfaceEffect.name,
+      _kSurfaceBlur: defaultSurfaceBlur,
+    });
+  }
+
+  AppBackgroundFit get backgroundFit =>
+      _decodeBackgroundFit(_str(_kBackgroundFit, defaultBackgroundFit.name));
+
+  Future<void> setBackgroundFit(AppBackgroundFit value) async {
+    if (value == backgroundFit) return;
+    _put(_kBackgroundFit, value.name);
+  }
+
+  double get backgroundFocalX =>
+      _normalizedFocal(_double(_kBackgroundFocalX, defaultBackgroundFocalX));
+
+  double get backgroundFocalY =>
+      _normalizedFocal(_double(_kBackgroundFocalY, defaultBackgroundFocalY));
+
+  double get backgroundZoom => _normalizedBackgroundZoom(
+    _double(_kBackgroundZoom, defaultBackgroundZoom),
+  );
+
+  Future<void> setBackgroundViewport(double x, double y, double zoom) async {
+    final nextX = _normalizedFocal(x);
+    final nextY = _normalizedFocal(y);
+    final nextZoom = _normalizedBackgroundZoom(zoom);
+    if (nextX == backgroundFocalX &&
+        nextY == backgroundFocalY &&
+        nextZoom == backgroundZoom) {
+      return;
+    }
+    _putAll({
+      _kBackgroundFocalX: nextX,
+      _kBackgroundFocalY: nextY,
+      _kBackgroundZoom: nextZoom,
+    });
+  }
+
+  double get surfaceOpacity =>
+      _double(_kSurfaceOpacity, defaultSurfaceOpacity).clamp(0.05, 1.0);
+
+  Future<void> setSurfaceOpacity(double value) async {
+    final next = value.clamp(0.05, 1.0).toDouble();
+    if (next == surfaceOpacity) return;
+    _put(_kSurfaceOpacity, next);
+  }
+
+  AppSurfaceEffect get surfaceEffect =>
+      _decodeSurfaceEffect(_str(_kSurfaceEffect, defaultSurfaceEffect.name));
+
+  Future<void> setSurfaceEffect(AppSurfaceEffect value) async {
+    if (value == surfaceEffect) return;
+    _put(_kSurfaceEffect, value.name);
+  }
+
+  double get surfaceBlur =>
+      _double(_kSurfaceBlur, defaultSurfaceBlur).clamp(0.0, 40.0);
+
+  Future<void> setSurfaceBlur(double value) async {
+    final next = value.clamp(0.0, 40.0).toDouble();
+    if (next == surfaceBlur) return;
+    _put(_kSurfaceBlur, next);
+  }
+
   String _compactKey(CompactControlKind kind, String property) =>
       'compact.${kind.name}.$property';
 
@@ -645,6 +795,92 @@ class AppPrefs extends ChangeNotifier {
   ) async {
     final next = value.clamp(0.75, 1.5).toDouble();
     final key = _compactStyleKey(kind, 'widthScale');
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  bool get navigationSurfaceFollowsGlobal => _bool(
+    _compactStyleKey(CompactControlKind.navigationBar, 'followGlobalSurface'),
+    true,
+  );
+
+  AppSurfaceEffect get navigationSurfaceEffect => _decodeSurfaceEffect(
+    _str(
+      _compactStyleKey(CompactControlKind.navigationBar, 'surfaceEffect'),
+      defaultSurfaceEffect.name,
+    ),
+  );
+
+  double get navigationSurfaceOpacity => _double(
+    _compactStyleKey(CompactControlKind.navigationBar, 'surfaceOpacity'),
+    defaultSurfaceOpacity,
+  ).clamp(0.05, 1.0);
+
+  double get navigationSurfaceBlur => _double(
+    _compactStyleKey(CompactControlKind.navigationBar, 'surfaceBlur'),
+    defaultSurfaceBlur,
+  ).clamp(0.0, 40.0);
+
+  AppSurfaceEffect get effectiveNavigationSurfaceEffect =>
+      navigationSurfaceFollowsGlobal ? surfaceEffect : navigationSurfaceEffect;
+
+  double get effectiveNavigationSurfaceOpacity => navigationSurfaceFollowsGlobal
+      ? surfaceOpacity
+      : navigationSurfaceOpacity;
+
+  double get effectiveNavigationSurfaceBlur =>
+      navigationSurfaceFollowsGlobal ? surfaceBlur : navigationSurfaceBlur;
+
+  Future<void> setNavigationSurfaceFollowsGlobal(bool value) async {
+    final followKey = _compactStyleKey(
+      CompactControlKind.navigationBar,
+      'followGlobalSurface',
+    );
+    if (_bool(followKey, true) == value) return;
+    if (!value) {
+      _s.putIfAbsent(
+        _compactStyleKey(CompactControlKind.navigationBar, 'surfaceEffect'),
+        () => surfaceEffect.name,
+      );
+      _s.putIfAbsent(
+        _compactStyleKey(CompactControlKind.navigationBar, 'surfaceOpacity'),
+        () => surfaceOpacity,
+      );
+      _s.putIfAbsent(
+        _compactStyleKey(CompactControlKind.navigationBar, 'surfaceBlur'),
+        () => surfaceBlur,
+      );
+    }
+    _s[followKey] = value;
+    _store.scheduleSave();
+    notifyListeners();
+  }
+
+  Future<void> setNavigationSurfaceEffect(AppSurfaceEffect value) async {
+    final key = _compactStyleKey(
+      CompactControlKind.navigationBar,
+      'surfaceEffect',
+    );
+    if (_s[key] == value.name) return;
+    _put(key, value.name);
+  }
+
+  Future<void> setNavigationSurfaceOpacity(double value) async {
+    final next = value.clamp(0.05, 1.0).toDouble();
+    final key = _compactStyleKey(
+      CompactControlKind.navigationBar,
+      'surfaceOpacity',
+    );
+    if (_s[key] == next) return;
+    _put(key, next);
+  }
+
+  Future<void> setNavigationSurfaceBlur(double value) async {
+    final next = value.clamp(0.0, 40.0).toDouble();
+    final key = _compactStyleKey(
+      CompactControlKind.navigationBar,
+      'surfaceBlur',
+    );
     if (_s[key] == next) return;
     _put(key, next);
   }
@@ -751,6 +987,10 @@ class AppPrefs extends ChangeNotifier {
         'widthScale',
         'heightOffset',
         'followGlobalColor',
+        'followGlobalSurface',
+        'surfaceEffect',
+        'surfaceOpacity',
+        'surfaceBlur',
       ]) {
         _s.remove(_navigationInnerKey(property));
         _s.remove(_compactStyleKey(kind, property));
@@ -781,6 +1021,37 @@ class AppPrefs extends ChangeNotifier {
     }
     return defaultDesktopTitleBarMode;
   }
+
+  static AppBackgroundSource _decodeBackgroundSource(String? raw) {
+    for (final value in AppBackgroundSource.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultBackgroundSource;
+  }
+
+  static AppSurfaceEffect _decodeSurfaceEffect(String? raw) {
+    for (final value in AppSurfaceEffect.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultSurfaceEffect;
+  }
+
+  static AppBackgroundFit _decodeBackgroundFit(String? raw) {
+    // The old contain mode is migrated to focal-point cover. Its default
+    // center coordinates preserve a sensible first result for existing users.
+    if (raw == 'contain') return AppBackgroundFit.focalPoint;
+    for (final value in AppBackgroundFit.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultBackgroundFit;
+  }
+
+  static double _normalizedFocal(double value) =>
+      value.isFinite ? value.clamp(-1.0, 1.0).toDouble() : 0.0;
+
+  static double _normalizedBackgroundZoom(double value) => value.isFinite
+      ? value.clamp(defaultBackgroundZoom, maxBackgroundZoom).toDouble()
+      : defaultBackgroundZoom;
 
   static ProxiesLayout _decodeProxiesLayout(String? raw) {
     if (raw == null) return defaultProxiesLayout;

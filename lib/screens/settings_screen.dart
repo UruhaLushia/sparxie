@@ -11,8 +11,12 @@ import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/app_background.dart';
+import '../widgets/app_page_route.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
+import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
@@ -156,71 +160,92 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ];
+        final groups = <Widget>[
+          if (pageTiles.isNotEmpty)
+            _SettingsGroup(
+              title: '页面',
+              icon: Icons.grid_view_rounded,
+              children: pageTiles,
+            ),
+          if (toolTiles.isNotEmpty)
+            _SettingsGroup(
+              title: '工具',
+              icon: Icons.construction_outlined,
+              children: toolTiles,
+            ),
+          _SettingsGroup(
+            title: '设置',
+            icon: Icons.settings_outlined,
+            children: settingsTiles,
+          ),
+        ];
 
+        final scheme = Theme.of(context).colorScheme;
+        final compactPage = MediaQuery.sizeOf(context).width < 600;
         return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 600;
-              final maxContentWidth = compact ? constraints.maxWidth : 640.0;
-              final horizontal = constraints.maxWidth > maxContentWidth
-                  ? (constraints.maxWidth - maxContentWidth) / 2
-                  : 0.0;
-              return CustomScrollView(
-                slivers: [
-                  if (compact)
-                    const SliverAppBar(
-                      pinned: true,
-                      title: Text('更多'),
-                      flexibleSpace: DesktopAppBarDragArea(),
-                    )
-                  else
+          backgroundColor: AppSurfaceTheme.of(
+            context,
+          ).pageColor(scheme.surfaceContainerLowest),
+          appBar: compactPage
+              ? AppRouteAppBar(
+                  child: AppBar(
+                    leading: AppRouteAppBar.leadingOf(context),
+                    automaticallyImplyLeading: false,
+                    title: const Text('更多'),
+                    flexibleSpace: const DesktopAppBarDragArea(),
+                  ),
+                )
+              : null,
+          body: AppPageBodyTransition(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+                const maxContentWidth = 640.0;
+                final centeredGutter =
+                    (constraints.maxWidth - maxContentWidth) / 2;
+                final horizontal = compact
+                    ? 12.0
+                    : centeredGutter > 20
+                    ? centeredGutter
+                    : 20.0;
+                return CustomScrollView(
+                  slivers: [
+                    if (!compact)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          28,
+                          horizontal,
+                          8,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: Text(
+                            '更多',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         horizontal,
-                        28,
+                        compact ? 12 : 8,
                         horizontal,
-                        8,
+                        20 + MediaQuery.paddingOf(context).bottom,
                       ),
-                      sliver: SliverToBoxAdapter(
-                        child: Text(
-                          '更多',
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
+                      sliver: SliverList.list(
+                        children: [
+                          for (var i = 0; i < groups.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 14),
+                            groups[i],
+                          ],
+                        ],
                       ),
                     ),
-                  SliverPadding(
-                    padding: EdgeInsets.only(
-                      left: horizontal,
-                      right: horizontal,
-                      bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                    ),
-                    sliver: SliverList.list(
-                      children: [
-                        if (pageTiles.isNotEmpty)
-                          _SettingsGroup(
-                            title: '页面',
-                            carded: !compact,
-                            children: pageTiles,
-                          ),
-                        if (toolTiles.isNotEmpty)
-                          _SettingsGroup(
-                            title: '工具',
-                            carded: !compact,
-                            children: toolTiles,
-                          ),
-                        _SettingsGroup(
-                          title: '设置',
-                          carded: !compact,
-                          children: settingsTiles,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         );
       },
@@ -228,7 +253,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _push(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(context).push(AppPageRoute<void>(builder: (_) => page));
   }
 }
 
@@ -249,18 +274,18 @@ class _Tile extends StatelessWidget {
     final theme = Theme.of(context);
     return ListTile(
       minTileHeight: 76,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       leading: Container(
-        width: 40,
-        height: 40,
+        width: 38,
+        height: 38,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(12),
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(11),
         ),
         child: Icon(
           icon,
-          size: 22,
+          size: 21,
           color: theme.colorScheme.onPrimaryContainer,
         ),
       ),
@@ -275,9 +300,9 @@ class _Tile extends StatelessWidget {
             ),
       trailing: Icon(
         Icons.chevron_right,
+        size: 20,
         color: theme.colorScheme.onSurfaceVariant,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       hoverColor: theme.colorScheme.primary.withValues(alpha: 0.06),
       onTap: onTap,
     );
@@ -287,58 +312,74 @@ class _Tile extends StatelessWidget {
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({
     required this.title,
+    required this.icon,
     required this.children,
-    required this.carded,
   });
 
   final String title;
+  final IconData icon;
   final List<Widget> children;
-  final bool carded;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(carded ? 4 : 20, 22, 20, 10),
-          child: Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+    final surfaceTheme = AppSurfaceTheme.of(context);
+    const radius = BorderRadius.all(Radius.circular(20));
+    return AppSurfaceBackdrop(
+      borderRadius: radius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surfaceTheme.surfaceColor(
+            theme.colorScheme.surfaceContainerLow,
+            0.07,
           ),
+          border: surfaceTheme.outlineBorder(
+            theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          borderRadius: radius,
         ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(carded ? 16 : 0),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: carded
-                  ? theme.colorScheme.surfaceContainerLow
-                  : theme.colorScheme.surface,
-              border: carded
-                  ? Border.all(
-                      color: theme.colorScheme.outlineVariant.withValues(
-                        alpha: 0.55,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 13, 16, 11),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 9),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
                       ),
-                    )
-                  : null,
-              borderRadius: BorderRadius.circular(carded ? 16 : 0),
-            ),
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0)
-                    Divider(height: 1, indent: 76, endIndent: carded ? 16 : 0),
-                  children[i],
-                ],
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.58),
+              ),
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 70,
+                    endIndent: 16,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.48,
+                    ),
+                  ),
+                children[i],
               ],
-            ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -363,9 +404,13 @@ class BackendSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('后端设置'),
-        flexibleSpace: const DesktopAppBarDragArea(),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('后端设置'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+        ),
       ),
       body: SafeArea(
         bottom: false,
@@ -400,9 +445,13 @@ class AppSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('应用设置'),
-        flexibleSpace: const DesktopAppBarDragArea(),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('应用设置'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+        ),
       ),
       body: SafeArea(
         bottom: false,

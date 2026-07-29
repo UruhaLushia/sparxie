@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_background.dart';
 import 'delay_badge.dart';
 import 'pressable_scale.dart';
 
@@ -33,6 +34,7 @@ class ProxyNodeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return RepaintBoundary(
       child: ValueListenableBuilder<String>(
         valueListenable: nowListenable,
@@ -56,78 +58,87 @@ class ProxyNodeTile extends StatelessWidget {
                 border = pinnedColor;
                 fg = Colors.white;
               } else if (selected) {
-                bg = scheme.primaryContainer.withValues(alpha: 0.7);
+                bg = surfaceTheme.surfaceColor(
+                  scheme.primaryContainer.withValues(alpha: 0.7),
+                  0.12,
+                );
                 border = scheme.primary.withValues(alpha: 0.5);
                 fg = scheme.onPrimaryContainer;
               } else {
-                bg = scheme.surfaceContainerHigh;
-                border = scheme.outlineVariant.withValues(alpha: 0.5);
+                bg = surfaceTheme.surfaceColor(scheme.surfaceContainerHigh);
+                border = surfaceTheme.outlineColor(
+                  scheme.outlineVariant.withValues(alpha: 0.5),
+                );
                 fg = scheme.onSurface;
               }
-              return PressableScale(
-                child: Material(
-                  color: bg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(color: border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: selectable ? onSelect : null,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Row(
-                                  children: [
-                                    if (isPinned) ...[
-                                      Icon(Icons.push_pin, size: 13, color: fg),
-                                      const SizedBox(width: 4),
-                                    ],
-                                    Flexible(
-                                      child: Text(
-                                        name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              fontWeight: selected || isPinned
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w500,
-                                              color: fg,
-                                            ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
+              const radius = BorderRadius.all(Radius.circular(10));
+              final tile = Material(
+                color: bg,
+                shape: RoundedRectangleBorder(
+                  borderRadius: radius,
+                  side: BorderSide(color: border),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  borderRadius: radius,
+                  onTap: selectable ? onSelect : null,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(
+                                children: [
+                                  if (isPinned) ...[
+                                    Icon(Icons.push_pin, size: 13, color: fg),
+                                    const SizedBox(width: 4),
                                   ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  type,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: fg.withValues(alpha: 0.75),
-                                      ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
+                                  Flexible(
+                                    child: Text(
+                                      name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            fontWeight: selected || isPinned
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                            color: fg,
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                type,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: fg.withValues(alpha: 0.75),
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          NodeDelay(delay: delay, onTest: onTestDelay),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        NodeDelay(delay: delay, onTest: onTestDelay),
+                      ],
                     ),
                   ),
                 ),
+              );
+              return PressableScale(
+                child: isPinned
+                    ? tile
+                    : AppSurfaceBackdrop(borderRadius: radius, child: tile),
               );
             },
           );

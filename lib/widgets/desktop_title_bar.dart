@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../platform_capabilities.dart';
+import 'app_background.dart';
 
 class DesktopTitleBarFrame extends StatefulWidget {
   const DesktopTitleBarFrame({
@@ -111,67 +112,72 @@ class _CustomTitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final brightness = theme.brightness;
     return Column(
       children: [
         SizedBox(
           height: 40,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: scheme.outlineVariant.withValues(alpha: 0.65),
+          child: AppSurfaceBackdrop(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: surfaceTheme.chromeColor(scheme.surface),
+                border: Border(
+                  bottom: surfaceTheme.outlineSide(
+                    scheme.outlineVariant.withValues(alpha: 0.65),
+                  ),
                 ),
               ),
-            ),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: DragToMoveArea(
-                    child: Center(
-                      child: Text(
-                        'Sparxie',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: scheme.onSurface,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DragToMoveArea(
+                      child: Center(
+                        child: Text(
+                          'Sparxie',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      WindowCaptionButton.minimize(
-                        brightness: brightness,
-                        onPressed: windowManager.minimize,
-                      ),
-                      if (maximized)
-                        WindowCaptionButton.unmaximize(
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        WindowCaptionButton.minimize(
                           brightness: brightness,
-                          onPressed: windowManager.unmaximize,
-                        )
-                      else
-                        WindowCaptionButton.maximize(
-                          brightness: brightness,
-                          onPressed: windowManager.maximize,
+                          onPressed: windowManager.minimize,
                         ),
-                      WindowCaptionButton.close(
-                        brightness: brightness,
-                        onPressed: windowManager.close,
-                      ),
-                    ],
+                        if (maximized)
+                          WindowCaptionButton.unmaximize(
+                            brightness: brightness,
+                            onPressed: windowManager.unmaximize,
+                          )
+                        else
+                          WindowCaptionButton.maximize(
+                            brightness: brightness,
+                            onPressed: windowManager.maximize,
+                          ),
+                        WindowCaptionButton.close(
+                          brightness: brightness,
+                          onPressed: windowManager.close,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-        Expanded(child: child),
+        // Route transitions and composited background followers may transform
+        // beyond their layout bounds. Keep them below the window chrome.
+        Expanded(child: ClipRect(child: child)),
       ],
     );
   }
@@ -183,10 +189,10 @@ class DesktopAppBarDragArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!_DesktopTitleBarScope.contentDraggingOf(context)) {
-      return const SizedBox.shrink();
-    }
-    return const DragToMoveArea(child: SizedBox.expand());
+    final child = _DesktopTitleBarScope.contentDraggingOf(context)
+        ? const DragToMoveArea(child: SizedBox.expand())
+        : const SizedBox.expand();
+    return AppSurfaceBackdrop(child: child);
   }
 }
 
