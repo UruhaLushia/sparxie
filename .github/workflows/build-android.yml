@@ -26,8 +26,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+          cache: false
           pub-cache: true
+          pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
 
       - uses: dtolnay/rust-toolchain@master
         with:
