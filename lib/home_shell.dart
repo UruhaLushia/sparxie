@@ -430,48 +430,30 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildCompactFloating(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.floating, destinations);
-    final navigationStyle = CompactControlTheme.navigationBarOf(context);
     final navigationSurface = _navigationSurfaceTheme(context);
-    return Stack(
-      children: [
-        Scaffold(
-          body: Builder(
-            builder: (context) {
-              final data = MediaQuery.of(context);
-              final navBarExtra =
-                  navigationStyle.buttonHeight +
-                  26 +
-                  navigationStyle.floatingHeightOffset.clamp(0, 20);
-              return MediaQuery(
-                data: data.copyWith(
-                  padding: data.padding.copyWith(
-                    bottom: data.padding.bottom + navBarExtra,
-                  ),
-                  viewPadding: data.viewPadding.copyWith(
-                    bottom: data.viewPadding.bottom + navBarExtra,
-                  ),
-                ),
-                child: _BodyTransitionIndexedStack(
-                  index: _index,
-                  children: pages,
-                ),
-              );
-            },
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: FloatingBottomNavBar(
-            selectedIndex: _index,
-            onSelected: (i) => setState(() => _index = i),
-            destinations: destinations,
-            style: widget.prefs.navBarStyle,
-            surfaceTheme: navigationSurface,
-          ),
-        ),
-      ],
+    // Scaffold must own the floating bar so SnackBars use its visual top.
+    return Scaffold(
+      extendBody: true,
+      body: Builder(
+        builder: (context) {
+          final data = MediaQuery.of(context);
+          final bodyBottom = data.padding.bottom + 20;
+          return MediaQuery(
+            data: data.copyWith(
+              padding: data.padding.copyWith(bottom: bodyBottom),
+              viewPadding: data.viewPadding.copyWith(bottom: bodyBottom),
+            ),
+            child: _BodyTransitionIndexedStack(index: _index, children: pages),
+          );
+        },
+      ),
+      bottomNavigationBar: FloatingBottomNavBar(
+        selectedIndex: _index,
+        onSelected: (i) => setState(() => _index = i),
+        destinations: destinations,
+        style: widget.prefs.navBarStyle,
+        surfaceTheme: navigationSurface,
+      ),
     );
   }
 

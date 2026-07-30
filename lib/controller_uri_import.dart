@@ -73,9 +73,25 @@ class ControllerUriImporter {
     final currentNavigator = navigatorKey.currentState;
     if (currentNavigator == null || !currentNavigator.mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(currentNavigator.context);
+    final scheme = Theme.of(currentNavigator.context).colorScheme;
     messenger
       ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已导入目标服务“${draft.name}”')));
+      ..showSnackBar(
+        SnackBar(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          content: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 20,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text('已导入目标服务“${draft.name}”')),
+            ],
+          ),
+        ),
+      );
   }
 
   Future<void> _showError(String message) async {

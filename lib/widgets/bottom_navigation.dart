@@ -203,14 +203,18 @@ class FloatingBottomNavBar extends StatelessWidget {
         ),
       ),
     );
+    final heightOffset = controlStyle.floatingHeightOffset;
+    // Upward movement contributes to layout height for Scaffold geometry.
+    final upwardOffset = heightOffset.clamp(0, 20).toDouble();
+    final downwardOffset = (-heightOffset).clamp(0, 20).toDouble();
     return Transform.translate(
-      offset: Offset(0, -controlStyle.floatingHeightOffset),
+      offset: Offset(0, downwardOffset),
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           horizontalInset,
           0,
           horizontalInset,
-          6 + bottomPadding,
+          6 + bottomPadding + upwardOffset,
         ),
         child: Center(heightFactor: 1, child: AppBackdropGroup(child: surface)),
       ),

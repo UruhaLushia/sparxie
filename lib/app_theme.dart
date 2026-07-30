@@ -197,7 +197,26 @@ ThemeData _appTheme({
     ),
     extensions: [surfaceTheme],
   );
-  return _applyFontSet(base, userFonts);
+  final themed = _applyFontSet(base, userFonts);
+  return themed.copyWith(
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerHigh,
+      ),
+      contentTextStyle: themed.textTheme.bodyMedium?.copyWith(
+        color: scheme.onSurface,
+      ),
+      actionTextColor: scheme.primary,
+      closeIconColor: scheme.onSurfaceVariant,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: kAppPanelRadius,
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+      ),
+      insetPadding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    ),
+  );
 }
 
 ColorScheme _applyThemeColorCoverage(
