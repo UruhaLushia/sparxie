@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
-import 'dart:ui' show ImageFilter;
 
+import 'package:app_links/app_links.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +13,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
+import 'background_image_store.dart';
 import 'config_store.dart';
 import 'controller.dart';
+import 'controller_uri_import.dart';
 import 'imported_fonts.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
@@ -29,23 +32,46 @@ import 'screens/settings_screen.dart';
 import 'screens/tailscale_screen.dart';
 import 'session.dart';
 import 'src/rust/frb_generated.dart';
+import 'system_accent_color.dart';
 import 'utils.dart';
+import 'widgets/app_background.dart';
+import 'widgets/app_page_route.dart';
 import 'widgets/bottom_navigation.dart';
+import 'widgets/compact_controls.dart';
+import 'widgets/desktop_title_bar.dart';
 import 'widgets/outbound_mode_card.dart';
+import 'widgets/page_body_transition.dart';
 import 'window_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final appLinks = AppLinks();
   _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.
   final config = await JsonStore.load();
+  final prefs = await AppPrefs.load(config);
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
-  await WindowState.bind(config);
+  final windowState = await WindowState.bind(
+    config,
+    titleBarHidden: prefs.desktopTitleBarMode != DesktopTitleBarMode.system,
+  );
   await _initRust();
-  final prefs = await AppPrefs.load(config);
+  final systemAccentColor = await SystemAccentColor.load(
+    enabled: prefs.automaticColor,
+  );
   await ImportedFonts.cleanup(prefs.importedFonts);
   await ImportedFonts.loadAll(prefs.importedFonts);
+  await BackgroundImageStore.cleanup(prefs.backgroundImagePath);
+  if (prefs.backgroundSource == AppBackgroundSource.image &&
+      prefs.backgroundImagePath.isNotEmpty) {
+    try {
+      await BackgroundImageStore.imageSize(prefs.backgroundImagePath);
+    } catch (_) {
+      // Rendering falls back to the configured background color if the saved
+      // image is no longer readable.
+    }
+  }
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
@@ -62,8 +88,19 @@ Future<void> main() async {
   final session = MihomoSession(store)
     ..setConnectionsInterval(prefs.connectionsRefreshMs);
   var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
+  var titleBarMode = prefs.desktopTitleBarMode;
   prefs.addListener(() {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
+    systemAccentColor.setEnabled(prefs.automaticColor);
+    final nextTitleBarMode = prefs.desktopTitleBarMode;
+    if (nextTitleBarMode != titleBarMode) {
+      titleBarMode = nextTitleBarMode;
+      unawaited(
+        windowState?.setTitleBarHidden(
+          nextTitleBarMode != DesktopTitleBarMode.system,
+        ),
+      );
+    }
     final next = prefs.allowInsecureOnlineResources;
     if (next != allowInsecureOnlineResources) {
       allowInsecureOnlineResources = next;
@@ -74,7 +111,15 @@ Future<void> main() async {
       );
     }
   });
-  runApp(MihomoControllerApp(store: store, prefs: prefs, session: session));
+  runApp(
+    MihomoControllerApp(
+      store: store,
+      prefs: prefs,
+      session: session,
+      systemAccentColor: systemAccentColor,
+      appLinks: appLinks,
+    ),
+  );
 }
 
 Future<void> _initRust() {
@@ -138,20 +183,175 @@ class _SystemBarStyle extends StatelessWidget {
   }
 }
 
+/// Material 3's Android stretch effect transforms the scrollable subtree.
+/// Backdrop filters inside that subtree can lose their sampled backdrop until
+/// the overscroll gesture ends, so keep Android's normal clamping without the
+/// visual stretch. Other platforms retain their native overscroll behavior.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    if (getPlatform(context) == TargetPlatform.android) return child;
+    return super.buildOverscrollIndicator(context, child, details);
+  }
+}
+
 ThemeData _appTheme({
   required Brightness brightness,
   required Color seedColor,
   required List<String> userFonts,
+  required bool useAutomaticColors,
+  required bool pureBlack,
+  required AppBackgroundSource backgroundSource,
+  required double surfaceOpacity,
+  required AppSurfaceEffect surfaceEffect,
+  required double surfaceBlur,
 }) {
+  var scheme = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  );
+  scheme = _applyThemeColorCoverage(
+    scheme,
+    seedColor,
+    preserveSeedPrimary: !useAutomaticColors,
+  );
+  if (pureBlack && brightness == Brightness.dark) {
+    scheme = _pureBlackScheme(scheme);
+  }
+  final customBackground = backgroundSource != AppBackgroundSource.theme;
+  final surfaceTheme = AppSurfaceTheme(
+    enabled: customBackground,
+    effect: surfaceEffect,
+    blurSigma: surfaceBlur,
+    opacity: surfaceOpacity,
+    tintColor: seedColor,
+  );
   final base = ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: brightness,
-    ),
+    colorScheme: scheme,
     useMaterial3: true,
+    scaffoldBackgroundColor: surfaceTheme.pageColor(scheme.surface),
+    canvasColor: surfaceTheme.surfaceColor(scheme.surface),
+    cardColor: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
+    dividerColor: surfaceTheme.outlineColor(scheme.outlineVariant),
+    focusColor: scheme.primary.withValues(alpha: 0.12),
+    hoverColor: scheme.primary.withValues(alpha: 0.06),
+    highlightColor: scheme.primary.withValues(alpha: 0.08),
+    splashColor: scheme.primary.withValues(alpha: 0.1),
+    appBarTheme: AppBarThemeData(
+      backgroundColor: surfaceTheme.chromeColor(scheme.surface),
+      surfaceTintColor: Colors.transparent,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerHigh,
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerLow,
+      ),
+      modalBackgroundColor: surfaceTheme.modalSurfaceColor(
+        scheme.surfaceContainerLow,
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: surfaceTheme.modalSurfaceColor(scheme.surfaceContainerHigh),
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: AppHorizontalPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.linux: AppHorizontalPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.windows: AppHorizontalPageTransitionsBuilder(),
+      },
+    ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: surfaceTheme.surfaceColor(scheme.surface),
+    ),
+    extensions: [surfaceTheme],
   );
   return _applyFontSet(base, userFonts);
 }
+
+ColorScheme _applyThemeColorCoverage(
+  ColorScheme scheme,
+  Color seedColor, {
+  required bool preserveSeedPrimary,
+}) {
+  final dark = scheme.brightness == Brightness.dark;
+  final neutral = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: scheme.brightness,
+    dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+  );
+  Color tint(Color base, double lightOpacity, double darkOpacity) =>
+      Color.alphaBlend(
+        seedColor.withValues(alpha: dark ? darkOpacity : lightOpacity),
+        base,
+      );
+  final onSeed =
+      ThemeData.estimateBrightnessForColor(seedColor) == Brightness.dark
+      ? Colors.white
+      : Colors.black;
+  final surface = dark ? neutral.surface : Colors.white;
+  final surfaceDim = dark ? tint(neutral.surfaceDim, 0, 0.015) : Colors.white;
+  final surfaceBright = dark ? neutral.surfaceBright : Colors.white;
+  final surfaceContainerLowest = dark
+      ? neutral.surfaceContainerLowest
+      : Colors.white;
+  final surfaceContainerLow = dark
+      ? tint(neutral.surfaceContainerLow, 0, 0.015)
+      : tint(Colors.white, 0.01, 0);
+  final surfaceContainer = dark
+      ? tint(neutral.surfaceContainer, 0, 0.025)
+      : tint(Colors.white, 0.025, 0);
+  final surfaceContainerHigh = dark
+      ? tint(neutral.surfaceContainerHigh, 0, 0.04)
+      : tint(Colors.white, 0.04, 0);
+  final surfaceContainerHighest = dark
+      ? tint(neutral.surfaceContainerHighest, 0, 0.055)
+      : tint(Colors.white, 0.06, 0);
+  return scheme.copyWith(
+    primary: preserveSeedPrimary ? seedColor : scheme.primary,
+    onPrimary: preserveSeedPrimary ? onSeed : scheme.onPrimary,
+    secondaryContainer: tint(scheme.secondaryContainer, 0.03, 0.05),
+    tertiaryContainer: tint(scheme.tertiaryContainer, 0.02, 0.03),
+    surface: surface,
+    onSurface: neutral.onSurface,
+    surfaceDim: surfaceDim,
+    surfaceBright: surfaceBright,
+    surfaceContainerLowest: surfaceContainerLowest,
+    surfaceContainerLow: surfaceContainerLow,
+    surfaceContainer: surfaceContainer,
+    surfaceContainerHigh: surfaceContainerHigh,
+    surfaceContainerHighest: surfaceContainerHighest,
+    onSurfaceVariant: neutral.onSurfaceVariant,
+    outline: tint(neutral.outline, 0.03, 0.03),
+    outlineVariant: tint(neutral.outlineVariant, 0.06, 0.045),
+    inverseSurface: neutral.inverseSurface,
+    onInverseSurface: neutral.onInverseSurface,
+    surfaceTint: seedColor,
+  );
+}
+
+ColorScheme _pureBlackScheme(ColorScheme scheme) => scheme.copyWith(
+  surface: Colors.black,
+  surfaceDim: Colors.black,
+  surfaceBright: const Color(0xff1c1c1c),
+  surfaceContainerLowest: Colors.black,
+  surfaceContainerLow: const Color(0xff050505),
+  surfaceContainer: const Color(0xff0a0a0a),
+  surfaceContainerHigh: const Color(0xff101010),
+  surfaceContainerHighest: const Color(0xff181818),
+);
 
 ThemeData _applyFontSet(ThemeData base, List<String> userFonts) {
   if (userFonts.isEmpty) return base;
@@ -211,27 +411,153 @@ void _addFont(List<String> out, String family) {
   if (!out.contains(family)) out.add(family);
 }
 
-class MihomoControllerApp extends StatelessWidget {
+class MihomoControllerApp extends StatefulWidget {
   const MihomoControllerApp({
     super.key,
     required this.store,
     required this.prefs,
     required this.session,
+    required this.systemAccentColor,
+    required this.appLinks,
   });
 
   final ControllerStore store;
   final AppPrefs prefs;
   final MihomoSession session;
+  final SystemAccentColor systemAccentColor;
+  final AppLinks appLinks;
+
+  @override
+  State<MihomoControllerApp> createState() => _MihomoControllerAppState();
+}
+
+class _MihomoControllerAppState extends State<MihomoControllerApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final ControllerUriImporter _controllerUriImporter;
+  ThemeData? _lightTheme;
+  ThemeData? _darkTheme;
+  int? _themeSeed;
+  bool? _themeUsesAutomaticColors;
+  bool? _themePureBlack;
+  AppBackgroundSource? _themeBackgroundSource;
+  double? _themeSurfaceOpacity;
+  AppSurfaceEffect? _themeSurfaceEffect;
+  double? _themeSurfaceBlur;
+  List<String> _themeFonts = const [];
+
+  ControllerStore get store => widget.store;
+  AppPrefs get prefs => widget.prefs;
+  MihomoSession get session => widget.session;
+  SystemAccentColor get systemAccentColor => widget.systemAccentColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllerUriImporter = ControllerUriImporter(
+      widget.appLinks,
+      store: store,
+      navigatorKey: _navigatorKey,
+    )..start();
+  }
+
+  @override
+  void dispose() {
+    _controllerUriImporter.dispose();
+    super.dispose();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _lightTheme = null;
+    _darkTheme = null;
+  }
+
+  void _ensureThemes({
+    required Color seedColor,
+    required List<String> userFonts,
+    required bool useAutomaticColors,
+    required bool pureBlack,
+    required AppBackgroundSource backgroundSource,
+    required double surfaceOpacity,
+    required AppSurfaceEffect surfaceEffect,
+    required double surfaceBlur,
+  }) {
+    final seed = seedColor.toARGB32();
+    if (_lightTheme != null &&
+        _themeSeed == seed &&
+        _themeUsesAutomaticColors == useAutomaticColors &&
+        _themePureBlack == pureBlack &&
+        _themeBackgroundSource == backgroundSource &&
+        _themeSurfaceOpacity == surfaceOpacity &&
+        _themeSurfaceEffect == surfaceEffect &&
+        _themeSurfaceBlur == surfaceBlur &&
+        listEquals(_themeFonts, userFonts)) {
+      return;
+    }
+    _themeSeed = seed;
+    _themeUsesAutomaticColors = useAutomaticColors;
+    _themePureBlack = pureBlack;
+    _themeBackgroundSource = backgroundSource;
+    _themeSurfaceOpacity = surfaceOpacity;
+    _themeSurfaceEffect = surfaceEffect;
+    _themeSurfaceBlur = surfaceBlur;
+    _themeFonts = List.unmodifiable(userFonts);
+    _lightTheme = _appTheme(
+      brightness: Brightness.light,
+      seedColor: seedColor,
+      userFonts: userFonts,
+      useAutomaticColors: useAutomaticColors,
+      pureBlack: false,
+      backgroundSource: backgroundSource,
+      surfaceOpacity: surfaceOpacity,
+      surfaceEffect: surfaceEffect,
+      surfaceBlur: surfaceBlur,
+    );
+    _darkTheme = _appTheme(
+      brightness: Brightness.dark,
+      seedColor: seedColor,
+      userFonts: userFonts,
+      useAutomaticColors: useAutomaticColors,
+      pureBlack: pureBlack,
+      backgroundSource: backgroundSource,
+      surfaceOpacity: surfaceOpacity,
+      surfaceEffect: surfaceEffect,
+      surfaceBlur: surfaceBlur,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: prefs,
+      listenable: Listenable.merge([prefs, systemAccentColor]),
       builder: (context, _) {
         final uiFonts = prefs.uiFontFamilies;
+        final globalSeed = Color(prefs.globalThemeColor);
+        final useAutomaticColor = prefs.automaticColor;
+        final effectiveSeed = useAutomaticColor
+            ? systemAccentColor.color ??
+                  const Color(AppPrefs.defaultGlobalThemeColor)
+            : globalSeed;
+        final backgroundSource = prefs.backgroundSource;
+        final surfaceOpacity = prefs.surfaceOpacity;
+        final surfaceEffect = prefs.surfaceEffect;
+        final surfaceBlur = prefs.surfaceBlur;
+        _ensureThemes(
+          seedColor: effectiveSeed,
+          userFonts: uiFonts,
+          useAutomaticColors: useAutomaticColor,
+          pureBlack: prefs.pureBlackMode,
+          backgroundSource: backgroundSource,
+          surfaceOpacity: surfaceOpacity,
+          surfaceEffect: surfaceEffect,
+          surfaceBlur: surfaceBlur,
+        );
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'Sparxie',
+          scrollBehavior: const _AppScrollBehavior(),
           locale: const Locale('zh', 'CN'),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
@@ -239,19 +565,100 @@ class MihomoControllerApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('zh', 'CN')],
-          theme: _appTheme(
-            brightness: Brightness.light,
-            seedColor: const Color(0xff2563eb),
-            userFonts: uiFonts,
-          ),
-          darkTheme: _appTheme(
-            brightness: Brightness.dark,
-            seedColor: const Color(0xff60a5fa),
-            userFonts: uiFonts,
-          ),
-          builder: (context, child) =>
-              _SystemBarStyle(child: child ?? const SizedBox.shrink()),
-          home: HomeShell(store: store, prefs: prefs, session: session),
+          themeMode: switch (prefs.appThemeMode) {
+            AppThemeMode.system => ThemeMode.system,
+            AppThemeMode.light => ThemeMode.light,
+            AppThemeMode.dark => ThemeMode.dark,
+          },
+          theme: _lightTheme!,
+          darkTheme: _darkTheme!,
+          builder: (context, child) {
+            CompactControlStyle styleFor(CompactControlKind kind) {
+              final radius = prefs.compactBorderRadius(kind);
+              final height = prefs.compactControlHeight(kind);
+              final widthScale = prefs.compactWidthScale(kind);
+              final navigationBar = kind == CompactControlKind.navigationBar;
+              final innerRadius = navigationBar
+                  ? prefs.navigationInnerBorderRadius
+                  : radius;
+              final innerHeight = navigationBar
+                  ? prefs.navigationInnerHeight
+                  : height;
+              final innerWidthScale = navigationBar
+                  ? prefs.navigationInnerWidthScale
+                  : widthScale;
+              final style = useAutomaticColor
+                  ? CompactControlStyle.fromColorScheme(
+                      colorScheme: Theme.of(context).colorScheme,
+                      borderRadius: radius,
+                      controlHeight: height,
+                      widthScale: widthScale,
+                      indicatorBorderRadius: innerRadius,
+                      indicatorHeight: innerHeight,
+                      indicatorWidthScale: innerWidthScale,
+                      floatingHeightOffset:
+                          prefs.navigationFloatingHeightOffset,
+                    )
+                  : CompactControlStyle.fromSeed(
+                      seedColor: Color(prefs.effectiveCompactThemeColor(kind)),
+                      selectedSeedColor: navigationBar
+                          ? Color(prefs.navigationInnerThemeColor)
+                          : null,
+                      brightness: Theme.of(context).brightness,
+                      borderRadius: radius,
+                      controlHeight: height,
+                      widthScale: widthScale,
+                      indicatorBorderRadius: innerRadius,
+                      indicatorHeight: innerHeight,
+                      indicatorWidthScale: innerWidthScale,
+                      floatingHeightOffset:
+                          prefs.navigationFloatingHeightOffset,
+                    );
+              if (navigationBar ||
+                  prefs.backgroundSource == AppBackgroundSource.theme) {
+                return style;
+              }
+              return style.withSurfaceOpacity(prefs.surfaceOpacity);
+            }
+
+            return AppBackgroundFrame(
+              source: prefs.backgroundSource,
+              color: Color(prefs.backgroundColor),
+              imagePath: prefs.backgroundImagePath,
+              fit: prefs.backgroundFit,
+              focalPoint: Alignment(
+                prefs.backgroundFocalX,
+                prefs.backgroundFocalY,
+              ),
+              zoom: prefs.backgroundZoom,
+              child: DesktopTitleBarFrame(
+                showTitleBar:
+                    prefs.desktopTitleBarMode == DesktopTitleBarMode.custom,
+                enableContentDragging:
+                    prefs.desktopTitleBarMode != DesktopTitleBarMode.system,
+                child: CompactControlTheme(
+                  buttonStyle: styleFor(CompactControlKind.button),
+                  searchStyle: styleFor(CompactControlKind.search),
+                  segmentedStyle: styleFor(CompactControlKind.segmented),
+                  switchStyle: styleFor(CompactControlKind.toggle),
+                  navigationBarStyle: styleFor(
+                    CompactControlKind.navigationBar,
+                  ),
+                  child: _SystemBarStyle(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            );
+          },
+          onGenerateRoute: (settings) {
+            if (settings.name != Navigator.defaultRouteName) return null;
+            return AppPageRoute<void>(
+              settings: settings,
+              builder: (_) =>
+                  HomeShell(store: store, prefs: prefs, session: session),
+            );
+          },
         );
       },
     );
@@ -321,6 +728,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     return false;
   }
 
+  AppSurfaceTheme _navigationSurfaceTheme(BuildContext context) {
+    final prefs = widget.prefs;
+    final global = AppSurfaceTheme.of(context);
+    if (prefs.navigationSurfaceFollowsGlobal) return global;
+    final effect = prefs.navigationSurfaceEffect;
+    return global.copyWith(
+      enabled: true,
+      effect: effect,
+      blurSigma: prefs.navigationSurfaceBlur,
+      opacity: prefs.navigationSurfaceOpacity,
+      tintColor: Theme.of(context).colorScheme.primary,
+      blurScale: effect == AppSurfaceEffect.acrylic
+          ? AppSurfaceTheme.compactAcrylicBlurScale
+          : 1,
+      acrylicVeil: effect == AppSurfaceEffect.acrylic
+          ? AppSurfaceTheme.compactAcrylicVeil
+          : 0.18,
+    );
+  }
+
   List<AppNavDestination> _destinationsFor(
     NavLayout layout, {
     required bool isCompact,
@@ -374,7 +801,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           icon: Icons.network_check_outlined,
           label: '网络工具',
         ),
-      const AppNavDestination(icon: Icons.more_horiz, label: '其他'),
+      const AppNavDestination(icon: Icons.more_horiz, label: '更多'),
     ];
   }
 
@@ -505,7 +932,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             otherIndex,
           ];
 
-          // Destinations that didn't fit become tiles on the 其他 page; they
+          // Destinations that didn't fit become tiles on the 更多 page; they
           // push a full route (with its own AppBar + back button) rather than
           // swapping the IndexedStack, so navigation is unambiguous.
           final extras = <SettingsExtra>[
@@ -514,14 +941,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 icon: destinations[i].icon,
                 label: destinations[i].label,
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
+                  AppPageRoute<void>(
                     builder: (_) => _buildPage(destinations[i]),
                   ),
                 ),
               ),
           ];
 
-          // If the current page overflowed (no longer a rail item), show 其他
+          // If the current page overflowed (no longer a rail item), show 更多
           // instead — its list links to the overflowed page. Growing the
           // window back makes _index a visible rail item again, restoring it.
           final effectiveIndex = visibleReal.contains(_index)
@@ -550,9 +977,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 selectedIndex: visibleReal.indexOf(effectiveIndex),
                 onSelected: (pos) => setState(() => _index = visibleReal[pos]),
               ),
-              const VerticalDivider(width: 1),
               Expanded(
-                child: IndexedStack(index: effectiveIndex, children: children),
+                child: IndexedStack(
+                  index: effectiveIndex,
+                  children: [
+                    for (var i = 0; i < children.length; i++)
+                      HeroMode(
+                        enabled: i == effectiveIndex,
+                        child: TickerMode(
+                          enabled: i == effectiveIndex,
+                          child: children[i],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           );
@@ -563,6 +1001,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildWideCards(List<AppNavDestination> destinations) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final pages = _ensureStackPages(NavLayout.cards, destinations);
     final supportsRules = widget.session.supportsRules.value;
     final effectiveIndex = !supportsRules && _index == -3 ? 0 : _index;
@@ -578,33 +1017,43 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         session: widget.session,
       ),
       -3 => RulesScreen(store: widget.store),
-      _ => IndexedStack(index: effectiveIndex, children: pages),
+      _ => IndexedStack(
+        index: effectiveIndex,
+        children: [
+          for (var i = 0; i < pages.length; i++)
+            HeroMode(
+              enabled: i == effectiveIndex,
+              child: TickerMode(enabled: i == effectiveIndex, child: pages[i]),
+            ),
+        ],
+      ),
     };
     return Scaffold(
       body: Row(
         children: [
-          Container(
-            width: 300,
-            color: scheme.surfaceContainerLow,
-            child: SafeArea(
-              child: _NavCardGrid(
-                store: widget.store,
-                session: widget.session,
-                destinations: destinations,
-                selectedIndex: effectiveIndex,
-                onSelected: (i) => setState(() => _index = i),
-                onKernelTap: () => setState(() => _index = -1),
-                kernelSelected: effectiveIndex == -1,
-                onConnectionsTap: () => setState(() => _index = -2),
-                connectionsSelected: effectiveIndex == -2,
-                supportsRules: supportsRules,
-                onRulesTap: () => setState(() => _index = -3),
-                rulesSelected: effectiveIndex == -3,
-                onBackendSettingsTap: _openBackendSettings,
+          AppSurfaceBackdrop(
+            child: Container(
+              width: 300,
+              color: surfaceTheme.chromeColor(scheme.surface),
+              child: SafeArea(
+                child: _NavCardGrid(
+                  store: widget.store,
+                  session: widget.session,
+                  destinations: destinations,
+                  selectedIndex: effectiveIndex,
+                  onSelected: (i) => setState(() => _index = i),
+                  onKernelTap: () => setState(() => _index = -1),
+                  kernelSelected: effectiveIndex == -1,
+                  onConnectionsTap: () => setState(() => _index = -2),
+                  connectionsSelected: effectiveIndex == -2,
+                  supportsRules: supportsRules,
+                  onRulesTap: () => setState(() => _index = -3),
+                  rulesSelected: effectiveIndex == -3,
+                  onBackendSettingsTap: _openBackendSettings,
+                ),
               ),
             ),
           ),
-          const VerticalDivider(width: 1),
           Expanded(child: mainArea),
         ],
       ),
@@ -613,45 +1062,51 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildCompactStandard(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.standard, destinations);
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
-    return Scaffold(
-      extendBody: true,
-      body: _FadeThroughIndexedStack(index: _index, children: pages),
-      bottomNavigationBar: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: ColoredBox(
-            color: isDark
-                ? scheme.surface.withValues(alpha: 0.6)
-                : scheme.surface.withValues(alpha: 0.7),
-            child: SafeArea(
-              top: false,
-              child: SizedBox(
-                height: 64,
-                child: BottomNavBarItems(
-                  style: widget.prefs.navBarStyle,
-                  destinations: destinations,
-                  selectedIndex: _index,
-                  onSelected: (i) => setState(() => _index = i),
-                ),
-              ),
+    final navigationSurface = _navigationSurfaceTheme(context);
+    final navigationStyle = CompactControlTheme.navigationBarOf(context);
+    final navigationBackground = navigationSurface.surfaceColor(
+      navigationStyle.background(context),
+    );
+    final bottomBar = AppSurfaceBackdrop(
+      surfaceTheme: navigationSurface,
+      child: ColoredBox(
+        color: navigationBackground,
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: navigationStyle.buttonHeight,
+            child: BottomNavBarItems(
+              style: widget.prefs.navBarStyle,
+              styleConfig: navigationStyle,
+              destinations: destinations,
+              selectedIndex: _index,
+              onSelected: (i) => setState(() => _index = i),
             ),
           ),
         ),
       ),
     );
+    return Scaffold(
+      extendBody: true,
+      body: _BodyTransitionIndexedStack(index: _index, children: pages),
+      bottomNavigationBar: ClipRect(child: AppBackdropGroup(child: bottomBar)),
+    );
   }
 
   Widget _buildCompactFloating(List<AppNavDestination> destinations) {
     final pages = _ensureStackPages(NavLayout.floating, destinations);
+    final navigationStyle = CompactControlTheme.navigationBarOf(context);
+    final navigationSurface = _navigationSurfaceTheme(context);
     return Stack(
       children: [
         Scaffold(
           body: Builder(
             builder: (context) {
               final data = MediaQuery.of(context);
-              const navBarExtra = 82.0; // 56 bar + 6 pad + 20 top gap
+              final navBarExtra =
+                  navigationStyle.buttonHeight +
+                  26 +
+                  navigationStyle.floatingHeightOffset.clamp(0, 20);
               return MediaQuery(
                 data: data.copyWith(
                   padding: data.padding.copyWith(
@@ -661,7 +1116,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                     bottom: data.viewPadding.bottom + navBarExtra,
                   ),
                 ),
-                child: _FadeThroughIndexedStack(index: _index, children: pages),
+                child: _BodyTransitionIndexedStack(
+                  index: _index,
+                  children: pages,
+                ),
               );
             },
           ),
@@ -675,6 +1133,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             onSelected: (i) => setState(() => _index = i),
             destinations: destinations,
             style: widget.prefs.navBarStyle,
+            surfaceTheme: navigationSurface,
           ),
         ),
       ],
@@ -686,8 +1145,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     List<AppNavDestination> destinations,
   ) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return Scaffold(
-      backgroundColor: scheme.surfaceContainerLow,
+      backgroundColor: surfaceTheme.pageColor(scheme.surfaceContainerLow),
       // Let the grid scroll behind the bottom system gesture bar instead of
       // reserving a solid strip; the ListView padding handles the inset.
       body: SafeArea(
@@ -698,17 +1158,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           destinations: destinations,
           selectedIndex: -1,
           onSelected: (i) => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _buildPage(destinations[i])),
+            AppPageRoute<void>(builder: (_) => _buildPage(destinations[i])),
           ),
           onKernelTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
+            AppPageRoute<void>(
               builder: (_) =>
                   CoreConfigScreen(store: widget.store, prefs: widget.prefs),
             ),
           ),
           kernelSelected: false,
           onConnectionsTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
+            AppPageRoute<void>(
               builder: (_) => ConnectionsScreen(
                 store: widget.store,
                 prefs: widget.prefs,
@@ -718,7 +1178,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ),
           connectionsSelected: false,
           onRulesTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => RulesScreen(store: widget.store)),
+            AppPageRoute<void>(
+              builder: (_) => RulesScreen(store: widget.store),
+            ),
           ),
           rulesSelected: false,
           supportsRules: widget.session.supportsRules.value,
@@ -730,7 +1192,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   void _openBackendSettings() {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      AppPageRoute<void>(
         builder: (_) => BackendSettingsScreen(store: widget.store),
       ),
     );
@@ -1198,20 +1660,27 @@ class _CardSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return SizedBox(
       height: height,
-      child: Material(
-        color: selected ? scheme.primaryContainer : scheme.surface,
-        elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(
-          side: selected
-              ? BorderSide(color: scheme.primary, width: 1.5)
-              : BorderSide.none,
-          borderRadius: BorderRadius.circular(20),
+      child: AppSurfaceBackdrop(
+        borderRadius: BorderRadius.circular(20),
+        child: Material(
+          color: surfaceTheme.surfaceColor(
+            selected ? scheme.primaryContainer : scheme.surface,
+            selected ? 0.08 : 0,
+          ),
+          elevation: 1,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            side: selected
+                ? BorderSide(color: scheme.primary, width: 1.5)
+                : BorderSide.none,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: child,
       ),
     );
   }
@@ -1235,7 +1704,11 @@ class _NavCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final cardColor = selected ? scheme.primaryContainer : scheme.surface;
+    final surfaceTheme = AppSurfaceTheme.of(context);
+    final cardColor = surfaceTheme.surfaceColor(
+      selected ? scheme.primaryContainer : scheme.surface,
+      selected ? 0.08 : 0,
+    );
     final iconBg = selected
         ? scheme.primary.withValues(alpha: 0.18)
         : scheme.surfaceContainerHighest;
@@ -1244,43 +1717,48 @@ class _NavCard extends StatelessWidget {
 
     return SizedBox(
       height: 110,
-      child: Material(
-        color: cardColor,
-        elevation: selected ? 0 : 1,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: iconBg,
-                        borderRadius: BorderRadius.circular(9),
+      child: AppSurfaceBackdrop(
+        borderRadius: BorderRadius.circular(20),
+        child: Material(
+          color: cardColor,
+          elevation: selected ? 0 : 1,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: iconBg,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Icon(icon, size: 16, color: iconFg),
                       ),
-                      child: Icon(icon, size: 16, color: iconFg),
-                    ),
-                    const Spacer(),
-                    ?badge,
-                  ],
-                ),
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: labelFg,
-                    fontWeight: FontWeight.w700,
+                      const Spacer(),
+                      ?badge,
+                    ],
                   ),
-                ),
-              ],
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: labelFg,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1289,110 +1767,67 @@ class _NavCard extends StatelessWidget {
   }
 }
 
-class _FadeThroughIndexedStack extends StatefulWidget {
-  const _FadeThroughIndexedStack({required this.index, required this.children});
+class _BodyTransitionIndexedStack extends StatefulWidget {
+  const _BodyTransitionIndexedStack({
+    required this.index,
+    required this.children,
+  });
 
   final int index;
   final List<Widget> children;
 
   @override
-  State<_FadeThroughIndexedStack> createState() =>
-      _FadeThroughIndexedStackState();
+  State<_BodyTransitionIndexedStack> createState() =>
+      _BodyTransitionIndexedStackState();
 }
 
-class _FadeThroughIndexedStackState extends State<_FadeThroughIndexedStack>
+class _BodyTransitionIndexedStackState
+    extends State<_BodyTransitionIndexedStack>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
+  static const _complete = AlwaysStoppedAnimation<double>(1);
+
+  late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 280),
+    duration: const Duration(milliseconds: 240),
+    value: 1,
   );
-  late final Animation<double> _fadeIn = CurvedAnimation(
-    parent: _ctrl,
-    curve: const Interval(0.3, 1, curve: Curves.easeOutCubic),
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
   );
-  late final Animation<double> _scaleIn = Tween<double>(
-    begin: 0.94,
-    end: 1,
-  ).animate(_fadeIn);
-  late final Animation<double> _fadeOut = ReverseAnimation(
-    CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0, 0.3, curve: Curves.easeIn),
-    ),
-  );
-  int _current = 0;
-  int _outgoing = -1;
 
   @override
-  void initState() {
-    super.initState();
-    _current = widget.index;
-    _ctrl.value = 1;
-    _ctrl.addStatusListener((status) {
-      if (status == AnimationStatus.completed && _outgoing >= 0) {
-        setState(() => _outgoing = -1);
-      }
-    });
+  void didUpdateWidget(_BodyTransitionIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) _controller.forward(from: 0);
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
-  void didUpdateWidget(_FadeThroughIndexedStack old) {
-    super.didUpdateWidget(old);
-    if (old.index != widget.index) {
-      setState(() {
-        _outgoing = _current;
-        _current = widget.index;
-      });
-      _ctrl.forward(from: 0);
-    }
-  }
-
-  // Every child keeps the same wrapper chain and a stable key, so moving
-  // between hidden/outgoing/current only flips parameters — page state
-  // (stream subscriptions etc.) survives z-order changes.
-  Widget _wrap(int i) {
-    final active = i == _current;
-    final outgoing = i == _outgoing;
-    return Offstage(
-      key: ValueKey(i),
-      offstage: !active && !outgoing,
-      child: TickerMode(
-        enabled: active || outgoing,
-        child: IgnorePointer(
-          ignoring: !active,
-          child: FadeTransition(
-            opacity: active
-                ? _fadeIn
-                : outgoing
-                ? _fadeOut
-                : const AlwaysStoppedAnimation(1),
-            child: ScaleTransition(
-              scale: active ? _scaleIn : const AlwaysStoppedAnimation(1),
-              child: widget.children[i],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final order = <int>[
-      for (var i = 0; i < widget.children.length; i++)
-        if (i != _current && i != _outgoing) i,
-      if (_outgoing >= 0) _outgoing,
-      _current,
-    ];
     return Stack(
       fit: StackFit.expand,
-      children: [for (final i in order) _wrap(i)],
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          Offstage(
+            offstage: i != widget.index,
+            child: HeroMode(
+              enabled: i == widget.index,
+              child: TickerMode(
+                enabled: i == widget.index,
+                child: AppPageTransitionScope(
+                  animation: i == widget.index ? _animation : _complete,
+                  child: widget.children[i],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

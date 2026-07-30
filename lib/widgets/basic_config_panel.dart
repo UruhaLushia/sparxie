@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import 'compact_controls.dart';
 import 'section_panel.dart';
 
 /// Self-contained panel that pulls backend `/configs`, lets the user toggle
@@ -241,31 +242,44 @@ class _ModeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String? selected;
+    for (final mode in options) {
+      if (_sameMode(current, mode)) {
+        selected = mode;
+        break;
+      }
+    }
+    final busy = saving == 'mode';
+    final control = CompactSegmentedButton<String>(
+      expanded: options.length <= 3,
+      segments: [
+        for (final mode in options)
+          ButtonSegment(
+            value: mode,
+            enabled: !readOnly && !busy,
+            icon: busy && _sameMode(current, mode)
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            label: Text(_label(mode)),
+          ),
+      ],
+      selected: selected == null ? const <String>{} : {selected},
+      onSelectionChanged: (selection) {
+        if (selection.isNotEmpty) onChange(selection.first);
+      },
+    );
     return SectionPanel(
       title: '出站模式',
       icon: Icons.alt_route,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final m in options)
-            ChoiceChip(
-              label: Text(_label(m)),
-              selected: _sameMode(current, m),
-              onSelected: readOnly || saving == 'mode' || _sameMode(current, m)
-                  ? null
-                  : (_) => onChange(m),
+      child: options.length <= 3
+          ? control
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: control,
             ),
-          if (saving == 'mode')
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -302,7 +316,7 @@ class _SwitchSection extends StatelessWidget {
               onChange: onLogLevel,
             ),
           if (configs.tunEnabled != null)
-            SwitchListTile(
+            CompactSwitch.tile(
               contentPadding: EdgeInsets.zero,
               title: const Text('TUN'),
               subtitle: saving == 'tun' ? const Text('保存中…') : null,
@@ -338,7 +352,7 @@ class _SwitchSection extends StatelessWidget {
     required bool current,
   }) {
     final busy = saving == valueKey;
-    return SwitchListTile(
+    return CompactSwitch.tile(
       contentPadding: EdgeInsets.zero,
       title: Text(label),
       subtitle: busy ? const Text('保存中…') : null,
@@ -492,19 +506,17 @@ class _LogLevelRow extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          DropdownButton<String>(
+          CompactMenuButton<String>(
             value: value,
-            borderRadius: BorderRadius.circular(8),
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final l in _levels)
-                DropdownMenuItem(value: l, child: Text(l)),
+            label: value,
+            semanticLabel: '日志级别',
+            enabled: !readOnly && !busy,
+            itemBuilder: (_) => [
+              for (final l in _levels) PopupMenuItem(value: l, child: Text(l)),
             ],
-            onChanged: readOnly || busy
-                ? null
-                : (v) {
-                    if (v != null && v != current) onChange(v);
-                  },
+            onSelected: (v) {
+              if (v != current) onChange(v);
+            },
           ),
         ],
       ),

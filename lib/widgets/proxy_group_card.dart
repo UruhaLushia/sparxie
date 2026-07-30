@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../session.dart';
 import '../utils.dart';
+import 'app_background.dart';
 import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
 
@@ -80,15 +81,26 @@ _CardStyle _styleFor(BuildContext context, String name, bool colored) {
     );
   }
   final scheme = Theme.of(context).colorScheme;
+  final surfaceTheme = AppSurfaceTheme.of(context);
   return _CardStyle(
-    background: scheme.surfaceContainerHigh,
-    cardBorder: scheme.outlineVariant.withValues(alpha: 0.5),
+    background: surfaceTheme.surfaceColor(scheme.surfaceContainerHigh),
+    cardBorder: surfaceTheme.enabled
+        ? null
+        : scheme.outlineVariant.withValues(alpha: 0.5),
     title: scheme.onSurface,
     subtitle: scheme.onSurfaceVariant,
     icon: scheme.onSurfaceVariant,
-    tileBg: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-    tileSelectedBg: scheme.primaryContainer.withValues(alpha: 0.7),
-    tileBorder: scheme.outlineVariant.withValues(alpha: 0.4),
+    tileBg: surfaceTheme.surfaceColor(
+      scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+      0.05,
+    ),
+    tileSelectedBg: surfaceTheme.surfaceColor(
+      scheme.primaryContainer.withValues(alpha: 0.7),
+      0.12,
+    ),
+    tileBorder: surfaceTheme.outlineColor(
+      scheme.outlineVariant.withValues(alpha: 0.4),
+    ),
     tileSelectedBorder: scheme.primary.withValues(alpha: 0.6),
     tileTitle: scheme.onSurface,
     tileSubtitle: scheme.onSurfaceVariant,
@@ -109,7 +121,7 @@ class _CardSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       decoration: BoxDecoration(
         gradient: style.gradient,
         color: style.background,
@@ -120,6 +132,11 @@ class _CardSurface extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(type: MaterialType.transparency, child: child),
+    );
+    if (style.gradient != null) return card;
+    return AppSurfaceBackdrop(
+      borderRadius: BorderRadius.circular(radius),
+      child: card,
     );
   }
 }

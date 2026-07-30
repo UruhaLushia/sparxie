@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../rust_api.dart' as rust;
 
-/// Mirror of Rust's per-(target, level) log cache. Rust owns the ring
-/// buffer; this just renders what each subscribe replays + delta-streams.
+/// Filtered mirror of Rust's per-target log cache. Rust owns the full ring;
+/// this only renders the selected level's snapshot and following entries.
 class LogBuffer extends ChangeNotifier {
   static const int maxEntries = 500;
 
@@ -25,6 +25,17 @@ class LogBuffer extends ChangeNotifier {
     _entries.addAll(entries);
     final overflow = _entries.length - maxEntries;
     if (overflow > 0) _entries.removeRange(0, overflow);
+    notifyListeners();
+  }
+
+  void replaceAll(List<rust.LogEntry> entries) {
+    _entries
+      ..clear()
+      ..addAll(
+        entries.length > maxEntries
+            ? entries.sublist(entries.length - maxEntries)
+            : entries,
+      );
     notifyListeners();
   }
 

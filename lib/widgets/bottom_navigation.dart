@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_prefs.dart';
+import 'app_background.dart';
+import 'compact_controls/style.dart';
 
 class AppNavDestination {
   const AppNavDestination({required this.icon, required this.label});
@@ -32,27 +33,35 @@ class SideNavigationRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final leftInset = MediaQuery.paddingOf(context).left;
-    return Container(
-      width: 84 + leftInset,
-      padding: EdgeInsets.only(left: leftInset),
-      child: SafeArea(
-        left: false,
-        right: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < destinations.length; i++)
-              SizedBox(
-                height: itemHeight,
-                child: _SideNavigationRailItem(
-                  destination: destinations[i],
-                  selected: i == selectedIndex,
-                  onTap: () => onSelected(i),
-                  scheme: scheme,
-                ),
+    return AppSurfaceBackdrop(
+      child: ColoredBox(
+        color: surfaceTheme.chromeColor(scheme.surface),
+        child: SizedBox(
+          width: 84 + leftInset,
+          child: Padding(
+            padding: EdgeInsets.only(left: leftInset),
+            child: SafeArea(
+              left: false,
+              right: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    SizedBox(
+                      height: itemHeight,
+                      child: _SideNavigationRailItem(
+                        destination: destinations[i],
+                        selected: i == selectedIndex,
+                        onTap: () => onSelected(i),
+                        scheme: scheme,
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );
@@ -122,83 +131,98 @@ class FloatingBottomNavBar extends StatelessWidget {
     required this.onSelected,
     required this.destinations,
     required this.style,
+    required this.surfaceTheme,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final List<AppNavDestination> destinations;
   final NavBarStyle style;
-
-  static const double _height = 56;
-  static const double _horizontalInset = 24;
+  final AppSurfaceTheme surfaceTheme;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final controlStyle = CompactControlTheme.navigationBarOf(context);
+    final height = controlStyle.buttonHeight;
+    final horizontalInset = (24 + (1 - controlStyle.widthScale) * 40).clamp(
+      8.0,
+      56.0,
+    );
     final isDark = scheme.brightness == Brightness.dark;
+    final background = controlStyle.background(context);
+    final surfaceColor = surfaceTheme.surfaceColor(background);
+    final shadowStrength = surfaceTheme.enabled
+        ? surfaceTheme.effectiveSurfaceOpacity()
+        : 1.0;
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        _horizontalInset,
-        0,
-        _horizontalInset,
-        6 + bottomPadding,
-      ),
-      child: Center(
-        heightFactor: 1,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(_height / 2),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? scheme.surfaceContainerHigh.withValues(alpha: 0.68)
-                    : scheme.surfaceContainer.withValues(alpha: 0.74),
-                borderRadius: BorderRadius.circular(_height / 2),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.black.withValues(alpha: 0.08),
-                  width: 0.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                    blurRadius: 16,
-                    spreadRadius: -2,
-                    offset: const Offset(0, 4),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
+    final surface = AppSurfaceBackdrop(
+      borderRadius: controlStyle.borderRadius,
+      surfaceTheme: surfaceTheme,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: controlStyle.borderRadius,
+          border: surfaceTheme.outlineBorder(
+            isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.08),
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: (isDark ? 0.3 : 0.08) * shadowStrength,
               ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: SizedBox(
-                  height: _height,
-                  child: BottomNavBarItems(
-                    style: style,
-                    destinations: destinations,
-                    selectedIndex: selectedIndex,
-                    onSelected: onSelected,
-                    shrinkWrap: true,
-                  ),
-                ),
+              blurRadius: 16,
+              spreadRadius: -2,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: (isDark ? 0.12 : 0.03) * shadowStrength,
               ),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: SizedBox(
+            height: height,
+            child: BottomNavBarItems(
+              style: style,
+              styleConfig: controlStyle,
+              destinations: destinations,
+              selectedIndex: selectedIndex,
+              onSelected: onSelected,
+              shrinkWrap: true,
             ),
           ),
         ),
       ),
     );
+    return Transform.translate(
+      offset: Offset(0, -controlStyle.floatingHeightOffset),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalInset,
+          0,
+          horizontalInset,
+          6 + bottomPadding,
+        ),
+        child: Center(heightFactor: 1, child: AppBackdropGroup(child: surface)),
+      ),
+    );
   }
 }
 
-Color _indicatorColor(ColorScheme scheme, bool isDark) =>
-    scheme.primaryContainer.withValues(alpha: isDark ? 0.6 : 0.9);
+Color _indicatorColor(
+  BuildContext context,
+  CompactControlStyle style,
+  bool isDark,
+) => style.selectedBackground(context).withValues(alpha: isDark ? 0.72 : 0.92);
 
 const double _navDragActivationDistance = 26;
 const Duration _navAnimationDuration = Duration(milliseconds: 220);
@@ -259,6 +283,7 @@ class BottomNavBarItems extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     this.shrinkWrap = false,
+    this.styleConfig,
   });
 
   final NavBarStyle style;
@@ -266,16 +291,18 @@ class BottomNavBarItems extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final bool shrinkWrap;
+  final CompactControlStyle? styleConfig;
 
   static const double _cellWidth = 68;
 
-  Widget _cell(Widget child) => shrinkWrap
-      ? SizedBox(width: _cellWidth, child: child)
+  Widget _cell(Widget child, CompactControlStyle controlStyle) => shrinkWrap
+      ? SizedBox(width: _cellWidth * controlStyle.widthScale, child: child)
       : Expanded(child: child);
 
   Widget _labeledItem(
+    BuildContext context,
     int index,
-    ColorScheme scheme,
+    CompactControlStyle controlStyle,
     Color selectedColor, {
     int? activeIndex,
   }) {
@@ -285,12 +312,13 @@ class BottomNavBarItems extends StatelessWidget {
       selected: index == (activeIndex ?? selectedIndex),
       onTap: () => onSelected(index),
       selectedColor: selectedColor,
-      unselectedColor: scheme.onSurfaceVariant,
+      unselectedColor: controlStyle.foreground(context),
     );
   }
 
   Widget _labeledRow(
-    ColorScheme scheme,
+    BuildContext context,
+    CompactControlStyle controlStyle,
     Color selectedColor, {
     bool fill = false,
     int? activeIndex,
@@ -302,19 +330,22 @@ class BottomNavBarItems extends StatelessWidget {
           fill
               ? Expanded(
                   child: _labeledItem(
+                    context,
                     i,
-                    scheme,
+                    controlStyle,
                     selectedColor,
                     activeIndex: activeIndex,
                   ),
                 )
               : _cell(
                   _labeledItem(
+                    context,
                     i,
-                    scheme,
+                    controlStyle,
                     selectedColor,
                     activeIndex: activeIndex,
                   ),
+                  controlStyle,
                 ),
       ],
     );
@@ -323,6 +354,8 @@ class BottomNavBarItems extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final controlStyle =
+        styleConfig ?? CompactControlTheme.navigationBarOf(context);
     final isDark = scheme.brightness == Brightness.dark;
     return switch (style) {
       NavBarStyle.capsule => Padding(
@@ -332,20 +365,27 @@ class BottomNavBarItems extends StatelessWidget {
           selectedIndex: selectedIndex,
           onSelected: onSelected,
           shrinkWrap: shrinkWrap,
+          styleConfig: controlStyle,
         ),
       ),
       NavBarStyle.pill => _PillNavBar(
         destinationCount: destinations.length,
         selectedIndex: selectedIndex,
         onSelected: onSelected,
+        styleConfig: controlStyle,
         childBuilder: (activeIndex) => _labeledRow(
-          scheme,
-          scheme.onPrimaryContainer,
+          context,
+          controlStyle,
+          controlStyle.selectedForeground(context),
           fill: true,
           activeIndex: activeIndex,
         ),
       ),
-      NavBarStyle.tint => _labeledRow(scheme, scheme.primary),
+      NavBarStyle.tint => _labeledRow(
+        context,
+        controlStyle,
+        controlStyle.focus(context),
+      ),
       NavBarStyle.m3 => Row(
         mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
         children: [
@@ -356,9 +396,10 @@ class BottomNavBarItems extends StatelessWidget {
                 label: destinations[i].label,
                 selected: i == selectedIndex,
                 onTap: () => onSelected(i),
-                scheme: scheme,
                 isDark: isDark,
+                styleConfig: controlStyle,
               ),
+              controlStyle,
             ),
         ],
       ),
@@ -372,12 +413,14 @@ class _PillNavBar extends StatefulWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.childBuilder,
+    required this.styleConfig,
   });
 
   final int destinationCount;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final Widget Function(int activeIndex) childBuilder;
+  final CompactControlStyle styleConfig;
 
   @override
   State<_PillNavBar> createState() => _PillNavBarState();
@@ -387,7 +430,6 @@ class _PillNavBarState extends State<_PillNavBar> {
   static const double _indicatorInset = 3;
   static const double _indicatorExtraWidth = 12;
   static const double _contentInset = _indicatorExtraWidth / 2;
-  static const double _indicatorHeight = 50;
 
   int? _dragIndex;
   double? _dragCenter;
@@ -408,7 +450,10 @@ class _PillNavBarState extends State<_PillNavBar> {
 
   double _indicatorWidth(double width) {
     final cellWidth = (width - _contentInset * 2) / widget.destinationCount;
-    return (cellWidth + _indicatorExtraWidth).clamp(0, width).toDouble();
+    return ((cellWidth + _indicatorExtraWidth) *
+            widget.styleConfig.indicatorWidthScale)
+        .clamp(0, width)
+        .toDouble();
   }
 
   double _clampCenter(double position, double width) {
@@ -472,15 +517,18 @@ class _PillNavBarState extends State<_PillNavBar> {
   }
 
   Widget _indicator(
-    ColorScheme scheme,
+    BuildContext context,
     bool isDark,
     double width,
     double edgeStrength,
     Duration duration,
   ) {
+    final height = widget.styleConfig.indicatorHeight
+        .clamp(24.0, widget.styleConfig.buttonHeight)
+        .toDouble();
     return SizedBox(
       width: width,
-      height: _indicatorHeight,
+      height: height,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: _indicatorInset),
         child: _ElasticDragIndicator(
@@ -488,8 +536,8 @@ class _PillNavBarState extends State<_PillNavBar> {
           duration: duration,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: _indicatorColor(scheme, isDark),
-              borderRadius: BorderRadius.circular(999),
+              color: _indicatorColor(context, widget.styleConfig, isDark),
+              borderRadius: widget.styleConfig.indicatorBorderRadius,
             ),
           ),
         ),
@@ -506,7 +554,9 @@ class _PillNavBarState extends State<_PillNavBar> {
       builder: (context, constraints) {
         final width = constraints.hasBoundedWidth
             ? constraints.maxWidth
-            : BottomNavBarItems._cellWidth * widget.destinationCount +
+            : BottomNavBarItems._cellWidth *
+                      widget.styleConfig.widthScale *
+                      widget.destinationCount +
                   _contentInset * 2;
         if (width <= _contentInset * 2) return const SizedBox.shrink();
         final indicatorWidth = _indicatorWidth(width);
@@ -546,7 +596,7 @@ class _PillNavBarState extends State<_PillNavBar> {
                   curve: Curves.easeOutCubic,
                   alignment: Alignment(indicatorAlignment, 0),
                   child: _indicator(
-                    scheme,
+                    context,
                     isDark,
                     indicatorWidth,
                     edgeStrength,
@@ -576,12 +626,14 @@ class _CapsuleNavBar extends StatefulWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.shrinkWrap,
+    required this.styleConfig,
   });
 
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final bool shrinkWrap;
+  final CompactControlStyle styleConfig;
 
   @override
   State<_CapsuleNavBar> createState() => _CapsuleNavBarState();
@@ -674,11 +726,14 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
     if (widget.destinations.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
+    final widthScale = widget.styleConfig.widthScale;
+    final selectedColor = widget.styleConfig.selectedForeground(context);
+    final unselectedColor = widget.styleConfig.foreground(context);
     final labelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
       fontSize: 12.5,
       fontWeight: FontWeight.w700,
       letterSpacing: 0,
-      color: scheme.onPrimaryContainer,
+      color: selectedColor,
     );
     final textDirection = Directionality.of(context);
     final textScaler = MediaQuery.textScalerOf(context);
@@ -691,15 +746,15 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
         textScaler: textScaler,
       )..layout();
       selectedWidths.add(
-        _selectedHorizontalPadding * 2 +
+        _selectedHorizontalPadding * widthScale * 2 +
             _iconSize +
-            _iconLabelGap +
+            _iconLabelGap * widthScale +
             painter.width,
       );
     }
     final naturalWidth =
         selectedWidths.reduce(math.max) +
-        _unselectedWidth * (widget.destinations.length - 1);
+        _unselectedWidth * widthScale * (widget.destinations.length - 1);
     return LayoutBuilder(
       builder: (context, constraints) {
         final requestedWidth = widget.shrinkWrap || !constraints.hasBoundedWidth
@@ -710,11 +765,14 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
         final activeIndex = (_dragIndex ?? widget.selectedIndex)
             .clamp(0, widget.destinations.length - 1)
             .toInt();
-        final minimumSelectedWidth = math.min(_unselectedWidth, width);
+        final minimumUnselectedWidth = _minimumUnselectedWidth * widthScale;
+        final minimumSelectedWidth = math.min(
+          _unselectedWidth * widthScale,
+          width,
+        );
         final availableSelectedWidth = widget.destinations.length == 1
             ? width
-            : width -
-                  _minimumUnselectedWidth * (widget.destinations.length - 1);
+            : width - minimumUnselectedWidth * (widget.destinations.length - 1);
         final maximumSelectedWidth = availableSelectedWidth
             .clamp(minimumSelectedWidth, width)
             .toDouble();
@@ -766,16 +824,26 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
                   curve: Curves.easeOutCubic,
                   child: IgnorePointer(
                     child: Center(
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 42,
-                        child: _ElasticDragIndicator(
-                          strength: edgeStrength,
-                          duration: positionDuration,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: _indicatorColor(scheme, isDark),
-                              borderRadius: BorderRadius.circular(999),
+                      child: Transform.scale(
+                        scaleX: widget.styleConfig.indicatorWidthScale,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: widget.styleConfig.indicatorHeight
+                              .clamp(24.0, widget.styleConfig.buttonHeight)
+                              .toDouble(),
+                          child: _ElasticDragIndicator(
+                            strength: edgeStrength,
+                            duration: positionDuration,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: _indicatorColor(
+                                  context,
+                                  widget.styleConfig,
+                                  isDark,
+                                ),
+                                borderRadius:
+                                    widget.styleConfig.indicatorBorderRadius,
+                              ),
                             ),
                           ),
                         ),
@@ -801,7 +869,9 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
                               ? selectedWidth
                               : unselectedWidth,
                           labelStyle: labelStyle,
-                          scheme: scheme,
+                          selectedColor: selectedColor,
+                          unselectedColor: unselectedColor,
+                          widthScale: widthScale,
                         ),
                       ),
                   ],
@@ -822,7 +892,9 @@ class _CapsuleNavItem extends StatelessWidget {
     required this.onTap,
     required this.itemWidth,
     required this.labelStyle,
-    required this.scheme,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.widthScale,
   });
 
   final AppNavDestination destination;
@@ -830,13 +902,13 @@ class _CapsuleNavItem extends StatelessWidget {
   final VoidCallback onTap;
   final double itemWidth;
   final TextStyle labelStyle;
-  final ColorScheme scheme;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final double widthScale;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected
-        ? scheme.onPrimaryContainer
-        : scheme.onSurfaceVariant;
+    final foreground = selected ? selectedColor : unselectedColor;
     return Semantics(
       button: true,
       selected: selected,
@@ -854,7 +926,8 @@ class _CapsuleNavItem extends StatelessWidget {
               curve: Curves.easeOutCubic,
               padding: EdgeInsets.symmetric(
                 horizontal: selected
-                    ? _CapsuleNavBarState._selectedHorizontalPadding
+                    ? _CapsuleNavBarState._selectedHorizontalPadding *
+                          widthScale
                     : 0,
               ),
               child: Row(
@@ -882,8 +955,8 @@ class _CapsuleNavItem extends StatelessWidget {
                       ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: _CapsuleNavBarState._iconLabelGap,
+                      padding: EdgeInsets.only(
+                        left: _CapsuleNavBarState._iconLabelGap * widthScale,
                       ),
                       child: Text(
                         destination.label,
@@ -978,16 +1051,16 @@ class _M3NavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    required this.scheme,
     required this.isDark,
+    required this.styleConfig,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final ColorScheme scheme;
   final bool isDark;
+  final CompactControlStyle styleConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -1001,19 +1074,22 @@ class _M3NavItem extends StatelessWidget {
             AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+              width: 48 * styleConfig.indicatorWidthScale,
+              height: styleConfig.indicatorHeight
+                  .clamp(24.0, styleConfig.buttonHeight - 18)
+                  .toDouble(),
               decoration: BoxDecoration(
                 color: selected
-                    ? _indicatorColor(scheme, isDark)
+                    ? _indicatorColor(context, styleConfig, isDark)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: styleConfig.indicatorBorderRadius,
               ),
               child: Icon(
                 icon,
                 size: 20,
                 color: selected
-                    ? scheme.onPrimaryContainer
-                    : scheme.onSurfaceVariant,
+                    ? styleConfig.selectedForeground(context)
+                    : styleConfig.foreground(context),
               ),
             ),
             const SizedBox(height: 3),
@@ -1023,7 +1099,9 @@ class _M3NavItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 fontSize: 10,
-                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                color: selected
+                    ? styleConfig.selectedForeground(context)
+                    : styleConfig.foreground(context).withValues(alpha: 0.72),
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),

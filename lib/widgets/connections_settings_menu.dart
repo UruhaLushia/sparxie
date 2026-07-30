@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
 import '../platform_capabilities.dart';
+import 'compact_controls.dart';
 
 /// AppBar tune button for the connections page. Opens a right-anchored
 /// settings sheet exposing connection-list preferences.
@@ -86,7 +87,7 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                                 '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加后端与设备负载。',
                             child: _RefreshChips(prefs: prefs),
                           ),
-                          SwitchListTile(
+                          CompactSwitch.tile(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
                             ),
@@ -97,7 +98,7 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                                 ? prefs.setConnectionsShowProcessIcon
                                 : null,
                           ),
-                          SwitchListTile(
+                          CompactSwitch.tile(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
                             ),
@@ -108,7 +109,7 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                                 ? prefs.setConnectionsShowAppName
                                 : null,
                           ),
-                          SwitchListTile(
+                          CompactSwitch.tile(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
                             ),
@@ -202,19 +203,17 @@ class _RefreshChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = prefs.connectionsRefreshMs;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final ms in _options)
-          ChoiceChip(
-            label: Text(_formatMs(ms)),
-            selected: current == ms,
-            onSelected: current == ms
-                ? null
-                : (_) => prefs.setConnectionsRefreshMs(ms),
-          ),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: CompactSegmentedButton<int>(
+        segments: [
+          for (final ms in _options)
+            ButtonSegment(value: ms, label: Text(_formatMs(ms))),
+        ],
+        selected: {current},
+        onSelectionChanged: (selection) =>
+            prefs.setConnectionsRefreshMs(selection.first),
+      ),
     );
   }
 }
@@ -250,21 +249,19 @@ class _GroupSortRow extends StatelessWidget {
             child: Text('归类排序', style: Theme.of(context).textTheme.bodyLarge),
           ),
           const SizedBox(width: 12),
-          DropdownButton<GroupSort>(
+          CompactMenuButton<GroupSort>(
             value: prefs.connectionsGroupSort,
-            underline: const SizedBox.shrink(),
-            borderRadius: BorderRadius.circular(8),
-            items: [
+            label: _labels[prefs.connectionsGroupSort]!,
+            semanticLabel: '归类排序',
+            itemBuilder: (_) => [
               for (final entry in _labels.entries)
-                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                PopupMenuItem(value: entry.key, child: Text(entry.value)),
             ],
-            onChanged: (v) {
-              if (v != null) prefs.setConnectionsGroupSort(v);
-            },
+            onSelected: prefs.setConnectionsGroupSort,
           ),
-          IconButton(
-            tooltip: asc ? '升序' : '降序',
-            visualDensity: VisualDensity.compact,
+          const SizedBox(width: 4),
+          CompactIconButton(
+            semanticLabel: asc ? '升序' : '降序',
             onPressed: () => prefs.setConnectionsGroupSortAsc(!asc),
             icon: Icon(
               asc ? Icons.arrow_upward : Icons.arrow_downward,

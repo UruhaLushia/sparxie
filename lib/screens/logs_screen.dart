@@ -6,6 +6,12 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/active_listenable_builder.dart';
+import '../widgets/app_background.dart';
+import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
+import '../widgets/route_app_bar.dart';
 
 /// Renders the buffer owned by `MihomoSession` (`session.logs`). The
 /// WebSocket is opened on controller connect — independent of this widget's
@@ -30,6 +36,8 @@ class _LogsScreenState extends State<LogsScreen> {
   String _filter = '';
   List<rust.LogEntry> _visibleEntries = const <rust.LogEntry>[];
   bool _follow = true;
+  bool _active = true;
+  bool _logsDirty = false;
 
   @override
   void initState() {
@@ -48,8 +56,30 @@ class _LogsScreenState extends State<LogsScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = TickerMode.valuesOf(context).enabled;
+    if (_active == active) return;
+    _active = active;
+    if (!active) {
+      _flushTimer?.cancel();
+      _flushTimer = null;
+      return;
+    }
+    if (_logsDirty) {
+      _logsDirty = false;
+      _recomputeVisibleEntries();
+      _scheduleAutoScroll();
+    }
+  }
+
   void _onLogs() {
     if (!mounted) return;
+    if (!_active) {
+      _logsDirty = true;
+      return;
+    }
     _recomputeVisibleEntries();
     setState(() {});
     _scheduleAutoScroll();
@@ -74,11 +104,11 @@ class _LogsScreenState extends State<LogsScreen> {
 
   // Defer follow-scroll until the rebuild from setState has materialized.
   void _scheduleAutoScroll() {
-    if (!_follow) return;
+    if (!_active || !_follow) return;
     if (_flushTimer != null) return;
     _flushTimer = Timer(const Duration(milliseconds: 80), () {
       _flushTimer = null;
-      if (!mounted) return;
+      if (!mounted || !_active) return;
       if (!_follow || !_scroll.hasClients) return;
       final pos = _scroll.position;
       if (pos.hasContentDimensions) {
@@ -101,6 +131,12 @@ class _LogsScreenState extends State<LogsScreen> {
   void _clear() {
     widget.session.clearLogs();
   }
+
+  String _levelLabel(String level) => switch (level) {
+    'warning' => 'warn',
+    'silent' => 'off',
+    _ => level,
+  };
 
   void _recomputeVisibleEntries() {
     final all = widget.session.logs.entries;
@@ -126,119 +162,127 @@ class _LogsScreenState extends State<LogsScreen> {
         ? const ['info', 'debug', 'trace', 'warning', 'error', 'silent']
         : _baseLevels;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('日志'),
-        actions: [
-          ValueListenableBuilder<bool>(
-            valueListenable: logs.paused,
-            builder: (_, paused, _) => IconButton(
-              tooltip: paused ? '继续' : '暂停',
-              onPressed: _togglePause,
-              icon: Icon(paused ? Icons.play_arrow : Icons.pause),
-            ),
-          ),
-          IconButton(
-            tooltip: '清空',
-            onPressed: logs.isEmpty ? null : _clear,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: '过滤消息内容',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: _setFilter,
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final l in levels)
-                          ChoiceChip(
-                            label: Text(l),
-                            selected: widget.session.logsLevel == l,
-                            onSelected: (_) => _setLevel(l),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('日志'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+          actions: [
+            ActiveValueListenableBuilder<bool>(
+              valueListenable: logs.paused,
+              builder: (_, paused, _) => IconButton(
+                tooltip: paused ? '继续' : '暂停',
+                onPressed: _togglePause,
+                icon: Icon(paused ? Icons.play_arrow : Icons.pause),
               ),
             ),
-            ValueListenableBuilder<String?>(
-              valueListenable: widget.session.error,
-              builder: (_, err, _) {
-                if (err == null) return const SizedBox.shrink();
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: scheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_rounded,
-                        color: scheme.onErrorContainer,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          err,
-                          style: TextStyle(color: scheme.onErrorContainer),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+            IconButton(
+              tooltip: '清空',
+              onPressed: logs.isEmpty ? null : _clear,
+              icon: const Icon(Icons.delete_outline),
             ),
-            Expanded(
-              child: Builder(
-                builder: (_) {
-                  final entries = _visibleEntries;
-                  if (entries.isEmpty) {
-                    return Center(
-                      child: Text(
-                        logs.isEmpty ? '暂无日志' : '没有匹配的日志',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    );
-                  }
-                  return RepaintBoundary(
-                    child: SuperListView.builder(
-                      controller: _scroll,
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        8,
-                        16,
-                        24 + MediaQuery.paddingOf(context).bottom,
-                      ),
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) =>
-                          _LogTile(entry: entries[index]),
+          ],
+        ),
+      ),
+      body: AppPageBodyTransition(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CompactSearchField(
+                            hintText: '过滤消息内容',
+                            onChanged: _setFilter,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        CompactMenuButton<String>(
+                          width: 80,
+                          value: widget.session.logsLevel,
+                          label: _levelLabel(widget.session.logsLevel),
+                          semanticLabel: '日志等级',
+                          onSelected: _setLevel,
+                          itemBuilder: (_) => [
+                            for (final level in levels)
+                              PopupMenuItem(
+                                value: level,
+                                child: Text(_levelLabel(level)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              ActiveValueListenableBuilder<String?>(
+                valueListenable: widget.session.error,
+                builder: (_, err, _) {
+                  if (err == null) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: scheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_rounded,
+                          color: scheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            err,
+                            style: TextStyle(color: scheme.onErrorContainer),
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
               ),
-            ),
-          ],
+              Expanded(
+                child: Builder(
+                  builder: (_) {
+                    final entries = _visibleEntries;
+                    if (entries.isEmpty) {
+                      return Center(
+                        child: Text(
+                          logs.isEmpty ? '暂无日志' : '没有匹配的日志',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      );
+                    }
+                    return RepaintBoundary(
+                      child: SuperListView.builder(
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
+                        ),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) =>
+                            _LogTile(entry: entries[index]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: _follow
@@ -262,57 +306,81 @@ class _LogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final (badgeFg, badgeBg) = _levelColors(entry.level, scheme);
     final ts = entry.time.isEmpty ? '' : entry.time;
     final level = entry.level.isEmpty ? 'log' : entry.level;
+    final surfaceColor = Color.alphaBlend(
+      badgeBg.withValues(alpha: 0.045),
+      scheme.surfaceContainerLow,
+    );
+    const radius = BorderRadius.all(Radius.circular(10));
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 68,
-            margin: const EdgeInsets.only(top: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      child: RepaintBoundary(
+        child: AppSurfaceBackdrop(
+          borderRadius: radius,
+          child: DecoratedBox(
             decoration: BoxDecoration(
-              color: badgeBg,
-              borderRadius: BorderRadius.circular(6),
+              color: surfaceTheme.surfaceColor(surfaceColor, -0.02),
+              borderRadius: radius,
+              border: surfaceTheme.outlineBorder(
+                scheme.outlineVariant.withValues(alpha: 0.42),
+              ),
             ),
-            child: Text(
-              level,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.clip,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: badgeFg,
-                fontWeight: FontWeight.w600,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(9, 7, 11, 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 68,
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: badgeBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      level,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.clip,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: badgeFg,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (ts.isNotEmpty)
+                          Text(
+                            ts,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        SelectableText(
+                          entry.message,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (ts.isNotEmpty)
-                  Text(
-                    ts,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                SelectableText(
-                  entry.message,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

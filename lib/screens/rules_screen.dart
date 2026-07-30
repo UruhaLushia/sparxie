@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import '../widgets/app_background.dart';
+import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
+import '../widgets/route_app_bar.dart';
 
 /// Read-only view of the active backend's routing rules.
 ///
@@ -276,15 +280,20 @@ class _RulesScreenState extends State<RulesScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('分流规则'),
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('分流规则'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+          actions: [
+            IconButton(
+              tooltip: '刷新',
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
       ),
       body: SafeArea(
         bottom: false,
@@ -292,14 +301,9 @@ class _RulesScreenState extends State<RulesScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search),
-                  hintText: '筛选 规则 / 类型 / 出站',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                  suffixText: '$_filtered/$_total',
-                ),
+              child: CompactSearchField(
+                hintText: '筛选 规则 / 类型 / 出站',
+                suffixText: '$_filtered/$_total',
                 onChanged: _onFilterChanged,
               ),
             ),
@@ -370,11 +374,14 @@ class _RulePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          color: surfaceTheme.surfaceColor(
+            scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
       ),
@@ -396,76 +403,84 @@ class _RuleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final rate = _hitRate;
     final meta = [
       if (rule.ruleType.isNotEmpty) rule.ruleType,
       if (rule.proxy.isNotEmpty) rule.proxy,
       if (rule.extraParams.isNotEmpty) rule.extraParams.join(', '),
     ].join('  ·  ');
+    const radius = BorderRadius.all(Radius.circular(12));
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      rule.payload.isEmpty ? 'Match' : rule.payload,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (rule.hasExtra)
-                    Switch(
-                      value: !rule.disabled,
-                      onChanged: onToggle,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      meta,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (rate != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+      child: AppSurfaceBackdrop(
+        borderRadius: radius,
+        child: Card(
+          margin: EdgeInsets.zero,
+          color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
+          surfaceTintColor: Colors.transparent,
+          shape: const RoundedRectangleBorder(borderRadius: radius),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
                       child: Text(
-                        '${rate.toStringAsFixed(1)}%',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onPrimaryContainer,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                        rule.payload.isEmpty ? 'Match' : rule.payload,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (rule.hasExtra)
+                      CompactSwitch(value: !rule.disabled, onChanged: onToggle),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        meta,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (rate != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${rate.toStringAsFixed(1)}%',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: scheme.onPrimaryContainer,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

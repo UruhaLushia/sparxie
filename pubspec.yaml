@@ -45,6 +45,8 @@ dependencies:
   url_launcher: ^6.3.2
   qr_flutter: ^4.1.0
   file_selector: ^1.1.0
+  image_picker: ^1.2.3
+  app_links: ^7.2.1
 
 dev_dependencies:
   flutter_test:

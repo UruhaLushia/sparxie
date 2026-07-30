@@ -78,11 +78,12 @@ jobs:
           [Desktop Entry]
           Name=Sparxie
           Comment=mihomo 控制器
-          Exec=sparxie
+          Exec=sparxie %u
           Icon=sparxie
           Terminal=false
           Type=Application
           Categories=Network;
+          MimeType=x-scheme-handler/sparxie;
           EOF
 
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)

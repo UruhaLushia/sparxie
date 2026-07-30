@@ -10,7 +10,7 @@ import 'config_store.dart';
 /// Desktop-only persistence of the OS window's geometry. Mobile/web
 /// targets are no-ops.
 class WindowState with WindowListener {
-  WindowState._(this._store);
+  WindowState._(this._store, this._titleBarHidden);
 
   static const _kWidth = 'width';
   static const _kHeight = 'height';
@@ -26,6 +26,7 @@ class WindowState with WindowListener {
   static const Duration _saveDebounce = Duration(milliseconds: 300);
 
   final JsonStore _store;
+  bool _titleBarHidden;
   Timer? _saveTimer;
 
   Map<String, dynamic> get _s => _store.section('window');
@@ -33,13 +34,16 @@ class WindowState with WindowListener {
   static bool get _isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
-  static Future<WindowState?> bind(JsonStore store) async {
+  static Future<WindowState?> bind(
+    JsonStore store, {
+    required bool titleBarHidden,
+  }) async {
     if (!_isDesktop) return null;
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(_minimumSize);
     // setPreventClose lets us flush a pending save before the process exits.
     await windowManager.setPreventClose(true);
-    final state = WindowState._(store);
+    final state = WindowState._(store, titleBarHidden);
     await state._restore();
     windowManager.addListener(state);
     return state;
@@ -66,7 +70,13 @@ class WindowState with WindowListener {
     );
 
     await windowManager.waitUntilReadyToShow(
-      WindowOptions(size: size),
+      WindowOptions(
+        size: size,
+        titleBarStyle: _titleBarHidden
+            ? TitleBarStyle.hidden
+            : TitleBarStyle.normal,
+        windowButtonVisibility: !_titleBarHidden,
+      ),
       () async {
         // setSize + setPosition rather than setBounds — the latter's
         // position hint is dropped pre-realize on GTK.
@@ -84,6 +94,15 @@ class WindowState with WindowListener {
         await windowManager.show();
         await windowManager.focus();
       },
+    );
+  }
+
+  Future<void> setTitleBarHidden(bool value) async {
+    if (value == _titleBarHidden) return;
+    _titleBarHidden = value;
+    await windowManager.setTitleBarStyle(
+      value ? TitleBarStyle.hidden : TitleBarStyle.normal,
+      windowButtonVisibility: !value,
     );
   }
 

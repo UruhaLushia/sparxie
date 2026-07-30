@@ -76,6 +76,179 @@ class Controller {
   );
 }
 
+class ControllerDraft {
+  const ControllerDraft({
+    required this.name,
+    required this.type,
+    required this.baseUrl,
+    this.secret = '',
+    this.allowInsecure = false,
+  });
+
+  final String name;
+  final BackendType type;
+  final String baseUrl;
+  final String secret;
+  final bool allowInsecure;
+}
+
+class ControllerImportRequest {
+  const ControllerImportRequest(this.draft);
+
+  static const scheme = 'sparxie';
+  static const _actions = {'install-target', 'install-backend'};
+
+  final ControllerDraft draft;
+
+  factory ControllerImportRequest.fromUri(Uri uri) {
+    if (uri.scheme.toLowerCase() != scheme) {
+      throw const FormatException('不支持的链接协议');
+    }
+
+    final action = uri.host.isNotEmpty
+        ? uri.host.toLowerCase()
+        : uri.pathSegments
+              .where((segment) => segment.isNotEmpty)
+              .firstOrNull
+              ?.toLowerCase();
+    if (!_actions.contains(action)) {
+      throw const FormatException('不支持的导入操作');
+    }
+
+    final params = uri.queryParameters;
+    final rawUrl = (params['url'] ?? params['address'] ?? params['endpoint'])
+        ?.trim();
+    if (rawUrl == null || rawUrl.isEmpty) {
+      throw const FormatException('缺少目标服务地址 url');
+    }
+    if (rawUrl.length > 4096) {
+      throw const FormatException('目标服务地址过长');
+    }
+
+    final type = _parseType(params['type']);
+    final baseUrl = _normalizeBaseUrl(rawUrl, type);
+    final ipc = _isIpcUrl(baseUrl);
+    final rawName = params['name']?.trim();
+    final name = rawName == null || rawName.isEmpty
+        ? _defaultName(baseUrl, type)
+        : rawName;
+    if (name.length > 120) {
+      throw const FormatException('目标服务名称过长');
+    }
+
+    return ControllerImportRequest(
+      ControllerDraft(
+        name: name,
+        type: type,
+        baseUrl: baseUrl,
+        secret: ipc ? '' : params['secret']?.trim() ?? '',
+        allowInsecure:
+            !ipc &&
+            _isSecureUrl(baseUrl) &&
+            _parseBool(params['allowInsecure'] ?? params['allow-insecure']),
+      ),
+    );
+  }
+
+  static BackendType _parseType(String? value) {
+    return switch (value?.trim().toLowerCase()) {
+      null || '' || 'clash' || 'mihomo' => BackendType.clash,
+      'surge' => BackendType.surge,
+      'sing-box' || 'sing_box' || 'singbox' => BackendType.singBox,
+      _ => throw const FormatException('不支持的目标服务类型'),
+    };
+  }
+
+  static String _normalizeBaseUrl(String value, BackendType type) {
+    var url = value;
+    final lower = url.toLowerCase();
+    final hasKnownScheme = const [
+      'http://',
+      'https://',
+      'grpc://',
+      'grpcs://',
+      'unix:',
+      'pipe:',
+      'sparkle-service:',
+    ].any(lower.startsWith);
+    if (!hasKnownScheme) {
+      if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(url)) {
+        throw const FormatException('不支持的目标服务连接方式');
+      }
+      url = '${type == BackendType.singBox ? 'grpc' : 'http'}://$url';
+    }
+
+    final separator = url.indexOf(':');
+    final rawScheme = url.substring(0, separator).toLowerCase();
+    final normalizedScheme = switch ((type, rawScheme)) {
+      (BackendType.singBox, 'http') => 'grpc',
+      (BackendType.singBox, 'https') => 'grpcs',
+      (BackendType.clash || BackendType.surge, 'grpc') => 'http',
+      (BackendType.clash || BackendType.surge, 'grpcs') => 'https',
+      _ => rawScheme,
+    };
+    if (normalizedScheme != rawScheme ||
+        url.substring(0, separator) != normalizedScheme) {
+      url = '$normalizedScheme${url.substring(separator)}';
+    }
+
+    final allowed = switch (type) {
+      BackendType.clash => const {
+        'http',
+        'https',
+        'unix',
+        'pipe',
+        'sparkle-service',
+      },
+      BackendType.surge => const {'http', 'https'},
+      BackendType.singBox => const {'grpc', 'grpcs'},
+    };
+    if (!allowed.contains(normalizedScheme)) {
+      throw FormatException('$normalizedScheme 连接方式不适用于 ${type.label}');
+    }
+
+    if (_isIpcUrl(url)) {
+      if (normalizedScheme != 'sparkle-service' &&
+          url.substring(url.indexOf(':') + 1).trim().isEmpty) {
+        throw const FormatException('目标服务 IPC 路径不能为空');
+      }
+      return url;
+    }
+
+    final parsed = Uri.tryParse(url);
+    if (parsed == null || !parsed.hasAuthority || parsed.host.isEmpty) {
+      throw const FormatException('目标服务地址无效');
+    }
+    if (parsed.userInfo.isNotEmpty) {
+      throw const FormatException('请使用 secret 参数传递密钥');
+    }
+    return url;
+  }
+
+  static bool _isIpcUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.startsWith('unix:') ||
+        lower.startsWith('pipe:') ||
+        lower.startsWith('sparkle-service:');
+  }
+
+  static bool _isSecureUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.startsWith('https:') || lower.startsWith('grpcs:');
+  }
+
+  static bool _parseBool(String? value) => switch (value?.toLowerCase()) {
+    '1' || 'true' || 'yes' || 'on' => true,
+    _ => false,
+  };
+
+  static String _defaultName(String baseUrl, BackendType type) {
+    final parsed = Uri.tryParse(baseUrl);
+    if (parsed != null && parsed.host.isNotEmpty) return parsed.host;
+    return type.label;
+  }
+}
+
 class ControllerStore extends ChangeNotifier {
   ControllerStore._(this._store);
 
@@ -161,6 +334,14 @@ class ControllerStore extends ChangeNotifier {
     notifyListeners();
     return controller;
   }
+
+  Future<Controller> addDraft(ControllerDraft draft) => add(
+    name: draft.name,
+    type: draft.type,
+    baseUrl: draft.baseUrl,
+    secret: draft.secret,
+    allowInsecure: draft.allowInsecure,
+  );
 
   Future<void> update(
     String id, {

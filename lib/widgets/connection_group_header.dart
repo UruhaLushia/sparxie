@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../session.dart';
 import '../utils.dart';
+import 'active_listenable_builder.dart';
+import 'app_background.dart';
 import 'process_icon.dart';
 
 /// Expandable header for one process group in the grouped connections view.
@@ -51,6 +53,7 @@ class ConnectionGroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final cache = processIcons;
     // Inner connections have no process/source, so never resolve an icon/name.
     final wantIcon = showIcon && cache != null && !_isInner;
@@ -58,102 +61,114 @@ class ConnectionGroupHeader extends StatelessWidget {
     final wantName =
         showAppName && cache != null && !_isInner && nameKey.isNotEmpty;
     if (wantName) cache.requestName(nameKey);
+    const radius = BorderRadius.all(Radius.circular(14));
 
     return ColoredBox(
-      color: scheme.surface,
+      color: surfaceTheme.pageColor(scheme.surface),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-        child: Material(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
+        child: AppSurfaceBackdrop(
+          borderRadius: radius,
+          child: Material(
+            color: surfaceTheme.surfaceColor(
+              scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+              0.04,
             ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
-              child: Row(
-                children: [
-                  // Icons only make sense for a local backend (cache present).
-                  if (_isInner && showIcon && cache != null) ...[
-                    _InnerIcon(scheme: scheme),
-                    const SizedBox(width: 12),
-                  ] else if (wantIcon) ...[
-                    ProcessIcon(
-                      cache: cache,
-                      process: summary.process,
-                      processPath: summary.processPath,
-                      size: 40,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        wantName
-                            ? ListenableBuilder(
-                                listenable: cache,
-                                builder: (_, _) => _titleText(
-                                  context,
-                                  _title(cache.nameFor(nameKey)),
-                                ),
-                              )
-                            : _titleText(context, _title(null)),
-                        const SizedBox(height: 2),
-                        _StatsLine(summary: summary, scheme: scheme),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ValueListenableBuilder<int>(
-                    valueListenable: summary.count,
-                    builder: (_, count, _) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: radius,
+              side: surfaceTheme.outlineSide(
+                scheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: radius,
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+                child: Row(
+                  children: [
+                    // Icons only make sense for a local backend (cache present).
+                    if (_isInner && showIcon && cache != null) ...[
+                      _InnerIcon(scheme: scheme),
+                      const SizedBox(width: 12),
+                    ] else if (wantIcon) ...[
+                      ProcessIcon(
+                        cache: cache,
+                        process: summary.process,
+                        processPath: summary.processPath,
+                        size: 40,
                       ),
-                      decoration: BoxDecoration(
-                        color: scheme.secondaryContainer.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(999),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          wantName
+                              ? ActiveListenableBuilder(
+                                  listenable: cache,
+                                  builder: (_, _) => _titleText(
+                                    context,
+                                    _title(cache.nameFor(nameKey)),
+                                  ),
+                                )
+                              : _titleText(context, _title(null)),
+                          const SizedBox(height: 2),
+                          _StatsLine(summary: summary, scheme: scheme),
+                        ],
                       ),
-                      child: Text(
-                        '$count',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                    const SizedBox(width: 8),
+                    ActiveValueListenableBuilder<int>(
+                      valueListenable: summary.count,
+                      builder: (_, count, _) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.secondaryContainer.withValues(
+                            alpha: 0.6,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                       ),
                     ),
-                  ),
-                  if (onCloseAll != null)
-                    IconButton(
-                      tooltip: '关闭该来源全部连接',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: onCloseAll,
-                      icon: const Icon(Icons.close, size: 20),
+                    if (onCloseAll != null)
+                      IconButton(
+                        tooltip: '关闭该来源全部连接',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onCloseAll,
+                        icon: const Icon(Icons.close, size: 20),
+                      ),
+                    if (onClearAll != null)
+                      IconButton(
+                        tooltip: '清空该组已关闭连接',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onClearAll,
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                      ),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.expand_more,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  if (onClearAll != null)
-                    IconButton(
-                      tooltip: '清空该组已关闭连接',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: onClearAll,
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                    ),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      Icons.expand_more,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -209,7 +224,7 @@ class _StatsLine extends StatelessWidget {
     return Row(
       children: [
         Flexible(
-          child: ValueListenableBuilder<RowBytes>(
+          child: ActiveValueListenableBuilder<RowBytes>(
             valueListenable: summary.bytes,
             builder: (_, b, _) => Text(
               '↑${formatBytes(b.upload)} ↓${formatBytes(b.download)}',
@@ -219,7 +234,7 @@ class _StatsLine extends StatelessWidget {
             ),
           ),
         ),
-        ValueListenableBuilder<RowSpeeds>(
+        ActiveValueListenableBuilder<RowSpeeds>(
           valueListenable: summary.speeds,
           builder: (_, s, _) {
             if (s.upload == BigInt.zero && s.download == BigInt.zero) {

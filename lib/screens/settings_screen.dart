@@ -11,6 +11,12 @@ import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/app_background.dart';
+import '../widgets/app_page_route.dart';
+import '../widgets/compact_controls.dart';
+import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
+import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
@@ -18,8 +24,9 @@ import 'diagnostics_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
 import 'tailscale_screen.dart';
+import 'theme_settings_screen.dart';
 
-/// "其他" — aggregator page that lists every settings/config destination
+/// "更多" — aggregator page that lists every settings/config destination
 /// as a tile. Each tile pushes a dedicated screen.
 ///
 /// [extras] are navigation destinations that overflowed the standard-layout
@@ -29,7 +36,7 @@ import 'tailscale_screen.dart';
 /// [railManagesPages] is true in wide standard layout, where 核心配置 /
 /// 外部资源 / 核心操作 / 分流规则 can be rail destinations (or [extras] when they
 /// overflow) — so their static tiles are suppressed here to avoid a second
-/// path to the same page. 后端设置 / 应用设置 always live here.
+/// path to the same page. 后端设置 / 主题设置 / 应用设置 always live here.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
@@ -78,26 +85,11 @@ class SettingsScreen extends StatelessWidget {
         final showResources =
             showCoreResources && session.supportsExternalResources.value;
 
-        // Overflow rail items lead the list, then the settings tiles — one
-        // flat section, no separate 导航 grouping.
-        final tiles = <Widget>[
+        final pageTiles = <Widget>[
           for (final e in extras)
             _Tile(icon: e.icon, title: e.label, onTap: e.onTap),
-          _Tile(
-            icon: Icons.dns_outlined,
-            title: '后端设置',
-            subtitle: '管理后端实例',
-            onTap: () => _push(context, BackendSettingsScreen(store: store)),
-          ),
-          _Tile(
-            icon: Icons.app_settings_alt_outlined,
-            title: '应用设置',
-            subtitle: '导航布局等',
-            onTap: () => _push(
-              context,
-              AppSettingsScreen(prefs: prefs, session: session),
-            ),
-          ),
+        ];
+        final toolTiles = <Widget>[
           if (showCore)
             _Tile(
               icon: Icons.memory_outlined,
@@ -110,7 +102,7 @@ class SettingsScreen extends StatelessWidget {
             _Tile(
               icon: Icons.build_outlined,
               title: '核心操作',
-              subtitle: '重载 / 重启 / 升级、清空缓存',
+              subtitle: '重载、重启、升级与缓存维护',
               onTap: () => _push(
                 context,
                 CoreActionsScreen(store: store, session: session),
@@ -118,62 +110,141 @@ class SettingsScreen extends StatelessWidget {
             ),
           if (showRules)
             _Tile(
-              icon: Icons.rule,
+              icon: Icons.rule_outlined,
               title: '分流规则',
               subtitle: '查看与筛选当前规则',
               onTap: () => _push(context, RulesScreen(store: store)),
-            ),
-          if (showTailscale)
-            _Tile(
-              icon: Icons.vpn_lock_outlined,
-              title: 'Tailscale',
-              subtitle: '状态与认证',
-              onTap: () => _push(context, TailscaleScreen(store: store)),
             ),
           if (showDiagnostics)
             _Tile(
               icon: Icons.network_check_outlined,
               title: '网络工具',
-              subtitle: '网络质量 / STUN 测试',
+              subtitle: '网络质量与 STUN 测试',
               onTap: () => _push(context, DiagnosticsScreen(store: store)),
+            ),
+          if (showTailscale)
+            _Tile(
+              icon: Icons.vpn_lock_outlined,
+              title: 'Tailscale',
+              subtitle: '状态、认证与网络信息',
+              onTap: () => _push(context, TailscaleScreen(store: store)),
             ),
           if (showResources)
             _Tile(
               icon: Icons.cloud_outlined,
               title: '外部资源',
-              subtitle: '代理订阅 / 规则集',
+              subtitle: '代理订阅与规则集',
               onTap: () => _push(context, ResourcesScreen(store: store)),
             ),
         ];
+        final settingsTiles = <Widget>[
+          _Tile(
+            icon: Icons.dns_outlined,
+            title: '后端设置',
+            subtitle: '管理后端实例与连接方式',
+            onTap: () => _push(context, BackendSettingsScreen(store: store)),
+          ),
+          _Tile(
+            icon: Icons.palette_outlined,
+            title: '主题设置',
+            subtitle: '主题颜色与组件外观',
+            onTap: () => _push(context, ThemeSettingsScreen(prefs: prefs)),
+          ),
+          _Tile(
+            icon: Icons.app_settings_alt_outlined,
+            title: '应用设置',
+            subtitle: '字体与缓存设置',
+            onTap: () => _push(
+              context,
+              AppSettingsScreen(prefs: prefs, session: session),
+            ),
+          ),
+        ];
+        final groups = <Widget>[
+          if (pageTiles.isNotEmpty)
+            _SettingsGroup(
+              title: '页面',
+              icon: Icons.grid_view_rounded,
+              children: pageTiles,
+            ),
+          if (toolTiles.isNotEmpty)
+            _SettingsGroup(
+              title: '工具',
+              icon: Icons.construction_outlined,
+              children: toolTiles,
+            ),
+          _SettingsGroup(
+            title: '设置',
+            icon: Icons.settings_outlined,
+            children: settingsTiles,
+          ),
+        ];
 
+        final scheme = Theme.of(context).colorScheme;
+        final compactPage = MediaQuery.sizeOf(context).width < 600;
         return Scaffold(
-          appBar: AppBar(title: const Text('其他')),
-          body: SafeArea(
-            bottom: false,
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + MediaQuery.paddingOf(context).bottom,
-              ),
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: SectionPanel(
-                    title: '配置',
-                    icon: Icons.tune,
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < tiles.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          tiles[i],
-                        ],
-                      ],
-                    ),
+          backgroundColor: AppSurfaceTheme.of(
+            context,
+          ).pageColor(scheme.surfaceContainerLowest),
+          appBar: compactPage
+              ? AppRouteAppBar(
+                  child: AppBar(
+                    leading: AppRouteAppBar.leadingOf(context),
+                    automaticallyImplyLeading: false,
+                    title: const Text('更多'),
+                    flexibleSpace: const DesktopAppBarDragArea(),
                   ),
-                ),
-              ],
+                )
+              : null,
+          body: AppPageBodyTransition(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+                const maxContentWidth = 640.0;
+                final centeredGutter =
+                    (constraints.maxWidth - maxContentWidth) / 2;
+                final horizontal = compact
+                    ? 12.0
+                    : centeredGutter > 20
+                    ? centeredGutter
+                    : 20.0;
+                return CustomScrollView(
+                  slivers: [
+                    if (!compact)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          28,
+                          horizontal,
+                          8,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: Text(
+                            '更多',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        compact ? 12 : 8,
+                        horizontal,
+                        20 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                      sliver: SliverList.list(
+                        children: [
+                          for (var i = 0; i < groups.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 14),
+                            groups[i],
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -182,7 +253,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _push(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    Navigator.of(context).push(AppPageRoute<void>(builder: (_) => page));
   }
 }
 
@@ -200,19 +271,121 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: const Icon(Icons.chevron_right),
+      minTileHeight: 76,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      leading: Container(
+        width: 38,
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Icon(
+          icon,
+          size: 21,
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+      title: Text(title, style: theme.textTheme.titleMedium),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+      trailing: Icon(
+        Icons.chevron_right,
+        size: 20,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      hoverColor: theme.colorScheme.primary.withValues(alpha: 0.06),
       onTap: onTap,
     );
   }
 }
 
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surfaceTheme = AppSurfaceTheme.of(context);
+    const radius = BorderRadius.all(Radius.circular(20));
+    return AppSurfaceBackdrop(
+      borderRadius: radius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surfaceTheme.surfaceColor(
+            theme.colorScheme.surfaceContainerLow,
+            0.07,
+          ),
+          border: surfaceTheme.outlineBorder(
+            theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+          borderRadius: radius,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 13, 16, 11),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 9),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.58),
+              ),
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 70,
+                    endIndent: 16,
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.48,
+                    ),
+                  ),
+                children[i],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A navigation destination that overflowed the standard-layout rail and is
-/// surfaced in the "其他" page's 导航 section instead.
+/// surfaced in the "更多" page's 页面 section instead.
 class SettingsExtra {
   const SettingsExtra({
     required this.icon,
@@ -231,7 +404,14 @@ class BackendSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('后端设置')),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('后端设置'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -265,7 +445,14 @@ class AppSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('应用设置')),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          title: const Text('应用设置'),
+          flexibleSpace: const DesktopAppBarDragArea(),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -308,55 +495,6 @@ class AppSettingsPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('导航布局', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              SegmentedButton<NavLayout>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: NavLayout.cards,
-                    label: Text('卡片'),
-                    icon: Icon(Icons.dashboard_outlined),
-                  ),
-                  ButtonSegment(
-                    value: NavLayout.standard,
-                    label: Text('标准'),
-                    icon: Icon(Icons.view_sidebar_outlined),
-                  ),
-                  ButtonSegment(
-                    value: NavLayout.floating,
-                    label: Text('悬浮'),
-                    icon: Icon(Icons.panorama_fish_eye_outlined),
-                  ),
-                ],
-                selected: {prefs.navLayout},
-                onSelectionChanged: (s) => prefs.setNavLayout(s.first),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '卡片：窄屏网格入口、宽屏卡片侧栏；标准：底栏 / 侧栏；悬浮：圆角悬浮底栏。',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              if (prefs.navLayout != NavLayout.cards) ...[
-                const SizedBox(height: 12),
-                Text('底栏样式', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
-                SegmentedButton<NavBarStyle>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(
-                      value: NavBarStyle.capsule,
-                      label: Text('胶囊'),
-                    ),
-                    ButtonSegment(value: NavBarStyle.pill, label: Text('药丸')),
-                    ButtonSegment(value: NavBarStyle.tint, label: Text('素色')),
-                    ButtonSegment(value: NavBarStyle.m3, label: Text('M3')),
-                  ],
-                  selected: {prefs.navBarStyle},
-                  onSelectionChanged: (s) => prefs.setNavBarStyle(s.first),
-                ),
-              ],
-              const Divider(height: 24),
               if (showFontSettings) ...[
                 _FontRow(prefs: prefs),
                 const Divider(height: 24),
@@ -807,7 +945,7 @@ class _OnlineResourcesRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
+    return CompactSwitch.tile(
       contentPadding: EdgeInsets.zero,
       title: const Text('跳过在线资源证书验证'),
       subtitle: const Text('用于图标 URL 等在线资源;不影响后端连接设置'),
@@ -908,6 +1046,23 @@ class BackendSettingsPanel extends StatefulWidget {
   State<BackendSettingsPanel> createState() => _BackendSettingsPanelState();
 }
 
+Future<ctl.ControllerDraft?> showControllerEditorDialog(
+  BuildContext context, {
+  ctl.Controller? existing,
+  ctl.ControllerDraft? initial,
+  bool importMode = false,
+}) {
+  assert(existing == null || initial == null);
+  return showDialog<ctl.ControllerDraft>(
+    context: context,
+    builder: (_) => _EditDialog(
+      existing: existing,
+      initial: initial,
+      importMode: importMode,
+    ),
+  );
+}
+
 class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   @override
   void initState() {
@@ -974,19 +1129,13 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   }
 
   Future<void> _edit({ctl.Controller? existing}) async {
-    final result = await showDialog<_EditResult>(
-      context: context,
-      builder: (_) => _EditDialog(existing: existing),
+    final result = await showControllerEditorDialog(
+      context,
+      existing: existing,
     );
     if (result == null) return;
     if (existing == null) {
-      await widget.store.add(
-        name: result.name,
-        type: result.type,
-        baseUrl: result.baseUrl,
-        secret: result.secret,
-        allowInsecure: result.allowInsecure,
-      );
+      await widget.store.addDraft(result);
     } else {
       await widget.store.update(
         existing.id,
@@ -1079,24 +1228,11 @@ class _ControllerTile extends StatelessWidget {
   }
 }
 
-class _EditResult {
-  _EditResult({
-    required this.name,
-    required this.type,
-    required this.baseUrl,
-    required this.secret,
-    required this.allowInsecure,
-  });
-  final String name;
-  final ctl.BackendType type;
-  final String baseUrl;
-  final String secret;
-  final bool allowInsecure;
-}
-
 class _EditDialog extends StatefulWidget {
-  const _EditDialog({this.existing});
+  const _EditDialog({this.existing, this.initial, this.importMode = false});
   final ctl.Controller? existing;
+  final ctl.ControllerDraft? initial;
+  final bool importMode;
 
   @override
   State<_EditDialog> createState() => _EditDialogState();
@@ -1177,14 +1313,17 @@ class _EditDialogState extends State<_EditDialog> {
   void initState() {
     super.initState();
     final c = widget.existing;
-    _name = TextEditingController(text: c?.name ?? '');
-    _type = c?.type ?? ctl.BackendType.clash;
-    final (scheme, addr) = _decompose(c?.baseUrl ?? 'http://127.0.0.1:9090');
+    final initial = widget.initial;
+    _name = TextEditingController(text: c?.name ?? initial?.name ?? '');
+    _type = c?.type ?? initial?.type ?? ctl.BackendType.clash;
+    final (scheme, addr) = _decompose(
+      c?.baseUrl ?? initial?.baseUrl ?? 'http://127.0.0.1:9090',
+    );
     final allowed = _isSchemeAllowed(scheme);
     _scheme = allowed ? scheme : _Scheme.http;
     _address = TextEditingController(text: allowed ? addr : _defaultTcpAddress);
-    _secret = TextEditingController(text: c?.secret ?? '');
-    _allowInsecure = c?.allowInsecure ?? false;
+    _secret = TextEditingController(text: c?.secret ?? initial?.secret ?? '');
+    _allowInsecure = c?.allowInsecure ?? initial?.allowInsecure ?? false;
   }
 
   void _setType(ctl.BackendType type) {
@@ -1319,7 +1458,7 @@ class _EditDialogState extends State<_EditDialog> {
     final isNew = widget.existing == null;
     return AlertDialog(
       scrollable: true,
-      title: Text(isNew ? '新增后端' : '编辑后端'),
+      title: Text(widget.importMode ? '导入目标服务' : (isNew ? '新增后端' : '编辑后端')),
       content: SizedBox(
         width: 360,
         child: Form(
@@ -1329,7 +1468,7 @@ class _EditDialogState extends State<_EditDialog> {
             children: [
               TextFormField(
                 controller: _name,
-                autofocus: true,
+                autofocus: !widget.importMode,
                 decoration: const InputDecoration(
                   labelText: '名称',
                   hintText: '例如：家用机',
@@ -1410,7 +1549,7 @@ class _EditDialogState extends State<_EditDialog> {
               ],
               if (_scheme == _Scheme.https) ...[
                 const SizedBox(height: 4),
-                SwitchListTile(
+                CompactSwitch.tile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('跳过证书验证'),
                   subtitle: Text(_tlsSkipSubtitle),
@@ -1432,7 +1571,7 @@ class _EditDialogState extends State<_EditDialog> {
             if (_formKey.currentState?.validate() != true) return;
             Navigator.pop(
               context,
-              _EditResult(
+              ctl.ControllerDraft(
                 name: _name.text.trim(),
                 type: _type,
                 baseUrl: _composeUrl(),
@@ -1442,7 +1581,7 @@ class _EditDialogState extends State<_EditDialog> {
               ),
             );
           },
-          child: Text(isNew ? '添加' : '保存'),
+          child: Text(widget.importMode ? '导入' : (isNew ? '添加' : '保存')),
         ),
       ],
     );

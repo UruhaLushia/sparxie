@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
+import 'compact_controls.dart';
 
 /// App-bar tune button. Opens a right-anchored settings sheet on tap.
 class ProxiesSettingsMenu extends StatelessWidget {
@@ -82,7 +83,7 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                         if (prefs.proxiesLayout == ProxiesLayout.cards)
                           _SettingsRow(
                             label: '卡片渐变配色',
-                            trailing: Switch(
+                            trailing: CompactSwitch(
                               value: prefs.proxiesCardColored,
                               onChanged: prefs.setProxiesCardColored,
                             ),
@@ -97,21 +98,21 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                         ),
                         _SettingsRow(
                           label: '显示代理组图标',
-                          trailing: Switch(
+                          trailing: CompactSwitch(
                             value: prefs.proxiesShowGroupIcons,
                             onChanged: prefs.setProxiesShowGroupIcons,
                           ),
                         ),
                         _SettingsRow(
                           label: '显示隐藏代理组',
-                          trailing: Switch(
+                          trailing: CompactSwitch(
                             value: prefs.proxiesShowHiddenGroups,
                             onChanged: prefs.setProxiesShowHiddenGroups,
                           ),
                         ),
                         _SettingsRow(
                           label: '切换节点时断开连接',
-                          trailing: Switch(
+                          trailing: CompactSwitch(
                             value: prefs.autoCloseOnSwitch,
                             onChanged: prefs.setAutoCloseOnSwitch,
                           ),
@@ -128,7 +129,7 @@ class _ProxiesSettingsSheet extends StatelessWidget {
                         ),
                         _SettingsRow(
                           label: '使用策略组 API 测速',
-                          trailing: Switch(
+                          trailing: CompactSwitch(
                             value: prefs.delayTestUseGroupApi,
                             onChanged: prefs.setDelayTestUseGroupApi,
                           ),
@@ -210,12 +211,7 @@ class _LayoutSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<ProxiesLayout>(
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      showSelectedIcon: false,
+    return CompactSegmentedButton<ProxiesLayout>(
       segments: const [
         ButtonSegment(value: ProxiesLayout.list, label: Text('列表')),
         ButtonSegment(value: ProxiesLayout.cards, label: Text('卡片')),
@@ -232,12 +228,7 @@ class _SortSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<ProxiesSort>(
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      showSelectedIcon: false,
+    return CompactSegmentedButton<ProxiesSort>(
       segments: const [
         ButtonSegment(value: ProxiesSort.original, label: Text('默认')),
         ButtonSegment(value: ProxiesSort.delay, label: Text('延迟')),
@@ -259,17 +250,15 @@ class _ColumnsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButton<int>(
+    return CompactMenuButton<int>(
       value: prefs.proxiesColumns,
-      underline: const SizedBox.shrink(),
-      borderRadius: BorderRadius.circular(8),
-      items: [
+      label: _label(prefs.proxiesColumns),
+      semanticLabel: '每行列数',
+      itemBuilder: (_) => [
         for (final v in _options)
-          DropdownMenuItem(value: v, child: Text(_label(v))),
+          PopupMenuItem(value: v, child: Text(_label(v))),
       ],
-      onChanged: (v) {
-        if (v != null) prefs.setProxiesColumns(v);
-      },
+      onSelected: prefs.setProxiesColumns,
     );
   }
 }
@@ -280,12 +269,7 @@ class _CloseModeSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<CloseMode>(
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      showSelectedIcon: false,
+    return CompactSegmentedButton<CloseMode>(
       segments: const [
         ButtonSegment(value: CloseMode.all, label: Text('所有')),
         ButtonSegment(value: CloseMode.group, label: Text('当前组')),
@@ -302,12 +286,7 @@ class _ScopeSegmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<DelayTestScope>(
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      showSelectedIcon: false,
+    return CompactSegmentedButton<DelayTestScope>(
       segments: const [
         ButtonSegment(value: DelayTestScope.group, label: Text('组')),
         ButtonSegment(value: DelayTestScope.global, label: Text('全局')),
@@ -488,19 +467,17 @@ class _DelayTestTimeoutRow extends StatelessWidget {
         children: [
           Text('延迟测试超时时间', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final ms in _options)
-                ChoiceChip(
-                  label: Text(_label(ms)),
-                  selected: current == ms,
-                  onSelected: current == ms
-                      ? null
-                      : (_) => prefs.setDelayTestTimeoutMs(ms),
-                ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: CompactSegmentedButton<int>(
+              segments: [
+                for (final ms in _options)
+                  ButtonSegment(value: ms, label: Text(_label(ms))),
+              ],
+              selected: {current},
+              onSelectionChanged: (selection) =>
+                  prefs.setDelayTestTimeoutMs(selection.first),
+            ),
           ),
         ],
       ),

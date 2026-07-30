@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
+import '../widgets/app_background.dart';
 import '../widgets/backend_switcher.dart';
+import '../widgets/desktop_title_bar.dart';
+import '../widgets/page_body_transition.dart';
+import '../widgets/route_app_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -24,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   ctl.Controller? _activeKey;
   String? _error;
+  var _active = true;
 
   final _SparkHistory _history = _SparkHistory(capacity: _historyCapacity);
 
@@ -34,7 +40,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.traffic.addListener(_onTraffic);
     widget.session.memory.addListener(_onMemory);
     widget.session.supportsMemory.addListener(_onSupportsMemory);
-    widget.session.connectionsTotals.addListener(_onConnTotals);
     widget.session.error.addListener(_onSessionError);
     widget.session.versionString.addListener(_onVersion);
     _bind();
@@ -46,15 +51,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.traffic.removeListener(_onTraffic);
     widget.session.memory.removeListener(_onMemory);
     widget.session.supportsMemory.removeListener(_onSupportsMemory);
-    widget.session.connectionsTotals.removeListener(_onConnTotals);
     widget.session.error.removeListener(_onSessionError);
     widget.session.versionString.removeListener(_onVersion);
     _history.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = TickerMode.valuesOf(context).enabled;
+    if (_active == active) return;
+    _active = active;
+    if (active) _error = widget.session.error.value;
+  }
+
   void _onVersion() {
-    if (mounted) setState(() {});
+    if (mounted && _active) setState(() {});
   }
 
   void _onStore() {
@@ -63,196 +76,220 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _onTraffic() {
     final t = widget.session.traffic.value;
-    _history.pushTraffic(_toDouble(t.up), _toDouble(t.down));
+    _history.pushTraffic(_toDouble(t.up), _toDouble(t.down), notify: _active);
   }
 
   void _onMemory() {
     if (!widget.session.supportsMemory.value) return;
-    _history.pushMemory(_toDouble(widget.session.memory.value.inuse));
+    _history.pushMemory(
+      _toDouble(widget.session.memory.value.inuse),
+      notify: _active,
+    );
   }
 
   void _onSupportsMemory() {
-    if (!widget.session.supportsMemory.value) _history.clearMemory();
-    if (mounted) setState(() {});
-  }
-
-  void _onConnTotals() {
-    if (mounted) setState(() {});
+    if (!widget.session.supportsMemory.value) {
+      _history.clearMemory(notify: false);
+    }
+    if (mounted && _active) setState(() {});
   }
 
   void _onSessionError() {
     if (!mounted) return;
-    setState(() => _error = widget.session.error.value);
+    _error = widget.session.error.value;
+    if (_active) setState(() {});
   }
 
   void _bind() {
     _activeKey = widget.store.active;
-    _history.reset();
-    if (_activeKey == null) {
-      setState(() => _error = '请先在“后端”中添加一个后端');
-      return;
-    }
-    setState(() => _error = widget.session.error.value);
+    _history.reset(notify: false);
+    _error = _activeKey == null ? '请先在“后端”中添加一个后端' : widget.session.error.value;
+    if (mounted && _active) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final core = widget.session.versionString.value;
     final showVersion = widget.store.active?.type != ctl.BackendType.surge;
 
     return Scaffold(
-      backgroundColor: scheme.surfaceContainerLowest,
-      appBar: AppBar(
-        backgroundColor: scheme.surfaceContainerLowest,
-        scrolledUnderElevation: 0,
-        title: Row(
-          children: [
-            Flexible(
-              child: BackendSwitcher(
-                store: widget.store,
-                textStyle: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            const SizedBox(width: 10),
-            ValueListenableBuilder<bool>(
-              valueListenable: widget.session.isStreaming,
-              builder: (_, live, _) => Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: live ? const Color(0xff10b981) : scheme.outlineVariant,
+      backgroundColor: surfaceTheme.pageColor(scheme.surfaceContainerLowest),
+      appBar: AppRouteAppBar(
+        child: AppBar(
+          leading: AppRouteAppBar.leadingOf(context),
+          automaticallyImplyLeading: false,
+          backgroundColor: surfaceTheme.chromeColor(scheme.surface),
+          scrolledUnderElevation: 0,
+          flexibleSpace: const DesktopAppBarDragArea(),
+          title: Row(
+            children: [
+              Flexible(
+                child: BackendSwitcher(
+                  store: widget.store,
+                  textStyle: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-            ),
-            if (showVersion && core.isNotEmpty) ...[
               const SizedBox(width: 10),
-              Text(
-                core,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ActiveValueListenableBuilder<bool>(
+                valueListenable: widget.session.isStreaming,
+                builder: (_, live, _) => Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: live
+                        ? const Color(0xff10b981)
+                        : scheme.outlineVariant,
+                  ),
+                ),
               ),
+              if (showVersion && core.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Text(
+                  core,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: ListenableBuilder(
-          listenable: _history,
-          builder: (context, _) {
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 640;
-                return ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    16,
-                    16,
-                    24 + MediaQuery.paddingOf(context).bottom,
-                  ),
-                  children: [
-                    if (_error != null) ...[
-                      _ErrorBanner(text: _error!),
-                      const SizedBox(height: 16),
-                    ],
-                    if (wide)
-                      IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            Expanded(child: _uploadCard()),
-                            const SizedBox(width: 12),
-                            Expanded(child: _downloadCard()),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      _uploadCard(),
-                      const SizedBox(height: 12),
-                      _downloadCard(),
-                    ],
-                    const SizedBox(height: 12),
-                    if (widget.session.supportsMemory.value) ...[
-                      _memoryCard(),
-                      const SizedBox(height: 12),
-                    ],
-                    _connectionsCard(),
+      body: AppPageBodyTransition(
+        child: SafeArea(
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 640;
+              return ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  24 + MediaQuery.paddingOf(context).bottom,
+                ),
+                children: [
+                  if (_error != null) ...[
+                    _ErrorBanner(text: _error!),
+                    const SizedBox(height: 16),
                   ],
-                );
-              },
-            );
-          },
+                  if (wide)
+                    IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Expanded(child: _uploadCard()),
+                          const SizedBox(width: 12),
+                          Expanded(child: _downloadCard()),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    _uploadCard(),
+                    const SizedBox(height: 12),
+                    _downloadCard(),
+                  ],
+                  const SizedBox(height: 12),
+                  if (widget.session.supportsMemory.value) ...[
+                    _memoryCard(),
+                    const SizedBox(height: 12),
+                  ],
+                  _connectionsCard(),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
   Widget _uploadCard() {
-    final t = widget.session.traffic.value;
-    return _MetricChartCard(
-      icon: Icons.arrow_upward_rounded,
-      label: '上传',
-      value: formatBytes(t.up),
-      unit: '/s',
-      footer: '总计 ${formatBytes(t.upTotal)}',
-      samples: _history.upSnapshot,
-      color: const Color(0xff60a5fa),
-      formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
+    return ActiveValueListenableBuilder<int>(
+      valueListenable: _history.trafficRevision,
+      builder: (context, _, _) {
+        final t = widget.session.traffic.value;
+        return _MetricChartCard(
+          icon: Icons.arrow_upward_rounded,
+          label: '上传',
+          value: formatBytes(t.up),
+          unit: '/s',
+          footer: '总计 ${formatBytes(t.upTotal)}',
+          samples: _history.upSnapshot,
+          color: const Color(0xff60a5fa),
+          formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
+        );
+      },
     );
   }
 
   Widget _downloadCard() {
-    final t = widget.session.traffic.value;
-    return _MetricChartCard(
-      icon: Icons.arrow_downward_rounded,
-      label: '下载',
-      value: formatBytes(t.down),
-      unit: '/s',
-      footer: '总计 ${formatBytes(t.downTotal)}',
-      samples: _history.downSnapshot,
-      color: const Color(0xffa78bfa),
-      formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
+    return ActiveValueListenableBuilder<int>(
+      valueListenable: _history.trafficRevision,
+      builder: (context, _, _) {
+        final t = widget.session.traffic.value;
+        return _MetricChartCard(
+          icon: Icons.arrow_downward_rounded,
+          label: '下载',
+          value: formatBytes(t.down),
+          unit: '/s',
+          footer: '总计 ${formatBytes(t.downTotal)}',
+          samples: _history.downSnapshot,
+          color: const Color(0xffa78bfa),
+          formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
+        );
+      },
     );
   }
 
   Widget _connectionsCard() {
-    final totals = widget.session.connectionsTotals.value;
-    final hasBreakdown = totals.connectionsIn > 0 || totals.connectionsOut > 0;
-    return _MetricChartCard(
-      icon: Icons.hub_outlined,
-      label: '连接',
-      value: hasBreakdown
-          ? '${totals.connectionsIn} / ${totals.connectionsOut}'
-          : '${totals.count}',
-      unit: '',
-      footer: hasBreakdown ? '入站 / 出站' : null,
-      samples: const <double>[],
-      color: const Color(0xff10b981),
-      formatY: (v) => '${v.round()}',
-      showChart: false,
+    return ActiveValueListenableBuilder<ConnectionsTotals>(
+      valueListenable: widget.session.connectionsTotals,
+      builder: (context, totals, _) {
+        final hasBreakdown =
+            totals.connectionsIn > 0 || totals.connectionsOut > 0;
+        return _MetricChartCard(
+          icon: Icons.hub_outlined,
+          label: '连接',
+          value: hasBreakdown
+              ? '${totals.connectionsIn} / ${totals.connectionsOut}'
+              : '${totals.count}',
+          unit: '',
+          footer: hasBreakdown ? '入站 / 出站' : null,
+          samples: const <double>[],
+          color: const Color(0xff10b981),
+          formatY: (v) => '${v.round()}',
+          showChart: false,
+        );
+      },
     );
   }
 
   Widget _memoryCard() {
-    final mem = widget.session.memory.value;
-    final limit = mem.oslimit > BigInt.zero
-        ? '上限 ${formatBytes(mem.oslimit)}'
-        : null;
-    final footer = [
-      ?limit,
-      if (mem.goroutines > 0) '协程 ${mem.goroutines}',
-    ].join(' · ');
-    return _MetricChartCard(
-      icon: Icons.memory_outlined,
-      label: '内存',
-      value: formatBytes(mem.inuse),
-      unit: '',
-      footer: footer.isEmpty ? '当前使用' : footer,
-      samples: _history.memSnapshot,
-      color: const Color(0xfff59e0b),
-      formatY: (v) => formatBytes(BigInt.from(v.round())),
+    return ActiveValueListenableBuilder<int>(
+      valueListenable: _history.memoryRevision,
+      builder: (context, _, _) {
+        final mem = widget.session.memory.value;
+        final limit = mem.oslimit > BigInt.zero
+            ? '上限 ${formatBytes(mem.oslimit)}'
+            : null;
+        final footer = [
+          ?limit,
+          if (mem.goroutines > 0) '协程 ${mem.goroutines}',
+        ].join(' · ');
+        return _MetricChartCard(
+          icon: Icons.memory_outlined,
+          label: '内存',
+          value: formatBytes(mem.inuse),
+          unit: '',
+          footer: footer.isEmpty ? '当前使用' : footer,
+          samples: _history.memSnapshot,
+          color: const Color(0xfff59e0b),
+          formatY: (v) => formatBytes(BigInt.from(v.round())),
+        );
+      },
     );
   }
 
@@ -315,6 +352,7 @@ class _MetricChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final chartMax = _maxOf(samples);
     final peak = showChart && chartMax > 0 ? formatY(chartMax) : null;
@@ -323,142 +361,149 @@ class _MetricChartCard extends StatelessWidget {
       scheme.surfaceContainerHigh,
     );
 
-    return Material(
-      color: scheme.surfaceContainerLow,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(11),
+    return AppSurfaceBackdrop(
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow, -0.03),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: surfaceTheme.outlineSide(
+            scheme.outlineVariant.withValues(alpha: 0.55),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(icon, size: 18, color: color),
                   ),
-                  child: Icon(icon, size: 18, color: color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                height: 1.0,
-                              ),
-                            ),
-                          ),
-                          if (unit.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
                               child: Text(
-                                unit,
-                                style: textTheme.titleMedium?.copyWith(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodyMedium?.copyWith(
                                   color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
-                        ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ),
+                            if (unit.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  unit,
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (showChart) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  height: 78,
+                  decoration: BoxDecoration(
+                    color: chartBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                  child: SizedBox.expand(
+                    child: CustomPaint(
+                      painter: _SparklinePainter(
+                        samples: samples,
+                        color: color,
+                        gridColor: scheme.outlineVariant.withValues(
+                          alpha: 0.24,
+                        ),
+                        pointBorderColor: chartBackground,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
-            ),
-            if (showChart) ...[
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                height: 78,
-                decoration: BoxDecoration(
-                  color: chartBackground,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: scheme.outlineVariant.withValues(alpha: 0.25),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                child: SizedBox.expand(
-                  child: CustomPaint(
-                    painter: _SparklinePainter(
-                      samples: samples,
-                      color: color,
-                      gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
-                      pointBorderColor: chartBackground,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (footer != null || peak != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (footer != null)
-                    Expanded(
-                      child: Text(
-                        footer!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+              if (footer != null || peak != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (footer != null)
+                      Expanded(
+                        child: Text(
+                          footer!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    if (peak != null) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _MetricPill(text: '峰值 $peak', color: color),
                         ),
                       ),
-                    )
-                  else
-                    const Spacer(),
-                  if (peak != null) ...[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: _MetricPill(text: '峰值 $peak', color: color),
-                      ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -636,47 +681,56 @@ class _SparklinePainter extends CustomPainter {
       old.pointBorderColor != pointBorderColor;
 }
 
-/// Ring-buffer-backed sample history. Three independent series tracked at
-/// whatever cadence the upstream notifiers fire. Notifies listeners after
-/// each push so the dashboard repaints.
-class _SparkHistory extends ChangeNotifier {
+/// Ring-buffer-backed sample history. Traffic and memory revisions are kept
+/// separate so one telemetry stream does not rebuild every dashboard card.
+class _SparkHistory {
   _SparkHistory({required this.capacity});
   final int capacity;
   final List<double> _up = [];
   final List<double> _down = [];
   final List<double> _mem = [];
+  final trafficRevision = ValueNotifier(0);
+  final memoryRevision = ValueNotifier(0);
 
   List<double> get upSnapshot => List<double>.unmodifiable(_up);
   List<double> get downSnapshot => List<double>.unmodifiable(_down);
   List<double> get memSnapshot => List<double>.unmodifiable(_mem);
 
-  void pushTraffic(double up, double down) {
+  void pushTraffic(double up, double down, {bool notify = true}) {
     _push(_up, up);
     _push(_down, down);
-    notifyListeners();
+    if (notify) trafficRevision.value += 1;
   }
 
-  void pushMemory(double inuse) {
+  void pushMemory(double inuse, {bool notify = true}) {
     _push(_mem, inuse);
-    notifyListeners();
+    if (notify) memoryRevision.value += 1;
   }
 
-  void clearMemory() {
+  void clearMemory({bool notify = true}) {
     if (_mem.isEmpty) return;
     _mem.clear();
-    notifyListeners();
+    if (notify) memoryRevision.value += 1;
   }
 
-  void reset() {
-    if (_up.isEmpty && _down.isEmpty && _mem.isEmpty) return;
+  void reset({bool notify = true}) {
+    final hadTraffic = _up.isNotEmpty || _down.isNotEmpty;
+    final hadMemory = _mem.isNotEmpty;
+    if (!hadTraffic && !hadMemory) return;
     _up.clear();
     _down.clear();
     _mem.clear();
-    notifyListeners();
+    if (notify && hadTraffic) trafficRevision.value += 1;
+    if (notify && hadMemory) memoryRevision.value += 1;
   }
 
   void _push(List<double> series, double value) {
     series.add(value);
     if (series.length > capacity) series.removeAt(0);
+  }
+
+  void dispose() {
+    trafficRevision.dispose();
+    memoryRevision.dispose();
   }
 }

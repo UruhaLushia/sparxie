@@ -51,5 +51,11 @@ Name: "{group}\{#MyAppName}";                          Filename: "{app}\{#MyAppE
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}";    Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}";                    Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+[Registry]
+Root: HKA; Subkey: "Software\Classes\sparxie"; ValueType: string; ValueData: "URL:Sparxie URI Scheme"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\sparxie"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\sparxie\DefaultIcon"; ValueType: string; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKA; Subkey: "Software\Classes\sparxie\shell\open\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
