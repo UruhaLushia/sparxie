@@ -163,7 +163,7 @@ class ProxyGroupCard extends StatelessWidget {
         tag: 'proxy-group-card-${group.name}',
         child: _CardSurface(
           style: style,
-          radius: showIcon ? 20 : 16,
+          radius: 16,
           child: InkWell(
             onTap: onTap,
             child: _collapsedContent(group, showIcon, style),
@@ -538,7 +538,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
     }
     return _CardSurface(
       style: style,
-      radius: 22,
+      radius: 16,
       child: Stack(
         children: [
           Positioned.fill(
@@ -638,7 +638,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                   flightShuttleBuilder: _shuttle,
                   child: _CardSurface(
                     style: style,
-                    radius: 24,
+                    radius: 16,
                     child: _detailBody(
                       group,
                       widget.showIcon,

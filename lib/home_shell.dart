@@ -806,13 +806,13 @@ class _TrafficHeroCard extends StatelessWidget {
                     width: 30,
                     height: 30,
                     decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(9),
+                      color: scheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
                       Icons.lan_outlined,
                       size: 16,
-                      color: scheme.primary,
+                      color: scheme.onPrimaryContainer,
                     ),
                   ),
                   const Spacer(),
@@ -976,29 +976,9 @@ class _CardSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
     return SizedBox(
       height: height,
-      child: AppSurfaceBackdrop(
-        borderRadius: BorderRadius.circular(20),
-        child: Material(
-          color: surfaceTheme.surfaceColor(
-            selected ? scheme.primaryContainer : scheme.surface,
-            selected ? 0.08 : 0,
-          ),
-          elevation: 1,
-          shadowColor: Colors.black.withValues(alpha: 0.08),
-          shape: RoundedRectangleBorder(
-            side: selected
-                ? BorderSide(color: scheme.primary, width: 1.5)
-                : BorderSide.none,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      ),
+      child: AppPanelSurface(outlined: false, selected: selected, child: child),
     );
   }
 }
@@ -1021,62 +1001,46 @@ class _NavCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
-    final cardColor = surfaceTheme.surfaceColor(
-      selected ? scheme.primaryContainer : scheme.surface,
-      selected ? 0.08 : 0,
-    );
     final iconBg = selected
         ? scheme.primary.withValues(alpha: 0.18)
-        : scheme.surfaceContainerHighest;
-    final iconFg = selected ? scheme.onPrimaryContainer : scheme.primary;
+        : scheme.primaryContainer;
+    final iconFg = scheme.onPrimaryContainer;
     final labelFg = selected ? scheme.onPrimaryContainer : scheme.onSurface;
 
-    return SizedBox(
+    return _CardSurface(
       height: 110,
-      child: AppSurfaceBackdrop(
-        borderRadius: BorderRadius.circular(20),
-        child: Material(
-          color: cardColor,
-          elevation: selected ? 0 : 1,
-          shadowColor: Colors.black.withValues(alpha: 0.08),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: iconBg,
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        child: Icon(icon, size: 16, color: iconFg),
-                      ),
-                      const Spacer(),
-                      ?badge,
-                    ],
-                  ),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: labelFg,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: iconBg,
+                      borderRadius: BorderRadius.circular(10),
                     ),
+                    child: Icon(icon, size: 16, color: iconFg),
                   ),
+                  const Spacer(),
+                  ?badge,
                 ],
               ),
-            ),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: labelFg,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
       ),

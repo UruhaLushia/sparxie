@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import 'compact_controls.dart';
+import 'section_panel.dart';
 
 /// Launcher card for the backend's outbound modes. Tapping a segment
 /// immediately switches the active backend mode; no popup, no navigation.
@@ -102,64 +104,50 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final mode = _mode;
     final options = _options;
     if (options.isEmpty) return const SizedBox.shrink();
-    return Material(
-      color: scheme.surface,
-      elevation: 1,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
+    final expanded = options.length <= 3;
+    final selected = mode == null
+        ? const <String>{}
+        : {
+            for (final key in options)
+              if (_sameMode(mode, key)) key,
+          };
+    final controlStyle = CompactControlTheme.segmentedOf(
+      context,
+    ).copyWith(backgroundColor: Colors.transparent);
+    final control = CompactSegmentedButton<String>(
+      expanded: expanded,
+      style: controlStyle,
+      segments: [
+        for (final key in options)
+          ButtonSegment(
+            value: key,
+            enabled: !_saving,
+            icon: _saving && selected.contains(key)
+                ? const SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+            label: Text(_label(key)),
+          ),
+      ],
+      selected: selected,
+      onSelectionChanged: (selection) {
+        if (selection.isNotEmpty) _setMode(selection.first);
+      },
+    );
+    return AppPanelSurface(
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          padding: const EdgeInsets.all(4),
-          child: options.length <= 3
-              ? Row(
-                  children: [
-                    for (final key in options)
-                      Expanded(
-                        child: _Segment(
-                          label: _label(key),
-                          selected: mode != null && _sameMode(mode, key),
-                          busy: _saving && mode != null && _sameMode(mode, key),
-                          onTap:
-                              _saving || (mode != null && _sameMode(mode, key))
-                              ? null
-                              : () => _setMode(key),
-                        ),
-                      ),
-                  ],
-                )
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final key in options)
-                        SizedBox(
-                          width: 96,
-                          child: _Segment(
-                            label: _label(key),
-                            selected: mode != null && _sameMode(mode, key),
-                            busy:
-                                _saving && mode != null && _sameMode(mode, key),
-                            onTap:
-                                _saving ||
-                                    (mode != null && _sameMode(mode, key))
-                                ? null
-                                : () => _setMode(key),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-        ),
+        child: expanded
+            ? control
+            : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: control,
+              ),
       ),
     );
   }
@@ -195,61 +183,3 @@ String _label(String m) => switch (m.toLowerCase()) {
   'direct' => '直连',
   _ => m,
 };
-
-class _Segment extends StatelessWidget {
-  const _Segment({
-    required this.label,
-    required this.selected,
-    required this.busy,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final bool busy;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: selected ? scheme.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Center(
-              child: busy
-                  ? SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: selected
-                            ? scheme.onPrimary
-                            : scheme.onSurfaceVariant,
-                      ),
-                    )
-                  : Text(
-                      label,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: selected ? scheme.onPrimary : scheme.onSurface,
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

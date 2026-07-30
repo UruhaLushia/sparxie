@@ -218,8 +218,8 @@ class _TailscaleScreenState extends State<TailscaleScreen> {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
+            MaxWidthContent(
+              maxWidth: 900,
               child: _Body(
                 loading: _loading,
                 error: _error,
@@ -495,7 +495,7 @@ class _AuthQrSheet extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: QrImageView(
                 data: authUrl,
@@ -896,7 +896,7 @@ class _MessageBox extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(text, style: TextStyle(color: fg)),
     );

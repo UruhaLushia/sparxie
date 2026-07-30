@@ -41,6 +41,7 @@ import 'widgets/compact_controls.dart';
 import 'widgets/desktop_title_bar.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'widgets/page_body_transition.dart';
+import 'widgets/section_panel.dart';
 import 'window_state.dart';
 
 part 'app_theme.dart';
@@ -357,7 +358,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     final navigationBar = kind == CompactControlKind.navigationBar;
     final innerRadius = navigationBar
         ? prefs.navigationInnerBorderRadius
-        : radius;
+        : null;
     final innerHeight = navigationBar ? prefs.navigationInnerHeight : height;
     final innerWidthScale = navigationBar
         ? prefs.navigationInnerWidthScale

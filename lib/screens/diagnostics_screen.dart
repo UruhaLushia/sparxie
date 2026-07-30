@@ -102,8 +102,8 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
+            MaxWidthContent(
+              maxWidth: 900,
               child: _error != null || target == null
                   ? SectionPanel(
                       title: '状态',
@@ -601,7 +601,7 @@ class _MessageBox extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(text, style: TextStyle(color: fg)),
     );

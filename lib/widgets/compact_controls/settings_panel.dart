@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_background.dart';
+import '../section_panel.dart';
 
 class CompactSettingsPanel extends StatelessWidget {
   const CompactSettingsPanel({
@@ -8,10 +9,10 @@ class CompactSettingsPanel extends StatelessWidget {
     required this.header,
     required this.child,
     this.expandBody = false,
-    this.borderRadius = const BorderRadius.all(Radius.circular(22)),
+    this.borderRadius = kAppPanelRadius,
     this.surfaceTheme,
     this.backgroundColor,
-    this.surfaceLift = 0.04,
+    this.surfaceLift = 0.05,
   });
 
   final Widget header;
@@ -26,8 +27,8 @@ class CompactSettingsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final effectiveSurfaceTheme = surfaceTheme ?? AppSurfaceTheme.of(context);
-    final outline = effectiveSurfaceTheme.outlineBorder(
-      scheme.outlineVariant.withValues(alpha: 0.72),
+    final outline = Border.all(
+      color: scheme.outlineVariant.withValues(alpha: 0.72),
     );
     final content = Column(
       mainAxisSize: expandBody ? MainAxisSize.max : MainAxisSize.min,
@@ -47,14 +48,6 @@ class CompactSettingsPanel extends StatelessWidget {
             surfaceLift,
           ),
           borderRadius: borderRadius,
-          boxShadow: [
-            BoxShadow(
-              color: scheme.shadow.withValues(alpha: 0.06),
-              blurRadius: 18,
-              spreadRadius: -8,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
         foregroundDecoration: BoxDecoration(
           borderRadius: borderRadius,
@@ -136,7 +129,7 @@ class CompactSettingsPanelHeader extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       icon,

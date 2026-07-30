@@ -5,6 +5,7 @@ import '../controller.dart' as ctl;
 import '../widgets/basic_config_panel.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/section_panel.dart';
 
 class CoreConfigScreen extends StatelessWidget {
   const CoreConfigScreen({super.key, required this.store, this.prefs});
@@ -38,8 +39,8 @@ class CoreConfigScreen extends StatelessWidget {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+            MaxWidthContent(
+              maxWidth: 720,
               child: BasicConfigPanel(
                 store: store,
                 showOutboundMode: !hideMode,

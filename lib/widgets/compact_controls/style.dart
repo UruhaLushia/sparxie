@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+BorderRadius _indicatorRadius(
+  double outerRadius,
+  double inset,
+  double? configuredRadius,
+) {
+  final radius =
+      configuredRadius ??
+      (outerRadius - inset).clamp(0.0, outerRadius).toDouble();
+  return BorderRadius.all(Radius.circular(radius));
+}
+
 @immutable
 class CompactControlStyle {
   const CompactControlStyle({
@@ -93,6 +104,7 @@ class CompactControlStyle {
           );
     final radius = BorderRadius.all(Radius.circular(borderRadius));
     final switchHeight = (controlHeight * 0.6).clamp(20.0, 28.0);
+    final segmentInset = (controlHeight * 0.075).clamp(2.0, 4.0);
     return CompactControlStyle(
       backgroundColor: background,
       selectedBackgroundColor: effectiveSelectedSeed,
@@ -107,8 +119,10 @@ class CompactControlStyle {
       switchInactiveThumbColor: neutral.surface,
       switchOutlineColor: seedColor.withValues(alpha: 0.55),
       borderRadius: radius,
-      indicatorBorderRadius: BorderRadius.all(
-        Radius.circular(indicatorBorderRadius ?? borderRadius),
+      indicatorBorderRadius: _indicatorRadius(
+        borderRadius,
+        segmentInset,
+        indicatorBorderRadius,
       ),
       fieldHeight: controlHeight,
       buttonHeight: controlHeight,
@@ -117,7 +131,7 @@ class CompactControlStyle {
       switchHeight: switchHeight,
       switchThumbSize: switchHeight - 6,
       switchBorderRadius: radius,
-      segmentInset: (controlHeight * 0.075).clamp(2.0, 4.0),
+      segmentInset: segmentInset,
       widthScale: widthScale,
       indicatorWidthScale: indicatorWidthScale ?? widthScale,
       floatingHeightOffset: floatingHeightOffset,
@@ -136,6 +150,7 @@ class CompactControlStyle {
   }) {
     final radius = BorderRadius.all(Radius.circular(borderRadius));
     final switchHeight = (controlHeight * 0.6).clamp(20.0, 28.0);
+    final segmentInset = (controlHeight * 0.075).clamp(2.0, 4.0);
     return CompactControlStyle(
       backgroundColor: colorScheme.surfaceContainerHigh,
       selectedBackgroundColor: colorScheme.primaryContainer,
@@ -148,8 +163,10 @@ class CompactControlStyle {
       switchInactiveThumbColor: colorScheme.surface,
       switchOutlineColor: colorScheme.outlineVariant,
       borderRadius: radius,
-      indicatorBorderRadius: BorderRadius.all(
-        Radius.circular(indicatorBorderRadius ?? borderRadius),
+      indicatorBorderRadius: _indicatorRadius(
+        borderRadius,
+        segmentInset,
+        indicatorBorderRadius,
       ),
       fieldHeight: controlHeight,
       buttonHeight: controlHeight,
@@ -158,7 +175,7 @@ class CompactControlStyle {
       switchHeight: switchHeight,
       switchThumbSize: switchHeight - 6,
       switchBorderRadius: radius,
-      segmentInset: (controlHeight * 0.075).clamp(2.0, 4.0),
+      segmentInset: segmentInset,
       widthScale: widthScale,
       indicatorWidthScale: indicatorWidthScale ?? widthScale,
       floatingHeightOffset: floatingHeightOffset,

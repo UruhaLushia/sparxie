@@ -200,7 +200,7 @@ class SettingsScreen extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 600;
-                const maxContentWidth = 640.0;
+                const maxContentWidth = 720.0;
                 final centeredGutter =
                     (constraints.maxWidth - maxContentWidth) / 2;
                 final horizontal = compact
@@ -273,22 +273,9 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListTile(
-      minTileHeight: 76,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-      leading: Container(
-        width: 38,
-        height: 38,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.82),
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Icon(
-          icon,
-          size: 21,
-          color: theme.colorScheme.onPrimaryContainer,
-        ),
-      ),
+      minTileHeight: 68,
+      contentPadding: const EdgeInsets.symmetric(vertical: 2),
+      leading: PanelIconChip(icon: icon),
       title: Text(title, style: theme.textTheme.titleMedium),
       subtitle: subtitle == null
           ? null
@@ -323,61 +310,36 @@ class _SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final surfaceTheme = AppSurfaceTheme.of(context);
-    const radius = BorderRadius.all(Radius.circular(20));
-    return AppSurfaceBackdrop(
-      borderRadius: radius,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceTheme.surfaceColor(
-            theme.colorScheme.surfaceContainerLow,
-            0.07,
-          ),
-          border: surfaceTheme.outlineBorder(
-            theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          ),
-          borderRadius: radius,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 13, 16, 11),
-                child: Row(
-                  children: [
-                    Icon(icon, size: 18, color: theme.colorScheme.primary),
-                    const SizedBox(width: 9),
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.58),
-              ),
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: 1,
-                    indent: 70,
-                    endIndent: 16,
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: 0.48,
-                    ),
+    return AppPanelSurface(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                children[i],
+                ),
               ],
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  indent: 56,
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.6,
+                  ),
+                ),
+              children[i],
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -422,8 +384,8 @@ class BackendSettingsScreen extends StatelessWidget {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+            MaxWidthContent(
+              maxWidth: 720,
               child: BackendSettingsPanel(store: store),
             ),
           ],
@@ -463,8 +425,8 @@ class AppSettingsScreen extends StatelessWidget {
             16 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
+            MaxWidthContent(
+              maxWidth: 720,
               child: AppSettingsPanel(prefs: prefs, session: session),
             ),
           ],
@@ -1084,7 +1046,6 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   Widget build(BuildContext context) {
     final controllers = widget.store.controllers;
     final activeId = widget.store.activeId;
-    final scheme = Theme.of(context).colorScheme;
     return SectionPanel(
       title: '后端',
       icon: Icons.dns_outlined,
@@ -1101,7 +1062,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
             )
           else
             for (var i = 0; i < controllers.length; i++) ...[
-              if (i > 0) const Divider(height: 1),
+              if (i > 0) const Divider(height: 1, indent: 56),
               _ControllerTile(
                 controller: controllers[i],
                 active: controllers[i].id == activeId,
@@ -1118,9 +1079,6 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
               onPressed: () => _edit(),
               icon: const Icon(Icons.add, size: 18),
               label: const Text('新增后端'),
-              style: FilledButton.styleFrom(
-                foregroundColor: scheme.onPrimaryContainer,
-              ),
             ),
           ),
         ],
@@ -1189,12 +1147,12 @@ class _ControllerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        active ? Icons.check_circle : Icons.dns_outlined,
-        color: active ? scheme.primary : null,
+      minTileHeight: 64,
+      contentPadding: const EdgeInsets.symmetric(vertical: 2),
+      leading: PanelIconChip(
+        icon: active ? Icons.check_rounded : Icons.dns_outlined,
+        active: active,
       ),
       title: Text(controller.name),
       subtitle: Text(

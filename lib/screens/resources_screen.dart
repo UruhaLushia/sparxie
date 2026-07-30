@@ -50,8 +50,8 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
           16 + MediaQuery.paddingOf(context).bottom,
         ),
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
+          MaxWidthContent(
+            maxWidth: 720,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -425,7 +425,7 @@ class _ProviderBody extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: scheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [

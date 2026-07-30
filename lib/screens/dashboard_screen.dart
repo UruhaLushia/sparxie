@@ -9,6 +9,7 @@ import '../widgets/backend_switcher.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/section_panel.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -352,7 +353,6 @@ class _MetricChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final chartMax = _maxOf(samples);
     final peak = showChart && chartMax > 0 ? formatY(chartMax) : null;
@@ -361,149 +361,135 @@ class _MetricChartCard extends StatelessWidget {
       scheme.surfaceContainerHigh,
     );
 
-    return AppSurfaceBackdrop(
-      borderRadius: BorderRadius.circular(20),
-      child: Material(
-        color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow, -0.03),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: surfaceTheme.outlineSide(
-            scheme.outlineVariant.withValues(alpha: 0.55),
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(icon, size: 18, color: color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                value,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ),
-                            if (unit.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Text(
-                                  unit,
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (showChart) ...[
-                const SizedBox(height: 16),
+    return AppPanelSurface(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Container(
-                  width: double.infinity,
-                  height: 78,
+                  width: 34,
+                  height: 34,
                   decoration: BoxDecoration(
-                    color: chartBackground,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: scheme.outlineVariant.withValues(alpha: 0.25),
-                    ),
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: SizedBox.expand(
-                    child: CustomPaint(
-                      painter: _SparklinePainter(
-                        samples: samples,
-                        color: color,
-                        gridColor: scheme.outlineVariant.withValues(
-                          alpha: 0.24,
-                        ),
-                        pointBorderColor: chartBackground,
-                      ),
-                    ),
-                  ),
+                  child: Icon(icon, size: 18, color: color),
                 ),
-              ],
-              if (footer != null || peak != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (footer != null)
-                      Expanded(
-                        child: Text(
-                          footer!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    if (peak != null) ...[
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: _MetricPill(text: '峰值 $peak', color: color),
-                        ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                          if (unit.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                unit,
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ],
+            ),
+            if (showChart) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                height: 78,
+                decoration: BoxDecoration(
+                  color: chartBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.25),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: SizedBox.expand(
+                  child: CustomPaint(
+                    painter: _SparklinePainter(
+                      samples: samples,
+                      color: color,
+                      gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
+                      pointBorderColor: chartBackground,
+                    ),
+                  ),
+                ),
+              ),
             ],
-          ),
+            if (footer != null || peak != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (footer != null)
+                    Expanded(
+                      child: Text(
+                        footer!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (peak != null) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: _MetricPill(text: '峰值 $peak', color: color),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );

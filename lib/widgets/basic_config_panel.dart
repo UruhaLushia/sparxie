@@ -150,7 +150,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: colorScheme.errorContainer,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
@@ -445,10 +445,12 @@ class _PortsSectionState extends State<_PortsSection> {
             controller: c,
             readOnly: widget.readOnly,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               isDense: true,
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,
               ),
@@ -457,6 +459,10 @@ class _PortsSectionState extends State<_PortsSection> {
         ),
         const SizedBox(width: 8),
         FilledButton.tonal(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(72, 45),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
           onPressed: busy || widget.readOnly
               ? null
               : () {

@@ -119,8 +119,8 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                 16 + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
+                MaxWidthContent(
+                  maxWidth: 720,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
