@@ -38,6 +38,8 @@ enum CompactControlKind { navigationBar, button, search, segmented, toggle }
 
 enum AppThemeMode { system, light, dark }
 
+enum AutomaticColorSource { system, wallpaper }
+
 enum DesktopTitleBarMode { system, custom, hidden }
 
 enum AppBackgroundSource { theme, color, image }
@@ -167,6 +169,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
   static const _kGlobalThemeColor = 'globalThemeColor';
   static const _kAutomaticColor = 'automaticColor';
+  static const _kAutomaticColorSource = 'automaticColorSource';
   static const _kPureBlackMode = 'pureBlackMode';
   static const _kAppThemeMode = 'appThemeMode';
   static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
@@ -215,6 +218,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultAllowInsecureOnlineResources = false;
   static const defaultGlobalThemeColor = 0xff66ccff;
   static const defaultAutomaticColor = false;
+  static const defaultAutomaticColorSource = AutomaticColorSource.system;
   static const defaultPureBlackMode = false;
   static const defaultAppThemeMode = AppThemeMode.system;
   static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
@@ -595,6 +599,15 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setAutomaticColor(bool value) async {
     if (value == automaticColor) return;
     _put(_kAutomaticColor, value);
+  }
+
+  AutomaticColorSource get automaticColorSource => _decodeAutomaticColorSource(
+    _str(_kAutomaticColorSource, defaultAutomaticColorSource.name),
+  );
+
+  Future<void> setAutomaticColorSource(AutomaticColorSource value) async {
+    if (value == automaticColorSource) return;
+    _put(_kAutomaticColorSource, value.name);
   }
 
   bool get pureBlackMode => _bool(_kPureBlackMode, defaultPureBlackMode);
@@ -1051,6 +1064,13 @@ class AppPrefs extends ChangeNotifier {
       if (value.name == raw) return value;
     }
     return defaultAppThemeMode;
+  }
+
+  static AutomaticColorSource _decodeAutomaticColorSource(String? raw) {
+    for (final value in AutomaticColorSource.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultAutomaticColorSource;
   }
 
   static DesktopTitleBarMode _decodeDesktopTitleBarMode(String? raw) {

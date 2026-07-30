@@ -13,6 +13,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
+import 'background_accent_color.dart';
 import 'background_image_store.dart';
 import 'config_store.dart';
 import 'controller.dart';
@@ -85,6 +86,10 @@ Future<void> main() async {
       // image is no longer readable.
     }
   }
+  final backgroundAccentColor = await BackgroundAccentColor.load(
+    enabled: _usesBackgroundAccent(prefs),
+    imagePath: backgroundImagePath,
+  );
   // Hand the platform's app cache dir to Rust so it can persist proxy
   // icon bytes across launches; failures here are non-fatal — icons just
   // fall back to letter chips when unreachable.
@@ -111,6 +116,12 @@ Future<void> main() async {
     session.setClosedConnectionsCapacity(prefs.closedConnectionsCapacity);
     session.setLogInfoCapacity(prefs.logInfoCapacity);
     systemAccentColor.setEnabled(prefs.automaticColor);
+    unawaited(
+      backgroundAccentColor.update(
+        enabled: _usesBackgroundAccent(prefs),
+        imagePath: prefs.backgroundImagePath,
+      ),
+    );
     final nextTitleBarMode = prefs.desktopTitleBarMode;
     if (nextTitleBarMode != titleBarMode) {
       titleBarMode = nextTitleBarMode;
@@ -136,6 +147,7 @@ Future<void> main() async {
       prefs: prefs,
       session: session,
       systemAccentColor: systemAccentColor,
+      backgroundAccentColor: backgroundAccentColor,
       appLinks: appLinks,
     ),
   );
@@ -169,6 +181,12 @@ void _enableEdgeToEdge() {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 }
 
+bool _usesBackgroundAccent(AppPrefs prefs) =>
+    prefs.automaticColor &&
+    prefs.automaticColorSource == AutomaticColorSource.wallpaper &&
+    prefs.backgroundSource == AppBackgroundSource.image &&
+    prefs.backgroundImagePath.isNotEmpty;
+
 class MihomoControllerApp extends StatefulWidget {
   const MihomoControllerApp({
     super.key,
@@ -176,6 +194,7 @@ class MihomoControllerApp extends StatefulWidget {
     required this.prefs,
     required this.session,
     required this.systemAccentColor,
+    required this.backgroundAccentColor,
     required this.appLinks,
   });
 
@@ -183,6 +202,7 @@ class MihomoControllerApp extends StatefulWidget {
   final AppPrefs prefs;
   final MihomoSession session;
   final SystemAccentColor systemAccentColor;
+  final BackgroundAccentColor backgroundAccentColor;
   final AppLinks appLinks;
 
   @override
@@ -210,6 +230,8 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   AppPrefs get prefs => widget.prefs;
   MihomoSession get session => widget.session;
   SystemAccentColor get systemAccentColor => widget.systemAccentColor;
+  BackgroundAccentColor get backgroundAccentColor =>
+      widget.backgroundAccentColor;
 
   @override
   void initState() {
@@ -403,16 +425,22 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([prefs, systemAccentColor]),
+      listenable: Listenable.merge([
+        prefs,
+        systemAccentColor,
+        backgroundAccentColor,
+      ]),
       builder: (context, _) {
         final uiFonts = prefs.uiFontFamilies;
         final globalSeed = Color(prefs.globalThemeColor);
         final useAutomaticColor = prefs.automaticColor;
-        final effectiveSeed = useAutomaticColor
-            ? systemAccentColor.color ??
-                  const Color(AppPrefs.defaultGlobalThemeColor)
-            : globalSeed;
         final backgroundSource = prefs.backgroundSource;
+        final automaticSeed = _usesBackgroundAccent(prefs)
+            ? backgroundAccentColor.color ?? systemAccentColor.color
+            : systemAccentColor.color;
+        final effectiveSeed = useAutomaticColor
+            ? automaticSeed ?? const Color(AppPrefs.defaultGlobalThemeColor)
+            : globalSeed;
         final surfaceOpacity = prefs.surfaceOpacity;
         final surfaceEffect = prefs.surfaceEffect;
         final surfaceBlur = prefs.surfaceBlur;

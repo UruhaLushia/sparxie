@@ -47,6 +47,7 @@ dependencies:
   file_selector: ^1.1.0
   image_picker: ^1.2.3
   app_links: ^7.2.1
+  material_color_utilities: ^0.13.0
 
 dev_dependencies:
   flutter_test:

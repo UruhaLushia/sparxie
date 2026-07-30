@@ -44,6 +44,12 @@ class ThemeSettingsScreen extends StatelessWidget {
         listenable: prefs,
         builder: (context, _) {
           final automaticColor = prefs.automaticColor;
+          final wallpaperColorAvailable =
+              prefs.backgroundSource == AppBackgroundSource.image &&
+              prefs.backgroundImagePath.isNotEmpty;
+          final wallpaperColor =
+              wallpaperColorAvailable &&
+              prefs.automaticColorSource == AutomaticColorSource.wallpaper;
           return ListView(
             padding: EdgeInsets.fromLTRB(
               16,
@@ -107,10 +113,43 @@ class ThemeSettingsScreen extends StatelessWidget {
                     CompactSwitch.tile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('自动取色'),
-                      subtitle: const Text('自动生成配色'),
+                      subtitle: Text(
+                        automaticColor && wallpaperColor
+                            ? '基于背景图片生成配色'
+                            : '自动生成配色',
+                      ),
                       value: automaticColor,
                       onChanged: prefs.setAutomaticColor,
                     ),
+                    if (automaticColor && wallpaperColorAvailable) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '取色来源',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      CompactSegmentedButton<AutomaticColorSource>(
+                        expanded: true,
+                        segments: const [
+                          ButtonSegment(
+                            value: AutomaticColorSource.system,
+                            label: Text('系统'),
+                            icon: Icon(Icons.devices_outlined),
+                          ),
+                          ButtonSegment(
+                            value: AutomaticColorSource.wallpaper,
+                            label: Text('壁纸'),
+                            icon: Icon(Icons.wallpaper_outlined),
+                          ),
+                        ],
+                        selected: {prefs.automaticColorSource},
+                        onSelectionChanged: (selection) =>
+                            prefs.setAutomaticColorSource(selection.first),
+                      ),
+                    ],
                     const Divider(height: 16),
                     CompactSwitch.tile(
                       contentPadding: EdgeInsets.zero,
