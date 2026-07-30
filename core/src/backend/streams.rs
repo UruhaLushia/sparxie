@@ -6,7 +6,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::MihomoError;
 use crate::frb_generated::StreamSink;
 
-use super::{BackendTarget, BackendType, LogEntry, MemorySample, TrafficSample};
+use super::{BackendTarget, BackendType, LogWindow, LogsFrame, MemorySample, TrafficSample};
 
 pub async fn traffic_stream(
     target: BackendTarget,
@@ -82,57 +82,101 @@ pub async fn memory_stream(
 pub async fn logs_stream(
     target: BackendTarget,
     info_capacity: u32,
-    sink: StreamSink<Vec<LogEntry>>,
+    sink: StreamSink<LogsFrame>,
 ) -> Result<(), MihomoError> {
     let info_capacity = info_capacity.max(1) as usize;
     match target.backend_type {
         BackendType::Clash => {
-            let (snapshot, rx) =
+            let (frame, rx) =
                 crate::clash::state::logs::subscribe(target.clash(), info_capacity).await?;
-            if sink
-                .add(snapshot.into_iter().map(Into::into).collect())
-                .is_err()
-            {
+            if sink.add(frame).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
-                let Ok(sample) = item else { continue };
-                if sink.add(vec![sample.into()]).is_err() {
+                let Ok(frame) = item else { continue };
+                if sink.add(frame).is_err() {
                     break;
                 }
             }
             Ok(())
         }
         BackendType::Surge => {
-            let (snapshot, rx) =
+            let (frame, rx) =
                 crate::surge::state::logs::subscribe(target.surge(), info_capacity).await?;
-            if sink.add(snapshot).is_err() {
+            if sink.add(frame).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
-                let Ok(sample) = item else { continue };
-                if sink.add(vec![sample]).is_err() {
+                let Ok(frame) = item else { continue };
+                if sink.add(frame).is_err() {
                     break;
                 }
             }
             Ok(())
         }
         BackendType::SingBox => {
-            let (snapshot, rx) =
+            let (frame, rx) =
                 crate::sing_box::state::logs::subscribe(target.sing_box(), info_capacity).await?;
-            if sink.add(snapshot).is_err() {
+            if sink.add(frame).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
-                let Ok(sample) = item else { continue };
-                if sink.add(vec![sample]).is_err() {
+                let Ok(frame) = item else { continue };
+                if sink.add(frame).is_err() {
                     break;
                 }
             }
             Ok(())
+        }
+    }
+}
+
+pub async fn fetch_logs_window(
+    target: BackendTarget,
+    level: String,
+    query: String,
+    offset: u32,
+    limit: u32,
+    from_end: bool,
+) -> LogWindow {
+    let offset = offset as usize;
+    let limit = limit.max(1) as usize;
+    match target.backend_type {
+        BackendType::Clash => {
+            crate::clash::state::logs::fetch_window(
+                target.clash(),
+                &level,
+                &query,
+                offset,
+                limit,
+                from_end,
+            )
+            .await
+        }
+        BackendType::Surge => {
+            crate::surge::state::logs::fetch_window(
+                target.surge(),
+                &level,
+                &query,
+                offset,
+                limit,
+                from_end,
+            )
+            .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::state::logs::fetch_window(
+                target.sing_box(),
+                &level,
+                &query,
+                offset,
+                limit,
+                from_end,
+            )
+            .await
         }
     }
 }

@@ -27,16 +27,6 @@ impl From<crate::clash::state::traffic::MemorySample> for MemorySample {
     }
 }
 
-impl From<crate::clash::state::logs::LogEntry> for LogEntry {
-    fn from(value: crate::clash::state::logs::LogEntry) -> Self {
-        Self {
-            time: value.time,
-            level: value.level,
-            message: value.message,
-        }
-    }
-}
-
 impl From<crate::clash::state::connections::Connection> for Connection {
     fn from(value: crate::clash::state::connections::Connection) -> Self {
         Self {

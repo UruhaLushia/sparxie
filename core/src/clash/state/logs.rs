@@ -1,78 +1,22 @@
-//! Per-target rolling log buffer with replay-on-subscribe. Rust owns the
-//! ring; Dart subscribes for an atomic snapshot + delta stream so a fresh
-//! screen sees cached verbose logs instantly.
+//! Per-target rolling log buffer. Rust owns the entries; Dart receives only
+//! cache metadata and fetches the window it is rendering.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
+use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
+use crate::backend::log_store::LogStore;
 use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
 use crate::clash::client::{MihomoClient, read_ws_text};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct LogEntry {
-    #[serde(default)]
-    pub time: String,
-    #[serde(default)]
-    pub level: String,
-    #[serde(default)]
-    pub message: String,
-}
-
 struct LogSlot {
-    buffer: Mutex<LogBuffer>,
-    sender: broadcast::Sender<LogEntry>,
-}
-
-struct LogBuffer {
-    entries: VecDeque<LogEntry>,
-    info_entries: usize,
-    info_capacity: usize,
-}
-
-impl LogBuffer {
-    fn new(info_capacity: usize) -> Self {
-        Self {
-            entries: VecDeque::new(),
-            info_entries: 0,
-            info_capacity: info_capacity.max(1),
-        }
-    }
-
-    fn set_info_capacity(&mut self, info_capacity: usize) {
-        self.info_capacity = info_capacity.max(1);
-        self.trim();
-    }
-
-    fn push(&mut self, entry: LogEntry) {
-        if level_allows("info", &entry.level) {
-            self.info_entries += 1;
-        }
-        self.entries.push_back(entry);
-        self.trim();
-    }
-
-    fn clear(&mut self) {
-        self.entries.clear();
-        self.info_entries = 0;
-    }
-
-    fn trim(&mut self) {
-        while self.info_entries > self.info_capacity {
-            let Some(entry) = self.entries.pop_front() else {
-                self.info_entries = 0;
-                break;
-            };
-            if level_allows("info", &entry.level) {
-                self.info_entries -= 1;
-            }
-        }
-    }
+    store: Mutex<LogStore>,
+    sender: broadcast::Sender<LogsFrame>,
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -90,35 +34,20 @@ fn slot_key(target: &MihomoTarget) -> String {
     )
 }
 
-pub fn level_allows(filter: &str, level: &str) -> bool {
-    let rank = |level: &str| match level.to_ascii_lowercase().as_str() {
-        "debug" => Some(0),
-        "info" => Some(1),
-        "warning" | "warn" => Some(2),
-        "error" | "fatal" | "panic" => Some(3),
-        "silent" => None,
-        _ => Some(1),
-    };
-    let Some(filter_rank) = rank(if filter.is_empty() { "info" } else { filter }) else {
-        return false;
-    };
-    rank(level).is_some_and(|level_rank| level_rank >= filter_rank)
-}
-
 /// Snapshot + receiver are taken under one lock so the ingest task can't
 /// slip an entry between them — no dropped or duplicated lines.
 pub async fn subscribe(
     target: MihomoTarget,
     info_capacity: usize,
-) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
+) -> Result<(LogsFrame, broadcast::Receiver<LogsFrame>), MihomoError> {
     let key = slot_key(&target);
     let mut map = slots().lock().await;
     let slot = if let Some(s) = map.get(&key) {
         s.clone()
     } else {
-        let (tx, _) = broadcast::channel::<LogEntry>(64);
+        let (tx, _) = broadcast::channel::<LogsFrame>(64);
         let slot = Arc::new(LogSlot {
-            buffer: Mutex::new(LogBuffer::new(info_capacity)),
+            store: Mutex::new(LogStore::new(info_capacity)),
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
@@ -127,18 +56,37 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let mut buffer = slot.buffer.lock().expect("logs buffer poisoned");
-    buffer.set_info_capacity(info_capacity);
+    let mut store = slot.store.lock().expect("logs store poisoned");
+    store.set_info_capacity(info_capacity);
     let rx = slot.sender.subscribe();
-    let snapshot = buffer.entries.iter().cloned().collect();
-    Ok((snapshot, rx))
+    Ok((store.frame(true), rx))
+}
+
+pub async fn fetch_window(
+    target: MihomoTarget,
+    level: &str,
+    query: &str,
+    offset: usize,
+    limit: usize,
+    from_end: bool,
+) -> LogWindow {
+    let key = slot_key(&target);
+    let map = slots().lock().await;
+    let Some(slot) = map.get(&key) else {
+        return LogWindow::default();
+    };
+    slot.store
+        .lock()
+        .expect("logs store poisoned")
+        .window(level, query, offset, limit, from_end)
 }
 
 pub async fn clear(target: MihomoTarget) {
     let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
-        slot.buffer.lock().expect("logs buffer poisoned").clear();
+        let frame = slot.store.lock().expect("logs store poisoned").clear();
+        let _ = slot.sender.send(frame);
     }
 }
 
@@ -211,13 +159,8 @@ async fn stream_once(
         let Some(entry) = parse_log_entry(trimmed) else {
             continue;
         };
-        {
-            slot.buffer
-                .lock()
-                .expect("logs buffer poisoned")
-                .push(entry.clone());
-        }
-        let _ = slot.sender.send(entry);
+        let frame = slot.store.lock().expect("logs store poisoned").push(entry);
+        let _ = slot.sender.send(frame);
     }
 }
 
@@ -229,6 +172,7 @@ fn parse_log_entry(line: &str) -> Option<LogEntry> {
         return None;
     }
     Some(LogEntry {
+        id: 0,
         time: first_string(&raw, &["time"]),
         level,
         message,

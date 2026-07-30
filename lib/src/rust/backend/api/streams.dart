@@ -15,12 +15,28 @@ Stream<TrafficSample> trafficStream({required BackendTarget target}) =>
 Stream<MemorySample> memoryStream({required BackendTarget target}) =>
     RustLib.instance.api.crateBackendApiStreamsMemoryStream(target: target);
 
-Stream<List<LogEntry>> logsStream({
+Stream<LogsFrame> logsStream({
   required BackendTarget target,
   required int infoCapacity,
 }) => RustLib.instance.api.crateBackendApiStreamsLogsStream(
   target: target,
   infoCapacity: infoCapacity,
+);
+
+Future<LogWindow> fetchLogsWindow({
+  required BackendTarget target,
+  required String level,
+  required String query,
+  required int offset,
+  required int limit,
+  required bool fromEnd,
+}) => RustLib.instance.api.crateBackendApiStreamsFetchLogsWindow(
+  target: target,
+  level: level,
+  query: query,
+  offset: offset,
+  limit: limit,
+  fromEnd: fromEnd,
 );
 
 Future<void> clearLogs({required BackendTarget target}) =>

@@ -23,11 +23,27 @@ pub struct MemorySample {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LogEntry {
     #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
     pub time: String,
     #[serde(default)]
     pub level: String,
     #[serde(default)]
     pub message: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct LogWindow {
+    pub total: u32,
+    pub offset: u32,
+    pub rows: Vec<LogEntry>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct LogsFrame {
+    pub total: u32,
+    pub latest_id: u64,
+    pub is_initial: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

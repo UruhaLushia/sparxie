@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `matches_query`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 class Connection {
   final String id;
@@ -400,11 +400,13 @@ class GroupDelayEntry {
 }
 
 class LogEntry {
+  final BigInt id;
   final String time;
   final String level;
   final String message;
 
   const LogEntry({
+    required this.id,
     required this.time,
     required this.level,
     required this.message,
@@ -414,16 +416,72 @@ class LogEntry {
       RustLib.instance.api.crateBackendApiTypesLogEntryDefault();
 
   @override
-  int get hashCode => time.hashCode ^ level.hashCode ^ message.hashCode;
+  int get hashCode =>
+      id.hashCode ^ time.hashCode ^ level.hashCode ^ message.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is LogEntry &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           time == other.time &&
           level == other.level &&
           message == other.message;
+}
+
+class LogWindow {
+  final int total;
+  final int offset;
+  final List<LogEntry> rows;
+
+  const LogWindow({
+    required this.total,
+    required this.offset,
+    required this.rows,
+  });
+
+  static Future<LogWindow> default_() =>
+      RustLib.instance.api.crateBackendApiTypesLogWindowDefault();
+
+  @override
+  int get hashCode => total.hashCode ^ offset.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LogWindow &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          offset == other.offset &&
+          rows == other.rows;
+}
+
+class LogsFrame {
+  final int total;
+  final BigInt latestId;
+  final bool isInitial;
+
+  const LogsFrame({
+    required this.total,
+    required this.latestId,
+    required this.isInitial,
+  });
+
+  static Future<LogsFrame> default_() =>
+      RustLib.instance.api.crateBackendApiTypesLogsFrameDefault();
+
+  @override
+  int get hashCode => total.hashCode ^ latestId.hashCode ^ isInitial.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LogsFrame &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          latestId == other.latestId &&
+          isInitial == other.isInitial;
 }
 
 class MemorySample {

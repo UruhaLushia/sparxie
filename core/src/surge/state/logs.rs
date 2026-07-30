@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -6,67 +6,14 @@ use serde_json::Value;
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
-use crate::backend::api::LogEntry;
+use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
+use crate::backend::log_store::LogStore;
 use crate::backend::retry::RetryBackoff;
 use crate::surge::client::{SurgeTarget, target_key};
 
 struct LogSlot {
-    state: Mutex<LogState>,
-    sender: broadcast::Sender<LogEntry>,
-}
-
-struct LogState {
-    buffer: VecDeque<(String, LogEntry)>,
-    seen: HashSet<String>,
-    info_entries: usize,
-    info_capacity: usize,
-}
-
-impl LogState {
-    fn new(info_capacity: usize) -> Self {
-        Self {
-            buffer: VecDeque::new(),
-            seen: HashSet::new(),
-            info_entries: 0,
-            info_capacity: info_capacity.max(1),
-        }
-    }
-
-    fn set_info_capacity(&mut self, info_capacity: usize) {
-        self.info_capacity = info_capacity.max(1);
-        self.trim();
-    }
-
-    fn push(&mut self, key: String, entry: LogEntry) -> bool {
-        if !self.seen.insert(key.clone()) {
-            return false;
-        }
-        if level_allows("info", &entry.level) {
-            self.info_entries += 1;
-        }
-        self.buffer.push_back((key, entry));
-        self.trim();
-        true
-    }
-
-    fn clear(&mut self) {
-        self.buffer.clear();
-        self.seen.clear();
-        self.info_entries = 0;
-    }
-
-    fn trim(&mut self) {
-        while self.info_entries > self.info_capacity {
-            let Some((key, entry)) = self.buffer.pop_front() else {
-                self.info_entries = 0;
-                break;
-            };
-            self.seen.remove(&key);
-            if level_allows("info", &entry.level) {
-                self.info_entries -= 1;
-            }
-        }
-    }
+    store: Mutex<LogStore>,
+    sender: broadcast::Sender<LogsFrame>,
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -83,15 +30,15 @@ fn slot_key(target: &SurgeTarget) -> String {
 pub async fn subscribe(
     target: SurgeTarget,
     info_capacity: usize,
-) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
+) -> Result<(LogsFrame, broadcast::Receiver<LogsFrame>), MihomoError> {
     let key = slot_key(&target);
     let mut map = slots().lock().await;
     let slot = if let Some(slot) = map.get(&key) {
         slot.clone()
     } else {
-        let (tx, _) = broadcast::channel::<LogEntry>(64);
+        let (tx, _) = broadcast::channel::<LogsFrame>(64);
         let slot = Arc::new(LogSlot {
-            state: Mutex::new(LogState::new(info_capacity)),
+            store: Mutex::new(LogStore::new(info_capacity)),
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
@@ -100,25 +47,41 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let mut state = slot.state.lock().expect("surge logs state poisoned");
-    state.set_info_capacity(info_capacity);
+    let mut store = slot.store.lock().expect("surge logs store poisoned");
+    store.set_info_capacity(info_capacity);
     let rx = slot.sender.subscribe();
-    Ok((
-        state
-            .buffer
-            .iter()
-            .map(|(_, entry)| entry.clone())
-            .collect(),
-        rx,
-    ))
+    Ok((store.frame(true), rx))
+}
+
+pub async fn fetch_window(
+    target: SurgeTarget,
+    level: &str,
+    query: &str,
+    offset: usize,
+    limit: usize,
+    from_end: bool,
+) -> LogWindow {
+    let key = slot_key(&target);
+    let map = slots().lock().await;
+    let Some(slot) = map.get(&key) else {
+        return LogWindow::default();
+    };
+    slot.store
+        .lock()
+        .expect("surge logs store poisoned")
+        .window(level, query, offset, limit, from_end)
 }
 
 pub async fn clear(target: SurgeTarget) {
     let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
-        let mut state = slot.state.lock().expect("surge logs state poisoned");
-        state.clear();
+        let frame = slot
+            .store
+            .lock()
+            .expect("surge logs store poisoned")
+            .clear();
+        let _ = slot.sender.send(frame);
     }
 }
 
@@ -148,14 +111,14 @@ async fn poll_once(target: &SurgeTarget, slot: &LogSlot) -> Result<(), MihomoErr
     entries.reverse();
     for entry in entries {
         let key = event_key(&entry);
-        let inserted = {
-            let mut state = slot.state.lock().expect("surge logs state poisoned");
-            state.push(key, entry.clone())
-        };
-        if !inserted {
-            continue;
+        let frame = slot
+            .store
+            .lock()
+            .expect("surge logs store poisoned")
+            .push_unique(key, entry);
+        if let Some(frame) = frame {
+            let _ = slot.sender.send(frame);
         }
-        let _ = slot.sender.send(entry);
     }
     Ok(())
 }
@@ -176,6 +139,7 @@ fn parse_event(raw: &Value) -> Option<LogEntry> {
     }
     let identifier = string_field(raw, "identifier");
     Some(LogEntry {
+        id: 0,
         time: string_field(raw, "date"),
         level: event_level(raw, &identifier),
         message,
@@ -194,16 +158,6 @@ fn event_level(raw: &Value, identifier: &str) -> String {
         1 => "warning".into(),
         value if value >= 2 => "error".into(),
         _ => "info".into(),
-    }
-}
-
-pub fn level_allows(filter: &str, level: &str) -> bool {
-    match filter.to_ascii_lowercase().as_str() {
-        "silent" => false,
-        "error" | "fatal" => matches!(level, "error" | "fatal"),
-        "warning" | "warn" => matches!(level, "warning" | "warn" | "error" | "fatal"),
-        "debug" | "trace" => true,
-        _ => true,
     }
 }
 

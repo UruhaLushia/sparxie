@@ -39,9 +39,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<List<LogEntry>> dco_decode_StreamSink_list_log_entry_Sse(
-    dynamic raw,
-  );
+  RustStreamSink<LogsFrame> dco_decode_StreamSink_logs_frame_Sse(dynamic raw);
 
   @protected
   RustStreamSink<MemorySample> dco_decode_StreamSink_memory_sample_Sse(
@@ -196,6 +194,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LogEntry dco_decode_log_entry(dynamic raw);
 
   @protected
+  LogWindow dco_decode_log_window(dynamic raw);
+
+  @protected
+  LogsFrame dco_decode_logs_frame(dynamic raw);
+
+  @protected
   MemorySample dco_decode_memory_sample(dynamic raw);
 
   @protected
@@ -300,7 +304,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<List<LogEntry>> sse_decode_StreamSink_list_log_entry_Sse(
+  RustStreamSink<LogsFrame> sse_decode_StreamSink_logs_frame_Sse(
     SseDeserializer deserializer,
   );
 
@@ -487,6 +491,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LogEntry sse_decode_log_entry(SseDeserializer deserializer);
 
   @protected
+  LogWindow sse_decode_log_window(SseDeserializer deserializer);
+
+  @protected
+  LogsFrame sse_decode_logs_frame(SseDeserializer deserializer);
+
+  @protected
   MemorySample sse_decode_memory_sample(SseDeserializer deserializer);
 
   @protected
@@ -609,8 +619,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_list_log_entry_Sse(
-    RustStreamSink<List<LogEntry>> self,
+  void sse_encode_StreamSink_logs_frame_Sse(
+    RustStreamSink<LogsFrame> self,
     SseSerializer serializer,
   );
 
@@ -844,6 +854,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_log_entry(LogEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_log_window(LogWindow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_logs_frame(LogsFrame self, SseSerializer serializer);
 
   @protected
   void sse_encode_memory_sample(MemorySample self, SseSerializer serializer);

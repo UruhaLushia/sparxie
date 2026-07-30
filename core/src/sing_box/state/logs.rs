@@ -1,63 +1,18 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
-use crate::backend::api::LogEntry;
+use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
+use crate::backend::log_store::LogStore;
 use crate::backend::retry::RetryBackoff;
 use crate::sing_box::client::{SingBoxTarget, target_key};
 use crate::sing_box::proto::daemon::{LogLevel, log};
 
 struct LogSlot {
-    buffer: Mutex<LogBuffer>,
-    sender: broadcast::Sender<LogEntry>,
-}
-
-struct LogBuffer {
-    entries: VecDeque<LogEntry>,
-    info_entries: usize,
-    info_capacity: usize,
-}
-
-impl LogBuffer {
-    fn new(info_capacity: usize) -> Self {
-        Self {
-            entries: VecDeque::new(),
-            info_entries: 0,
-            info_capacity: info_capacity.max(1),
-        }
-    }
-
-    fn set_info_capacity(&mut self, info_capacity: usize) {
-        self.info_capacity = info_capacity.max(1);
-        self.trim();
-    }
-
-    fn push(&mut self, entry: LogEntry) {
-        if level_allows("info", &entry.level) {
-            self.info_entries += 1;
-        }
-        self.entries.push_back(entry);
-        self.trim();
-    }
-
-    fn clear(&mut self) {
-        self.entries.clear();
-        self.info_entries = 0;
-    }
-
-    fn trim(&mut self) {
-        while self.info_entries > self.info_capacity {
-            let Some(entry) = self.entries.pop_front() else {
-                self.info_entries = 0;
-                break;
-            };
-            if level_allows("info", &entry.level) {
-                self.info_entries -= 1;
-            }
-        }
-    }
+    store: Mutex<LogStore>,
+    sender: broadcast::Sender<LogsFrame>,
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -70,7 +25,7 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
 pub async fn subscribe(
     target: SingBoxTarget,
     info_capacity: usize,
-) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
+) -> Result<(LogsFrame, broadcast::Receiver<LogsFrame>), MihomoError> {
     let key = target_key(&target);
     let mut map = slots().lock().await;
     let slot = if let Some(slot) = map.get(&key) {
@@ -78,7 +33,7 @@ pub async fn subscribe(
     } else {
         let (sender, _) = broadcast::channel(64);
         let slot = Arc::new(LogSlot {
-            buffer: Mutex::new(LogBuffer::new(info_capacity)),
+            store: Mutex::new(LogStore::new(info_capacity)),
             sender,
         });
         map.insert(key.clone(), slot.clone());
@@ -87,20 +42,40 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let mut buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
-    buffer.set_info_capacity(info_capacity);
+    let mut store = slot.store.lock().expect("sing-box logs store poisoned");
+    store.set_info_capacity(info_capacity);
     let receiver = slot.sender.subscribe();
-    let snapshot = buffer.entries.iter().cloned().collect();
-    Ok((snapshot, receiver))
+    Ok((store.frame(true), receiver))
+}
+
+pub async fn fetch_window(
+    target: SingBoxTarget,
+    level: &str,
+    query: &str,
+    offset: usize,
+    limit: usize,
+    from_end: bool,
+) -> LogWindow {
+    let key = target_key(&target);
+    let map = slots().lock().await;
+    let Some(slot) = map.get(&key) else {
+        return LogWindow::default();
+    };
+    slot.store
+        .lock()
+        .expect("sing-box logs store poisoned")
+        .window(level, query, offset, limit, from_end)
 }
 
 pub async fn clear(target: SingBoxTarget) -> Result<(), MihomoError> {
     let key = target_key(&target);
     if let Some(slot) = slots().lock().await.get(&key) {
-        slot.buffer
+        let frame = slot
+            .store
             .lock()
-            .expect("sing-box logs buffer poisoned")
+            .expect("sing-box logs store poisoned")
             .clear();
+        let _ = slot.sender.send(frame);
     }
     target.client().await?.clear_logs(()).await?;
     Ok(())
@@ -133,13 +108,12 @@ async fn stream_once(target: &SingBoxTarget, slot: &LogSlot) -> Result<(), Mihom
         };
         let Some(log) = log else { return Ok(()) };
         for entry in entries(log.messages) {
-            {
-                slot.buffer
-                    .lock()
-                    .expect("sing-box logs buffer poisoned")
-                    .push(entry.clone());
-            }
-            let _ = slot.sender.send(entry);
+            let frame = slot
+                .store
+                .lock()
+                .expect("sing-box logs store poisoned")
+                .push(entry);
+            let _ = slot.sender.send(frame);
         }
     }
 }
@@ -150,6 +124,7 @@ pub fn entries(messages: Vec<log::Message>) -> Vec<LogEntry> {
         .map(|message| {
             let (level, message) = clean_entry(message.level, &message.message);
             LogEntry {
+                id: 0,
                 time: String::new(),
                 level: level.to_string(),
                 message,
@@ -167,27 +142,6 @@ fn level_name(level: i32) -> &'static str {
         LogLevel::Info => "info",
         LogLevel::Debug => "debug",
         LogLevel::Trace => "trace",
-    }
-}
-
-pub fn level_allows(filter: &str, level: &str) -> bool {
-    let Some(filter_rank) = level_rank(filter) else {
-        return !filter.eq_ignore_ascii_case("silent");
-    };
-    level_rank(level).is_some_and(|rank| rank >= filter_rank)
-}
-
-fn level_rank(level: &str) -> Option<u8> {
-    match level.to_ascii_lowercase().as_str() {
-        "trace" => Some(0),
-        "debug" => Some(1),
-        "info" => Some(2),
-        "warning" | "warn" => Some(3),
-        "error" => Some(4),
-        "fatal" => Some(5),
-        "panic" => Some(6),
-        "silent" => None,
-        _ => Some(2),
     }
 }
 

@@ -15,10 +15,9 @@ import '../widgets/logs_settings_menu.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
 
-/// Renders the buffer owned by `MihomoSession` (`session.logs`). The
-/// WebSocket is opened on controller connect — independent of this widget's
-/// lifecycle — so navigating to "日志" shows already-cached lines instead of
-/// waiting for a fresh subscription.
+/// Renders a small window into the Rust-owned log cache. The backend keeps
+/// collecting while this page is inactive; row payloads are fetched only for
+/// the visible range and its overscan.
 class LogsScreen extends StatefulWidget {
   const LogsScreen({
     super.key,
@@ -39,27 +38,37 @@ class _LogsScreenState extends State<LogsScreen> {
   static const _baseLevels = ['info', 'debug', 'warning', 'error', 'silent'];
 
   final ScrollController _scroll = ScrollController();
+  final ListController _listController = ListController();
+  final Set<BigInt> _enteringIds = <BigInt>{};
   Timer? _flushTimer;
 
+  late int _logsAppendRevision;
   String _filter = '';
-  List<rust.LogEntry> _visibleEntries = const <rust.LogEntry>[];
   bool _follow = true;
   bool _active = true;
   bool _logsDirty = false;
+  bool _autoScrolling = false;
+  bool _windowScheduled = false;
+  int _autoScrollGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    _logsAppendRevision = widget.session.logs.appendRevision;
     _scroll.addListener(_onScroll);
+    _listController.addListener(_scheduleEnsureWindow);
     widget.session.logs.addListener(_onLogs);
-    _recomputeVisibleEntries();
   }
 
   @override
   void dispose() {
     widget.session.logs.removeListener(_onLogs);
+    widget.session.logs.setActive(false);
     _scroll.removeListener(_onScroll);
+    _listController.removeListener(_scheduleEnsureWindow);
     _flushTimer?.cancel();
+    _autoScrollGeneration++;
+    _listController.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -68,28 +77,46 @@ class _LogsScreenState extends State<LogsScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final active = TickerMode.valuesOf(context).enabled;
+    widget.session.logs.setActive(active);
     if (_active == active) return;
     _active = active;
     if (!active) {
       _flushTimer?.cancel();
       _flushTimer = null;
+      _enteringIds.clear();
       return;
     }
     if (_logsDirty) {
       _logsDirty = false;
-      _recomputeVisibleEntries();
+      _scheduleEnsureWindow();
       _scheduleAutoScroll();
     }
   }
 
   void _onLogs() {
     if (!mounted) return;
+    final logs = widget.session.logs;
+    final appendChanged = logs.appendRevision != _logsAppendRevision;
+    _logsAppendRevision = logs.appendRevision;
     if (!_active) {
+      _enteringIds.clear();
       _logsDirty = true;
       return;
     }
-    _recomputeVisibleEntries();
+    final latestAppendId = logs.latestAppendId;
+    if (appendChanged && _follow && latestAppendId != null) {
+      _enteringIds.add(latestAppendId);
+      final revision = _logsAppendRevision;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && revision == _logsAppendRevision) {
+          _enteringIds.clear();
+        }
+      });
+    } else {
+      _enteringIds.clear();
+    }
     setState(() {});
+    _scheduleEnsureWindow();
     _scheduleAutoScroll();
   }
 
@@ -97,17 +124,33 @@ class _LogsScreenState extends State<LogsScreen> {
     final next = value.trim();
     if (next == _filter) return;
     _filter = next;
-    _recomputeVisibleEntries();
-    setState(() {});
+    _enteringIds.clear();
+    widget.session.logs.setQuery(next);
   }
 
   void _onScroll() {
+    _scheduleEnsureWindow();
+    if (_autoScrolling) return;
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
     final atBottom = pos.pixels >= pos.maxScrollExtent - 80;
     if (atBottom != _follow) {
       setState(() => _follow = atBottom);
+      widget.session.logs.setFollowing(atBottom);
     }
+  }
+
+  void _scheduleEnsureWindow() {
+    if (!_active || _windowScheduled) return;
+    _windowScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _windowScheduled = false;
+      if (!mounted || !_active) return;
+      if (!_listController.isAttached) return;
+      final range = _listController.visibleRange;
+      if (range == null) return;
+      widget.session.logs.ensureWindow(range.$1, range.$2);
+    });
   }
 
   // Defer follow-scroll until the rebuild from setState has materialized.
@@ -120,16 +163,36 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!_follow || !_scroll.hasClients) return;
       final pos = _scroll.position;
       if (pos.hasContentDimensions) {
-        _scroll.jumpTo(pos.maxScrollExtent);
+        final target = pos.maxScrollExtent;
+        if ((target - pos.pixels).abs() < 1) return;
+        if (target - pos.pixels > pos.viewportDimension * 2) {
+          _scroll.jumpTo(target);
+          _scheduleEnsureWindow();
+          return;
+        }
+        final generation = ++_autoScrollGeneration;
+        _autoScrolling = true;
+        unawaited(
+          _scroll
+              .animateTo(
+                target,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+              )
+              .whenComplete(() {
+                if (!mounted || generation != _autoScrollGeneration) return;
+                _autoScrolling = false;
+                _onScroll();
+              }),
+        );
       }
     });
   }
 
   void _setLevel(String level) {
     if (level == widget.session.logsLevel) return;
+    _enteringIds.clear();
     widget.session.setLogsLevel(level);
-    _recomputeVisibleEntries();
-    setState(() {});
   }
 
   void _togglePause() {
@@ -146,20 +209,6 @@ class _LogsScreenState extends State<LogsScreen> {
     'silent' => 'off',
     _ => level,
   };
-
-  void _recomputeVisibleEntries() {
-    final all = widget.session.logs.entries;
-    final f = _filter.toLowerCase();
-    _visibleEntries = all
-        .where(
-          (e) =>
-              _levelAllows(widget.session.logsLevel, e.level) &&
-              (f.isEmpty ||
-                  e.message.toLowerCase().contains(f) ||
-                  e.level.toLowerCase().contains(f)),
-        )
-        .toList(growable: false);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,8 +315,10 @@ class _LogsScreenState extends State<LogsScreen> {
               Expanded(
                 child: Builder(
                   builder: (_) {
-                    final entries = _visibleEntries;
-                    if (entries.isEmpty) {
+                    if (logs.filterLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (logs.length == 0) {
                       return Center(
                         child: Text(
                           logs.isEmpty ? '暂无日志' : '没有匹配的日志',
@@ -278,15 +329,22 @@ class _LogsScreenState extends State<LogsScreen> {
                     return RepaintBoundary(
                       child: SuperListView.builder(
                         controller: _scroll,
+                        listController: _listController,
                         padding: EdgeInsets.fromLTRB(
                           16,
                           8,
                           16,
                           24 + MediaQuery.paddingOf(context).bottom,
                         ),
-                        itemCount: entries.length,
-                        itemBuilder: (context, index) =>
-                            _LogTile(entry: entries[index]),
+                        itemCount: logs.length,
+                        itemBuilder: (context, index) {
+                          final entry = logs.rowAt(index);
+                          if (entry == null) return const _LogPlaceholder();
+                          return _AnimatedLogTile(
+                            entry: entry,
+                            animate: _enteringIds.contains(entry.id),
+                          );
+                        },
                       ),
                     );
                   },
@@ -302,6 +360,7 @@ class _LogsScreenState extends State<LogsScreen> {
               tooltip: '回到底部',
               onPressed: () {
                 setState(() => _follow = true);
+                widget.session.logs.setFollowing(true);
                 _scheduleAutoScroll();
               },
               child: const Icon(Icons.arrow_downward),
@@ -310,23 +369,79 @@ class _LogsScreenState extends State<LogsScreen> {
   }
 }
 
-bool _levelAllows(String filter, String level) {
-  final filterRank = _levelRank(filter.isEmpty ? 'info' : filter);
-  if (filterRank == null) return false;
-  return (_levelRank(level) ?? 2) >= filterRank;
+class _LogPlaceholder extends StatelessWidget {
+  const _LogPlaceholder();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(height: 72);
 }
 
-int? _levelRank(String level) => switch (level.toLowerCase()) {
-  'trace' => 0,
-  'debug' => 1,
-  'info' => 2,
-  'warning' || 'warn' => 3,
-  'error' => 4,
-  'fatal' => 5,
-  'panic' => 6,
-  'silent' => null,
-  _ => 2,
-};
+class _AnimatedLogTile extends StatefulWidget {
+  const _AnimatedLogTile({required this.entry, required this.animate});
+
+  final rust.LogEntry entry;
+  final bool animate;
+
+  @override
+  State<_AnimatedLogTile> createState() => _AnimatedLogTileState();
+}
+
+class _AnimatedLogTileState extends State<_AnimatedLogTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+    value: widget.animate ? 0 : 1,
+  );
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedLogTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.entry.id == oldWidget.entry.id) return;
+    if (widget.animate) {
+      _controller.forward(from: 0);
+    } else {
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final child = _LogTile(entry: widget.entry);
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return AnimatedBuilder(
+      animation: _animation,
+      child: child,
+      builder: (context, child) {
+        final progress = _animation.value;
+        return Opacity(
+          opacity: 0.35 + 0.65 * progress,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - progress)),
+            transformHitTests: false,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _LogTile extends StatelessWidget {
   const _LogTile({required this.entry});

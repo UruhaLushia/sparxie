@@ -28,15 +28,14 @@ class MihomoSession {
     this.store, {
     int connectionsIntervalMs = 1000,
     int closedConnectionsCapacity = 500,
-    int logInfoCapacity = LogBuffer.defaultInfoCapacity,
+    int logInfoCapacity = 500,
   }) : _connectionsIntervalMs = connectionsIntervalMs > 0
            ? connectionsIntervalMs
            : 1000,
        _closedConnectionsCapacity = closedConnectionsCapacity > 0
            ? closedConnectionsCapacity
            : 1,
-       _logInfoCapacity = logInfoCapacity > 0 ? logInfoCapacity : 1,
-       logs = LogBuffer(infoCapacity: logInfoCapacity) {
+       _logInfoCapacity = logInfoCapacity > 0 ? logInfoCapacity : 1 {
     store.addListener(_onStoreChange);
     _onStoreChange();
   }
@@ -49,7 +48,7 @@ class MihomoSession {
   StreamSubscription<rust.TrafficSample>? _trafficSub;
   StreamSubscription<rust.MemorySample>? _memorySub;
   StreamSubscription<rust.ConnectionsFrame>? _connSub;
-  StreamSubscription<List<rust.LogEntry>>? _logsSub;
+  StreamSubscription<rust.LogsFrame>? _logsSub;
   Timer? _trafficRetry;
   Timer? _memoryRetry;
   Timer? _connRetry;
@@ -116,6 +115,27 @@ class MihomoSession {
     );
   }
 
+  Future<rust.LogWindow> _fetchLogsWindow(
+    int offset,
+    int limit,
+    String level,
+    String query,
+    bool fromEnd,
+  ) async {
+    final t = _target;
+    if (t == null) {
+      return const rust.LogWindow(total: 0, offset: 0, rows: []);
+    }
+    return rust.fetchLogsWindow(
+      target: t,
+      level: level,
+      query: query,
+      offset: offset,
+      limit: limit,
+      fromEnd: fromEnd,
+    );
+  }
+
   Future<List<rust.ConnectionGroup>> _fetchConnectionGroups(
     ConnectionsTab tab,
     rust.ConnectionGroupSort sort,
@@ -160,9 +180,9 @@ class MihomoSession {
     ConnectionsTotals.zero,
   );
 
-  /// Verbose `/logs` cache for the active controller. Owned here so the
-  /// stream stays alive even when the user is on another tab.
-  final LogBuffer logs;
+  late final LogWindowNotifier logs = LogWindowNotifier(
+    windowFetcher: _fetchLogsWindow,
+  );
 
   /// Resolved local-process icons. Only meaningful when [isLocalBackend].
   final ProcessIconCache processIcons = ProcessIconCache();
@@ -288,13 +308,13 @@ class MihomoSession {
     final next = level.isEmpty ? 'info' : level;
     if (next == _logsLevel) return;
     _logsLevel = next;
+    logs.setLevel(next);
   }
 
   void setLogInfoCapacity(int value) {
     final next = value > 0 ? value : 1;
     if (next == _logInfoCapacity) return;
     _logInfoCapacity = next;
-    logs.setInfoCapacity(next);
     _restartLogs();
   }
 
@@ -451,6 +471,7 @@ class MihomoSession {
     if (_activeKey?.type != BackendType.singBox && _logsLevel == 'trace') {
       _logsLevel = 'debug';
     }
+    logs.setLevel(_logsLevel);
     connectionsPaused.value = false;
     ruleCount.value = 0;
     _iconsWarmed = false;
@@ -725,29 +746,25 @@ class MihomoSession {
         );
   }
 
-  void _subscribeLogs({StreamSubscription<List<rust.LogEntry>>? previous}) {
+  void _subscribeLogs({StreamSubscription<rust.LogsFrame>? previous}) {
     final t = _target;
     if (t == null) return;
     final controller = _activeKey;
     final epoch = _nextStreamEpoch(_RetryKind.logs);
-    var receivedSnapshot = false;
+    var receivedFrame = false;
     var previousSub = previous;
     _logsSub = rust
         .logsStream(target: t, infoCapacity: _logInfoCapacity)
         .listen(
-          (entries) {
+          (frame) {
             if (!_isCurrentStream(_RetryKind.logs, controller, epoch)) return;
-            if (!receivedSnapshot) {
+            if (!receivedFrame) {
+              receivedFrame = true;
               unawaited(previousSub?.cancel());
               previousSub = null;
             }
             _markStreamHealthy(_RetryKind.logs);
-            if (!receivedSnapshot) {
-              receivedSnapshot = true;
-              logs.replaceAll(entries);
-            } else {
-              logs.addAll(entries);
-            }
+            logs.applyFrame(frame);
           },
           onError: (Object e) {
             unawaited(previousSub?.cancel());
@@ -758,8 +775,7 @@ class MihomoSession {
         );
   }
 
-  /// Drop both the Rust ring buffer and the Dart mirror; upstream stream
-  /// keeps running.
+  /// Clear the Rust cache and the currently rendered window.
   Future<void> clearLogs() async {
     final t = _target;
     logs.clearLocal();
