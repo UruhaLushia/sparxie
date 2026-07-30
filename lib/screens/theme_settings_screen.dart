@@ -65,25 +65,9 @@ class ThemeSettingsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    CompactSegmentedButton<AppThemeMode>(
-                      expanded: true,
-                      segments: const [
-                        ButtonSegment(
-                          value: AppThemeMode.system,
-                          label: Text('自动'),
-                        ),
-                        ButtonSegment(
-                          value: AppThemeMode.light,
-                          label: Text('浅色'),
-                        ),
-                        ButtonSegment(
-                          value: AppThemeMode.dark,
-                          label: Text('深色'),
-                        ),
-                      ],
-                      selected: {prefs.appThemeMode},
-                      onSelectionChanged: (selection) =>
-                          prefs.setAppThemeMode(selection.first),
+                    _ThemeModeSelector(
+                      value: prefs.appThemeMode,
+                      onChanged: prefs.setAppThemeMode,
                     ),
                     if (supportsCustomTitleBar) ...[
                       const Divider(height: 24),

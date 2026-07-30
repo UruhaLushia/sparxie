@@ -76,7 +76,7 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
 
   @override
   Widget build(BuildContext context) {
-    _scheduleMeasurement();
+    if (!widget.expanded) _scheduleMeasurement();
     final controlStyle =
         widget.style ?? CompactControlTheme.segmentedOf(context);
     final selectedIndex = widget.segments.indexWhere(
@@ -94,65 +94,95 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
           height: controlStyle.buttonHeight,
           child: Padding(
             padding: EdgeInsets.all(controlStyle.segmentInset),
-            child: Stack(
-              key: _stackKey,
-              children: [
-                if (indicatorRect != null)
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    left: indicatorRect.left,
-                    top: indicatorRect.top,
-                    width: indicatorRect.width,
-                    height: indicatorRect.height,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: controlStyle.selectedBackground(context),
-                          borderRadius: controlStyle.indicatorBorderRadius,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final hasIndicator =
+                    selectedIndex >= 0 &&
+                    (widget.expanded || indicatorRect != null);
+                return Stack(
+                  key: _stackKey,
+                  children: [
+                    if (widget.expanded && selectedIndex >= 0)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: constraints.maxWidth / widget.segments.length,
+                        child: AnimatedSlide(
+                          duration: const Duration(milliseconds: 120),
+                          curve: Curves.easeOutCubic,
+                          offset: Offset(selectedIndex.toDouble(), 0),
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: controlStyle.selectedBackground(context),
+                                borderRadius:
+                                    controlStyle.indicatorBorderRadius,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (indicatorRect != null)
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 120),
+                        curve: Curves.easeOutCubic,
+                        left: indicatorRect.left,
+                        top: indicatorRect.top,
+                        width: indicatorRect.width,
+                        height: indicatorRect.height,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: controlStyle.selectedBackground(context),
+                              borderRadius: controlStyle.indicatorBorderRadius,
+                            ),
+                          ),
                         ),
                       ),
+                    Row(
+                      mainAxisSize: widget.expanded
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < widget.segments.length; i++)
+                          if (widget.expanded)
+                            Expanded(
+                              child: _CompactSegment<T>(
+                                key: _segmentKeys[i],
+                                segment: widget.segments[i],
+                                selected: selectedIndex == i,
+                                fallbackBackground: !hasIndicator,
+                                style: controlStyle,
+                                onPressed:
+                                    widget.segments[i].enabled &&
+                                        selectedIndex != i
+                                    ? () => widget.onSelectionChanged({
+                                        widget.segments[i].value,
+                                      })
+                                    : null,
+                              ),
+                            )
+                          else
+                            _CompactSegment<T>(
+                              key: _segmentKeys[i],
+                              segment: widget.segments[i],
+                              selected: selectedIndex == i,
+                              fallbackBackground: !hasIndicator,
+                              style: controlStyle,
+                              onPressed:
+                                  widget.segments[i].enabled &&
+                                      selectedIndex != i
+                                  ? () => widget.onSelectionChanged({
+                                      widget.segments[i].value,
+                                    })
+                                  : null,
+                            ),
+                      ],
                     ),
-                  ),
-                Row(
-                  mainAxisSize: widget.expanded
-                      ? MainAxisSize.max
-                      : MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < widget.segments.length; i++)
-                      if (widget.expanded)
-                        Expanded(
-                          child: _CompactSegment<T>(
-                            key: _segmentKeys[i],
-                            segment: widget.segments[i],
-                            selected: selectedIndex == i,
-                            fallbackBackground: indicatorRect == null,
-                            style: controlStyle,
-                            onPressed:
-                                widget.segments[i].enabled && selectedIndex != i
-                                ? () => widget.onSelectionChanged({
-                                    widget.segments[i].value,
-                                  })
-                                : null,
-                          ),
-                        )
-                      else
-                        _CompactSegment<T>(
-                          key: _segmentKeys[i],
-                          segment: widget.segments[i],
-                          selected: selectedIndex == i,
-                          fallbackBackground: indicatorRect == null,
-                          style: controlStyle,
-                          onPressed:
-                              widget.segments[i].enabled && selectedIndex != i
-                              ? () => widget.onSelectionChanged({
-                                  widget.segments[i].value,
-                                })
-                              : null,
-                        ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),

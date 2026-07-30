@@ -1,5 +1,59 @@
 part of 'theme_settings_screen.dart';
 
+class _ThemeModeSelector extends StatefulWidget {
+  const _ThemeModeSelector({required this.value, required this.onChanged});
+
+  final AppThemeMode value;
+  final ValueChanged<AppThemeMode> onChanged;
+
+  @override
+  State<_ThemeModeSelector> createState() => _ThemeModeSelectorState();
+}
+
+class _ThemeModeSelectorState extends State<_ThemeModeSelector> {
+  late AppThemeMode _selected;
+  var _changeGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(_ThemeModeSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value == oldWidget.value || widget.value == _selected) return;
+    _changeGeneration++;
+    _selected = widget.value;
+  }
+
+  void _select(Set<AppThemeMode> selection) {
+    final next = selection.first;
+    if (next == _selected) return;
+    final generation = ++_changeGeneration;
+    setState(() => _selected = next);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (generation != _changeGeneration) return;
+      widget.onChanged(next);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompactSegmentedButton<AppThemeMode>(
+      expanded: true,
+      segments: const [
+        ButtonSegment(value: AppThemeMode.system, label: Text('自动')),
+        ButtonSegment(value: AppThemeMode.light, label: Text('浅色')),
+        ButtonSegment(value: AppThemeMode.dark, label: Text('深色')),
+      ],
+      selected: {_selected},
+      onSelectionChanged: _select,
+    );
+  }
+}
+
 class _StyleSlider extends StatelessWidget {
   const _StyleSlider({
     required this.label,
