@@ -6,8 +6,10 @@ import 'app_paths.dart';
 class BackgroundImageStore {
   BackgroundImageStore._();
 
+  static const _managedPrefix = 'managed:';
   static final _imageSizes = <String, ui.Size>{};
   static final _pendingImageSizes = <String, Future<ui.Size>>{};
+  static Directory? _managedDirectory;
 
   static const supportedExtensions = {
     'bmp',
@@ -19,6 +21,54 @@ class BackgroundImageStore {
     'png',
     'webp',
   };
+
+  static Future<void> initialize() async {
+    await _directory();
+  }
+
+  static String resolveReference(String reference) {
+    final value = reference.trim();
+    if (!value.startsWith(_managedPrefix)) return value;
+    final name = value.substring(_managedPrefix.length);
+    final dir = _managedDirectory;
+    if (dir == null || !_isManagedName(name)) return '';
+    return File('${dir.path}${Platform.pathSeparator}$name').absolute.path;
+  }
+
+  static String referenceForPath(String path) {
+    final value = path.trim();
+    if (value.isEmpty) return '';
+    final dir = _managedDirectory;
+    if (dir == null) return value;
+    final file = File(value).absolute;
+    if (file.parent.path != dir.absolute.path) return value;
+    final name = _basename(file.path);
+    return _isManagedName(name) ? '$_managedPrefix$name' : value;
+  }
+
+  static Future<String> normalizeReference(String storedReference) async {
+    final reference = storedReference.trim();
+    if (reference.isEmpty) return '';
+    await initialize();
+    if (reference.startsWith(_managedPrefix)) {
+      final name = reference.substring(_managedPrefix.length);
+      return _isManagedName(name) ? '$_managedPrefix$name' : '';
+    }
+
+    final storedFile = File(reference);
+    if (await storedFile.exists()) {
+      return referenceForPath(storedFile.absolute.path);
+    }
+
+    // Older versions persisted the full iOS container path. App upgrades may
+    // replace that root while retaining the managed directory and filename.
+    if (_basename(storedFile.parent.path) != 'backgrounds') return reference;
+    final name = _basename(storedFile.path);
+    if (!_isManagedName(name)) return reference;
+    final dir = await _directory();
+    final candidate = File('${dir.path}${Platform.pathSeparator}$name');
+    return await candidate.exists() ? '$_managedPrefix$name' : reference;
+  }
 
   static Future<String> importStream(
     String sourceName,
@@ -88,7 +138,15 @@ class BackgroundImageStore {
 
   static Future<void> cleanup(String keepPath) async {
     final dir = await _directory();
-    final keep = keepPath.trim().isEmpty ? null : File(keepPath).absolute.path;
+    final trimmed = keepPath.trim();
+    String? keep;
+    if (trimmed.isNotEmpty) {
+      final keepFile = File(trimmed);
+      // A stale absolute path must not make cleanup delete the recoverable
+      // contents of the current managed directory.
+      if (!await keepFile.exists()) return;
+      keep = keepFile.absolute.path;
+    }
     await for (final entity in dir.list()) {
       if (entity is! File || entity.absolute.path == keep) continue;
       await entity.delete().catchError((_) => entity);
@@ -104,9 +162,14 @@ class BackgroundImageStore {
   }
 
   static Future<Directory> _directory() async {
+    final cached = _managedDirectory;
+    if (cached != null) return cached;
     final config = await AppPaths.configDir();
-    final dir = Directory('${config.path}${Platform.pathSeparator}backgrounds');
+    final dir = Directory(
+      '${config.path}${Platform.pathSeparator}backgrounds',
+    ).absolute;
     if (!await dir.exists()) await dir.create(recursive: true);
+    _managedDirectory = dir;
     return dir;
   }
 
@@ -114,4 +177,15 @@ class BackgroundImageStore {
     final index = name.lastIndexOf('.');
     return index < 0 ? '' : name.substring(index + 1).toLowerCase();
   }
+
+  static String _basename(String path) {
+    final normalized = path
+        .replaceAll('\\', '/')
+        .replaceAll(RegExp(r'/+$'), '');
+    final index = normalized.lastIndexOf('/');
+    return index < 0 ? normalized : normalized.substring(index + 1);
+  }
+
+  static bool _isManagedName(String name) =>
+      name.isNotEmpty && name != '.' && name != '..' && _basename(name) == name;
 }

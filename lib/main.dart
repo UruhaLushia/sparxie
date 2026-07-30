@@ -52,6 +52,7 @@ Future<void> main() async {
   _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.
   final config = await JsonStore.load();
+  await BackgroundImageStore.initialize();
   final prefs = await AppPrefs.load(config);
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
@@ -65,11 +66,19 @@ Future<void> main() async {
   );
   await ImportedFonts.cleanup(prefs.importedFonts);
   await ImportedFonts.loadAll(prefs.importedFonts);
-  await BackgroundImageStore.cleanup(prefs.backgroundImagePath);
+  final backgroundImageReference = prefs.backgroundImageReference;
+  final normalizedBackgroundImageReference =
+      await BackgroundImageStore.normalizeReference(backgroundImageReference);
+  if (normalizedBackgroundImageReference != backgroundImageReference) {
+    await prefs.setBackgroundImageReference(normalizedBackgroundImageReference);
+    await config.flush();
+  }
+  final backgroundImagePath = prefs.backgroundImagePath;
+  await BackgroundImageStore.cleanup(backgroundImagePath);
   if (prefs.backgroundSource == AppBackgroundSource.image &&
-      prefs.backgroundImagePath.isNotEmpty) {
+      backgroundImagePath.isNotEmpty) {
     try {
-      await BackgroundImageStore.imageSize(prefs.backgroundImagePath);
+      await BackgroundImageStore.imageSize(backgroundImagePath);
     } catch (_) {
       // Rendering falls back to the configured background color if the saved
       // image is no longer readable.

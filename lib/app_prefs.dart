@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'background_image_store.dart';
 import 'config_store.dart';
 import 'platform_capabilities.dart';
 
@@ -608,10 +609,19 @@ class AppPrefs extends ChangeNotifier {
     _put(_kBackgroundColor, value);
   }
 
-  String get backgroundImagePath => _str(_kBackgroundImagePath, '').trim();
+  String get backgroundImageReference => _str(_kBackgroundImagePath, '').trim();
+
+  String get backgroundImagePath =>
+      BackgroundImageStore.resolveReference(backgroundImageReference);
+
+  Future<void> setBackgroundImageReference(String reference) async {
+    final next = reference.trim();
+    if (next == backgroundImageReference) return;
+    _put(_kBackgroundImagePath, next);
+  }
 
   Future<void> useBackgroundImage(String path) async {
-    final next = path.trim();
+    final next = BackgroundImageStore.referenceForPath(path);
     if (next.isEmpty) return;
     _putAll({
       _kBackgroundImagePath: next,
