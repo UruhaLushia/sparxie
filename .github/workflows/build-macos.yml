@@ -68,26 +68,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: core
-          key: ${{ matrix.rust_target }}
-
-      - name: Cache CocoaPods
-        if: matrix.arch == 'x86_64'
-        uses: actions/cache@v5
-        with:
-          path: macos/Pods
-          key: pods-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            pods-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Cache Xcode DerivedData
-        if: matrix.arch == 'x86_64'
-        uses: actions/cache@v5
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: xcode-dd-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', 'macos/Podfile') }}
-          restore-keys: |
-            xcode-dd-${{ runner.os }}-${{ runner.arch }}-
+          prefix-key: v1-rust
+          key: macos-${{ matrix.rust_target }}
+          workspaces: 'core -> target'
+          save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Fetch Flutter deps
         run: flutter pub get
@@ -123,3 +107,5 @@ jobs:
           name: ${{ matrix.label }}
           path: out/*
           if-no-files-found: error
+          compression-level: 0
+          overwrite: true

@@ -1,0 +1,234 @@
+name: iOS Self-Hosted Runner Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-runner-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Mac mini environment check
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
+    environment: testflight
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Inspect host
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sw_vers
+          uname -m
+          sysctl -n machdep.cpu.brand_string
+
+          test "$(uname -m)" = "arm64"
+
+          xcode-select -p
+
+          command -v git
+          command -v curl
+          command -v codesign
+          command -v security
+          command -v xcrun
+
+      - name: Inspect Apple toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print
+
+          if ! xcodebuild -version; then
+            printf '::error::A full Xcode installation is not selected. Current developer directory: %s\n' \
+              "$(xcode-select -p)"
+            exit 1
+          fi
+
+          xcodebuild -showsdks
+
+      - name: Verify signing identity and provisioning profile
+        if: always()
+        shell: bash
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          MOBILEPROVISION_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          test -n "$KEYCHAIN_PASSWORD"
+          test -n "$MOBILEPROVISION_BASE64"
+
+          runner_keychain="$(security default-keychain -d user | tr -d ' \"')"
+          test -f "$runner_keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$runner_keychain"
+          security list-keychains -d user -s "$runner_keychain"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$runner_keychain"
+
+          signing_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-signing-smoke.XXXXXX")"
+          trap 'rm -rf "$signing_dir"' EXIT
+
+          profile_path="$signing_dir/Sparxie.mobileprovision"
+          profile_plist="$signing_dir/Sparxie.plist"
+          profile_certificate="$signing_dir/distribution.cer"
+
+          printf '%s' "$MOBILEPROVISION_BASE64" |
+            base64 --decode > "$profile_path"
+          security cms -D -i "$profile_path" > "$profile_plist"
+
+          profile_name="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$profile_plist")"
+          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$profile_plist")"
+          profile_team="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$profile_plist")"
+          profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$profile_plist")"
+          beta_reports="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:beta-reports-active' "$profile_plist")"
+
+          test "$profile_uuid" = "1c7a304c-b472-4557-9057-9531c2da3a57"
+          test "$profile_team" = "7P8CLHDH5G"
+          test "$profile_app_id" = "7P8CLHDH5G.zip.atri.sparxie"
+          test "$beta_reports" = "true"
+
+          plutil -extract DeveloperCertificates.0 raw -o - "$profile_plist" |
+            base64 --decode > "$profile_certificate"
+          profile_certificate_sha1="$(
+            shasum -a 1 "$profile_certificate" | awk '{print toupper($1)}'
+          )"
+
+          printf 'User keychain search list:\n'
+          security list-keychains -d user
+          printf 'Default user keychain:\n'
+          security default-keychain -d user
+
+          printf 'WWDR intermediate certificates visible to the Runner:\n'
+          security find-certificate -a -Z \
+            -c 'Apple Worldwide Developer Relations Certification Authority' || true
+          printf 'Kitta distribution certificates visible to the Runner:\n'
+          security find-certificate -a -Z \
+            -c 'iPhone Distribution: Kitta Ltd' || true
+
+          chain_status=0
+          security verify-cert -c "$profile_certificate" \
+            -p codeSign -v || chain_status=$?
+          printf 'Certificate-chain verification status: %s\n' "$chain_status"
+
+          identities="$(security find-identity -v -p codesigning)"
+          printf '%s\n' "$identities"
+          matching_identity="$(
+            printf '%s\n' "$identities" |
+              grep -Fi "$profile_certificate_sha1" |
+              head -n 1
+          )"
+          test -n "$matching_identity"
+
+          test_executable="$signing_dir/signing-smoke"
+          cp /usr/bin/true "$test_executable"
+          codesign --force --sign "$profile_certificate_sha1" \
+            --timestamp=none "$test_executable"
+          codesign --verify --strict --verbose=2 "$test_executable"
+
+          test "$chain_status" -eq 0
+
+          printf 'Provisioning profile: %s (%s)\n' \
+            "$profile_name" "$profile_uuid"
+          printf 'Matched certificate: %s\n' "$profile_certificate_sha1"
+
+          {
+            printf -- '- Provisioning profile: `%s`\n' "$profile_name"
+            printf -- '- Profile UUID: `%s`\n' "$profile_uuid"
+            printf -- '- Signing certificate: `%s`\n' "$profile_certificate_sha1"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify App Store Connect API credentials
+        if: always()
+        shell: bash
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+
+          test -n "$ASC_API_KEY_BASE64"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_KEY_ID"
+
+          api_key_dir="$(mktemp -d "$RUNNER_TEMP/sparxie-asc-api.XXXXXX")"
+          trap 'rm -rf "$api_key_dir"' EXIT
+
+          api_key_path="$api_key_dir/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_API_KEY_BASE64" |
+            base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          jwt_output="$(
+            xcrun altool --generate-jwt \
+              --api-key "$ASC_KEY_ID" \
+              --api-issuer "$ASC_ISSUER_ID" \
+              --p8-file-path "$api_key_path" 2>&1
+          )"
+          jwt="$(
+            printf '%s\n' "$jwt_output" |
+              grep -Eo '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' |
+              tail -n 1
+          )"
+          test -n "$jwt"
+
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $jwt" \
+              'https://api.appstoreconnect.apple.com/v1/apps?limit=1'
+          )"
+          test -n "$response"
+
+          printf 'App Store Connect API authentication succeeded.\n'
+          printf -- '- App Store Connect API: **authenticated**\n' \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check network access
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error --max-time 20 \
+            https://api.github.com/meta >/dev/null
+          curl --silent --show-error --head --max-time 20 \
+            https://appstoreconnect.apple.com >/dev/null
+
+      - name: Check workspace and temporary storage
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          df -h /
+          df -h "$RUNNER_TEMP"
+
+          smoke_file="$RUNNER_TEMP/sparxie-runner-smoke-${GITHUB_RUN_ID}"
+          printf 'ok\n' > "$smoke_file"
+          test "$(<"$smoke_file")" = "ok"
+          rm -f "$smoke_file"
+
+      - name: Write summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            printf '## iOS Runner smoke test\n\n'
+            printf -- '- Host: `%s`\n' "$(sw_vers -productVersion)"
+            printf -- '- Architecture: `%s`\n' "$(uname -m)"
+            if xcodebuild -version >/dev/null 2>&1; then
+              printf -- '- Xcode: `%s`\n' "$(xcodebuild -version | head -n 1)"
+            else
+              printf -- '- Xcode: **not selected** (`%s`)\n' "$(xcode-select -p)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

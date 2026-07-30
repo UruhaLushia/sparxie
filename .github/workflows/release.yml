@@ -14,6 +14,8 @@ concurrency:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+    with:
+      include_ios_xcarchive: true
     secrets: inherit
 
   publish:
@@ -27,7 +29,10 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) -exec cp {} release/ \;
+          find artifacts \
+            -path 'artifacts/ios-xcarchive' -prune -o \
+            -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) \
+            -exec cp {} release/ \;
           ls -la release/
 
       - uses: softprops/action-gh-release@v2

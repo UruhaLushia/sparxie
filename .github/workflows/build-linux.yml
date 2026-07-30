@@ -46,8 +46,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: core
-          key: ${{ matrix.rust_target }}
+          prefix-key: v1-rust
+          key: linux-${{ matrix.rust_target }}
+          workspaces: 'core -> target'
+          save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Install desktop dependencies
         run: |
@@ -113,3 +115,5 @@ jobs:
           name: linux-${{ matrix.arch }}
           path: out/*
           if-no-files-found: error
+          compression-level: 0
+          overwrite: true
