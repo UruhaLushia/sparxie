@@ -1,9 +1,6 @@
 name: iOS Self-Hosted Runner Smoke Test
 
 on:
-  push:
-    branches:
-      - ci/ios-runner-smoke
   workflow_dispatch:
 
 permissions:
