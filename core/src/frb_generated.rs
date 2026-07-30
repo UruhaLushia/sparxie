@@ -271,13 +271,12 @@ fn wire__crate__backend__api__streams__clear_logs_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_target =
                 <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
-            let api_level = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, ()>(
                     (move || async move {
                         let output_ok = Result::<_, ()>::Ok({
-                            crate::backend::api::streams::clear_logs(api_target, api_level).await;
+                            crate::backend::api::streams::clear_logs(api_target).await;
                         })?;
                         Ok(output_ok)
                     })()
@@ -791,6 +790,7 @@ fn wire__crate__backend__api__connections__connections_stream_impl(
             let api_target =
                 <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
             let api_interval_ms = <u32>::sse_decode(&mut deserializer);
+            let api_closed_capacity = <u32>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
                 crate::backend::api::types::ConnectionsFrame,
                 flutter_rust_bridge::for_generated::SseCodec,
@@ -802,6 +802,7 @@ fn wire__crate__backend__api__connections__connections_stream_impl(
                         let output_ok = crate::backend::api::connections::connections_stream(
                             api_target,
                             api_interval_ms,
+                            api_closed_capacity,
                             api_sink,
                         )
                         .await?;
@@ -1592,7 +1593,7 @@ fn wire__crate__backend__api__streams__logs_stream_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_target =
                 <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
-            let api_level = <String>::sse_decode(&mut deserializer);
+            let api_info_capacity = <u32>::sse_decode(&mut deserializer);
             let api_sink = <StreamSink<
                 Vec<crate::backend::api::types::LogEntry>,
                 flutter_rust_bridge::for_generated::SseCodec,
@@ -1602,7 +1603,9 @@ fn wire__crate__backend__api__streams__logs_stream_impl(
                 transform_result_sse::<_, crate::utils::error::MihomoError>(
                     (move || async move {
                         let output_ok = crate::backend::api::streams::logs_stream(
-                            api_target, api_level, api_sink,
+                            api_target,
+                            api_info_capacity,
+                            api_sink,
                         )
                         .await?;
                         Ok(output_ok)

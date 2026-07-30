@@ -17,16 +17,11 @@ Stream<MemorySample> memoryStream({required BackendTarget target}) =>
 
 Stream<List<LogEntry>> logsStream({
   required BackendTarget target,
-  required String level,
+  required int infoCapacity,
 }) => RustLib.instance.api.crateBackendApiStreamsLogsStream(
   target: target,
-  level: level,
+  infoCapacity: infoCapacity,
 );
 
-Future<void> clearLogs({
-  required BackendTarget target,
-  required String level,
-}) => RustLib.instance.api.crateBackendApiStreamsClearLogs(
-  target: target,
-  level: level,
-);
+Future<void> clearLogs({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiStreamsClearLogs(target: target);

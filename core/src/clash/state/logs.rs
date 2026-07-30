@@ -1,6 +1,6 @@
 //! Per-target rolling log buffer with replay-on-subscribe. Rust owns the
 //! ring; Dart subscribes for an atomic snapshot + delta stream so a fresh
-//! screen sees the last `LOGS_CAP` lines instantly.
+//! screen sees cached verbose logs instantly.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,8 +14,6 @@ use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
 use crate::clash::client::{MihomoClient, read_ws_text};
 
-pub const LOGS_CAP: usize = 500;
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LogEntry {
     #[serde(default)]
@@ -27,8 +25,54 @@ pub struct LogEntry {
 }
 
 struct LogSlot {
-    buffer: Mutex<VecDeque<LogEntry>>,
+    buffer: Mutex<LogBuffer>,
     sender: broadcast::Sender<LogEntry>,
+}
+
+struct LogBuffer {
+    entries: VecDeque<LogEntry>,
+    info_entries: usize,
+    info_capacity: usize,
+}
+
+impl LogBuffer {
+    fn new(info_capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::new(),
+            info_entries: 0,
+            info_capacity: info_capacity.max(1),
+        }
+    }
+
+    fn set_info_capacity(&mut self, info_capacity: usize) {
+        self.info_capacity = info_capacity.max(1);
+        self.trim();
+    }
+
+    fn push(&mut self, entry: LogEntry) {
+        if level_allows("info", &entry.level) {
+            self.info_entries += 1;
+        }
+        self.entries.push_back(entry);
+        self.trim();
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.info_entries = 0;
+    }
+
+    fn trim(&mut self) {
+        while self.info_entries > self.info_capacity {
+            let Some(entry) = self.entries.pop_front() else {
+                self.info_entries = 0;
+                break;
+            };
+            if level_allows("info", &entry.level) {
+                self.info_entries -= 1;
+            }
+        }
+    }
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -65,7 +109,7 @@ pub fn level_allows(filter: &str, level: &str) -> bool {
 /// slip an entry between them — no dropped or duplicated lines.
 pub async fn subscribe(
     target: MihomoTarget,
-    level: &str,
+    info_capacity: usize,
 ) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
     let key = slot_key(&target);
     let mut map = slots().lock().await;
@@ -74,7 +118,7 @@ pub async fn subscribe(
     } else {
         let (tx, _) = broadcast::channel::<LogEntry>(64);
         let slot = Arc::new(LogSlot {
-            buffer: Mutex::new(VecDeque::new()),
+            buffer: Mutex::new(LogBuffer::new(info_capacity)),
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
@@ -83,17 +127,14 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let buf = slot.buffer.lock().expect("logs buffer poisoned");
+    let mut buffer = slot.buffer.lock().expect("logs buffer poisoned");
+    buffer.set_info_capacity(info_capacity);
     let rx = slot.sender.subscribe();
-    let snapshot: Vec<LogEntry> = buf
-        .iter()
-        .filter(|entry| level_allows(level, &entry.level))
-        .cloned()
-        .collect();
+    let snapshot = buffer.entries.iter().cloned().collect();
     Ok((snapshot, rx))
 }
 
-pub async fn clear(target: MihomoTarget, _level: &str) {
+pub async fn clear(target: MihomoTarget) {
     let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
@@ -171,11 +212,10 @@ async fn stream_once(
             continue;
         };
         {
-            let mut buf = slot.buffer.lock().expect("logs buffer poisoned");
-            if buf.len() >= LOGS_CAP {
-                buf.pop_front();
-            }
-            buf.push_back(entry.clone());
+            slot.buffer
+                .lock()
+                .expect("logs buffer poisoned")
+                .push(entry.clone());
         }
         let _ = slot.sender.send(entry);
     }

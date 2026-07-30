@@ -27,6 +27,7 @@ pub use types::*;
 pub(super) struct State {
     pub(super) active: HashMap<String, Connection>,
     pub(super) closed: VecDeque<Connection>,
+    closed_capacity: usize,
     sort: ConnectionsSort,
     asc: bool,
     active_version: u64,
@@ -35,6 +36,29 @@ pub(super) struct State {
     sorted_active_sort: ConnectionsSort,
     sorted_active_asc: bool,
     sorted_active_valid: bool,
+}
+
+impl State {
+    fn new(closed_capacity: usize) -> Self {
+        Self {
+            closed_capacity: closed_capacity.max(1),
+            ..Self::default()
+        }
+    }
+
+    fn set_closed_capacity(&mut self, closed_capacity: usize) {
+        self.closed_capacity = closed_capacity.max(1);
+        while self.closed.len() > self.closed_capacity {
+            self.closed.pop_front();
+        }
+    }
+
+    pub(super) fn push_closed(&mut self, row: Connection) {
+        if self.closed.len() >= self.closed_capacity {
+            self.closed.pop_front();
+        }
+        self.closed.push_back(row);
+    }
 }
 
 pub(super) struct TargetSlot {
@@ -71,16 +95,21 @@ async fn slot_for(target: &MihomoTarget, interval_ms: u32) -> Option<Arc<TargetS
 pub async fn subscribe(
     target: MihomoTarget,
     interval_ms: u32,
+    closed_capacity: usize,
 ) -> Result<broadcast::Receiver<ConnectionsFrame>, MihomoError> {
     let interval = interval_or_default(interval_ms);
     let key = target_key(&target, interval);
     let mut map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
+        slot.state
+            .lock()
+            .expect("connections state poisoned")
+            .set_closed_capacity(closed_capacity);
         return Ok(slot.sender.subscribe());
     }
     let (tx, rx) = broadcast::channel::<ConnectionsFrame>(64);
     let slot = Arc::new(TargetSlot {
-        state: Mutex::new(State::default()),
+        state: Mutex::new(State::new(closed_capacity)),
         sender: tx,
     });
     map.insert(key.clone(), slot.clone());

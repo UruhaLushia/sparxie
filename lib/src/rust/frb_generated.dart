@@ -112,10 +112,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateBackendApiResourcesClearIconCache();
 
-  Future<void> crateBackendApiStreamsClearLogs({
-    required BackendTarget target,
-    required String level,
-  });
+  Future<void> crateBackendApiStreamsClearLogs({required BackendTarget target});
 
   Future<void> crateBackendApiConnectionsCloseAllConnections({
     required BackendTarget target,
@@ -163,6 +160,7 @@ abstract class RustLibApi extends BaseApi {
   Stream<ConnectionsFrame> crateBackendApiConnectionsConnectionsStream({
     required BackendTarget target,
     required int intervalMs,
+    required int closedCapacity,
   });
 
   Future<ConnectionsTotals> crateBackendApiTypesConnectionsTotalsDefault();
@@ -251,7 +249,7 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<List<LogEntry>> crateBackendApiStreamsLogsStream({
     required BackendTarget target,
-    required String level,
+    required int infoCapacity,
   });
 
   Future<MemorySample> crateBackendApiTypesMemorySampleDefault();
@@ -770,14 +768,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<void> crateBackendApiStreamsClearLogs({
     required BackendTarget target,
-    required String level,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(level, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -790,17 +786,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateBackendApiStreamsClearLogsConstMeta,
-        argValues: [target, level],
+        argValues: [target],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateBackendApiStreamsClearLogsConstMeta =>
-      const TaskConstMeta(
-        debugName: "clear_logs",
-        argNames: ["target", "level"],
-      );
+      const TaskConstMeta(debugName: "clear_logs", argNames: ["target"]);
 
   @override
   Future<void> crateBackendApiConnectionsCloseAllConnections({
@@ -1201,6 +1194,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Stream<ConnectionsFrame> crateBackendApiConnectionsConnectionsStream({
     required BackendTarget target,
     required int intervalMs,
+    required int closedCapacity,
   }) {
     final sink = RustStreamSink<ConnectionsFrame>();
     unawaited(
@@ -1210,6 +1204,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             final serializer = SseSerializer(generalizedFrbRustBinding);
             sse_encode_box_autoadd_backend_target(target, serializer);
             sse_encode_u_32(intervalMs, serializer);
+            sse_encode_u_32(closedCapacity, serializer);
             sse_encode_StreamSink_connections_frame_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
@@ -1223,7 +1218,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: sse_decode_mihomo_error,
           ),
           constMeta: kCrateBackendApiConnectionsConnectionsStreamConstMeta,
-          argValues: [target, intervalMs, sink],
+          argValues: [target, intervalMs, closedCapacity, sink],
           apiImpl: this,
         ),
       ),
@@ -1234,7 +1229,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateBackendApiConnectionsConnectionsStreamConstMeta =>
       const TaskConstMeta(
         debugName: "connections_stream",
-        argNames: ["target", "intervalMs", "sink"],
+        argNames: ["target", "intervalMs", "closedCapacity", "sink"],
       );
 
   @override
@@ -1879,7 +1874,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Stream<List<LogEntry>> crateBackendApiStreamsLogsStream({
     required BackendTarget target,
-    required String level,
+    required int infoCapacity,
   }) {
     final sink = RustStreamSink<List<LogEntry>>();
     unawaited(
@@ -1888,7 +1883,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           callFfi: (port_) {
             final serializer = SseSerializer(generalizedFrbRustBinding);
             sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_String(level, serializer);
+            sse_encode_u_32(infoCapacity, serializer);
             sse_encode_StreamSink_list_log_entry_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
@@ -1902,7 +1897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: sse_decode_mihomo_error,
           ),
           constMeta: kCrateBackendApiStreamsLogsStreamConstMeta,
-          argValues: [target, level, sink],
+          argValues: [target, infoCapacity, sink],
           apiImpl: this,
         ),
       ),
@@ -1913,7 +1908,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateBackendApiStreamsLogsStreamConstMeta =>
       const TaskConstMeta(
         debugName: "logs_stream",
-        argNames: ["target", "level", "sink"],
+        argNames: ["target", "infoCapacity", "sink"],
       );
 
   @override

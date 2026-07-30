@@ -11,7 +11,7 @@ use crate::clash::client::{MihomoClient, read_ws_text};
 use super::TargetSlot;
 use super::parse::parse_connection;
 use super::slots;
-use super::types::{CLOSED_CAP, Connection, ConnectionsFrame, ConnectionsSort, ConnectionsTotals};
+use super::types::{Connection, ConnectionsFrame, ConnectionsSort, ConnectionsTotals};
 
 pub(super) async fn stream_loop(
     target: MihomoTarget,
@@ -146,10 +146,7 @@ fn apply_snapshot(
             row.is_closed = true;
             row.upload_speed = 0;
             row.download_speed = 0;
-            if state.closed.len() >= CLOSED_CAP {
-                state.closed.pop_front();
-            }
-            state.closed.push_back(row);
+            state.push_closed(row);
         }
     }
     if order_dirty {

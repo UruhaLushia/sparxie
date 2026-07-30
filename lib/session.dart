@@ -24,7 +24,19 @@ const _retryDelays = <Duration>[
 ];
 
 class MihomoSession {
-  MihomoSession(this.store) {
+  MihomoSession(
+    this.store, {
+    int connectionsIntervalMs = 1000,
+    int closedConnectionsCapacity = 500,
+    int logInfoCapacity = LogBuffer.defaultInfoCapacity,
+  }) : _connectionsIntervalMs = connectionsIntervalMs > 0
+           ? connectionsIntervalMs
+           : 1000,
+       _closedConnectionsCapacity = closedConnectionsCapacity > 0
+           ? closedConnectionsCapacity
+           : 1,
+       _logInfoCapacity = logInfoCapacity > 0 ? logInfoCapacity : 1,
+       logs = LogBuffer(infoCapacity: logInfoCapacity) {
     store.addListener(_onStoreChange);
     _onStoreChange();
   }
@@ -55,13 +67,15 @@ class MihomoSession {
   final _queuedProxyMemberLoads =
       <_ProxyMemberLoadKey, _QueuedProxyMemberLoad>{};
 
-  int _connectionsIntervalMs = 1000;
+  int _connectionsIntervalMs;
+  int _closedConnectionsCapacity;
   int _proxiesIntervalMs = 3000;
   bool _includeHiddenProxyGroups = false;
   bool _resolveProxyProviderCurrentDelay = false;
   String _proxyCatalogFilter = '';
   rust.ProxyMemberSort _proxyMemberSort = rust.ProxyMemberSort.original;
   String _logsLevel = 'info';
+  int _logInfoCapacity;
 
   final ValueNotifier<rust.TrafficSample> traffic = ValueNotifier(
     rust.TrafficSample(
@@ -146,9 +160,9 @@ class MihomoSession {
     ConnectionsTotals.zero,
   );
 
-  /// Rolling 500-entry buffer of `/logs` for the active controller. Owned
-  /// here so the WebSocket is alive even when the user is on another tab.
-  final LogBuffer logs = LogBuffer();
+  /// Verbose `/logs` cache for the active controller. Owned here so the
+  /// stream stays alive even when the user is on another tab.
+  final LogBuffer logs;
 
   /// Resolved local-process icons. Only meaningful when [isLocalBackend].
   final ProcessIconCache processIcons = ProcessIconCache();
@@ -211,6 +225,13 @@ class MihomoSession {
     _restartConnections();
   }
 
+  void setClosedConnectionsCapacity(int value) {
+    final next = value > 0 ? value : 1;
+    if (next == _closedConnectionsCapacity) return;
+    _closedConnectionsCapacity = next;
+    _restartConnections();
+  }
+
   void setProxiesInterval(int ms) {
     if (ms <= 0 || ms == _proxiesIntervalMs) return;
     _proxiesIntervalMs = ms;
@@ -267,6 +288,13 @@ class MihomoSession {
     final next = level.isEmpty ? 'info' : level;
     if (next == _logsLevel) return;
     _logsLevel = next;
+  }
+
+  void setLogInfoCapacity(int value) {
+    final next = value > 0 ? value : 1;
+    if (next == _logInfoCapacity) return;
+    _logInfoCapacity = next;
+    logs.setInfoCapacity(next);
     _restartLogs();
   }
 
@@ -472,13 +500,17 @@ class MihomoSession {
 
   void _restartConnections() {
     _connectionsEpoch++;
-    _connSub?.cancel();
+    final previous = _connSub;
     _connRetry?.cancel();
     _connSub = null;
     _connRetry = null;
     _retryAttempts.remove(_RetryKind.connections);
     connections.reset();
-    if (_target != null) _subscribeConnections();
+    if (_target != null) {
+      _subscribeConnections(previous: previous);
+    } else {
+      previous?.cancel();
+    }
   }
 
   void _restartLogs() {
@@ -643,17 +675,30 @@ class MihomoSession {
         );
   }
 
-  void _subscribeConnections() {
+  void _subscribeConnections({
+    StreamSubscription<rust.ConnectionsFrame>? previous,
+  }) {
     final t = _target;
     if (t == null) return;
     final controller = _activeKey;
     final epoch = _nextStreamEpoch(_RetryKind.connections);
+    var receivedFrame = false;
+    var previousSub = previous;
     _connSub = rust
-        .connectionsStream(target: t, intervalMs: _connectionsIntervalMs)
+        .connectionsStream(
+          target: t,
+          intervalMs: _connectionsIntervalMs,
+          closedCapacity: _closedConnectionsCapacity,
+        )
         .listen(
           (frame) {
             if (!_isCurrentStream(_RetryKind.connections, controller, epoch)) {
               return;
+            }
+            if (!receivedFrame) {
+              receivedFrame = true;
+              unawaited(previousSub?.cancel());
+              previousSub = null;
             }
             _markStreamHealthy(_RetryKind.connections);
             if (connectionsPaused.value) {
@@ -671,8 +716,11 @@ class MihomoSession {
             );
             isStreaming.value = true;
           },
-          onError: (Object e) =>
-              _scheduleRetry(_RetryKind.connections, controller, epoch, e),
+          onError: (Object e) {
+            unawaited(previousSub?.cancel());
+            previousSub = null;
+            _scheduleRetry(_RetryKind.connections, controller, epoch, e);
+          },
           cancelOnError: true,
         );
   }
@@ -685,7 +733,7 @@ class MihomoSession {
     var receivedSnapshot = false;
     var previousSub = previous;
     _logsSub = rust
-        .logsStream(target: t, level: _logsLevel)
+        .logsStream(target: t, infoCapacity: _logInfoCapacity)
         .listen(
           (entries) {
             if (!_isCurrentStream(_RetryKind.logs, controller, epoch)) return;
@@ -716,7 +764,7 @@ class MihomoSession {
     final t = _target;
     logs.clearLocal();
     if (t == null) return;
-    await rust.clearLogs(target: t, level: _logsLevel);
+    await rust.clearLogs(target: t);
   }
 
   void _scheduleRetry(

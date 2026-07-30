@@ -10,17 +10,63 @@ use crate::backend::api::LogEntry;
 use crate::backend::retry::RetryBackoff;
 use crate::surge::client::{SurgeTarget, target_key};
 
-const LOGS_CAP: usize = 500;
-
 struct LogSlot {
     state: Mutex<LogState>,
     sender: broadcast::Sender<LogEntry>,
 }
 
-#[derive(Default)]
 struct LogState {
     buffer: VecDeque<(String, LogEntry)>,
     seen: HashSet<String>,
+    info_entries: usize,
+    info_capacity: usize,
+}
+
+impl LogState {
+    fn new(info_capacity: usize) -> Self {
+        Self {
+            buffer: VecDeque::new(),
+            seen: HashSet::new(),
+            info_entries: 0,
+            info_capacity: info_capacity.max(1),
+        }
+    }
+
+    fn set_info_capacity(&mut self, info_capacity: usize) {
+        self.info_capacity = info_capacity.max(1);
+        self.trim();
+    }
+
+    fn push(&mut self, key: String, entry: LogEntry) -> bool {
+        if !self.seen.insert(key.clone()) {
+            return false;
+        }
+        if level_allows("info", &entry.level) {
+            self.info_entries += 1;
+        }
+        self.buffer.push_back((key, entry));
+        self.trim();
+        true
+    }
+
+    fn clear(&mut self) {
+        self.buffer.clear();
+        self.seen.clear();
+        self.info_entries = 0;
+    }
+
+    fn trim(&mut self) {
+        while self.info_entries > self.info_capacity {
+            let Some((key, entry)) = self.buffer.pop_front() else {
+                self.info_entries = 0;
+                break;
+            };
+            self.seen.remove(&key);
+            if level_allows("info", &entry.level) {
+                self.info_entries -= 1;
+            }
+        }
+    }
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -36,7 +82,7 @@ fn slot_key(target: &SurgeTarget) -> String {
 
 pub async fn subscribe(
     target: SurgeTarget,
-    level: &str,
+    info_capacity: usize,
 ) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
     let key = slot_key(&target);
     let mut map = slots().lock().await;
@@ -45,7 +91,7 @@ pub async fn subscribe(
     } else {
         let (tx, _) = broadcast::channel::<LogEntry>(64);
         let slot = Arc::new(LogSlot {
-            state: Mutex::new(LogState::default()),
+            state: Mutex::new(LogState::new(info_capacity)),
             sender: tx,
         });
         map.insert(key.clone(), slot.clone());
@@ -54,26 +100,25 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let state = slot.state.lock().expect("surge logs state poisoned");
+    let mut state = slot.state.lock().expect("surge logs state poisoned");
+    state.set_info_capacity(info_capacity);
     let rx = slot.sender.subscribe();
     Ok((
         state
             .buffer
             .iter()
-            .filter(|(_, entry)| level_allows(level, &entry.level))
             .map(|(_, entry)| entry.clone())
             .collect(),
         rx,
     ))
 }
 
-pub async fn clear(target: SurgeTarget, _level: &str) {
+pub async fn clear(target: SurgeTarget) {
     let key = slot_key(&target);
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
         let mut state = slot.state.lock().expect("surge logs state poisoned");
-        state.buffer.clear();
-        state.seen.clear();
+        state.clear();
     }
 }
 
@@ -103,17 +148,12 @@ async fn poll_once(target: &SurgeTarget, slot: &LogSlot) -> Result<(), MihomoErr
     entries.reverse();
     for entry in entries {
         let key = event_key(&entry);
-        {
+        let inserted = {
             let mut state = slot.state.lock().expect("surge logs state poisoned");
-            if !state.seen.insert(key.clone()) {
-                continue;
-            }
-            if state.buffer.len() >= LOGS_CAP
-                && let Some((old_key, _)) = state.buffer.pop_front()
-            {
-                state.seen.remove(&old_key);
-            }
-            state.buffer.push_back((key, entry.clone()));
+            state.push(key, entry.clone())
+        };
+        if !inserted {
+            continue;
         }
         let _ = slot.sender.send(entry);
     }

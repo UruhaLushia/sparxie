@@ -5,8 +5,8 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 use crate::MihomoError;
 use crate::backend::api::{
-    CLOSED_CAP, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame,
-    ConnectionsListKind, ConnectionsSort,
+    Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame, ConnectionsListKind,
+    ConnectionsSort,
 };
 use crate::backend::retry::RetryBackoff;
 use crate::sing_box::client::{SingBoxTarget, target_key as base_target_key};
@@ -23,8 +23,32 @@ use sort::{sort_groups, sort_rows};
 struct State {
     active: HashMap<String, Connection>,
     closed: VecDeque<Connection>,
+    closed_capacity: usize,
     sort: ConnectionsSort,
     asc: bool,
+}
+
+impl State {
+    fn new(closed_capacity: usize) -> Self {
+        Self {
+            closed_capacity: closed_capacity.max(1),
+            ..Self::default()
+        }
+    }
+
+    fn set_closed_capacity(&mut self, closed_capacity: usize) {
+        self.closed_capacity = closed_capacity.max(1);
+        while self.closed.len() > self.closed_capacity {
+            self.closed.pop_front();
+        }
+    }
+
+    fn push_closed(&mut self, row: Connection) {
+        if self.closed.len() >= self.closed_capacity {
+            self.closed.pop_front();
+        }
+        self.closed.push_back(row);
+    }
 }
 
 struct TargetSlot {
@@ -58,16 +82,21 @@ async fn slot_for(target: &SingBoxTarget, interval_ms: u32) -> Option<Arc<Target
 pub async fn subscribe(
     target: SingBoxTarget,
     interval_ms: u32,
+    closed_capacity: usize,
 ) -> Result<broadcast::Receiver<ConnectionsFrame>, MihomoError> {
     let interval = interval_or_default(interval_ms);
     let key = target_key(&target, interval);
     let mut map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
+        slot.state
+            .lock()
+            .expect("sing-box connections state poisoned")
+            .set_closed_capacity(closed_capacity);
         return Ok(slot.sender.subscribe());
     }
     let (tx, rx) = broadcast::channel::<ConnectionsFrame>(64);
     let slot = Arc::new(TargetSlot {
-        state: Mutex::new(State::default()),
+        state: Mutex::new(State::new(closed_capacity)),
         sender: tx,
     });
     map.insert(key.clone(), slot.clone());
@@ -269,13 +298,6 @@ async fn stream_once(
         first = false;
         let _ = slot.sender.send(frame);
     }
-}
-
-fn push_closed(state: &mut State, row: Connection) {
-    if state.closed.len() >= CLOSED_CAP {
-        state.closed.pop_front();
-    }
-    state.closed.push_back(row);
 }
 
 fn connection_group_key(row: &Connection) -> String {

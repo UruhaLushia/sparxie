@@ -3,7 +3,7 @@ use crate::sing_box::client::SingBoxTarget;
 use crate::sing_box::proto::daemon::{ConnectionEvent, ConnectionEventType, ConnectionEvents};
 
 use super::parse::{closed_time, parse_connection, speed};
-use super::{State, TargetSlot, push_closed};
+use super::{State, TargetSlot};
 use crate::sing_box::state::status;
 
 pub(super) fn apply_events(
@@ -63,7 +63,7 @@ fn upsert_event(state: &mut State, id: String, event: ConnectionEvent, dt_secs: 
         let mut row = parse_connection(raw, up_speed, down_speed);
         row.id = id.clone();
         if row.is_closed {
-            push_closed(state, row);
+            state.push_closed(row);
         } else {
             state.active.insert(id, row);
         }
@@ -100,5 +100,5 @@ fn close_event(state: &mut State, id: String, event: ConnectionEvent, dt_secs: f
         row.connection_logs
             .push(format!("closed_at={}", closed_time(event.closed_at)));
     }
-    push_closed(state, row);
+    state.push_closed(row);
 }

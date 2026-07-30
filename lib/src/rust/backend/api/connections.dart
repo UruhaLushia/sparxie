@@ -44,9 +44,11 @@ Future<void> closeConnectionsByGroup({
 Stream<ConnectionsFrame> connectionsStream({
   required BackendTarget target,
   required int intervalMs,
+  required int closedCapacity,
 }) => RustLib.instance.api.crateBackendApiConnectionsConnectionsStream(
   target: target,
   intervalMs: intervalMs,
+  closedCapacity: closedCapacity,
 );
 
 Future<ConnectionWindow> fetchConnectionWindow({

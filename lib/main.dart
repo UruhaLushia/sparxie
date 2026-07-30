@@ -98,12 +98,18 @@ Future<void> main() async {
     if (kDebugMode) debugPrint('cache init failed: $e');
   }
   final store = await ControllerStore.load(config);
-  final session = MihomoSession(store)
-    ..setConnectionsInterval(prefs.connectionsRefreshMs);
+  final session = MihomoSession(
+    store,
+    connectionsIntervalMs: prefs.connectionsRefreshMs,
+    closedConnectionsCapacity: prefs.closedConnectionsCapacity,
+    logInfoCapacity: prefs.logInfoCapacity,
+  );
   var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
   var titleBarMode = prefs.desktopTitleBarMode;
   prefs.addListener(() {
     session.setConnectionsInterval(prefs.connectionsRefreshMs);
+    session.setClosedConnectionsCapacity(prefs.closedConnectionsCapacity);
+    session.setLogInfoCapacity(prefs.logInfoCapacity);
     systemAccentColor.setEnabled(prefs.automaticColor);
     final nextTitleBarMode = prefs.desktopTitleBarMode;
     if (nextTitleBarMode != titleBarMode) {

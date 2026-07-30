@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// Closed-connections retention. Approximately 250-500 KB at full capacity.
-pub const CLOSED_CAP: usize = 500;
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Connection {
     pub id: String,

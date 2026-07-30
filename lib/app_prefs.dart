@@ -137,6 +137,8 @@ class AppPrefs extends ChangeNotifier {
   Map<String, dynamic> get _s => _store.section('prefs');
 
   static const _kConnectionsRefreshMs = 'connectionsRefreshMs';
+  static const _kClosedConnectionsCapacity = 'closedConnectionsCapacity';
+  static const _kLogInfoCapacity = 'logInfoCapacity';
   static const _kProxiesSort = 'proxiesSort';
   static const _kProxiesColumns = 'proxiesColumns';
   static const _kProxiesShowGroupIcons = 'proxiesShowGroupIcons';
@@ -180,6 +182,10 @@ class AppPrefs extends ChangeNotifier {
   static const _kSurfaceBlur = 'surfaceBlur';
 
   static const defaultConnectionsRefreshMs = 1000;
+  static const defaultClosedConnectionsCapacity = 500;
+  static const defaultLogInfoCapacity = 500;
+  static const minCacheCapacity = 50;
+  static const maxCacheCapacity = 5000;
   static const defaultProxiesSort = ProxiesSort.original;
 
   /// `0` means "auto" — pick a column count from the viewport width.
@@ -316,6 +322,28 @@ class AppPrefs extends ChangeNotifier {
     final clamped = value.clamp(250, 30000);
     if (clamped == connectionsRefreshMs) return;
     _put(_kConnectionsRefreshMs, clamped);
+  }
+
+  int get closedConnectionsCapacity => _int(
+    _kClosedConnectionsCapacity,
+    defaultClosedConnectionsCapacity,
+  ).clamp(minCacheCapacity, maxCacheCapacity);
+
+  Future<void> setClosedConnectionsCapacity(int value) async {
+    final clamped = value.clamp(minCacheCapacity, maxCacheCapacity);
+    if (clamped == closedConnectionsCapacity) return;
+    _put(_kClosedConnectionsCapacity, clamped);
+  }
+
+  int get logInfoCapacity => _int(
+    _kLogInfoCapacity,
+    defaultLogInfoCapacity,
+  ).clamp(minCacheCapacity, maxCacheCapacity);
+
+  Future<void> setLogInfoCapacity(int value) async {
+    final clamped = value.clamp(minCacheCapacity, maxCacheCapacity);
+    if (clamped == logInfoCapacity) return;
+    _put(_kLogInfoCapacity, clamped);
   }
 
   ProxiesSort get proxiesSort =>

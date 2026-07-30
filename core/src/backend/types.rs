@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const CLOSED_CAP: usize = 500;
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TrafficSample {
     pub up: u64,

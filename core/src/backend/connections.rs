@@ -73,12 +73,18 @@ pub async fn close_connections_by_group(
 pub async fn connections_stream(
     target: BackendTarget,
     interval_ms: u32,
+    closed_capacity: u32,
     sink: StreamSink<ConnectionsFrame>,
 ) -> Result<(), MihomoError> {
+    let closed_capacity = closed_capacity.max(1) as usize;
     match target.backend_type {
         BackendType::Clash => {
-            let rx =
-                crate::clash::state::connections::subscribe(target.clash(), interval_ms).await?;
+            let rx = crate::clash::state::connections::subscribe(
+                target.clash(),
+                interval_ms,
+                closed_capacity,
+            )
+            .await?;
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(frame) = item else { continue };
@@ -89,8 +95,12 @@ pub async fn connections_stream(
             Ok(())
         }
         BackendType::Surge => {
-            let rx =
-                crate::surge::state::connections::subscribe(target.surge(), interval_ms).await?;
+            let rx = crate::surge::state::connections::subscribe(
+                target.surge(),
+                interval_ms,
+                closed_capacity,
+            )
+            .await?;
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(frame) = item else { continue };
@@ -101,8 +111,12 @@ pub async fn connections_stream(
             Ok(())
         }
         BackendType::SingBox => {
-            let rx = crate::sing_box::state::connections::subscribe(target.sing_box(), interval_ms)
-                .await?;
+            let rx = crate::sing_box::state::connections::subscribe(
+                target.sing_box(),
+                interval_ms,
+                closed_capacity,
+            )
+            .await?;
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(frame) = item else { continue };

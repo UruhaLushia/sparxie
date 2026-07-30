@@ -81,13 +81,14 @@ pub async fn memory_stream(
 
 pub async fn logs_stream(
     target: BackendTarget,
-    level: String,
+    info_capacity: u32,
     sink: StreamSink<Vec<LogEntry>>,
 ) -> Result<(), MihomoError> {
+    let info_capacity = info_capacity.max(1) as usize;
     match target.backend_type {
         BackendType::Clash => {
             let (snapshot, rx) =
-                crate::clash::state::logs::subscribe(target.clash(), &level).await?;
+                crate::clash::state::logs::subscribe(target.clash(), info_capacity).await?;
             if sink
                 .add(snapshot.into_iter().map(Into::into).collect())
                 .is_err()
@@ -97,9 +98,6 @@ pub async fn logs_stream(
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(sample) = item else { continue };
-                if !crate::clash::state::logs::level_allows(&level, &sample.level) {
-                    continue;
-                }
                 if sink.add(vec![sample.into()]).is_err() {
                     break;
                 }
@@ -108,16 +106,13 @@ pub async fn logs_stream(
         }
         BackendType::Surge => {
             let (snapshot, rx) =
-                crate::surge::state::logs::subscribe(target.surge(), &level).await?;
+                crate::surge::state::logs::subscribe(target.surge(), info_capacity).await?;
             if sink.add(snapshot).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(sample) = item else { continue };
-                if !crate::surge::state::logs::level_allows(&level, &sample.level) {
-                    continue;
-                }
                 if sink.add(vec![sample]).is_err() {
                     break;
                 }
@@ -126,16 +121,13 @@ pub async fn logs_stream(
         }
         BackendType::SingBox => {
             let (snapshot, rx) =
-                crate::sing_box::state::logs::subscribe(target.sing_box(), &level).await?;
+                crate::sing_box::state::logs::subscribe(target.sing_box(), info_capacity).await?;
             if sink.add(snapshot).is_err() {
                 return Ok(());
             }
             let mut stream = BroadcastStream::new(rx);
             while let Some(item) = stream.next().await {
                 let Ok(sample) = item else { continue };
-                if !crate::sing_box::state::logs::level_allows(&level, &sample.level) {
-                    continue;
-                }
                 if sink.add(vec![sample]).is_err() {
                     break;
                 }
@@ -145,10 +137,10 @@ pub async fn logs_stream(
     }
 }
 
-pub async fn clear_logs(target: BackendTarget, level: String) {
+pub async fn clear_logs(target: BackendTarget) {
     match target.backend_type {
-        BackendType::Clash => crate::clash::state::logs::clear(target.clash(), &level).await,
-        BackendType::Surge => crate::surge::state::logs::clear(target.surge(), &level).await,
+        BackendType::Clash => crate::clash::state::logs::clear(target.clash()).await,
+        BackendType::Surge => crate::surge::state::logs::clear(target.surge()).await,
         BackendType::SingBox => {
             let _ = crate::sing_box::state::logs::clear(target.sing_box()).await;
         }

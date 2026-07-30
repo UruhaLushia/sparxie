@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
 import '../session.dart';
@@ -10,6 +11,7 @@ import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
+import '../widgets/logs_settings_menu.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
 
@@ -18,9 +20,15 @@ import '../widgets/route_app_bar.dart';
 /// lifecycle — so navigating to "日志" shows already-cached lines instead of
 /// waiting for a fresh subscription.
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({super.key, required this.store, required this.session});
+  const LogsScreen({
+    super.key,
+    required this.store,
+    required this.prefs,
+    required this.session,
+  });
 
   final ctl.ControllerStore store;
+  final AppPrefs prefs;
   final MihomoSession session;
 
   @override
@@ -120,6 +128,7 @@ class _LogsScreenState extends State<LogsScreen> {
   void _setLevel(String level) {
     if (level == widget.session.logsLevel) return;
     widget.session.setLogsLevel(level);
+    _recomputeVisibleEntries();
     setState(() {});
   }
 
@@ -140,16 +149,14 @@ class _LogsScreenState extends State<LogsScreen> {
 
   void _recomputeVisibleEntries() {
     final all = widget.session.logs.entries;
-    if (_filter.isEmpty) {
-      _visibleEntries = all;
-      return;
-    }
     final f = _filter.toLowerCase();
     _visibleEntries = all
         .where(
           (e) =>
-              e.message.toLowerCase().contains(f) ||
-              e.level.toLowerCase().contains(f),
+              _levelAllows(widget.session.logsLevel, e.level) &&
+              (f.isEmpty ||
+                  e.message.toLowerCase().contains(f) ||
+                  e.level.toLowerCase().contains(f)),
         )
         .toList(growable: false);
   }
@@ -168,20 +175,24 @@ class _LogsScreenState extends State<LogsScreen> {
           automaticallyImplyLeading: false,
           title: const Text('日志'),
           flexibleSpace: const DesktopAppBarDragArea(),
+          actionsPadding: const EdgeInsets.only(right: 4),
           actions: [
             ActiveValueListenableBuilder<bool>(
               valueListenable: logs.paused,
               builder: (_, paused, _) => IconButton(
                 tooltip: paused ? '继续' : '暂停',
+                visualDensity: VisualDensity.compact,
                 onPressed: _togglePause,
                 icon: Icon(paused ? Icons.play_arrow : Icons.pause),
               ),
             ),
             IconButton(
               tooltip: '清空',
+              visualDensity: VisualDensity.compact,
               onPressed: logs.isEmpty ? null : _clear,
               icon: const Icon(Icons.delete_outline),
             ),
+            LogsSettingsMenu(prefs: widget.prefs),
           ],
         ),
       ),
@@ -298,6 +309,24 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 }
+
+bool _levelAllows(String filter, String level) {
+  final filterRank = _levelRank(filter.isEmpty ? 'info' : filter);
+  if (filterRank == null) return false;
+  return (_levelRank(level) ?? 2) >= filterRank;
+}
+
+int? _levelRank(String level) => switch (level.toLowerCase()) {
+  'trace' => 0,
+  'debug' => 1,
+  'info' => 2,
+  'warning' || 'warn' => 3,
+  'error' => 4,
+  'fatal' => 5,
+  'panic' => 6,
+  'silent' => null,
+  _ => 2,
+};
 
 class _LogTile extends StatelessWidget {
   const _LogTile({required this.entry});

@@ -9,11 +9,55 @@ use crate::backend::retry::RetryBackoff;
 use crate::sing_box::client::{SingBoxTarget, target_key};
 use crate::sing_box::proto::daemon::{LogLevel, log};
 
-const LOGS_CAP: usize = 500;
-
 struct LogSlot {
-    buffer: Mutex<VecDeque<LogEntry>>,
+    buffer: Mutex<LogBuffer>,
     sender: broadcast::Sender<LogEntry>,
+}
+
+struct LogBuffer {
+    entries: VecDeque<LogEntry>,
+    info_entries: usize,
+    info_capacity: usize,
+}
+
+impl LogBuffer {
+    fn new(info_capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::new(),
+            info_entries: 0,
+            info_capacity: info_capacity.max(1),
+        }
+    }
+
+    fn set_info_capacity(&mut self, info_capacity: usize) {
+        self.info_capacity = info_capacity.max(1);
+        self.trim();
+    }
+
+    fn push(&mut self, entry: LogEntry) {
+        if level_allows("info", &entry.level) {
+            self.info_entries += 1;
+        }
+        self.entries.push_back(entry);
+        self.trim();
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.info_entries = 0;
+    }
+
+    fn trim(&mut self) {
+        while self.info_entries > self.info_capacity {
+            let Some(entry) = self.entries.pop_front() else {
+                self.info_entries = 0;
+                break;
+            };
+            if level_allows("info", &entry.level) {
+                self.info_entries -= 1;
+            }
+        }
+    }
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -25,7 +69,7 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
 
 pub async fn subscribe(
     target: SingBoxTarget,
-    level: &str,
+    info_capacity: usize,
 ) -> Result<(Vec<LogEntry>, broadcast::Receiver<LogEntry>), MihomoError> {
     let key = target_key(&target);
     let mut map = slots().lock().await;
@@ -34,7 +78,7 @@ pub async fn subscribe(
     } else {
         let (sender, _) = broadcast::channel(64);
         let slot = Arc::new(LogSlot {
-            buffer: Mutex::new(VecDeque::new()),
+            buffer: Mutex::new(LogBuffer::new(info_capacity)),
             sender,
         });
         map.insert(key.clone(), slot.clone());
@@ -43,13 +87,10 @@ pub async fn subscribe(
     };
     drop(map);
 
-    let buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
+    let mut buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
+    buffer.set_info_capacity(info_capacity);
     let receiver = slot.sender.subscribe();
-    let snapshot = buffer
-        .iter()
-        .filter(|entry| level_allows(level, &entry.level))
-        .cloned()
-        .collect();
+    let snapshot = buffer.entries.iter().cloned().collect();
     Ok((snapshot, receiver))
 }
 
@@ -91,32 +132,28 @@ async fn stream_once(target: &SingBoxTarget, slot: &LogSlot) -> Result<(), Mihom
             log = stream.message() => log?,
         };
         let Some(log) = log else { return Ok(()) };
-        for entry in entries(log.messages, "trace") {
+        for entry in entries(log.messages) {
             {
-                let mut buffer = slot.buffer.lock().expect("sing-box logs buffer poisoned");
-                if buffer.len() >= LOGS_CAP {
-                    buffer.pop_front();
-                }
-                buffer.push_back(entry.clone());
+                slot.buffer
+                    .lock()
+                    .expect("sing-box logs buffer poisoned")
+                    .push(entry.clone());
             }
             let _ = slot.sender.send(entry);
         }
     }
 }
 
-pub fn entries(messages: Vec<log::Message>, filter: &str) -> Vec<LogEntry> {
+pub fn entries(messages: Vec<log::Message>) -> Vec<LogEntry> {
     messages
         .into_iter()
-        .filter_map(|message| {
+        .map(|message| {
             let (level, message) = clean_entry(message.level, &message.message);
-            if !level_allows(filter, level) {
-                return None;
-            }
-            Some(LogEntry {
+            LogEntry {
                 time: String::new(),
                 level: level.to_string(),
                 message,
-            })
+            }
         })
         .collect()
 }
@@ -135,7 +172,7 @@ fn level_name(level: i32) -> &'static str {
 
 pub fn level_allows(filter: &str, level: &str) -> bool {
     let Some(filter_rank) = level_rank(filter) else {
-        return filter.to_ascii_lowercase() != "silent";
+        return !filter.eq_ignore_ascii_case("silent");
     };
     level_rank(level).is_some_and(|rank| rank >= filter_rank)
 }

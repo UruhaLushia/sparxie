@@ -87,6 +87,12 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
                                 '当前:${_formatMs(prefs.connectionsRefreshMs)}。设置过低会增加后端与设备负载。',
                             child: _RefreshChips(prefs: prefs),
                           ),
+                          _SettingsBlock(
+                            label: '已关闭连接缓存',
+                            hint:
+                                '当前:${prefs.closedConnectionsCapacity} 条。仅限制历史连接，不影响活动连接。',
+                            child: _ClosedCapacityChips(prefs: prefs),
+                          ),
                           CompactSwitch.tile(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -213,6 +219,32 @@ class _RefreshChips extends StatelessWidget {
         selected: {current},
         onSelectionChanged: (selection) =>
             prefs.setConnectionsRefreshMs(selection.first),
+      ),
+    );
+  }
+}
+
+class _ClosedCapacityChips extends StatelessWidget {
+  const _ClosedCapacityChips({required this.prefs});
+
+  final AppPrefs prefs;
+
+  static const _options = <int>[100, 250, 500, 1000, 2000, 5000];
+
+  @override
+  Widget build(BuildContext context) {
+    final values = <int>{..._options, prefs.closedConnectionsCapacity}.toList()
+      ..sort();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: CompactSegmentedButton<int>(
+        segments: [
+          for (final value in values)
+            ButtonSegment(value: value, label: Text('$value')),
+        ],
+        selected: {prefs.closedConnectionsCapacity},
+        onSelectionChanged: (selection) =>
+            prefs.setClosedConnectionsCapacity(selection.first),
       ),
     );
   }
