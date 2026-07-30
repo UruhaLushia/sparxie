@@ -409,7 +409,21 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
     return Scaffold(
       extendBody: true,
-      body: _BodyTransitionIndexedStack(index: _index, children: pages),
+      body: Builder(
+        builder: (context) {
+          final data = MediaQuery.of(context);
+          // `extendBody` updates padding, while nested Scaffolds position FABs
+          // from viewPadding. Mirror the actual bar inset for both.
+          return MediaQuery(
+            data: data.copyWith(
+              viewPadding: data.viewPadding.copyWith(
+                bottom: data.padding.bottom,
+              ),
+            ),
+            child: _BodyTransitionIndexedStack(index: _index, children: pages),
+          );
+        },
+      ),
       bottomNavigationBar: ClipRect(child: AppBackdropGroup(child: bottomBar)),
     );
   }
