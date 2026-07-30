@@ -69,6 +69,7 @@ pub async fn fetch_window(
     offset: usize,
     limit: usize,
     from_end: bool,
+    anchor_id: u64,
 ) -> LogWindow {
     let key = slot_key(&target);
     let map = slots().lock().await;
@@ -78,7 +79,7 @@ pub async fn fetch_window(
     slot.store
         .lock()
         .expect("logs store poisoned")
-        .window(level, query, offset, limit, from_end)
+        .window(level, query, offset, limit, from_end, anchor_id)
 }
 
 pub async fn clear(target: MihomoTarget) {

@@ -12,6 +12,7 @@ typedef LogWindowFetcher =
       String level,
       String query,
       bool fromEnd,
+      BigInt? anchorId,
     );
 
 /// Rust owns the full log cache. Dart retains only the visible window plus a
@@ -22,8 +23,8 @@ class LogWindowNotifier extends ChangeNotifier {
   }
 
   static const int _initialWindowSize = 30;
-  static const int _windowOverscan = 12;
-  static const int _windowRefetchMargin = 6;
+  static const int _windowOverscan = 20;
+  static const int _windowRefetchMargin = 10;
   static const Duration _refetchDebounce = Duration(milliseconds: 50);
 
   LogWindowFetcher? windowFetcher;
@@ -33,16 +34,22 @@ class LogWindowNotifier extends ChangeNotifier {
   int _rawTotal = 0;
   int _total = 0;
   int _offset = 0;
-  int _limit = _initialWindowSize;
+  int _requestedOffset = 0;
+  int _requestedLimit = _initialWindowSize;
   String _level = 'info';
   String _query = '';
   bool _filterLoading = false;
   bool _following = true;
   bool _active = false;
+  bool _notifyOnNextWindow = false;
   int _filterRevision = 0;
   BigInt _latestId = BigInt.zero;
+  BigInt? _anchorId;
   int _appendRevision = 0;
   BigInt? _latestAppendId;
+  int _frameRevision = 0;
+  int _windowFrameRevision = -1;
+  int _windowRevision = 0;
 
   Timer? _refetchTimer;
   bool _refetching = false;
@@ -55,6 +62,21 @@ class LogWindowNotifier extends ChangeNotifier {
   bool get filterLoading => _filterLoading;
   int get appendRevision => _appendRevision;
   BigInt? get latestAppendId => _latestAppendId;
+  int get windowRevision => _windowRevision;
+
+  /// Returns the current window revision when a refresh is queued; otherwise
+  /// returns null.
+  int? refreshWindow() {
+    if (!_active || paused.value || _rawTotal == 0 || windowFetcher == null) {
+      return null;
+    }
+    final pending = _refetchTimer != null || _refetching || _refetchAgain;
+    if (!pending && _windowFrameRevision == _frameRevision) return null;
+    final revision = _windowRevision;
+    _notifyOnNextWindow = true;
+    _scheduleRefetch(force: true, fromEnd: _following);
+    return revision;
+  }
 
   rust.LogEntry? rowAt(int index) {
     final local = index - _offset;
@@ -62,7 +84,13 @@ class LogWindowNotifier extends ChangeNotifier {
     return _rows[local];
   }
 
+  int? indexOfId(BigInt id) {
+    final local = _rows.indexWhere((entry) => entry.id == id);
+    return local < 0 ? null : _offset + local;
+  }
+
   void applyFrame(rust.LogsFrame frame) {
+    _frameRevision++;
     if (frame.isInitial) _filterRevision++;
     final appended =
         !frame.isInitial && frame.total > 0 && frame.latestId != _latestId;
@@ -72,11 +100,8 @@ class LogWindowNotifier extends ChangeNotifier {
     if (_rawTotal == 0) {
       _cancelScheduledRefetch();
       _filterRevision++;
-      _total = 0;
-      _offset = 0;
-      _rows = const [];
-      _filterLoading = false;
-      _latestAppendId = null;
+      _clearWindow();
+      _completeWindowRefresh(_frameRevision);
       notifyListeners();
       return;
     }
@@ -84,7 +109,7 @@ class LogWindowNotifier extends ChangeNotifier {
     if (!_active || paused.value) return;
     if (appended) {
       _appendRevision++;
-      _latestAppendId = frame.latestId;
+      _latestAppendId = _following ? frame.latestId : null;
     }
     _scheduleRefetch(force: frame.isInitial, fromEnd: _following);
   }
@@ -95,14 +120,15 @@ class LogWindowNotifier extends ChangeNotifier {
     if (!value) {
       _cancelScheduledRefetch();
       _filterRevision++;
-      _rows = const [];
+      _notifyOnNextWindow = false;
       _latestAppendId = null;
       return;
     }
     if (_rawTotal == 0 || paused.value) return;
+    _notifyOnNextWindow = true;
     _filterLoading = _rows.isEmpty;
     _scheduleRefetch(force: true, fromEnd: _following);
-    notifyListeners();
+    if (_filterLoading) notifyListeners();
   }
 
   void setFollowing(bool value) {
@@ -110,11 +136,18 @@ class LogWindowNotifier extends ChangeNotifier {
     _following = value;
     if (!value) {
       _pendingFromEnd = false;
+      _latestAppendId = null;
       return;
     }
+    _anchorId = null;
     if (value && _active && !paused.value && _rawTotal > 0) {
       _scheduleRefetch(force: true, fromEnd: true);
     }
+  }
+
+  void setAnchor(BigInt? value) {
+    if (_anchorId == value) return;
+    _anchorId = value;
   }
 
   void setLevel(String value) {
@@ -143,29 +176,27 @@ class LogWindowNotifier extends ChangeNotifier {
     final cachedEnd = _offset + _rows.length;
     final covered =
         _rows.isNotEmpty &&
-        safeFirst >= _offset + _windowRefetchMargin &&
-        safeLast < cachedEnd - _windowRefetchMargin;
+        (_offset == 0 || safeFirst >= _offset + _windowRefetchMargin) &&
+        (cachedEnd >= _total || safeLast < cachedEnd - _windowRefetchMargin);
     if (covered ||
         (desiredOffset == _offset &&
-            desiredLimit == _limit &&
+            desiredLimit == _rows.length &&
             _rows.isNotEmpty)) {
       return;
     }
-    _offset = desiredOffset;
-    _limit = math.max(desiredLimit, 1);
-    _scheduleRefetch(force: true);
+    _requestedOffset = desiredOffset;
+    _requestedLimit = math.max(desiredLimit, 1);
+    _scheduleRefetch();
   }
 
   void clearLocal() {
     _cancelScheduledRefetch();
     _filterRevision++;
     _rawTotal = 0;
-    _total = 0;
-    _offset = 0;
-    _rows = const [];
-    _filterLoading = false;
     _latestId = BigInt.zero;
-    _latestAppendId = null;
+    _clearWindow();
+    _frameRevision++;
+    _completeWindowRefresh(_frameRevision);
     notifyListeners();
   }
 
@@ -173,25 +204,19 @@ class LogWindowNotifier extends ChangeNotifier {
     _cancelScheduledRefetch();
     _filterRevision++;
     _rawTotal = 0;
-    _total = 0;
-    _offset = 0;
-    _limit = _initialWindowSize;
-    _rows = const [];
-    _filterLoading = false;
     _latestId = BigInt.zero;
     _appendRevision = 0;
-    _latestAppendId = null;
+    _clearWindow(resetRequestLimit: true);
+    _frameRevision++;
+    _completeWindowRefresh(_frameRevision);
     paused.value = false;
     notifyListeners();
   }
 
   void _filterChanged() {
     _filterRevision++;
-    _total = 0;
-    _offset = 0;
-    _limit = _initialWindowSize;
-    _rows = const [];
-    _latestAppendId = null;
+    _clearWindow(resetRequestLimit: true);
+    _windowFrameRevision = -1;
     _filterLoading = _rawTotal > 0;
     if (_active && !paused.value && _rawTotal > 0) {
       _scheduleRefetch(fromEnd: _following);
@@ -199,11 +224,29 @@ class LogWindowNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _clearWindow({bool resetRequestLimit = false}) {
+    _total = 0;
+    _offset = 0;
+    _requestedOffset = 0;
+    if (resetRequestLimit) _requestedLimit = _initialWindowSize;
+    _rows = const [];
+    _filterLoading = false;
+    _notifyOnNextWindow = false;
+    _anchorId = null;
+    _latestAppendId = null;
+  }
+
+  void _completeWindowRefresh(int frameRevision) {
+    _windowFrameRevision = frameRevision;
+    _windowRevision++;
+  }
+
   void _onPausedChanged() {
     _latestAppendId = null;
     if (paused.value) {
       _cancelScheduledRefetch();
       _filterRevision++;
+      _notifyOnNextWindow = false;
       return;
     }
     if (!_active || _rawTotal == 0) return;
@@ -273,28 +316,46 @@ class LogWindowNotifier extends ChangeNotifier {
     final filterRevision = _filterRevision;
     final level = _level;
     final query = _query;
-    final offset = _offset;
-    final limit = math.max(_limit, 1);
+    final frameRevision = _frameRevision;
+    final anchorId = fromEnd ? null : _anchorId;
+    final offset = _requestedOffset;
+    final limit = math.max(_requestedLimit, 1);
+    bool requestIsCurrent() =>
+        _active &&
+        !paused.value &&
+        filterRevision == _filterRevision &&
+        level == _level &&
+        query == _query &&
+        (!fromEnd || _following) &&
+        (fromEnd || (offset == _requestedOffset && limit == _requestedLimit));
     final rust.LogWindow window;
     try {
-      window = await fetcher(offset, limit, level, query, fromEnd);
+      window = await fetcher(offset, limit, level, query, fromEnd, anchorId);
     } catch (_) {
+      if (!requestIsCurrent()) return;
+      _windowRevision++;
+      final shouldNotify = _notifyOnNextWindow;
+      _notifyOnNextWindow = false;
+      if (shouldNotify) notifyListeners();
       return;
     }
-    if (!_active ||
-        paused.value ||
-        filterRevision != _filterRevision ||
-        level != _level ||
-        query != _query ||
-        (fromEnd && !_following) ||
-        (!fromEnd && (offset != _offset || limit != _limit))) {
-      return;
-    }
+    if (!requestIsCurrent()) return;
+    final changed =
+        _filterLoading ||
+        _total != window.total ||
+        _offset != window.offset ||
+        !listEquals(_rows, window.rows);
     _total = window.total;
     _offset = window.offset;
+    if (offset == _requestedOffset && limit == _requestedLimit) {
+      _requestedOffset = window.offset;
+    }
     _rows = window.rows;
     _filterLoading = false;
-    notifyListeners();
+    _completeWindowRefresh(frameRevision);
+    final shouldNotify = changed || _notifyOnNextWindow;
+    _notifyOnNextWindow = false;
+    if (shouldNotify) notifyListeners();
   }
 
   void _cancelScheduledRefetch() {
@@ -309,6 +370,7 @@ class LogWindowNotifier extends ChangeNotifier {
   void dispose() {
     _cancelScheduledRefetch();
     _active = false;
+    _notifyOnNextWindow = false;
     _filterRevision++;
     paused.removeListener(_onPausedChanged);
     paused.dispose();

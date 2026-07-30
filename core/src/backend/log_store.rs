@@ -64,17 +64,30 @@ impl LogStore {
         offset: usize,
         limit: usize,
         from_end: bool,
+        anchor_id: u64,
     ) -> LogWindow {
         let query = query.trim().to_lowercase();
+        let filter_rank = level_rank(if level.is_empty() { "info" } else { level });
         let matches = |stored: &&StoredLog| {
-            level_allows(level, &stored.entry.level)
+            level_allows_rank(filter_rank, &stored.entry.level)
                 && (query.is_empty()
                     || stored.entry.message.to_lowercase().contains(&query)
                     || stored.entry.level.to_lowercase().contains(&query))
         };
-        let total = self.entries.iter().filter(matches).count();
+        let mut total = 0usize;
+        let mut anchor_index = None;
+        for stored in self.entries.iter().filter(matches) {
+            if stored.entry.id == anchor_id {
+                anchor_index = Some(total);
+            }
+            total += 1;
+        }
         let start = if from_end {
             total.saturating_sub(limit)
+        } else if let Some(anchor_index) = anchor_index {
+            anchor_index
+                .saturating_sub(limit / 2)
+                .min(total.saturating_sub(limit))
         } else {
             offset.min(total)
         };
@@ -121,10 +134,14 @@ impl LogStore {
 }
 
 fn level_allows(filter: &str, level: &str) -> bool {
-    let Some(filter_rank) = level_rank(if filter.is_empty() { "info" } else { filter }) else {
-        return false;
-    };
-    level_rank(level).is_some_and(|rank| rank >= filter_rank)
+    let filter_rank = level_rank(if filter.is_empty() { "info" } else { filter });
+    level_allows_rank(filter_rank, level)
+}
+
+fn level_allows_rank(filter_rank: Option<u8>, level: &str) -> bool {
+    filter_rank.is_some_and(|filter_rank| {
+        level_rank(level).is_some_and(|level_rank| level_rank >= filter_rank)
+    })
 }
 
 fn level_rank(level: &str) -> Option<u8> {

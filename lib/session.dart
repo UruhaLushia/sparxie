@@ -121,6 +121,7 @@ class MihomoSession {
     String level,
     String query,
     bool fromEnd,
+    BigInt? anchorId,
   ) async {
     final t = _target;
     if (t == null) {
@@ -133,6 +134,7 @@ class MihomoSession {
       offset: offset,
       limit: limit,
       fromEnd: fromEnd,
+      anchorId: anchorId ?? BigInt.zero,
     );
   }
 

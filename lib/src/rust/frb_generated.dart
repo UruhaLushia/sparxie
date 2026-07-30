@@ -215,6 +215,7 @@ abstract class RustLibApi extends BaseApi {
     required int offset,
     required int limit,
     required bool fromEnd,
+    required BigInt anchorId,
   });
 
   Future<Uint8List?> crateBackendApiResourcesFetchProcessIcon({
@@ -1541,6 +1542,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required int offset,
     required int limit,
     required bool fromEnd,
+    required BigInt anchorId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1552,6 +1554,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(offset, serializer);
           sse_encode_u_32(limit, serializer);
           sse_encode_bool(fromEnd, serializer);
+          sse_encode_u_64(anchorId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1564,7 +1567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateBackendApiStreamsFetchLogsWindowConstMeta,
-        argValues: [target, level, query, offset, limit, fromEnd],
+        argValues: [target, level, query, offset, limit, fromEnd, anchorId],
         apiImpl: this,
       ),
     );
@@ -1573,7 +1576,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateBackendApiStreamsFetchLogsWindowConstMeta =>
       const TaskConstMeta(
         debugName: "fetch_logs_window",
-        argNames: ["target", "level", "query", "offset", "limit", "fromEnd"],
+        argNames: [
+          "target",
+          "level",
+          "query",
+          "offset",
+          "limit",
+          "fromEnd",
+          "anchorId",
+        ],
       );
 
   @override

@@ -30,6 +30,7 @@ Future<LogWindow> fetchLogsWindow({
   required int offset,
   required int limit,
   required bool fromEnd,
+  required BigInt anchorId,
 }) => RustLib.instance.api.crateBackendApiStreamsFetchLogsWindow(
   target: target,
   level: level,
@@ -37,6 +38,7 @@ Future<LogWindow> fetchLogsWindow({
   offset: offset,
   limit: limit,
   fromEnd: fromEnd,
+  anchorId: anchorId,
 );
 
 Future<void> clearLogs({required BackendTarget target}) =>

@@ -20,14 +20,22 @@ class AppPageTransitionScope extends InheritedWidget {
 
 /// Animates page content without moving or fading its surrounding AppBar.
 class AppPageBodyTransition extends StatelessWidget {
-  const AppPageBodyTransition({super.key, required this.child});
+  const AppPageBodyTransition({
+    super.key,
+    required this.child,
+    this.enabled = true,
+  });
 
   final Widget child;
+  final bool enabled;
+
+  static const _complete = AlwaysStoppedAnimation<double>(1);
 
   @override
   Widget build(BuildContext context) {
-    final animation = AppPageTransitionScope.maybeOf(context);
-    if (animation == null) return child;
+    final pageAnimation = AppPageTransitionScope.maybeOf(context);
+    if (pageAnimation == null) return child;
+    final animation = enabled ? pageAnimation : _complete;
     return ClipRect(
       child: AnimatedBuilder(
         animation: animation,

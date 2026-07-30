@@ -141,6 +141,7 @@ pub async fn fetch_logs_window(
     offset: u32,
     limit: u32,
     from_end: bool,
+    anchor_id: u64,
 ) -> LogWindow {
     let offset = offset as usize;
     let limit = limit.max(1) as usize;
@@ -153,6 +154,7 @@ pub async fn fetch_logs_window(
                 offset,
                 limit,
                 from_end,
+                anchor_id,
             )
             .await
         }
@@ -164,6 +166,7 @@ pub async fn fetch_logs_window(
                 offset,
                 limit,
                 from_end,
+                anchor_id,
             )
             .await
         }
@@ -175,6 +178,7 @@ pub async fn fetch_logs_window(
                 offset,
                 limit,
                 from_end,
+                anchor_id,
             )
             .await
         }

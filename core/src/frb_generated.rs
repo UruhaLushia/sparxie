@@ -1187,6 +1187,7 @@ fn wire__crate__backend__api__streams__fetch_logs_window_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             let api_limit = <u32>::sse_decode(&mut deserializer);
             let api_from_end = <bool>::sse_decode(&mut deserializer);
+            let api_anchor_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, ()>(
@@ -1199,6 +1200,7 @@ fn wire__crate__backend__api__streams__fetch_logs_window_impl(
                                 api_offset,
                                 api_limit,
                                 api_from_end,
+                                api_anchor_id,
                             )
                             .await,
                         )?;
