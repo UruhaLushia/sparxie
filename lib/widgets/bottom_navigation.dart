@@ -16,6 +16,13 @@ class AppNavDestination {
   final String label;
 }
 
+double _sideIndicatorWidth(double availableWidth, CompactControlStyle style) {
+  final baseWidth = math.max(36.0, availableWidth - 12);
+  return (baseWidth * style.indicatorWidthScale)
+      .clamp(math.min(36.0, availableWidth), availableWidth)
+      .toDouble();
+}
+
 class SideNavigationRail extends StatelessWidget {
   const SideNavigationRail({
     super.key,
@@ -125,10 +132,7 @@ class _SideNavigationRailItems extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = math.max(0.0, constraints.maxWidth - 12);
-        final baseWidth = math.max(36.0, availableWidth - 12);
-        final indicatorWidth = (baseWidth * styleConfig.indicatorWidthScale)
-            .clamp(math.min(36.0, availableWidth), availableWidth)
-            .toDouble();
+        final indicatorWidth = _sideIndicatorWidth(availableWidth, styleConfig);
         return SizedBox(
           height: destinations.length * itemHeight,
           child: Stack(
@@ -156,7 +160,7 @@ class _SideNavigationRailItems extends StatelessWidget {
   }
 }
 
-class _SideNavigationRailItem extends StatelessWidget {
+class _SideNavigationRailItem extends StatefulWidget {
   const _SideNavigationRailItem({
     required this.destination,
     required this.selected,
@@ -172,7 +176,51 @@ class _SideNavigationRailItem extends StatelessWidget {
   final CompactControlStyle styleConfig;
 
   @override
-  Widget build(BuildContext context) {
+  State<_SideNavigationRailItem> createState() =>
+      _SideNavigationRailItemState();
+}
+
+class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
+  final _statesController = WidgetStatesController();
+
+  @override
+  void dispose() {
+    _statesController.dispose();
+    super.dispose();
+  }
+
+  Color _withStateLayer(
+    BuildContext context,
+    CompactControlStyle style,
+    Color background,
+    Set<WidgetState> states,
+  ) {
+    final overlay = states.contains(WidgetState.pressed)
+        ? style.pressed(context)
+        : states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.focused)
+        ? style.hover(context)
+        : null;
+    return overlay == null ? background : Color.alphaBlend(overlay, background);
+  }
+
+  Size _indicatorSize(
+    BoxConstraints constraints,
+    CompactControlStyle style, {
+    required double minHeight,
+  }) {
+    final availableWidth = constraints.maxWidth;
+    return Size(
+      _sideIndicatorWidth(availableWidth, style),
+      style.indicatorHeight.clamp(minHeight, constraints.maxHeight).toDouble(),
+    );
+  }
+
+  Widget _buildVisual(BuildContext context, Set<WidgetState> states) {
+    final destination = widget.destination;
+    final selected = widget.selected;
+    final style = widget.style;
+    final styleConfig = widget.styleConfig;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedForeground = style == NavBarStyle.tint
         ? _surfaceAccentForeground(context, styleConfig)
@@ -201,9 +249,14 @@ class _SideNavigationRailItem extends StatelessWidget {
                 .toDouble(),
             height: material3IndicatorHeight,
             decoration: BoxDecoration(
-              color: selected
-                  ? _indicatorColor(context, styleConfig, isDark)
-                  : Colors.transparent,
+              color: _withStateLayer(
+                context,
+                styleConfig,
+                selected
+                    ? _indicatorColor(context, styleConfig, isDark)
+                    : Colors.transparent,
+                states,
+              ),
               borderRadius: styleConfig.indicatorBorderRadius,
             ),
             child: Icon(destination.icon, size: 20, color: foreground),
@@ -257,60 +310,66 @@ class _SideNavigationRailItem extends StatelessWidget {
         ],
       ),
     );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (style == NavBarStyle.m3) return content;
+        final size = _indicatorSize(
+          constraints,
+          styleConfig,
+          minHeight: capsule ? 40 : 28,
+        );
+        final background = capsule && selected
+            ? _indicatorColor(context, styleConfig, isDark)
+            : Colors.transparent;
+        final stateLayer = AnimatedContainer(
+          duration: _navAnimationDuration,
+          curve: Curves.easeOutCubic,
+          width: size.width,
+          height: style == NavBarStyle.tint
+              ? constraints.maxHeight
+              : size.height,
+          decoration: BoxDecoration(
+            color: _withStateLayer(context, styleConfig, background, states),
+            borderRadius: styleConfig.indicatorBorderRadius,
+          ),
+          child: capsule ? content : null,
+        );
+        if (capsule) return Center(child: stateLayer);
+        return Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            Center(child: stateLayer),
+            content,
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Material(
-        color: Colors.transparent,
-        borderRadius: styleConfig.indicatorBorderRadius,
-        clipBehavior: Clip.antiAlias,
+        type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
-          hoverColor: styleConfig.hover(context),
-          splashColor: styleConfig.pressed(context),
+          statesController: _statesController,
+          onTap: widget.onTap,
+          excludeFromSemantics: true,
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
           child: Semantics(
             button: true,
-            selected: selected,
-            label: destination.label,
+            selected: widget.selected,
+            label: widget.destination.label,
             excludeSemantics: true,
             child: Tooltip(
-              message: destination.label,
-              child: capsule
-                  ? LayoutBuilder(
-                      builder: (context, constraints) {
-                        final availableWidth = constraints.maxWidth;
-                        final baseWidth = math.max(36.0, availableWidth - 12);
-                        final width =
-                            (baseWidth * styleConfig.indicatorWidthScale)
-                                .clamp(
-                                  math.min(36.0, availableWidth),
-                                  availableWidth,
-                                )
-                                .toDouble();
-                        final height = styleConfig.indicatorHeight
-                            .clamp(40.0, styleConfig.buttonHeight - 8)
-                            .toDouble();
-                        return Center(
-                          child: AnimatedContainer(
-                            duration: _navAnimationDuration,
-                            curve: Curves.easeOutCubic,
-                            width: width,
-                            height: height,
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? _indicatorColor(
-                                      context,
-                                      styleConfig,
-                                      isDark,
-                                    )
-                                  : Colors.transparent,
-                              borderRadius: styleConfig.indicatorBorderRadius,
-                            ),
-                            child: content,
-                          ),
-                        );
-                      },
-                    )
-                  : content,
+              message: widget.destination.label,
+              child: ValueListenableBuilder<Set<WidgetState>>(
+                valueListenable: _statesController,
+                builder: (context, states, _) => _buildVisual(context, states),
+              ),
             ),
           ),
         ),
@@ -541,7 +600,12 @@ class BottomNavBarItems extends StatelessWidget {
   static const double _cellWidth = 68;
 
   Widget _cell(Widget child, CompactControlStyle controlStyle) => shrinkWrap
-      ? SizedBox(width: _cellWidth * controlStyle.widthScale, child: child)
+      ? Flexible(
+          child: SizedBox(
+            width: _cellWidth * controlStyle.widthScale,
+            child: child,
+          ),
+        )
       : Expanded(child: child);
 
   Widget _labeledItem(
@@ -1192,32 +1256,34 @@ class _CapsuleNavItem extends StatelessWidget {
                     size: _CapsuleNavBarState._iconSize,
                     color: foreground,
                   ),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(end: selected ? 1 : 0),
-                    duration: _navAnimationDuration,
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) => ClipRect(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: value,
-                        child: Opacity(
-                          opacity: ((value - 0.95) / 0.05)
-                              .clamp(0.0, 1.0)
-                              .toDouble(),
-                          child: child,
+                  Flexible(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: selected ? 1 : 0),
+                      duration: _navAnimationDuration,
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) => ClipRect(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: value,
+                          child: Opacity(
+                            opacity: ((value - 0.95) / 0.05)
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                            child: child,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: _CapsuleNavBarState._iconLabelGap * widthScale,
-                      ),
-                      child: Text(
-                        destination.label,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.clip,
-                        style: labelStyle,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          left: _CapsuleNavBarState._iconLabelGap * widthScale,
+                        ),
+                        child: Text(
+                          destination.label,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.clip,
+                          style: labelStyle,
+                        ),
                       ),
                     ),
                   ),

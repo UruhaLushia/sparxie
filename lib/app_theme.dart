@@ -163,6 +163,11 @@ ThemeData _appTheme({
     hoverColor: scheme.primary.withValues(alpha: 0.06),
     highlightColor: scheme.primary.withValues(alpha: 0.08),
     splashColor: scheme.primary.withValues(alpha: 0.1),
+    listTileTheme: const ListTileThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
+    ),
     appBarTheme: AppBarThemeData(
       backgroundColor: surfaceTheme.chromeColor(scheme.surface),
       surfaceTintColor: Colors.transparent,
