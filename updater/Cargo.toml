@@ -1,0 +1,29 @@
+[package]
+name = "sparxie-updater"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+sha2 = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+flate2 = "1.1"
+libc = "0.2"
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSString", "NSURL", "std"] }
+security-framework = { version = "3.7", default-features = false }
+tar = "0.4"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading"] }
+zip = { version = "8.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

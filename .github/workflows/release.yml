@@ -17,6 +17,7 @@ jobs:
     name: Build release artifacts
     uses: ./.github/workflows/build.yml
     with:
+      update_channel: stable
       include_ios_xcarchive: true
     secrets: inherit
 
@@ -34,7 +35,7 @@ jobs:
           mkdir -p release
           find artifacts \
             -path 'artifacts/ios-xcarchive' -prune -o \
-            -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.exe' \) \
+            -type f \( -name '*.apk' -o -name '*.ipa' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.exe' \) \
             -exec cp {} release/ \;
           ls -la release/
 

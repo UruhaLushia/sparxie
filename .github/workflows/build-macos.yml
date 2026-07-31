@@ -3,12 +3,22 @@ name: Build macOS
 on:
   workflow_call:
     inputs:
+      update_channel:
+        required: false
+        default: stable
+        type: string
       include_intel:
         required: false
         default: false
         type: boolean
   workflow_dispatch:
     inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: choice
+        options: [stable, beta]
+        default: stable
       include_intel:
         description: Build the Intel x86_64 artifact
         required: false
@@ -71,24 +81,43 @@ jobs:
         with:
           prefix-key: v1-rust
           key: macos-${{ matrix.rust_target }}
-          workspaces: 'core -> target'
+          workspaces: |
+            core -> target
+            updater -> target
           save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Fetch Flutter deps
         run: flutter pub get
 
-      - name: Build DMG
+      - name: Build app packages
         run: |
-          (cd core && cargo build --release --target ${{ matrix.rust_target }})
-          flutter build macos --release
+          cargo build --manifest-path core/Cargo.toml --release \
+            --target ${{ matrix.rust_target }}
+          cargo build --manifest-path updater/Cargo.toml --release --locked \
+            --target ${{ matrix.rust_target }}
+          flutter build macos --release \
+            --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
+          mkdir -p "$APP/Contents/Helpers"
+          cp \
+            updater/target/${{ matrix.rust_target }}/release/sparxie-updater \
+            "$APP/Contents/Helpers/sparxie-updater"
+          chmod 755 "$APP/Contents/Helpers/sparxie-updater"
           ./scripts/package-macos-rust-framework.sh \
             core/target/${{ matrix.rust_target }}/release/libsparxie.dylib \
             "$APP"
           test -x "$APP/Contents/Frameworks/sparxie.framework/sparxie"
+          test -x "$APP/Contents/Helpers/sparxie-updater"
           codesign --verify --deep --strict --verbose=4 "$APP"
 
           mkdir -p out
+          UPDATE_PATH="out/sparxie-macos-${{ matrix.arch }}-update.tar.gz"
+          tar -czf "$UPDATE_PATH" \
+            -C "$(dirname "$APP")" \
+            "$(basename "$APP")"
+          tar -tzf "$UPDATE_PATH" >/dev/null
+
           DMG_ROOT="$RUNNER_TEMP/sparxie-dmg"
           DMG_PATH="out/sparxie-macos-${{ matrix.arch }}.dmg"
           rm -rf "$DMG_ROOT"

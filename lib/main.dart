@@ -13,6 +13,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
+import 'app_update_cleanup.dart';
 import 'background_accent_color.dart';
 import 'background_image_store.dart';
 import 'config_store.dart';
@@ -50,6 +51,7 @@ part 'home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(AppUpdateCleanup.removePending());
   final appLinks = AppLinks();
   _enableEdgeToEdge();
   // One shared config.json holds controllers, prefs and window geometry.

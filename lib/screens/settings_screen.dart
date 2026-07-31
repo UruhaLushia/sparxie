@@ -18,6 +18,7 @@ import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
+import 'about_screen.dart';
 import 'core_actions_screen.dart';
 import 'core_config_screen.dart';
 import 'diagnostics_screen.dart';
@@ -158,6 +159,12 @@ class SettingsScreen extends StatelessWidget {
               context,
               AppSettingsScreen(prefs: prefs, session: session),
             ),
+          ),
+          _Tile(
+            icon: Icons.info_outline,
+            title: '关于',
+            subtitle: '版本信息与检查更新',
+            onTap: () => _push(context, AboutScreen(prefs: prefs)),
           ),
         ];
         final groups = <Widget>[

@@ -43,6 +43,9 @@ dependencies:
   freezed_annotation: ^3.0.0
   window_manager: ^0.5.1
   url_launcher: ^6.3.2
+  http: ^1.6.0
+  package_info_plus: ^10.2.1
+  crypto: ^3.0.6
   qr_flutter: ^4.1.0
   file_selector: ^1.1.0
   image_picker: ^1.2.3

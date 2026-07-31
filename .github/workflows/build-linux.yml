@@ -2,7 +2,19 @@ name: Build Linux
 
 on:
   workflow_call:
+    inputs:
+      update_channel:
+        required: false
+        type: string
+        default: stable
   workflow_dispatch:
+    inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: choice
+        options: [stable, beta]
+        default: stable
 
 permissions:
   contents: read
@@ -67,7 +79,9 @@ jobs:
           PKG_ARCH_PACMAN: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
         run: |
           (cd core && cargo build --release)
-          flutter build linux --release
+          flutter build linux --release \
+            --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           BUNDLE=$(ls -d build/linux/*/release/bundle | head -n1)
           cp core/target/release/libsparxie.so "$BUNDLE/lib/"
 
@@ -121,7 +135,7 @@ jobs:
             --maintainer 'Sparxie' \
             --license 'GPL-3.0-only' \
             --pacman-compression zstd \
-            -d gtk3 -d 'libstdc++' \
+            -d gtk3 -d gcc-libs \
             -p "out/sparxie-linux-$PKG_ARCH_PACMAN.pkg.tar.zst" \
             -C "$STAGE" .
 
@@ -145,7 +159,7 @@ jobs:
             <(printf '%s\n' gtk3 'libstdc++' | LC_ALL=C sort) \
             <(rpm -qp --requires "${rpm_packages[0]}" | sed '/^rpmlib(/d' | LC_ALL=C sort)
           diff -u \
-            <(printf '%s\n' gtk3 'libstdc++' | LC_ALL=C sort) \
+            <(printf '%s\n' gtk3 gcc-libs | LC_ALL=C sort) \
             <(bsdtar -xOf "${pacman_packages[0]}" .PKGINFO | sed -n 's/^depend = //p' | LC_ALL=C sort)
 
       - uses: actions/upload-artifact@v7

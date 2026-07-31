@@ -3,6 +3,10 @@ name: Build iOS
 on:
   workflow_call:
     inputs:
+      update_channel:
+        required: false
+        type: string
+        default: stable
       include_xcarchive:
         description: Preserve the unsigned xcarchive for TestFlight publishing
         required: false
@@ -10,6 +14,12 @@ on:
         default: false
   workflow_dispatch:
     inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: choice
+        options: [stable, beta]
+        default: stable
       include_xcarchive:
         description: Preserve the unsigned xcarchive for TestFlight publishing
         required: false
@@ -64,6 +74,7 @@ jobs:
           IOS_BUILD_NUMBER: ${{ github.run_number }}
           IOS_XCARCHIVE_OUTPUT: ${{ inputs.include_xcarchive && 'out/sparxie-ios-unsigned.xcarchive.zip' || '' }}
           OUTPUT_DIR: out
+          SPARXIE_UPDATE_CHANNEL: ${{ inputs.update_channel }}
         run: ./scripts/build-ios-ipa.sh
 
       - name: Write xcarchive manifest

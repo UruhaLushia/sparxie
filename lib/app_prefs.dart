@@ -38,6 +38,8 @@ enum CompactControlKind { navigationBar, button, search, segmented, toggle }
 
 enum AppThemeMode { system, light, dark }
 
+enum UpdateChannel { stable, beta }
+
 enum AutomaticColorSource { system, wallpaper }
 
 enum DesktopTitleBarMode { system, custom, hidden }
@@ -167,6 +169,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kUiFontFamilies = 'uiFontFamilies';
   static const _kImportedFonts = 'importedFonts';
   static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
+  static const _kUpdateChannel = 'updateChannel';
   static const _kGlobalThemeColor = 'globalThemeColor';
   static const _kAutomaticColor = 'automaticColor';
   static const _kAutomaticColorSource = 'automaticColorSource';
@@ -216,6 +219,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
   static const defaultAllowInsecureOnlineResources = false;
+  static const defaultUpdateChannel = UpdateChannel.stable;
   static const defaultGlobalThemeColor = 0xff66ccff;
   static const defaultAutomaticColor = false;
   static const defaultAutomaticColorSource = AutomaticColorSource.system;
@@ -585,6 +589,14 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setAllowInsecureOnlineResources(bool value) async {
     if (value == allowInsecureOnlineResources) return;
     _put(_kAllowInsecureOnlineResources, value);
+  }
+
+  UpdateChannel get updateChannel =>
+      _decodeUpdateChannel(_str(_kUpdateChannel, defaultUpdateChannel.name));
+
+  Future<void> setUpdateChannel(UpdateChannel value) async {
+    if (value == updateChannel) return;
+    _put(_kUpdateChannel, value.name);
   }
 
   int get globalThemeColor => _int(_kGlobalThemeColor, defaultGlobalThemeColor);
@@ -1064,6 +1076,13 @@ class AppPrefs extends ChangeNotifier {
       if (value.name == raw) return value;
     }
     return defaultAppThemeMode;
+  }
+
+  static UpdateChannel _decodeUpdateChannel(String? raw) {
+    for (final value in UpdateChannel.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultUpdateChannel;
   }
 
   static AutomaticColorSource _decodeAutomaticColorSource(String? raw) {

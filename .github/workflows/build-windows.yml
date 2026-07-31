@@ -2,7 +2,19 @@ name: Build Windows
 
 on:
   workflow_call:
+    inputs:
+      update_channel:
+        required: false
+        type: string
+        default: stable
   workflow_dispatch:
+    inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: choice
+        options: [stable, beta]
+        default: stable
 
 permissions:
   contents: read
@@ -48,7 +60,9 @@ jobs:
         with:
           prefix-key: v1-rust
           key: windows-${{ matrix.rust_target }}
-          workspaces: 'core -> target'
+          workspaces: |
+            core -> target
+            updater -> target
           save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
       - name: Fetch Flutter deps
@@ -57,10 +71,17 @@ jobs:
       - name: Build bundle and portable archive
         shell: bash
         run: |
-          (cd core && cargo build --release)
-          flutter build windows --release
+          cargo build --manifest-path core/Cargo.toml --release
+          cargo build --manifest-path updater/Cargo.toml --release --locked \
+            --target ${{ matrix.rust_target }}
+          flutter build windows --release \
+            --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
           cp core/target/release/sparxie.dll "$BUNDLE/"
+          cp \
+            updater/target/${{ matrix.rust_target }}/release/sparxie-updater.exe \
+            "$BUNDLE/"
           mkdir -p out
           ZIP="$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip"
           (cd "$BUNDLE" && 7z a "$ZIP" .)

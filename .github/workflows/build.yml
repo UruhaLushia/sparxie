@@ -3,15 +3,36 @@ name: Build
 on:
   workflow_call:
     inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: string
+        default: stable
       include_ios_xcarchive:
         description: Preserve the unsigned iOS xcarchive for TestFlight publishing
         required: false
         type: boolean
         default: false
+      include_macos_intel:
+        description: Build the Intel macOS artifact
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
+      update_channel:
+        description: Update channel embedded in the app
+        required: false
+        type: choice
+        options: [stable, beta]
+        default: stable
       include_ios_xcarchive:
         description: Preserve the unsigned iOS xcarchive for diagnostics
+        required: false
+        type: boolean
+        default: false
+      include_macos_intel:
+        description: Build the Intel macOS artifact
         required: false
         type: boolean
         default: false
@@ -27,22 +48,32 @@ jobs:
   android:
     name: Android
     uses: ./.github/workflows/build-android.yml
+    with:
+      update_channel: ${{ inputs.update_channel }}
     secrets: inherit
 
   linux:
     name: Linux
     uses: ./.github/workflows/build-linux.yml
+    with:
+      update_channel: ${{ inputs.update_channel }}
 
   windows:
     name: Windows
     uses: ./.github/workflows/build-windows.yml
+    with:
+      update_channel: ${{ inputs.update_channel }}
 
   macos:
     name: macOS
     uses: ./.github/workflows/build-macos.yml
+    with:
+      update_channel: ${{ inputs.update_channel }}
+      include_intel: ${{ inputs.include_macos_intel }}
 
   ios:
     name: iOS
     uses: ./.github/workflows/build-ios.yml
     with:
+      update_channel: ${{ inputs.update_channel }}
       include_xcarchive: ${{ inputs.include_ios_xcarchive }}

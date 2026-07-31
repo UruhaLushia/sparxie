@@ -46,6 +46,7 @@ app.*.map.json
 
 # Rust core
 /core/target/
+/updater/target/
 /android/app/src/main/jniLibs
 
 # VS Code Dart extension scratch

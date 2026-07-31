@@ -17,6 +17,7 @@ PROJECT_ROOT="$(pwd)"
 : "${IPA_NAME:=sparxie-ios.ipa}"
 : "${IOS_BUILD_NUMBER:=$(awk -F+ '/^version:/ { print $2; exit }' pubspec.yaml)}"
 : "${IOS_XCARCHIVE_OUTPUT:=}"
+: "${SPARXIE_UPDATE_CHANNEL:=stable}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -52,7 +53,10 @@ flutter pub get
 
 if [[ -n "$IOS_XCARCHIVE_OUTPUT" ]]; then
   echo ">>> Building unsigned iOS archive"
-  flutter build ipa --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
+  flutter build ipa --release --no-codesign \
+    --build-number "$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_BUILD_NUMBER=$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_UPDATE_CHANNEL=$SPARXIE_UPDATE_CHANNEL"
 
   shopt -s nullglob
   XCARCHIVES=(build/ios/archive/*.xcarchive)
@@ -65,7 +69,10 @@ if [[ -n "$IOS_XCARCHIVE_OUTPUT" ]]; then
   APP_BUNDLE="$(find "$XCARCHIVE/Products/Applications" -maxdepth 1 -type d -name '*.app' | head -n1)"
 else
   echo ">>> Building unsigned iOS app"
-  flutter build ios --release --no-codesign --build-number "$IOS_BUILD_NUMBER"
+  flutter build ios --release --no-codesign \
+    --build-number "$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_BUILD_NUMBER=$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_UPDATE_CHANNEL=$SPARXIE_UPDATE_CHANNEL"
   APP_BUNDLE="$(find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | head -n1)"
 fi
 

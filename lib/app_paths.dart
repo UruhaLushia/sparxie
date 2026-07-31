@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 /// Resolves where app data (config + cache) lives.
 ///
 /// Portable mode: a `.portable` marker file beside the executable redirects
-/// everything to `<exeDir>/data`, so a Windows zip can be unzipped anywhere
+/// everything to `<exeDir>/userdata`, so a Windows zip can be unzipped anywhere
 /// and keep its data self-contained. Otherwise the platform's standard
 /// per-user directories are used (the Inno installer relies on this, since
 /// Program Files isn't user-writable).
