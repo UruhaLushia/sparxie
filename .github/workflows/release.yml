@@ -5,6 +5,7 @@ on:
     tags: ['v*']
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -13,12 +14,14 @@ concurrency:
 
 jobs:
   build:
+    name: Build release artifacts
     uses: ./.github/workflows/build.yml
     with:
       include_ios_xcarchive: true
     secrets: inherit
 
   publish:
+    name: Publish GitHub release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +43,16 @@ jobs:
           files: release/*
           generate_release_notes: true
 
+  push-testflight:
+    name: Push TestFlight
+    needs: build
+    uses: ./.github/workflows/publish-testflight.yml
+    with:
+      source_path: .github/workflows/release.yml
+    secrets: inherit
+
   publish-altstore-source:
+    name: Publish AltStore source
     needs: publish
     permissions:
       contents: write

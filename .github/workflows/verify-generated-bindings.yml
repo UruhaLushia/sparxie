@@ -12,6 +12,7 @@ env:
 
 jobs:
   verify:
+    name: Verify generated bindings
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

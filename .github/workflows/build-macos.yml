@@ -23,6 +23,7 @@ env:
 
 jobs:
   setup:
+    name: macOS matrix
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.value }}
@@ -41,7 +42,7 @@ jobs:
           echo "value=$(jq -c . <<<"$value")" >> "$GITHUB_OUTPUT"
 
   build:
-    name: ${{ matrix.label }}
+    name: macOS (${{ matrix.arch }})
     needs: setup
     runs-on: ${{ matrix.os }}
     strategy:

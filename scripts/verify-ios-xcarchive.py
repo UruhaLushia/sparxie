@@ -89,6 +89,12 @@ def main() -> None:
         expected_ref = f"refs/heads/{args.source_head_branch}"
         if source_ref != expected_ref:
             fail(f"pre-release source ref was {source_ref!r}, expected {expected_ref!r}")
+    elif args.source_path == ".github/workflows/testflight.yml":
+        if manifest.get("workflow") != "TestFlight":
+            fail("TestFlight manifest has an unexpected workflow name")
+        expected_ref = f"refs/heads/{args.source_head_branch}"
+        if source_ref != expected_ref:
+            fail(f"TestFlight source ref was {source_ref!r}, expected {expected_ref!r}")
     else:
         fail(f"unapproved source workflow: {args.source_path!r}")
 

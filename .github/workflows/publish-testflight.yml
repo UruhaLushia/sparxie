@@ -1,24 +1,20 @@
 name: Publish TestFlight
 
 on:
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      source_run_id:
-        description: Successful Release or Pre-release run containing ios-xcarchive
+      source_path:
+        description: Caller workflow path recorded in the xcarchive manifest
         required: true
         type: string
-      upload:
-        description: Upload after signing and App Store Connect validation
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   actions: read
   contents: read
+
+concurrency:
+  group: testflight-publish
+  cancel-in-progress: false
 
 env:
   ASC_APP_ID: '6781533588'
@@ -26,97 +22,33 @@ env:
 
 jobs:
   verify-source:
-    name: Verify source workflow run
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    name: Verify unsigned xcarchive
     runs-on: ubuntu-latest
-    outputs:
-      source_run_id: ${{ steps.verify.outputs.source_run_id }}
-      source_run_attempt: ${{ steps.verify.outputs.source_run_attempt }}
-      source_sha: ${{ steps.verify.outputs.source_sha }}
-      source_head_branch: ${{ steps.verify.outputs.source_head_branch }}
-      source_path: ${{ steps.verify.outputs.source_path }}
-      should_upload: ${{ steps.verify.outputs.should_upload }}
     steps:
-      - name: Verify source run and artifact
-        id: verify
+      - name: Verify caller
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          AUTOMATIC_RUN_ID: ${{ github.event.workflow_run.id }}
-          MANUAL_RUN_ID: ${{ inputs.source_run_id }}
-          MANUAL_UPLOAD: ${{ inputs.upload }}
-          CURRENT_REPOSITORY: ${{ github.repository }}
+          SOURCE_PATH: ${{ inputs.source_path }}
+          CURRENT_EVENT: ${{ github.event_name }}
+          CURRENT_WORKFLOW: ${{ github.workflow }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
-            source_run_id="$AUTOMATIC_RUN_ID"
-            should_upload=true
-          else
-            source_run_id="$MANUAL_RUN_ID"
-            should_upload="${MANUAL_UPLOAD:-false}"
-            test "$CURRENT_REF" = "refs/heads/$DEFAULT_BRANCH"
-          fi
-          [[ "$source_run_id" =~ ^[1-9][0-9]*$ ]]
-          [[ "$should_upload" == true || "$should_upload" == false ]]
-
-          source_json="$(gh api "repos/$CURRENT_REPOSITORY/actions/runs/$source_run_id")"
-          source_repository="$(jq -r '.repository.full_name' <<<"$source_json")"
-          source_conclusion="$(jq -r '.conclusion' <<<"$source_json")"
-          source_event="$(jq -r '.event' <<<"$source_json")"
-          source_path="$(jq -r '.path' <<<"$source_json")"
-          source_path="${source_path%%@*}"
-          source_head_branch="$(jq -r '.head_branch // ""' <<<"$source_json")"
-          source_sha="$(jq -r '.head_sha' <<<"$source_json")"
-          source_run_attempt="$(jq -r '.run_attempt' <<<"$source_json")"
-
-          test "$source_repository" = "$CURRENT_REPOSITORY"
-          test "$source_conclusion" = success
-          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$source_run_attempt" =~ ^[1-9][0-9]*$ ]]
-
-          case "$source_path:$source_event" in
-            .github/workflows/release.yml:push)
-              [[ "$source_head_branch" == v* ]]
+          case "$SOURCE_PATH:$CURRENT_WORKFLOW:$CURRENT_EVENT" in
+            .github/workflows/release.yml:Release:push)
+              [[ "$CURRENT_REF" == refs/tags/v* ]]
               ;;
-            .github/workflows/pre-release.yml:workflow_dispatch)
-              test "$source_head_branch" = "$DEFAULT_BRANCH"
+            .github/workflows/testflight.yml:TestFlight:workflow_dispatch)
+              test "$CURRENT_REF" = "refs/heads/$DEFAULT_BRANCH"
               ;;
             *)
-              printf '::error::Run %s is not an allowed Release or Pre-release source.\n' \
-                "$source_run_id"
+              printf '::error::Unsupported TestFlight caller: %s (%s, %s).\n' \
+                "$SOURCE_PATH" "$CURRENT_WORKFLOW" "$CURRENT_EVENT"
               exit 1
               ;;
           esac
-
-          artifacts_json="$(
-            gh api "repos/$CURRENT_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100"
-          )"
-          artifact_count="$(
-            jq '[.artifacts[] | select(.name == "ios-xcarchive" and .expired == false)] | length' \
-              <<<"$artifacts_json"
-          )"
-          test "$artifact_count" = 1
-
-          {
-            printf 'source_run_id=%s\n' "$source_run_id"
-            printf 'source_run_attempt=%s\n' "$source_run_attempt"
-            printf 'source_sha=%s\n' "$source_sha"
-            printf 'source_head_branch=%s\n' "$source_head_branch"
-            printf 'source_path=%s\n' "$source_path"
-            printf 'should_upload=%s\n' "$should_upload"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            printf '## TestFlight source\n\n'
-            printf -- '- Workflow: `%s`\n' "$source_path"
-            printf -- '- Run: `%s` (attempt `%s`)\n' "$source_run_id" "$source_run_attempt"
-            printf -- '- Commit: `%s`\n' "$source_sha"
-            printf -- '- Upload: `%s`\n' "$should_upload"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check out trusted verification script
         uses: actions/checkout@v5
@@ -129,20 +61,17 @@ jobs:
         with:
           name: ios-xcarchive
           path: ${{ runner.temp }}/sparxie-testflight-preflight-${{ github.run_id }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.verify.outputs.source_run_id }}
 
       - name: Verify manifest and archive digest before credentials
         shell: bash
         env:
           SOURCE_DIR: ${{ runner.temp }}/sparxie-testflight-preflight-${{ github.run_id }}
           CURRENT_REPOSITORY: ${{ github.repository }}
-          SOURCE_RUN_ID: ${{ steps.verify.outputs.source_run_id }}
-          SOURCE_RUN_ATTEMPT: ${{ steps.verify.outputs.source_run_attempt }}
-          SOURCE_SHA: ${{ steps.verify.outputs.source_sha }}
-          SOURCE_HEAD_BRANCH: ${{ steps.verify.outputs.source_head_branch }}
-          SOURCE_PATH: ${{ steps.verify.outputs.source_path }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_HEAD_BRANCH: ${{ github.ref_name }}
+          SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
           python3 ./scripts/verify-ios-xcarchive.py \
@@ -157,8 +86,8 @@ jobs:
             --bundle-id "$EXPECTED_BUNDLE_ID" \
             >/dev/null
 
-  publish:
-    name: Sign, validate, and publish
+  push:
+    name: Sign, validate, and push
     needs: verify-source
     if: needs.verify-source.result == 'success'
     runs-on: [self-hosted, macOS, ARM64]
@@ -166,12 +95,12 @@ jobs:
     environment: testflight
     env:
       DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
-      SOURCE_RUN_ID: ${{ needs.verify-source.outputs.source_run_id }}
-      SOURCE_RUN_ATTEMPT: ${{ needs.verify-source.outputs.source_run_attempt }}
-      SOURCE_SHA: ${{ needs.verify-source.outputs.source_sha }}
-      SOURCE_HEAD_BRANCH: ${{ needs.verify-source.outputs.source_head_branch }}
-      SOURCE_PATH: ${{ needs.verify-source.outputs.source_path }}
-      SHOULD_UPLOAD: ${{ needs.verify-source.outputs.should_upload }}
+      SOURCE_RUN_ID: ${{ github.run_id }}
+      SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+      SOURCE_SHA: ${{ github.sha }}
+      SOURCE_HEAD_BRANCH: ${{ github.ref_name }}
+      SOURCE_PATH: ${{ inputs.source_path }}
+      SHOULD_UPLOAD: true
     steps:
       - name: Check out trusted publishing scripts
         uses: actions/checkout@v5
@@ -184,9 +113,6 @@ jobs:
         with:
           name: ios-xcarchive
           path: ${{ runner.temp }}/sparxie-testflight-source-${{ github.run_id }}-${{ github.run_attempt }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.verify-source.outputs.source_run_id }}
 
       - name: Verify xcarchive manifest
         shell: bash

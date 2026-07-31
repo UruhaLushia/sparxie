@@ -12,12 +12,12 @@ concurrency:
 
 jobs:
   build:
+    name: Build pre-release artifacts
     uses: ./.github/workflows/build.yml
-    with:
-      include_ios_xcarchive: true
     secrets: inherit
 
   publish:
+    name: Publish pre-release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -56,6 +56,7 @@ jobs:
           files: release/*
 
   publish-altstore-source:
+    name: Publish AltStore source
     needs: publish
     permissions:
       contents: write

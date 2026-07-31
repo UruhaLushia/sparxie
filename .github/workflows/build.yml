@@ -21,22 +21,28 @@ permissions:
 
 jobs:
   verify-generated-bindings:
+    name: Verify generated bindings
     uses: ./.github/workflows/verify-generated-bindings.yml
 
   android:
+    name: Android
     uses: ./.github/workflows/build-android.yml
     secrets: inherit
 
   linux:
+    name: Linux
     uses: ./.github/workflows/build-linux.yml
 
   windows:
+    name: Windows
     uses: ./.github/workflows/build-windows.yml
 
   macos:
+    name: macOS
     uses: ./.github/workflows/build-macos.yml
 
   ios:
+    name: iOS
     uses: ./.github/workflows/build-ios.yml
     with:
       include_xcarchive: ${{ inputs.include_ios_xcarchive }}

@@ -1,0 +1,27 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  build-ios:
+    name: Build iOS
+    uses: ./.github/workflows/build-ios.yml
+    with:
+      include_xcarchive: true
+
+  push:
+    name: Push TestFlight
+    needs: build-ios
+    uses: ./.github/workflows/publish-testflight.yml
+    with:
+      source_path: .github/workflows/testflight.yml
+    secrets: inherit
