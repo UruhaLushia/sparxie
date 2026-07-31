@@ -11,6 +11,9 @@ BorderRadius _indicatorRadius(
   return BorderRadius.all(Radius.circular(radius));
 }
 
+Color _contrastingForeground(Color background) =>
+    background.computeLuminance() > 0.179 ? Colors.black : Colors.white;
+
 @immutable
 class CompactControlStyle {
   const CompactControlStyle({
@@ -88,11 +91,7 @@ class CompactControlStyle {
       brightness: brightness,
       dynamicSchemeVariant: DynamicSchemeVariant.neutral,
     );
-    final onSeed =
-        ThemeData.estimateBrightnessForColor(effectiveSelectedSeed) ==
-            Brightness.dark
-        ? Colors.white
-        : Colors.black;
+    final onSeed = _contrastingForeground(effectiveSelectedSeed);
     final background = dark
         ? Color.alphaBlend(
             seedColor.withValues(alpha: 0.1),
@@ -112,7 +111,9 @@ class CompactControlStyle {
       selectedForegroundColor: onSeed,
       hoverColor: seedColor.withValues(alpha: dark ? 0.12 : 0.08),
       pressedColor: seedColor.withValues(alpha: dark ? 0.18 : 0.12),
-      focusColor: effectiveSelectedSeed,
+      // `primary` preserves the seed's hue while selecting a tone that stays
+      // legible on this brightness's surfaces.
+      focusColor: neutral.primary,
       switchActiveTrackColor: effectiveSelectedSeed,
       switchActiveThumbColor: onSeed,
       switchInactiveTrackColor: background,

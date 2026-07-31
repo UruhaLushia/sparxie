@@ -285,7 +285,7 @@ extension on CompactControlKind {
     CompactControlKind.search => '搜索框',
     CompactControlKind.segmented => '分段选择',
     CompactControlKind.toggle => '开关',
-    CompactControlKind.navigationBar => '底栏',
+    CompactControlKind.navigationBar => '导航栏',
   };
 
   IconData get icon => switch (this) {
@@ -293,7 +293,7 @@ extension on CompactControlKind {
     CompactControlKind.search => Icons.search,
     CompactControlKind.segmented => Icons.view_week_outlined,
     CompactControlKind.toggle => Icons.toggle_on_outlined,
-    CompactControlKind.navigationBar => Icons.space_bar_outlined,
+    CompactControlKind.navigationBar => Icons.navigation_outlined,
   };
 }
 

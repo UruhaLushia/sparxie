@@ -19,7 +19,7 @@ enum ProxiesSort {
 /// Visual layout of the primary navigation chrome.
 enum NavLayout { cards, standard, floating }
 
-/// Item style of the compact bottom bar (floating and standard layouts).
+/// Item style shared by the compact bottom bar and wide sidebar.
 enum NavBarStyle {
   /// Selected item expands into an icon+label capsule; others icon-only.
   capsule,
@@ -30,7 +30,7 @@ enum NavBarStyle {
   /// All items icon+label; selection is tint-only (iOS-like).
   tint,
 
-  /// Material 3: pill behind the selected icon, label always below.
+  /// Material 3: indicator behind the selected icon.
   m3,
 }
 

@@ -251,6 +251,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Widget _buildWideStandard(List<AppNavDestination> destinations) {
+    final navigationStyle = CompactControlTheme.navigationBarOf(context);
+    final navigationSurface = _navigationSurfaceTheme(context);
+    final railItemHeight = SideNavigationRail.itemHeightFor(navigationStyle);
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -259,11 +262,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           // Fixed item height (rail items never stretch). Account for the top
           // safe-area inset so the fit count matches what actually renders.
           final topInset = MediaQuery.paddingOf(context).top;
-          final fit =
-              ((constraints.maxHeight - topInset) /
-                      SideNavigationRail.itemHeight)
-                  .floor()
-                  .clamp(2, n);
+          final fit = ((constraints.maxHeight - topInset) / railItemHeight)
+              .floor()
+              .clamp(2, n);
           final shownLeading = fit >= n ? otherIndex : fit - 1;
 
           final visibleReal = <int>[
@@ -315,6 +316,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 destinations: [for (final i in visibleReal) destinations[i]],
                 selectedIndex: visibleReal.indexOf(effectiveIndex),
                 onSelected: (pos) => setState(() => _index = visibleReal[pos]),
+                style: widget.prefs.navBarStyle,
+                styleConfig: navigationStyle,
+                surfaceTheme: navigationSurface,
               ),
               Expanded(
                 child: _LazyIndexedStack(

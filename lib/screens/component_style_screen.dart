@@ -197,7 +197,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  '底栏样式',
+                                  '导航栏样式',
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
                               ),
@@ -219,7 +219,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                   ),
                                   ButtonSegment(
                                     value: NavBarStyle.m3,
-                                    label: Text('M3'),
+                                    label: Text('MD3'),
                                   ),
                                 ],
                                 selected: {widget.prefs.navBarStyle},
@@ -637,7 +637,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   Future<void> _pickInnerColor(BuildContext context) async {
     final result = await showColorPalettePicker(
       context,
-      title: '底栏内层颜色',
+      title: '导航栏内层颜色',
       color: _innerColor,
     );
     if (result == null) return;

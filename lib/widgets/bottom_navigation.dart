@@ -22,24 +22,36 @@ class SideNavigationRail extends StatelessWidget {
     required this.destinations,
     required this.selectedIndex,
     required this.onSelected,
+    required this.style,
+    required this.surfaceTheme,
+    this.styleConfig,
   });
 
-  static const double itemHeight = 64;
+  static double itemHeightFor(CompactControlStyle style) =>
+      style.buttonHeight.clamp(52.0, 76.0).toDouble();
 
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final NavBarStyle style;
+  final AppSurfaceTheme surfaceTheme;
+  final CompactControlStyle? styleConfig;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
+    final controlStyle =
+        styleConfig ?? CompactControlTheme.navigationBarOf(context);
     final leftInset = MediaQuery.paddingOf(context).left;
+    final itemHeight = itemHeightFor(controlStyle);
+    final railWidth = (84 * controlStyle.widthScale)
+        .clamp(68.0, 116.0)
+        .toDouble();
     return AppSurfaceBackdrop(
+      surfaceTheme: surfaceTheme,
       child: ColoredBox(
-        color: surfaceTheme.chromeColor(scheme.surface),
+        color: surfaceTheme.surfaceColor(controlStyle.background(context)),
         child: SizedBox(
-          width: 84 + leftInset,
+          width: railWidth + leftInset,
           child: Padding(
             padding: EdgeInsets.only(left: leftInset),
             child: SafeArea(
@@ -48,16 +60,14 @@ class SideNavigationRail extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (var i = 0; i < destinations.length; i++)
-                    SizedBox(
-                      height: itemHeight,
-                      child: _SideNavigationRailItem(
-                        destination: destinations[i],
-                        selected: i == selectedIndex,
-                        onTap: () => onSelected(i),
-                        scheme: scheme,
-                      ),
-                    ),
+                  _SideNavigationRailItems(
+                    destinations: destinations,
+                    selectedIndex: selectedIndex,
+                    onSelected: onSelected,
+                    style: style,
+                    styleConfig: controlStyle,
+                    itemHeight: itemHeight,
+                  ),
                 ],
               ),
             ),
@@ -68,54 +78,239 @@ class SideNavigationRail extends StatelessWidget {
   }
 }
 
+class _SideNavigationRailItems extends StatelessWidget {
+  const _SideNavigationRailItems({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+    required this.style,
+    required this.styleConfig,
+    required this.itemHeight,
+  });
+
+  final List<AppNavDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final NavBarStyle style;
+  final CompactControlStyle styleConfig;
+  final double itemHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    if (destinations.isEmpty) return const SizedBox.shrink();
+    final items = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < destinations.length; i++)
+          SizedBox(
+            height: itemHeight,
+            child: _SideNavigationRailItem(
+              destination: destinations[i],
+              selected: i == selectedIndex,
+              onTap: () => onSelected(i),
+              style: style,
+              styleConfig: styleConfig,
+            ),
+          ),
+      ],
+    );
+    if (style != NavBarStyle.pill) return items;
+    final activeIndex = selectedIndex.clamp(0, destinations.length - 1).toInt();
+    final indicatorHeight = styleConfig.indicatorHeight
+        .clamp(28.0, itemHeight - 8)
+        .toDouble();
+    final top = activeIndex * itemHeight + (itemHeight - indicatorHeight) / 2;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = math.max(0.0, constraints.maxWidth - 12);
+        final baseWidth = math.max(36.0, availableWidth - 12);
+        final indicatorWidth = (baseWidth * styleConfig.indicatorWidthScale)
+            .clamp(math.min(36.0, availableWidth), availableWidth)
+            .toDouble();
+        return SizedBox(
+          height: destinations.length * itemHeight,
+          child: Stack(
+            children: [
+              AnimatedPositioned(
+                duration: _navAnimationDuration,
+                curve: Curves.easeOutCubic,
+                top: top,
+                left: (constraints.maxWidth - indicatorWidth) / 2,
+                width: indicatorWidth,
+                height: indicatorHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _indicatorColor(context, styleConfig, isDark),
+                    borderRadius: styleConfig.indicatorBorderRadius,
+                  ),
+                ),
+              ),
+              items,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _SideNavigationRailItem extends StatelessWidget {
   const _SideNavigationRailItem({
     required this.destination,
     required this.selected,
     required this.onTap,
-    required this.scheme,
+    required this.style,
+    required this.styleConfig,
   });
 
   final AppNavDestination destination;
   final bool selected;
   final VoidCallback onTap;
-  final ColorScheme scheme;
+  final NavBarStyle style;
+  final CompactControlStyle styleConfig;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected
-        ? scheme.onSecondaryContainer
-        : scheme.onSurfaceVariant;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedForeground = style == NavBarStyle.tint
+        ? _surfaceAccentForeground(context, styleConfig)
+        : _indicatorForeground(context, styleConfig, isDark);
+    final unselectedForeground = styleConfig
+        .foreground(context)
+        .withValues(alpha: style == NavBarStyle.capsule ? 1 : 0.72);
+    final foreground = selected ? selectedForeground : unselectedForeground;
+    final labelForeground = style == NavBarStyle.m3 && selected
+        ? styleConfig.foreground(context)
+        : foreground;
+    final capsule = style == NavBarStyle.capsule;
+    final showLabel = style != NavBarStyle.capsule || selected;
+    final material3IndicatorHeight = styleConfig.indicatorHeight
+        .clamp(
+          24.0,
+          math.max(24.0, math.min(38.0, styleConfig.buttonHeight - 23)),
+        )
+        .toDouble();
+    final icon = style == NavBarStyle.m3
+        ? AnimatedContainer(
+            duration: _navAnimationDuration,
+            curve: Curves.easeOutCubic,
+            width: (48 * styleConfig.indicatorWidthScale)
+                .clamp(36.0, 56.0)
+                .toDouble(),
+            height: material3IndicatorHeight,
+            decoration: BoxDecoration(
+              color: selected
+                  ? _indicatorColor(context, styleConfig, isDark)
+                  : Colors.transparent,
+              borderRadius: styleConfig.indicatorBorderRadius,
+            ),
+            child: Icon(destination.icon, size: 20, color: foreground),
+          )
+        : AnimatedScale(
+            scale: selected && style != NavBarStyle.capsule ? 1.12 : 1,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: foreground),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              builder: (context, color, child) =>
+                  Icon(destination.icon, size: 22, color: color),
+            ),
+          );
+    final content = Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: showLabel ? 1 : 0),
+            duration: _navAnimationDuration,
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) => ClipRect(
+              child: Align(
+                heightFactor: value,
+                child: Opacity(opacity: value, child: child),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontSize: capsule ? 10.5 : 10,
+                  color: labelForeground,
+                  fontWeight: selected
+                      ? style == NavBarStyle.m3
+                            ? FontWeight.w600
+                            : FontWeight.w700
+                      : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Material(
-        color: selected ? scheme.secondaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.transparent,
+        borderRadius: styleConfig.indicatorBorderRadius,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(destination.icon, size: 22, color: foreground),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: foreground,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+          hoverColor: styleConfig.hover(context),
+          splashColor: styleConfig.pressed(context),
+          child: Semantics(
+            button: true,
+            selected: selected,
+            label: destination.label,
+            excludeSemantics: true,
+            child: Tooltip(
+              message: destination.label,
+              child: capsule
+                  ? LayoutBuilder(
+                      builder: (context, constraints) {
+                        final availableWidth = constraints.maxWidth;
+                        final baseWidth = math.max(36.0, availableWidth - 12);
+                        final width =
+                            (baseWidth * styleConfig.indicatorWidthScale)
+                                .clamp(
+                                  math.min(36.0, availableWidth),
+                                  availableWidth,
+                                )
+                                .toDouble();
+                        final height = styleConfig.indicatorHeight
+                            .clamp(40.0, styleConfig.buttonHeight - 8)
+                            .toDouble();
+                        return Center(
+                          child: AnimatedContainer(
+                            duration: _navAnimationDuration,
+                            curve: Curves.easeOutCubic,
+                            width: width,
+                            height: height,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? _indicatorColor(
+                                      context,
+                                      styleConfig,
+                                      isDark,
+                                    )
+                                  : Colors.transparent,
+                              borderRadius: styleConfig.indicatorBorderRadius,
+                            ),
+                            child: content,
+                          ),
+                        );
+                      },
+                    )
+                  : content,
             ),
           ),
         ),
@@ -227,6 +422,52 @@ Color _indicatorColor(
   CompactControlStyle style,
   bool isDark,
 ) => style.selectedBackground(context).withValues(alpha: isDark ? 0.72 : 0.92);
+
+double _contrastRatio(Color first, Color second) {
+  final firstLuminance = first.computeLuminance();
+  final secondLuminance = second.computeLuminance();
+  final lighter = math.max(firstLuminance, secondLuminance);
+  final darker = math.min(firstLuminance, secondLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+Color _readableForeground(
+  Color preferred,
+  Color background, {
+  required Color fallback,
+}) {
+  if (_contrastRatio(preferred, background) >= 4.5) return preferred;
+  if (_contrastRatio(fallback, background) >= 4.5) return fallback;
+  final blackContrast = _contrastRatio(Colors.black, background);
+  final whiteContrast = _contrastRatio(Colors.white, background);
+  return blackContrast >= whiteContrast ? Colors.black : Colors.white;
+}
+
+Color _indicatorForeground(
+  BuildContext context,
+  CompactControlStyle style,
+  bool isDark,
+) {
+  final surface = style.background(context);
+  final indicator = Color.alphaBlend(
+    _indicatorColor(context, style, isDark),
+    surface,
+  );
+  return _readableForeground(
+    style.selectedForeground(context),
+    indicator,
+    fallback: style.foreground(context),
+  );
+}
+
+Color _surfaceAccentForeground(
+  BuildContext context,
+  CompactControlStyle style,
+) => _readableForeground(
+  style.focus(context),
+  style.background(context),
+  fallback: style.foreground(context),
+);
 
 const double _navDragActivationDistance = 26;
 const Duration _navAnimationDuration = Duration(milliseconds: 220);
@@ -361,6 +602,11 @@ class BottomNavBarItems extends StatelessWidget {
     final controlStyle =
         styleConfig ?? CompactControlTheme.navigationBarOf(context);
     final isDark = scheme.brightness == Brightness.dark;
+    final indicatorForeground = _indicatorForeground(
+      context,
+      controlStyle,
+      isDark,
+    );
     return switch (style) {
       NavBarStyle.capsule => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -380,7 +626,7 @@ class BottomNavBarItems extends StatelessWidget {
         childBuilder: (activeIndex) => _labeledRow(
           context,
           controlStyle,
-          controlStyle.selectedForeground(context),
+          indicatorForeground,
           fill: true,
           activeIndex: activeIndex,
         ),
@@ -388,14 +634,14 @@ class BottomNavBarItems extends StatelessWidget {
       NavBarStyle.tint => _labeledRow(
         context,
         controlStyle,
-        controlStyle.focus(context),
+        _surfaceAccentForeground(context, controlStyle),
       ),
       NavBarStyle.m3 => Row(
         mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
         children: [
           for (var i = 0; i < destinations.length; i++)
             _cell(
-              _M3NavItem(
+              _Material3NavItem(
                 icon: destinations[i].icon,
                 label: destinations[i].label,
                 selected: i == selectedIndex,
@@ -731,7 +977,11 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
     final widthScale = widget.styleConfig.widthScale;
-    final selectedColor = widget.styleConfig.selectedForeground(context);
+    final selectedColor = _indicatorForeground(
+      context,
+      widget.styleConfig,
+      isDark,
+    );
     final unselectedColor = widget.styleConfig.foreground(context);
     final labelStyle = Theme.of(context).textTheme.labelSmall!.copyWith(
       fontSize: 12.5,
@@ -1049,8 +1299,8 @@ class _LabeledNavItem extends StatelessWidget {
   }
 }
 
-class _M3NavItem extends StatelessWidget {
-  const _M3NavItem({
+class _Material3NavItem extends StatelessWidget {
+  const _Material3NavItem({
     required this.icon,
     required this.label,
     required this.selected,
@@ -1092,7 +1342,7 @@ class _M3NavItem extends StatelessWidget {
                 icon,
                 size: 20,
                 color: selected
-                    ? styleConfig.selectedForeground(context)
+                    ? _indicatorForeground(context, styleConfig, isDark)
                     : styleConfig.foreground(context),
               ),
             ),
@@ -1103,9 +1353,11 @@ class _M3NavItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 fontSize: 10,
-                color: selected
-                    ? styleConfig.selectedForeground(context)
-                    : styleConfig.foreground(context).withValues(alpha: 0.72),
+                // The label sits on the navigation surface, not inside the
+                // selected indicator, so it must use the surface foreground.
+                color: styleConfig
+                    .foreground(context)
+                    .withValues(alpha: selected ? 1 : 0.72),
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
