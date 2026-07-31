@@ -125,24 +125,17 @@ class _UpdateControls extends StatefulWidget {
 }
 
 class _UpdateControlsState extends State<_UpdateControls> {
-  static const _forceUpdateCheckCount = 5;
-
   bool _checking = false;
   bool _installing = false;
   bool _failed = false;
   String? _status;
   double? _downloadProgress;
-  int _betaChecks = 0;
-  AppUpdateResult? _betaResult;
 
   bool get _busy => _checking || _installing;
   UpdateChannel get _selectedChannel =>
       AppUpdateService.resolveChannel(widget.prefs.updateChannel);
-  bool get _forceUpdateUnlocked =>
-      _selectedChannel == UpdateChannel.beta &&
-      _betaChecks >= _forceUpdateCheckCount &&
-      _betaResult?.asset != null &&
-      AppUpdateInstaller.isSupported;
+  bool get _canForceUpdate =>
+      _selectedChannel == UpdateChannel.beta && AppUpdateInstaller.isSupported;
 
   @override
   Widget build(BuildContext context) {
@@ -168,15 +161,18 @@ class _UpdateControlsState extends State<_UpdateControls> {
               ),
             ),
             const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _check,
-              icon: _busy
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.system_update_alt, size: 18),
-              label: Text(_installing ? '更新中' : (_checking ? '检查中' : '检查')),
+            GestureDetector(
+              onLongPress: !_busy && _canForceUpdate ? _forceCheck : null,
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _check,
+                icon: _busy
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.system_update_alt, size: 18),
+                label: Text(_installing ? '更新中' : (_checking ? '检查中' : '检查')),
+              ),
             ),
           ],
         ),
@@ -206,20 +202,11 @@ class _UpdateControlsState extends State<_UpdateControls> {
             if (!AppUpdateService.canSelectChannel(channel)) return;
             unawaited(widget.prefs.setUpdateChannel(channel));
             setState(() {
-              _resetForceUpdate();
               _status = null;
               _failed = false;
             });
           },
         ),
-        if (_forceUpdateUnlocked)
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _busy ? null : _forceUpdate,
-              child: const Text('强制更新'),
-            ),
-          ),
         if (_status case final status?) ...[
           const SizedBox(height: 8),
           if (_downloadProgress case final progress?) ...[
@@ -239,7 +226,7 @@ class _UpdateControlsState extends State<_UpdateControls> {
     );
   }
 
-  Future<void> _check() async {
+  Future<void> _check({bool force = false}) async {
     setState(() {
       _checking = true;
       _failed = false;
@@ -253,26 +240,27 @@ class _UpdateControlsState extends State<_UpdateControls> {
       if (!mounted) return;
       setState(() {
         _status = _updateStatus(result!);
-        if (channel == UpdateChannel.beta) {
-          if (_betaChecks < _forceUpdateCheckCount) _betaChecks++;
-          _betaResult = result;
-        } else {
-          _resetForceUpdate();
-        }
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _resetForceUpdate();
         _failed = true;
         _status = '检查失败：$error';
       });
     } finally {
       if (mounted) setState(() => _checking = false);
     }
-    if (result?.updateAvailable == true && mounted) {
-      await _showUpdate(result!);
+    if (result == null || !mounted) return;
+    if (force) {
+      await _showUpdate(result, force: true);
+    } else if (result.updateAvailable) {
+      await _showUpdate(result);
     }
+  }
+
+  Future<void> _forceCheck() async {
+    if (_busy || !_canForceUpdate) return;
+    await _check(force: true);
   }
 
   Future<void> _showUpdate(AppUpdateResult result, {bool force = false}) async {
@@ -311,17 +299,6 @@ class _UpdateControlsState extends State<_UpdateControls> {
       return;
     }
     await _openRelease(result.releaseUri);
-  }
-
-  Future<void> _forceUpdate() async {
-    final result = _betaResult;
-    if (result == null || result.asset == null) return;
-    await _showUpdate(result, force: true);
-  }
-
-  void _resetForceUpdate() {
-    _betaChecks = 0;
-    _betaResult = null;
   }
 
   String get _externalUpdateHint => Platform.isLinux
