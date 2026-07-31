@@ -54,7 +54,7 @@ jobs:
       - name: Install desktop dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev clang cmake pkg-config rpm
+          sudo apt-get install -y ninja-build libgtk-3-dev clang cmake pkg-config rpm libarchive-tools zstd
           sudo gem install --no-document fpm
 
       - name: Fetch Flutter deps
@@ -64,6 +64,7 @@ jobs:
         env:
           PKG_ARCH_DEB: ${{ matrix.arch == 'arm64' && 'arm64' || 'amd64' }}
           PKG_ARCH_RPM: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+          PKG_ARCH_PACMAN: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
         run: |
           (cd core && cargo build --release)
           flutter build linux --release
@@ -96,7 +97,8 @@ jobs:
             --description 'mihomo 控制器' \
             --url 'https://github.com/UruhaLushia/sparxie' \
             --maintainer 'Sparxie' \
-            -d 'libgtk-3-0' -d 'libglib2.0-0' \
+            --license 'GPL-3.0-only' \
+            -d 'libgtk-3-0t64' -d 'libstdc++6' \
             -p "out/sparxie-linux-${{ matrix.arch }}.deb" \
             -C "$STAGE" .
 
@@ -106,9 +108,45 @@ jobs:
             --description 'mihomo 控制器' \
             --url 'https://github.com/UruhaLushia/sparxie' \
             --maintainer 'Sparxie' \
-            -d gtk3 -d glib2 \
+            --license 'GPL-3.0-only' \
+            -d gtk3 -d 'libstdc++' \
             -p "out/sparxie-linux-${{ matrix.arch }}.rpm" \
             -C "$STAGE" .
+
+          fpm -s dir -t pacman \
+            -n sparxie -v "$VERSION" \
+            -a "$PKG_ARCH_PACMAN" \
+            --description 'mihomo 控制器' \
+            --url 'https://github.com/UruhaLushia/sparxie' \
+            --maintainer 'Sparxie' \
+            --license 'GPL-3.0-only' \
+            --pacman-compression zstd \
+            -d gtk3 -d 'libstdc++' \
+            -p "out/sparxie-linux-$PKG_ARCH_PACMAN.pkg.tar.zst" \
+            -C "$STAGE" .
+
+      - name: Verify package dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          deb_packages=(out/*.deb)
+          rpm_packages=(out/*.rpm)
+          pacman_packages=(out/*.pkg.tar.zst)
+          shopt -u nullglob
+          test "${#deb_packages[@]}" -eq 1
+          test "${#rpm_packages[@]}" -eq 1
+          test "${#pacman_packages[@]}" -eq 1
+
+          diff -u \
+            <(printf '%s\n' libgtk-3-0t64 libstdc++6 | LC_ALL=C sort) \
+            <(dpkg-deb -f "${deb_packages[0]}" Depends | tr ',' '\n' | sed 's/^ *//; s/ *$//' | LC_ALL=C sort)
+          diff -u \
+            <(printf '%s\n' gtk3 'libstdc++' | LC_ALL=C sort) \
+            <(rpm -qp --requires "${rpm_packages[0]}" | sed '/^rpmlib(/d' | LC_ALL=C sort)
+          diff -u \
+            <(printf '%s\n' gtk3 'libstdc++' | LC_ALL=C sort) \
+            <(bsdtar -xOf "${pacman_packages[0]}" .PKGINFO | sed -n 's/^depend = //p' | LC_ALL=C sort)
 
       - uses: actions/upload-artifact@v7
         with:
