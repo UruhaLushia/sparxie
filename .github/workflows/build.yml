@@ -13,11 +13,6 @@ on:
         required: false
         type: boolean
         default: false
-      include_macos_intel:
-        description: Build the Intel macOS artifact
-        required: false
-        type: boolean
-        default: false
   workflow_dispatch:
     inputs:
       update_channel:
@@ -28,11 +23,6 @@ on:
         default: stable
       include_ios_xcarchive:
         description: Preserve the unsigned iOS xcarchive for diagnostics
-        required: false
-        type: boolean
-        default: false
-      include_macos_intel:
-        description: Build the Intel macOS artifact
         required: false
         type: boolean
         default: false
@@ -69,7 +59,6 @@ jobs:
     uses: ./.github/workflows/build-macos.yml
     with:
       update_channel: ${{ inputs.update_channel }}
-      include_intel: ${{ inputs.include_macos_intel }}
 
   ios:
     name: iOS

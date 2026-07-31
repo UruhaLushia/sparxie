@@ -7,10 +7,6 @@ on:
         required: false
         default: stable
         type: string
-      include_intel:
-        required: false
-        default: false
-        type: boolean
   workflow_dispatch:
     inputs:
       update_channel:
@@ -19,11 +15,6 @@ on:
         type: choice
         options: [stable, beta]
         default: stable
-      include_intel:
-        description: Build the Intel x86_64 artifact
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -32,33 +23,20 @@ env:
   RUST_TOOLCHAIN: stable
 
 jobs:
-  setup:
-    name: macOS matrix
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.value }}
-    steps:
-      - id: matrix
-        env:
-          INCLUDE_INTEL: ${{ inputs.include_intel }}
-        shell: bash
-        run: |
-          value='[
-            {"os":"macos-26","label":"macos-arm64","arch":"arm64","rust_target":"aarch64-apple-darwin"}
-          ]'
-          if [[ "$GITHUB_REF" == refs/tags/v* || "$INCLUDE_INTEL" == true ]]; then
-            value=$(jq -c '. + [{"os":"macos-26-intel","label":"macos-x86_64","arch":"x86_64","rust_target":"x86_64-apple-darwin"}]' <<<"$value")
-          fi
-          echo "value=$(jq -c . <<<"$value")" >> "$GITHUB_OUTPUT"
-
   build:
     name: macOS (${{ matrix.arch }})
-    needs: setup
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
+        include:
+          - arch: arm64
+            rust_target: aarch64-apple-darwin
+          - arch: x86_64
+            rust_target: x86_64-apple-darwin
+    env:
+      RUST_TARGET: ${{ matrix.rust_target }}
+      TARGET_ARCH: ${{ matrix.arch }}
 
     steps:
       - uses: actions/checkout@v5
@@ -75,12 +53,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: ${{ matrix.rust_target }}
+          targets: ${{ env.RUST_TARGET }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: v1-rust
-          key: macos-${{ matrix.rust_target }}
+          key: macos-${{ env.RUST_TARGET }}
           workspaces: |
             core -> target
             updater -> target
@@ -92,34 +70,39 @@ jobs:
       - name: Build app packages
         run: |
           cargo build --manifest-path core/Cargo.toml --release \
-            --target ${{ matrix.rust_target }}
+            --target "$RUST_TARGET"
           cargo build --manifest-path updater/Cargo.toml --release --locked \
-            --target ${{ matrix.rust_target }}
+            --target "$RUST_TARGET"
+          lipo "core/target/$RUST_TARGET/release/libsparxie.dylib" \
+            -verify_arch "$TARGET_ARCH"
+          lipo "updater/target/$RUST_TARGET/release/sparxie-updater" \
+            -verify_arch "$TARGET_ARCH"
           flutter build macos --release \
             --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
             --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
           mkdir -p "$APP/Contents/Helpers"
           cp \
-            updater/target/${{ matrix.rust_target }}/release/sparxie-updater \
+            "updater/target/$RUST_TARGET/release/sparxie-updater" \
             "$APP/Contents/Helpers/sparxie-updater"
           chmod 755 "$APP/Contents/Helpers/sparxie-updater"
           ./scripts/package-macos-rust-framework.sh \
-            core/target/${{ matrix.rust_target }}/release/libsparxie.dylib \
+            "core/target/$RUST_TARGET/release/libsparxie.dylib" \
             "$APP"
           test -x "$APP/Contents/Frameworks/sparxie.framework/sparxie"
           test -x "$APP/Contents/Helpers/sparxie-updater"
+          lipo "$APP/Contents/MacOS/Sparxie" -verify_arch "$TARGET_ARCH"
           codesign --verify --deep --strict --verbose=4 "$APP"
 
           mkdir -p out
-          UPDATE_PATH="out/sparxie-macos-${{ matrix.arch }}-update.tar.gz"
+          UPDATE_PATH="out/sparxie-macos-$TARGET_ARCH-update.tar.gz"
           tar -czf "$UPDATE_PATH" \
             -C "$(dirname "$APP")" \
             "$(basename "$APP")"
           tar -tzf "$UPDATE_PATH" >/dev/null
 
           DMG_ROOT="$RUNNER_TEMP/sparxie-dmg"
-          DMG_PATH="out/sparxie-macos-${{ matrix.arch }}.dmg"
+          DMG_PATH="out/sparxie-macos-$TARGET_ARCH.dmg"
           rm -rf "$DMG_ROOT"
           mkdir -p "$DMG_ROOT"
           ditto "$APP" "$DMG_ROOT/$(basename "$APP")"
@@ -134,7 +117,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.label }}
+          name: macos-${{ matrix.arch }}
           path: out/*
           if-no-files-found: error
           compression-level: 0

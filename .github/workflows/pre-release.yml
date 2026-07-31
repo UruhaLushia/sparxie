@@ -16,7 +16,6 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       update_channel: beta
-      include_macos_intel: true
     secrets: inherit
 
   publish:
