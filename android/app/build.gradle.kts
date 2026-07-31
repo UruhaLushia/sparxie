@@ -20,11 +20,8 @@ if (keystoreFile.exists()) {
 }
 val hasReleaseSigning = keystoreProperties.getProperty("storeFile") != null
 
-// versionCode = <UTC+8 build date yyyyMMdd> * 100 + <git commit count>, e.g.
-// 2026052912. Monotonic (date and commit count only ever increase) and well
-// under the 2_147_483_647 int ceiling until year ~2147. Needs full git
-// history (CI checks out with fetch-depth: 0); commit count falls back to 0
-// when git is unavailable (e.g. a source tarball).
+// Base versionCode = <UTC+8 build date yyyyMMdd> * 100 + <git commit count>.
+// CI checks out the full history; source archives fall back to a count of 0.
 fun gitCommitCount(): Int {
     return try {
         val result = providers.exec {
@@ -45,7 +42,10 @@ fun gitCommitCount(): Int {
 val buildDate = ZonedDateTime.now(ZoneOffset.ofHours(8))
     .format(DateTimeFormatter.ofPattern("yyyyMMdd"))
     .toInt()
-val resolvedVersionCode = buildDate * 100 + gitCommitCount()
+// Older split APKs used Flutter's ABI offsets of up to 4000. Start the unified
+// APK sequence above that range so existing installations can update in place.
+val unifiedApkVersionOffset = 5000
+val resolvedVersionCode = buildDate * 100 + gitCommitCount() + unifiedApkVersionOffset
 
 android {
     namespace = "zip.atri.sparxie"
@@ -91,6 +91,17 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+    }
+}
+
+// Flutter adds ABI-specific offsets to --split-per-abi outputs through the
+// legacy output API. GitHub also publishes a universal APK, so reset those
+// offsets to allow switching directly distributed APKs during updates.
+@Suppress("DEPRECATION")
+android.applicationVariants.configureEach {
+    outputs.configureEach {
+        (this as com.android.build.gradle.api.ApkVariantOutput).versionCodeOverride =
+            resolvedVersionCode
     }
 }
 
