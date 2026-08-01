@@ -72,7 +72,7 @@ class _AppHorizontalPageTransition extends StatefulWidget {
 class _AppHorizontalPageTransitionState
     extends State<_AppHorizontalPageTransition>
     with WidgetsBindingObserver {
-  static const _maxGesturePreviewDistance = 0.12;
+  static const _maxGesturePreviewDistance = 0.25;
 
   _BackGesturePhase _gesturePhase = _BackGesturePhase.idle;
   double _settleStartValue = 1;
@@ -166,11 +166,13 @@ class _AppHorizontalPageTransitionState
       }(),
       _BackGesturePhase.commit => () {
         // A committed predictive back restarts the route controller from 1.0.
-        // Keep the drag offset, then use that full-duration animation to leave.
+        // Preserve the drag offset and settle only the remaining distance.
         final progress = (1 - value).clamp(0.0, 1.0);
+        final remaining = 1 - _settleStartDistance;
+        if (remaining <= 0.0001) return 1.0;
+        final settleProgress = (progress / remaining).clamp(0.0, 1.0);
         return _settleStartDistance +
-            (1 - _settleStartDistance) *
-                Curves.easeInOutCubic.transform(progress);
+            remaining * Curves.linearToEaseOut.transform(settleProgress);
       }(),
       _BackGesturePhase.idle => switch (widget.animation.status) {
         AnimationStatus.reverse => Curves.easeOutCubic.transform(1 - value),
