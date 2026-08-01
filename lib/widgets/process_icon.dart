@@ -25,6 +25,7 @@ class ProcessIcon extends StatelessWidget {
   final double size;
 
   static const _desktopIconSize = 256;
+  static const _decodeOversample = 2.0;
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
@@ -44,9 +45,11 @@ class ProcessIcon extends StatelessWidget {
     final key = _key;
     final targetSize = _isAndroid ? null : _desktopIconSize;
     // Keep the reusable encoded icon at full size, not its decoded pixels.
-    final decodeSize = (size * MediaQuery.devicePixelRatioOf(context))
-        .ceil()
-        .clamp(1, _desktopIconSize);
+    final decodeScale = _isAndroid ? 1.0 : _decodeOversample;
+    final decodeSize =
+        (size * MediaQuery.devicePixelRatioOf(context) * decodeScale)
+            .ceil()
+            .clamp(1, _desktopIconSize);
     cache.request(key, size: targetSize, decodeSize: decodeSize);
     final fallback = key.isEmpty
         ? 'assets/process_icons/device.png'
@@ -67,7 +70,8 @@ class ProcessIcon extends StatelessWidget {
                   width: size,
                   height: size,
                   fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
+                  filterQuality: FilterQuality.medium,
+                  isAntiAlias: true,
                 )
               : _DefaultIcon(asset: fallback),
         );
@@ -86,7 +90,8 @@ class _DefaultIcon extends StatelessWidget {
       asset,
       fit: BoxFit.contain,
       gaplessPlayback: true,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
+      isAntiAlias: true,
     );
   }
 }

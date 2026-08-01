@@ -278,8 +278,7 @@ async fn resolve(
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn resolve_icon_bytes_sized(path: &str, size: u32) -> Option<Vec<u8>> {
     // No explicit size — `file-icon` already returns a large/native icon by
-    // default. Normalize before caching, matching Sparkle's renderer-side
-    // `cropAndPadTransparent` without repeating that work in Flutter.
+    // default. Normalize once before caching instead of repeating it in Flutter.
     let bytes = file_icon::file_to_buf(path).ok()?;
     normalize_desktop_icon(&bytes, size).or(Some(bytes))
 }
