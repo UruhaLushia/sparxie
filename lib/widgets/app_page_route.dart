@@ -9,6 +9,26 @@ class AppPageRoute<T> extends MaterialPageRoute<T> {
     : super(allowSnapshotting: false);
 
   @override
+  void handleCommitBackGesture() {
+    // TransitionRoute restarts at 1.0 on commit. This route already maps the
+    // gesture into its preview range, so pop from the current value instead.
+    final navigation = navigator;
+    if (isCurrent) navigation?.pop();
+
+    final routeController = controller;
+    if (routeController?.isAnimating ?? false) {
+      late final AnimationStatusListener stopGesture;
+      stopGesture = (_) {
+        routeController!.removeStatusListener(stopGesture);
+        navigation?.didStopUserGesture();
+      };
+      routeController!.addStatusListener(stopGesture);
+    } else {
+      navigation?.didStopUserGesture();
+    }
+  }
+
+  @override
   Widget buildTransitions(
     BuildContext context,
     Animation<double> animation,
@@ -78,6 +98,15 @@ class _AppHorizontalPageTransitionState
   double _settleStartValue = 1;
   double _settleStartDistance = 0;
 
+  bool get _usesContinuousCommit => widget.route is AppPageRoute<dynamic>;
+
+  double _backAnimationValue(PredictiveBackEvent event) {
+    final progress = _usesContinuousCommit
+        ? event.progress * _maxGesturePreviewDistance
+        : event.progress;
+    return 1 - progress;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -118,7 +147,9 @@ class _AppHorizontalPageTransitionState
     if (!canHandle) return false;
 
     _gesturePhase = _BackGesturePhase.drag;
-    widget.route.handleStartBackGesture(progress: 1 - backEvent.progress);
+    widget.route.handleStartBackGesture(
+      progress: _backAnimationValue(backEvent),
+    );
     if (mounted) setState(() {});
     return true;
   }
@@ -126,7 +157,7 @@ class _AppHorizontalPageTransitionState
   @override
   void handleUpdateBackGestureProgress(PredictiveBackEvent backEvent) {
     widget.route.handleUpdateBackGestureProgress(
-      progress: 1 - backEvent.progress,
+      progress: _backAnimationValue(backEvent),
     );
   }
 
@@ -148,8 +179,12 @@ class _AppHorizontalPageTransitionState
     if (mounted) setState(() => _gesturePhase = phase);
   }
 
-  double _gestureDistance(double animationValue) =>
-      (1 - animationValue) * _maxGesturePreviewDistance;
+  double _gestureDistance(double animationValue) {
+    final progress = 1 - animationValue;
+    return _usesContinuousCommit
+        ? progress
+        : progress * _maxGesturePreviewDistance;
+  }
 
   double _distanceFor(double value) {
     return switch (_gesturePhase) {
@@ -165,8 +200,17 @@ class _AppHorizontalPageTransitionState
             (1 - Curves.easeOutCubic.transform(progress));
       }(),
       _BackGesturePhase.commit => () {
-        // A committed predictive back restarts the route controller from 1.0.
-        // Preserve the drag offset and settle only the remaining distance.
+        if (_usesContinuousCommit) {
+          if (_settleStartValue <= 0.0001) return 1.0;
+          final progress = ((_settleStartValue - value) / _settleStartValue)
+              .clamp(0.0, 1.0);
+          return _settleStartDistance +
+              (1 - _settleStartDistance) *
+                  Curves.linearToEaseOut.transform(progress);
+        }
+
+        // Other PageRoute implementations retain Flutter's reset-on-commit
+        // behavior, so keep the visual offset continuous for that fallback.
         final progress = (1 - value).clamp(0.0, 1.0);
         final remaining = 1 - _settleStartDistance;
         if (remaining <= 0.0001) return 1.0;
