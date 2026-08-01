@@ -2,6 +2,8 @@ use std::collections::{HashSet, VecDeque};
 
 use super::api::{LogEntry, LogWindow, LogsFrame};
 
+const TOTAL_CAPACITY_MULTIPLIER: usize = 2;
+
 struct StoredLog {
     entry: LogEntry,
     dedupe_key: Option<String>,
@@ -27,8 +29,17 @@ impl LogStore {
     }
 
     pub(crate) fn set_info_capacity(&mut self, info_capacity: usize) {
-        self.info_capacity = info_capacity.max(1);
+        let info_capacity = info_capacity.max(1);
+        if info_capacity == self.info_capacity {
+            return;
+        }
+        let reduced = info_capacity < self.info_capacity;
+        self.info_capacity = info_capacity;
         self.trim();
+        if reduced {
+            self.entries.shrink_to_fit();
+            self.seen.shrink_to_fit();
+        }
     }
 
     pub(crate) fn push(&mut self, entry: LogEntry) -> LogsFrame {
@@ -43,8 +54,8 @@ impl LogStore {
     }
 
     pub(crate) fn clear(&mut self) -> LogsFrame {
-        self.entries.clear();
-        self.seen.clear();
+        self.entries = VecDeque::new();
+        self.seen = HashSet::new();
         self.info_entries = 0;
         self.frame(false)
     }
@@ -118,7 +129,10 @@ impl LogStore {
     }
 
     fn trim(&mut self) {
-        while self.info_entries > self.info_capacity {
+        // Verbose entries keep their own budget so changing the visible level
+        // still has history, but a Debug/Trace-only stream cannot grow forever.
+        let total_capacity = self.info_capacity.saturating_mul(TOTAL_CAPACITY_MULTIPLIER);
+        while self.info_entries > self.info_capacity || self.entries.len() > total_capacity {
             let Some(stored) = self.entries.pop_front() else {
                 self.info_entries = 0;
                 break;

@@ -43,6 +43,9 @@ impl State {
         while self.closed.len() > self.closed_capacity {
             self.closed.pop_front();
         }
+        if self.closed.capacity() > self.closed_capacity {
+            self.closed.shrink_to(self.closed_capacity);
+        }
     }
 
     fn push_closed(&mut self, row: Connection) {
@@ -50,6 +53,16 @@ impl State {
             self.closed.pop_front();
         }
         self.closed.push_back(row);
+    }
+
+    fn clear_closed(&mut self) {
+        self.closed = VecDeque::new();
+    }
+
+    fn compact_active(&mut self) {
+        if self.active.capacity() > self.active.len().saturating_mul(4).max(64) {
+            self.active.shrink_to_fit();
+        }
     }
 }
 
@@ -123,19 +136,16 @@ pub async fn clear_closed(target: SurgeTarget, interval_ms: u32) {
     slot.state
         .lock()
         .expect("surge connections state poisoned")
-        .closed
-        .clear();
+        .clear_closed();
 }
 
 pub async fn clear_closed_by_group(target: SurgeTarget, interval_ms: u32, group: String) {
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return;
     };
-    slot.state
-        .lock()
-        .expect("surge connections state poisoned")
-        .closed
-        .retain(|row| !connection_in_group(row, &group));
+    let mut state = slot.state.lock().expect("surge connections state poisoned");
+    state.closed.retain(|row| !connection_in_group(row, &group));
+    state.closed.shrink_to_fit();
 }
 
 pub async fn fetch_window(
@@ -340,6 +350,7 @@ async fn fetch_snapshot(
             state.push_closed(row);
         }
     }
+    state.compact_active();
 
     Ok(ConnectionsFrame {
         active_count: state.active.len() as u32,

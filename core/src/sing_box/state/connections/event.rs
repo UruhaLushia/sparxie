@@ -18,13 +18,13 @@ pub(super) fn apply_events(
         .lock()
         .expect("sing-box connections state poisoned");
     if events.reset {
-        state.active.clear();
-        state.closed.clear();
+        state.reset_connections();
     }
     let dt_secs = (interval_ms as f64 / 1000.0).max(0.05);
     for event in events.events {
         apply_event(&mut state, event, dt_secs);
     }
+    state.compact_active();
     ConnectionsFrame {
         active_count: state.active.len() as u32,
         closed_count: state.closed.len() as u32,

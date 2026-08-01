@@ -552,7 +552,12 @@ class _LogsScreenState extends State<LogsScreen> {
 
   void _clear() {
     _clearViewportAnchor();
-    widget.session.clearLogs();
+    _enteringIds.clear();
+    _cancelAutoScroll();
+    if (_listController.isAttached && !_listController.isLocked) {
+      _listController.invalidateAllExtents();
+    }
+    unawaited(widget.session.clearLogs());
   }
 
   Widget _buildLogsList(BuildContext context) {

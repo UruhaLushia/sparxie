@@ -51,6 +51,9 @@ impl State {
         while self.closed.len() > self.closed_capacity {
             self.closed.pop_front();
         }
+        if self.closed.capacity() > self.closed_capacity {
+            self.closed.shrink_to(self.closed_capacity);
+        }
     }
 
     pub(super) fn push_closed(&mut self, row: Connection) {
@@ -58,6 +61,26 @@ impl State {
             self.closed.pop_front();
         }
         self.closed.push_back(row);
+    }
+
+    fn clear_closed(&mut self) {
+        self.closed = VecDeque::new();
+    }
+
+    pub(super) fn mark_active_changed(&mut self, release_stale_ids: bool) {
+        self.active_version = self.active_version.wrapping_add(1);
+        self.sorted_active_valid = false;
+        if !release_stale_ids {
+            return;
+        }
+        self.sorted_active_ids.clear();
+        let active_len = self.active.len();
+        if self.sorted_active_ids.capacity() > active_len.saturating_mul(2).max(64) {
+            self.sorted_active_ids.shrink_to(active_len);
+        }
+        if self.active.capacity() > active_len.saturating_mul(4).max(64) {
+            self.active.shrink_to_fit();
+        }
     }
 }
 
@@ -134,7 +157,7 @@ pub async fn clear_closed(target: MihomoTarget, interval_ms: u32) {
         return;
     };
     let mut state = slot.state.lock().expect("connections state poisoned");
-    state.closed.clear();
+    state.clear_closed();
 }
 
 pub async fn clear_closed_by_group(target: MihomoTarget, interval_ms: u32, group: String) {
@@ -143,6 +166,7 @@ pub async fn clear_closed_by_group(target: MihomoTarget, interval_ms: u32, group
     };
     let mut state = slot.state.lock().expect("connections state poisoned");
     state.closed.retain(|conn| !conn_in_group(conn, &group));
+    state.closed.shrink_to_fit();
 }
 
 /// Slice the sorted list (active or closed) at `[offset, offset + limit)`.

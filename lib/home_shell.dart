@@ -754,41 +754,44 @@ class _StatusHeroCard extends StatelessWidget {
                     valueListenable: session.supportsMemory,
                     builder: (_, supportsMemory, _) {
                       if (!supportsMemory) return const SizedBox.shrink();
-                      return Row(
-                        children: [
-                          Icon(
-                            Icons.memory_outlined,
-                            size: 16,
-                            color: colors.accent.withValues(
-                              alpha: selected ? 0.72 : 1,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: RepaintBoundary(
-                              child: ValueListenableBuilder<rust.MemorySample>(
-                                valueListenable: session.memory,
-                                builder: (_, sample, _) {
-                                  final text = sample.goroutines > 0
-                                      ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
-                                      : formatBytes(sample.inuse);
-                                  return Text(
-                                    text,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(
-                                          color: colors.foreground,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  );
-                                },
+                      return Tooltip(
+                        message: '后端核心 RSS，不是 Sparxie 客户端内存',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.memory_outlined,
+                              size: 16,
+                              color: colors.accent.withValues(
+                                alpha: selected ? 0.72 : 1,
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: RepaintBoundary(
+                                child: ValueListenableBuilder<rust.MemorySample>(
+                                  valueListenable: session.memory,
+                                  builder: (_, sample, _) {
+                                    final text = sample.goroutines > 0
+                                        ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
+                                        : formatBytes(sample.inuse);
+                                    return Text(
+                                      text,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            color: colors.foreground,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       );
                     },
                   ),

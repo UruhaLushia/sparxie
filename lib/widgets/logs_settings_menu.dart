@@ -81,7 +81,7 @@ class _LogsSettingsSheet extends StatelessWidget {
                         _SettingsBlock(
                           label: '日志缓存',
                           hint:
-                              '当前:${prefs.logInfoCapacity} 条。按 Info 筛选条目计数；Debug/Trace 不占额度。',
+                              '当前:总计最多 ${prefs.logInfoCapacity * 2} 条，其中 Info 及以上最多 ${prefs.logInfoCapacity} 条。',
                           child: _CapacityChips(prefs: prefs),
                         ),
                       ],

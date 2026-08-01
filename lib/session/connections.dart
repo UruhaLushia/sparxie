@@ -919,11 +919,13 @@ class ConnectionListNotifier extends ChangeNotifier {
   /// to `clearClosedConnections` so the next frame agrees.
   void clearClosedOptimistic() {
     if (_closedCount == 0 && _closedRows.isEmpty) return;
-    _retireRows(_closedRows.values);
-    _closedRows.clear();
-    _closedWindowIds.clear();
-    _closedOffset = 0;
+    _filterRevision++;
+    _clearWindow(ConnectionsTab.closed);
     _closedCount = 0;
+    if (_visibleTab == ConnectionsTab.closed) {
+      _filteredCount = 0;
+      _filterLoading = false;
+    }
     if (_grouped && _visibleTab == ConnectionsTab.closed) {
       _disposeGroups();
     }
@@ -933,6 +935,7 @@ class ConnectionListNotifier extends ChangeNotifier {
   void clearClosedGroupOptimistic(String groupKey) {
     final group = _groupsByKey.remove(groupKey);
     if (group == null) return;
+    _filterRevision++;
     _groupsRevision++;
     final count = group.count.value;
     _groups.remove(group);
@@ -997,10 +1000,11 @@ class ConnectionListNotifier extends ChangeNotifier {
         ? _activeWindowIds
         : _closedWindowIds;
     final rows = tab == ConnectionsTab.active ? _activeRows : _closedRows;
-    if (ids.isEmpty && rows.isEmpty) return;
-    _retireRows(rows.values);
-    ids.clear();
-    rows.clear();
+    if (ids.isNotEmpty || rows.isNotEmpty) {
+      _retireRows(rows.values);
+      ids.clear();
+      rows.clear();
+    }
     if (tab == ConnectionsTab.active) {
       _activeOffset = 0;
       _activeLimit = 0;

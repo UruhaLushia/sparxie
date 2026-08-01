@@ -19,6 +19,7 @@ use crate::utils::image::normalize_desktop_icon;
 /// dozens of parallel desktop-file scans. Mirrors Sparkle's cap.
 const MAX_CONCURRENT: usize = 5;
 const DEFAULT_ICON_SIZE: u32 = 256;
+const MAX_MEMOIZED_KEYS: usize = 512;
 
 /// Process icons can change when apps update; keep the disk cache fresh while
 /// still avoiding repeated file-icon extraction during normal use.
@@ -64,6 +65,26 @@ fn sized_icon_key(key: &str, size: u32) -> String {
 
 fn icon_size(size: u32) -> u32 {
     size.clamp(1, DEFAULT_ICON_SIZE)
+}
+
+fn cache_name(names: &mut HashMap<String, Option<String>>, key: String, value: Option<String>) {
+    if names.len() >= MAX_MEMOIZED_KEYS
+        && !names.contains_key(&key)
+        && let Some(evicted) = names.keys().next().cloned()
+    {
+        names.remove(&evicted);
+    }
+    names.insert(key, value);
+}
+
+fn remember_negative(negative: &mut HashSet<String>, key: String) {
+    if negative.len() >= MAX_MEMOIZED_KEYS
+        && !negative.contains(&key)
+        && let Some(evicted) = negative.iter().next().cloned()
+    {
+        negative.remove(&evicted);
+    }
+    negative.insert(key);
 }
 
 async fn db_get_icon(key: String) -> Result<Option<Vec<u8>>, MihomoError> {
@@ -142,7 +163,7 @@ pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
     if let Some(text) = db_get_name(process_path.clone()).await? {
         let resolved = if text.is_empty() { None } else { Some(text) };
         if let Ok(mut names) = state.names.lock() {
-            names.insert(process_path, resolved.clone());
+            cache_name(&mut names, process_path, resolved.clone());
         }
         return Ok(resolved);
     }
@@ -159,7 +180,7 @@ pub async fn name(process_path: String) -> Result<Option<String>, MihomoError> {
 
     let _ = db_put_name(process_path.clone(), resolved.clone().unwrap_or_default()).await;
     if let Ok(mut names) = state.names.lock() {
-        names.insert(process_path, resolved.clone());
+        cache_name(&mut names, process_path, resolved.clone());
     }
     Ok(resolved)
 }
@@ -247,7 +268,7 @@ async fn resolve(
         }
         _ => {
             if let Ok(mut neg) = state.negative.lock() {
-                neg.insert(process_path);
+                remember_negative(&mut neg, process_path);
             }
             Ok(None)
         }
@@ -290,9 +311,11 @@ pub fn clear_memory() {
     if let Some(state) = STATE.get() {
         if let Ok(mut neg) = state.negative.lock() {
             neg.clear();
+            neg.shrink_to_fit();
         }
         if let Ok(mut names) = state.names.lock() {
             names.clear();
+            names.shrink_to_fit();
         }
     }
 }

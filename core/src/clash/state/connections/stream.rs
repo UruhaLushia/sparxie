@@ -110,6 +110,7 @@ fn apply_snapshot(
     let mut state = slot.state.lock().expect("connections state poisoned");
     let mut current_ids = HashSet::with_capacity(state.active.len());
     let mut order_dirty = is_initial || sort_needs_live_resort(state.sort);
+    let mut active_set_changed = is_initial;
 
     if let Some(arr) = raw.get("connections").and_then(|v| v.as_array()) {
         for item in arr {
@@ -126,6 +127,7 @@ fn apply_snapshot(
                 }
             } else {
                 order_dirty = true;
+                active_set_changed = true;
             }
             current_ids.insert(id.clone());
             state.active.insert(id, conn);
@@ -140,6 +142,7 @@ fn apply_snapshot(
         .collect();
     if !removed_ids.is_empty() {
         order_dirty = true;
+        active_set_changed = true;
     }
     for id in removed_ids {
         if let Some(mut row) = state.active.remove(&id) {
@@ -150,7 +153,7 @@ fn apply_snapshot(
         }
     }
     if order_dirty {
-        state.active_version = state.active_version.wrapping_add(1);
+        state.mark_active_changed(active_set_changed);
     }
 
     ConnectionsFrame {
