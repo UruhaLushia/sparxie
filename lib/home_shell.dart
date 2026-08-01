@@ -30,25 +30,27 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
-    if (_needsResumeReconnect) {
-      WidgetsBinding.instance.addObserver(this);
-    }
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
-    if (_needsResumeReconnect) {
-      WidgetsBinding.instance.removeObserver(this);
-    }
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (_needsResumeReconnect && state == AppLifecycleState.resumed) {
       widget.session.reconnect();
     }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    // Flutter clears its global ImageCache before notifying observers.
+    widget.session.processIcons.clearImages(preserveLive: true);
   }
 
   bool _handleKeyEvent(KeyEvent event) {

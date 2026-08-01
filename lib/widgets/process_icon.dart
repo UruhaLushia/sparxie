@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../session.dart';
+import 'active_listenable_builder.dart';
 
 /// Leading icon for a connection row. Requests resolution lazily and
 /// repaints when the cache fills; falls back to the bundled default icons
@@ -42,14 +43,15 @@ class ProcessIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final key = _key;
     final targetSize = _isAndroid ? null : _desktopIconSize;
-    final decodeSize = _isAndroid
-        ? null
-        : (size * MediaQuery.devicePixelRatioOf(context)).ceil();
+    // Keep the reusable encoded icon at full size, not its decoded pixels.
+    final decodeSize = (size * MediaQuery.devicePixelRatioOf(context))
+        .ceil()
+        .clamp(1, _desktopIconSize);
     cache.request(key, size: targetSize, decodeSize: decodeSize);
     final fallback = key.isEmpty
         ? 'assets/process_icons/device.png'
         : _defaultAppAsset;
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: cache,
       builder: (context, _) {
         final image = cache.iconFor(

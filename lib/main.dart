@@ -51,6 +51,7 @@ part 'home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _configureImageCache();
   unawaited(AppUpdateCleanup.removePending());
   final appLinks = AppLinks();
   _enableEdgeToEdge();
@@ -153,6 +154,15 @@ Future<void> main() async {
       appLinks: appLinks,
     ),
   );
+}
+
+void _configureImageCache() {
+  if (kIsWeb) return;
+  final mobile = Platform.isAndroid || Platform.isIOS;
+  // Keep visible backgrounds/icons hot while bounding offscreen image data.
+  final cache = PaintingBinding.instance.imageCache;
+  cache.maximumSize = mobile ? 512 : 768;
+  cache.maximumSizeBytes = (mobile ? 64 : 96) << 20;
 }
 
 Future<void> _initRust() {

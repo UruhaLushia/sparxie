@@ -178,20 +178,30 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun drawableToPng(drawable: Drawable): ByteArray? {
+        var ownsBitmap = false
         val bitmap = if (drawable is BitmapDrawable && drawable.bitmap != null) {
-            Bitmap.createScaledBitmap(drawable.bitmap, iconSize, iconSize, true)
+            val source = drawable.bitmap
+            Bitmap.createScaledBitmap(source, iconSize, iconSize, true).also {
+                ownsBitmap = it !== source
+            }
         } else {
+            ownsBitmap = true
             val bmp = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             drawable.setBounds(0, 0, canvas.width, canvas.height)
             drawable.draw(canvas)
             bmp
         }
-        val stream = ByteArrayOutputStream()
-        return if (bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
-            stream.toByteArray()
-        } else {
-            null
+        return try {
+            ByteArrayOutputStream().use { stream ->
+                if (bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                    stream.toByteArray()
+                } else {
+                    null
+                }
+            }
+        } finally {
+            if (ownsBitmap) bitmap.recycle()
         }
     }
 }

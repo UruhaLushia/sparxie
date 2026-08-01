@@ -42,8 +42,12 @@ class RustIconImage extends ImageProvider<RustIconImage> {
     }
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
     final codec = await decode(buffer);
-    final frame = await codec.getNextFrame();
-    return ImageInfo(image: frame.image, scale: key.scale);
+    try {
+      final frame = await codec.getNextFrame();
+      return ImageInfo(image: frame.image, scale: key.scale);
+    } finally {
+      codec.dispose();
+    }
   }
 
   @override

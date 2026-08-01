@@ -21,12 +21,10 @@ class ProxyAvatar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = _colorFor(name, scheme);
     final hasIcon = icon.isNotEmpty;
-    // Decode with 2x headroom over the display size (capped at the ~256px
-    // source) so the downscale has mip levels to resample from. Decoding
-    // straight to display res aliases edges in one harsh step (jagged); the
-    // cap keeps a huge source from wasting memory.
+    // Keep modest resampling headroom without retaining every icon at its
+    // full source size; proxy catalogs can contain hundreds of images.
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cachePx = (size * dpr * 2).round().clamp(1, 256);
+    final cachePx = (size * dpr * 1.25).ceil().clamp(1, 160);
     return SizedBox.square(
       dimension: size,
       child: ClipRRect(

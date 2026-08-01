@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../rust_api.dart' as rust;
@@ -15,21 +16,23 @@ import '../rust_api.dart' as rust;
 /// MethodChannel (PackageManager), then persists through Rust's disk cache.
 class ProcessIconCache extends ChangeNotifier {
   static const _channel = MethodChannel('zip.atri.sparxie/process_icons');
-  static const _maxImages = 160;
+  static const _maxImages = 128;
   static const _maxNames = 512;
   static const _maxMisses = 512;
   static const _imageRetireDelay = Duration(milliseconds: 500);
 
-  // Decoded, display-ready images. Desktop icons are normalized before they
-  // enter Rust's disk cache; Android icons are already suitable as-is.
+  // Decoded, display-ready images. Encoded source bytes stay in Rust's disk
+  // cache; Flutter only retains pixels at the requested display size.
   final LinkedHashMap<String, ui.Image> _images =
       LinkedHashMap<String, ui.Image>();
   final Set<String> _missing = {};
   final Set<String> _requested = {};
+  int _imageGeneration = 0;
 
   final LinkedHashMap<String, String> _names = LinkedHashMap<String, String>();
   final Set<String> _nameMissing = {};
   final Set<String> _nameRequested = {};
+  int? _notifyFrameCallback;
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
   static bool get _isSupported => !kIsWeb && !Platform.isIOS;
@@ -59,12 +62,22 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _requested.add(imageKey);
+    final generation = _imageGeneration;
     (_isAndroid
             ? _resolveAndroid(key)
             : rust.fetchProcessIcon(path: key, size: size))
-        .then((bytes) => _complete(imageKey, bytes, decodeSize: decodeSize))
+        .then(
+          (bytes) => _complete(
+            imageKey,
+            bytes,
+            decodeSize: decodeSize,
+            generation: generation,
+          ),
+        )
         .catchError((_) {
-          _requested.remove(imageKey);
+          if (generation == _imageGeneration) {
+            _requested.remove(imageKey);
+          }
         });
   }
 
@@ -114,14 +127,24 @@ class ProcessIconCache extends ChangeNotifier {
     return resolved;
   }
 
-  void _complete(String key, Uint8List? bytes, {int? decodeSize}) {
+  void _complete(
+    String key,
+    Uint8List? bytes, {
+    required int generation,
+    int? decodeSize,
+  }) {
+    if (generation != _imageGeneration) return;
     if (bytes == null || bytes.isEmpty) {
       _requested.remove(key);
       _remember(_missing, key, _maxMisses);
-      notifyListeners();
+      _scheduleNotify();
       return;
     }
     _decode(bytes, targetSize: decodeSize).then((image) {
+      if (generation != _imageGeneration) {
+        image?.dispose();
+        return;
+      }
       _requested.remove(key);
       if (image != null) {
         final previous = _images.remove(key);
@@ -131,7 +154,7 @@ class ProcessIconCache extends ChangeNotifier {
       } else {
         _remember(_missing, key, _maxMisses);
       }
-      notifyListeners();
+      _scheduleNotify();
     });
   }
 
@@ -143,8 +166,12 @@ class ProcessIconCache extends ChangeNotifier {
         targetWidth: targetSize,
         targetHeight: targetSize,
       );
-      final frame = await codec.getNextFrame();
-      return frame.image;
+      try {
+        final frame = await codec.getNextFrame();
+        return frame.image;
+      } finally {
+        codec.dispose();
+      }
     } catch (_) {
       return null;
     }
@@ -159,7 +186,15 @@ class ProcessIconCache extends ChangeNotifier {
     } else {
       _remember(_nameMissing, key, _maxMisses);
     }
-    notifyListeners();
+    _scheduleNotify();
+  }
+
+  void _scheduleNotify() {
+    if (!hasListeners || _notifyFrameCallback != null) return;
+    _notifyFrameCallback = SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _notifyFrameCallback = null;
+      if (hasListeners) notifyListeners();
+    });
   }
 
   void _trimImages() {
@@ -196,18 +231,33 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _missing.clear();
+    _imageGeneration++;
     _requested.clear();
     _nameMissing.clear();
     _nameRequested.clear();
     rust.resetProcessIconMisses();
-    notifyListeners();
+    _scheduleNotify();
+  }
+
+  /// Release decoded pixels while keeping names, misses and the disk cache.
+  void clearImages({bool preserveLive = false}) {
+    if (preserveLive && hasListeners) return;
+    if (_images.isEmpty && _requested.isEmpty) return;
+    _imageGeneration++;
+    _requested.clear();
+    for (final image in _images.values) {
+      _retireImage(image);
+    }
+    _images.clear();
+    _scheduleNotify();
   }
 
   /// Drop every resolved icon/name as well — used when the backing cache is
   /// wiped, so tiles re-resolve instead of showing now-stale entries.
   void clearAll() {
+    _imageGeneration++;
     for (final image in _images.values) {
-      image.dispose();
+      _retireImage(image);
     }
     _images.clear();
     _names.clear();
@@ -215,11 +265,17 @@ class ProcessIconCache extends ChangeNotifier {
     _requested.clear();
     _nameMissing.clear();
     _nameRequested.clear();
-    notifyListeners();
+    _scheduleNotify();
   }
 
   @override
   void dispose() {
+    _imageGeneration++;
+    final notifyFrameCallback = _notifyFrameCallback;
+    if (notifyFrameCallback != null) {
+      SchedulerBinding.instance.cancelFrameCallbackWithId(notifyFrameCallback);
+      _notifyFrameCallback = null;
+    }
     for (final image in _images.values) {
       image.dispose();
     }
