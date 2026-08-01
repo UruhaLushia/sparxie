@@ -629,7 +629,7 @@ class _NavCardGrid extends StatelessWidget {
           label: destinations[i].label,
           selected: selectedIndex == i,
           onTap: () => onSelected(i),
-          badge: _badgeFor(i),
+          badge: _badgeFor(i, selected: selectedIndex == i),
         ),
     ];
     final cards = <Widget>[...navCards];
@@ -659,13 +659,27 @@ class _NavCardGrid extends StatelessWidget {
     return rows;
   }
 
-  Widget? _badgeFor(int index) {
+  Widget? _badgeFor(int index, {required bool selected}) {
     return switch (destinations[index].label) {
-      '代理组' => _GroupCountBadge(session: session),
-      '连接' => _ConnectionCountBadge(session: session),
+      '代理组' => _GroupCountBadge(session: session, selected: selected),
+      '连接' => _ConnectionCountBadge(session: session, selected: selected),
       _ => null,
     };
   }
+}
+
+({Color foreground, Color secondary, Color accent}) _navCardColors(
+  ColorScheme scheme,
+  bool selected,
+) {
+  final selectedForeground = scheme.onPrimaryContainer;
+  return (
+    foreground: selected ? selectedForeground : scheme.onSurface,
+    secondary: selected
+        ? selectedForeground.withValues(alpha: 0.72)
+        : scheme.onSurfaceVariant,
+    accent: selected ? selectedForeground : scheme.primary,
+  );
 }
 
 class _StatusHeroCard extends StatelessWidget {
@@ -684,6 +698,7 @@ class _StatusHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = _navCardColors(scheme, selected);
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
@@ -706,7 +721,10 @@ class _StatusHeroCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                              ?.copyWith(
+                                color: colors.foreground,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                       ),
                       ValueListenableBuilder<bool>(
@@ -717,8 +735,8 @@ class _StatusHeroCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: live
-                                ? scheme.primary
-                                : scheme.outlineVariant,
+                                ? colors.accent
+                                : colors.secondary.withValues(alpha: 0.45),
                           ),
                         ),
                       ),
@@ -727,9 +745,9 @@ class _StatusHeroCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '核心配置',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.secondary),
                   ),
                   const Spacer(),
                   ValueListenableBuilder<bool>(
@@ -741,7 +759,9 @@ class _StatusHeroCard extends StatelessWidget {
                           Icon(
                             Icons.memory_outlined,
                             size: 16,
-                            color: scheme.onSurfaceVariant,
+                            color: colors.accent.withValues(
+                              alpha: selected ? 0.72 : 1,
+                            ),
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -759,7 +779,10 @@ class _StatusHeroCard extends StatelessWidget {
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                        ?.copyWith(
+                                          color: colors.foreground,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                   );
                                 },
                               ),
@@ -793,6 +816,7 @@ class _TrafficHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final colors = _navCardColors(scheme, selected);
     return _CardSurface(
       height: 96,
       selected: selected,
@@ -806,59 +830,52 @@ class _TrafficHeroCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
+                  SizedBox(
                     width: 30,
                     height: 30,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
                     child: Icon(
                       Icons.lan_outlined,
                       size: 16,
-                      color: scheme.onPrimaryContainer,
+                      color: colors.accent,
                     ),
                   ),
                   const Spacer(),
                   RepaintBoundary(
                     child: ValueListenableBuilder<rust.TrafficSample>(
                       valueListenable: session.traffic,
-                      builder: (_, sample, _) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${formatBytes(sample.up)}/s',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_upward,
-                                size: 14,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${formatBytes(sample.down)}/s',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_downward,
-                                size: 14,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                      builder: (context, sample, _) {
+                        final textStyle = Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(
+                              color: colors.foreground,
+                              fontWeight: FontWeight.w600,
+                            );
+                        final arrowColor = colors.accent.withValues(
+                          alpha: selected ? 0.72 : 0.8,
+                        );
+                        Widget rate(String value, IconData arrow) => Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(value, style: textStyle),
+                            const SizedBox(width: 4),
+                            Icon(arrow, size: 13, color: arrowColor),
+                          ],
+                        );
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            rate(
+                              '${formatBytes(sample.up)}/s',
+                              Icons.arrow_upward,
+                            ),
+                            const SizedBox(height: 2),
+                            rate(
+                              '${formatBytes(sample.down)}/s',
+                              Icons.arrow_downward,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -869,10 +886,11 @@ class _TrafficHeroCard extends StatelessWidget {
                   Text(
                     '连接',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: colors.foreground,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  _ConnectionCountBadge(session: session),
+                  _ConnectionCountBadge(session: session, selected: selected),
                 ],
               ),
             ],
@@ -904,16 +922,18 @@ class _RuleNavCard extends StatelessWidget {
       onTap: onTap,
       badge: ValueListenableBuilder<int>(
         valueListenable: session.ruleCount,
-        builder: (_, count, _) =>
-            count == 0 ? const SizedBox.shrink() : _BadgePill(text: '$count'),
+        builder: (_, count, _) => count == 0
+            ? const SizedBox.shrink()
+            : _BadgeLabel(text: '$count', selected: selected),
       ),
     );
   }
 }
 
 class _GroupCountBadge extends StatelessWidget {
-  const _GroupCountBadge({required this.session});
+  const _GroupCountBadge({required this.session, required this.selected});
   final MihomoSession session;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -922,15 +942,16 @@ class _GroupCountBadge extends StatelessWidget {
       builder: (context, _) {
         final count = session.proxies.groups.length;
         if (count == 0) return const SizedBox.shrink();
-        return _BadgePill(text: '$count');
+        return _BadgeLabel(text: '$count', selected: selected);
       },
     );
   }
 }
 
 class _ConnectionCountBadge extends StatelessWidget {
-  const _ConnectionCountBadge({required this.session});
+  const _ConnectionCountBadge({required this.session, required this.selected});
   final MihomoSession session;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -938,30 +959,28 @@ class _ConnectionCountBadge extends StatelessWidget {
       valueListenable: session.connectionsTotals,
       builder: (_, totals, _) {
         if (totals.count == 0) return const SizedBox.shrink();
-        return _BadgePill(text: '${totals.count}');
+        return _BadgeLabel(text: '${totals.count}', selected: selected);
       },
     );
   }
 }
 
-class _BadgePill extends StatelessWidget {
-  const _BadgePill({required this.text});
+class _BadgeLabel extends StatelessWidget {
+  const _BadgeLabel({required this.text, required this.selected});
   final String text;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
+    final colors = _navCardColors(scheme, selected);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w600,
-          color: scheme.onSurface,
+          color: colors.accent,
         ),
       ),
     );
@@ -972,7 +991,7 @@ class _CardSurface extends StatelessWidget {
   const _CardSurface({
     required this.height,
     required this.child,
-    this.selected = false,
+    required this.selected,
   });
   final double height;
   final Widget child;
@@ -982,7 +1001,11 @@ class _CardSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: height,
-      child: AppPanelSurface(outlined: false, selected: selected, child: child),
+      child: AppPanelSurface(
+        outlined: !selected,
+        selected: selected,
+        child: child,
+      ),
     );
   }
 }
@@ -1005,11 +1028,7 @@ class _NavCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final iconBg = selected
-        ? scheme.primary.withValues(alpha: 0.18)
-        : scheme.primaryContainer;
-    final iconFg = scheme.onPrimaryContainer;
-    final labelFg = selected ? scheme.onPrimaryContainer : scheme.onSurface;
+    final colors = _navCardColors(scheme, selected);
 
     return _CardSurface(
       height: 110,
@@ -1024,14 +1043,10 @@ class _NavCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
+                  SizedBox(
                     width: 30,
                     height: 30,
-                    decoration: BoxDecoration(
-                      color: iconBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, size: 16, color: iconFg),
+                    child: Icon(icon, size: 16, color: colors.accent),
                   ),
                   const Spacer(),
                   ?badge,
@@ -1040,7 +1055,7 @@ class _NavCard extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: labelFg,
+                  color: colors.foreground,
                   fontWeight: FontWeight.w700,
                 ),
               ),
