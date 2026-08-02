@@ -151,14 +151,17 @@ class ThemeSettingsScreen extends StatelessWidget {
                       ),
                     ],
                     const Divider(height: 16),
-                    CompactSwitch.tile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('纯黑模式'),
-                      subtitle: const Text('深色模式下使用 OLED 纯黑背景'),
-                      value: prefs.pureBlackMode,
-                      onChanged: prefs.setPureBlackMode,
-                    ),
-                    const Divider(height: 16),
+                    if (prefs.backgroundSource ==
+                        AppBackgroundSource.theme) ...[
+                      CompactSwitch.tile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('纯黑模式'),
+                        subtitle: const Text('深色模式下使用 OLED 纯黑背景'),
+                        value: prefs.pureBlackMode,
+                        onChanged: prefs.setPureBlackMode,
+                      ),
+                      const Divider(height: 16),
+                    ],
                     _ColorTile(
                       title: '全局主题色',
                       color: Color(prefs.globalThemeColor),

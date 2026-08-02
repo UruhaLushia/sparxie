@@ -142,7 +142,9 @@ ThemeData _appTheme({
     seedColor,
     preserveSeedPrimary: !useAutomaticColors,
   );
-  if (pureBlack && brightness == Brightness.dark) {
+  if (pureBlack &&
+      brightness == Brightness.dark &&
+      backgroundSource == AppBackgroundSource.theme) {
     scheme = _pureBlackScheme(scheme);
   }
   final customBackground = backgroundSource != AppBackgroundSource.theme;
