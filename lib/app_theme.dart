@@ -155,9 +155,9 @@ ThemeData _appTheme({
   );
   final dividerColor = !showDividers
       ? Colors.transparent
-      : brightness == Brightness.dark
-      ? scheme.onSurface.withValues(alpha: 0.12)
-      : scheme.outlineVariant;
+      : scheme.onSurface.withValues(
+          alpha: brightness == Brightness.dark ? 0.12 : 0.1,
+        );
   final base = ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
@@ -165,10 +165,7 @@ ThemeData _appTheme({
     canvasColor: surfaceTheme.surfaceColor(scheme.surface),
     cardColor: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
     dividerColor: dividerColor,
-    dividerTheme: DividerThemeData(
-      color: dividerColor,
-      thickness: brightness == Brightness.dark ? 0.5 : null,
-    ),
+    dividerTheme: DividerThemeData(color: dividerColor, thickness: 0.5),
     focusColor: scheme.primary.withValues(alpha: 0.12),
     hoverColor: scheme.primary.withValues(alpha: 0.06),
     highlightColor: scheme.primary.withValues(alpha: 0.08),
