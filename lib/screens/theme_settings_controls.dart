@@ -263,7 +263,6 @@ class _ComponentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: EdgeInsets.zero,
       leading: Icon(kind.icon),
       title: Text(kind.label),
       subtitle: Text(

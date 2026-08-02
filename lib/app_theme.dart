@@ -174,6 +174,7 @@ ThemeData _appTheme({
     highlightColor: scheme.primary.withValues(alpha: 0.08),
     splashColor: scheme.primary.withValues(alpha: 0.1),
     listTileTheme: const ListTileThemeData(
+      contentPadding: EdgeInsets.symmetric(horizontal: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(12)),
       ),

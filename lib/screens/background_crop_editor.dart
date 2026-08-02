@@ -22,7 +22,6 @@ class _BackgroundFocalPointTile extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : 0.48,
       child: ListTile(
-        contentPadding: EdgeInsets.zero,
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: SizedBox(

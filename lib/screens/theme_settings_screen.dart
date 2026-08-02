@@ -175,7 +175,6 @@ class ThemeSettingsScreen extends StatelessWidget {
                     ),
                     const Divider(height: 16),
                     ListTile(
-                      contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.wallpaper_outlined),
                       title: const Text('背景与表面'),
                       subtitle: Text(_backgroundSummary(prefs)),

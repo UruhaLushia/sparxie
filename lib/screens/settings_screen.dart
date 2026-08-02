@@ -281,7 +281,7 @@ class _Tile extends StatelessWidget {
     final theme = Theme.of(context);
     return ListTile(
       minTileHeight: 68,
-      contentPadding: const EdgeInsets.symmetric(vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       leading: PanelIconChip(icon: icon),
       title: Text(title, style: theme.textTheme.titleMedium),
       subtitle: subtitle == null
@@ -336,7 +336,7 @@ class _SettingsGroup extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) const Divider(height: 1, indent: 56),
+              if (i > 0) const Divider(height: 1, indent: 64),
               children[i],
             ],
           ],
@@ -1062,7 +1062,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
             )
           else
             for (var i = 0; i < controllers.length; i++) ...[
-              if (i > 0) const Divider(height: 1, indent: 56),
+              if (i > 0) const Divider(height: 1, indent: 64),
               _ControllerTile(
                 controller: controllers[i],
                 active: controllers[i].id == activeId,
@@ -1149,7 +1149,7 @@ class _ControllerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       minTileHeight: 64,
-      contentPadding: const EdgeInsets.symmetric(vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       leading: PanelIconChip(
         icon: active ? Icons.check_rounded : Icons.dns_outlined,
         active: active,

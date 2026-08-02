@@ -231,7 +231,6 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
     // Lock all rows while any action runs so two can't overlap.
     final enabled = _running == null;
     return ListTile(
-      contentPadding: EdgeInsets.zero,
       enabled: enabled,
       leading: Icon(icon),
       title: Text(title),
