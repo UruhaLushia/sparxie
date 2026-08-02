@@ -5320,14 +5320,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProxyProviderEntry dco_decode_proxy_provider_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProxyProviderEntry(
       name: dco_decode_String(arr[0]),
       vehicleType: dco_decode_String(arr[1]),
       proxies: dco_decode_u_32(arr[2]),
       updatedAt: dco_decode_String(arr[3]),
       updatable: dco_decode_bool(arr[4]),
+      hasSubscriptionInfo: dco_decode_bool(arr[5]),
+      subscriptionUpload: dco_decode_u_64(arr[6]),
+      subscriptionDownload: dco_decode_u_64(arr[7]),
+      subscriptionTotal: dco_decode_u_64(arr[8]),
+      subscriptionExpire: dco_decode_u_64(arr[9]),
     );
   }
 
@@ -6394,12 +6399,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_proxies = sse_decode_u_32(deserializer);
     var var_updatedAt = sse_decode_String(deserializer);
     var var_updatable = sse_decode_bool(deserializer);
+    var var_hasSubscriptionInfo = sse_decode_bool(deserializer);
+    var var_subscriptionUpload = sse_decode_u_64(deserializer);
+    var var_subscriptionDownload = sse_decode_u_64(deserializer);
+    var var_subscriptionTotal = sse_decode_u_64(deserializer);
+    var var_subscriptionExpire = sse_decode_u_64(deserializer);
     return ProxyProviderEntry(
       name: var_name,
       vehicleType: var_vehicleType,
       proxies: var_proxies,
       updatedAt: var_updatedAt,
       updatable: var_updatable,
+      hasSubscriptionInfo: var_hasSubscriptionInfo,
+      subscriptionUpload: var_subscriptionUpload,
+      subscriptionDownload: var_subscriptionDownload,
+      subscriptionTotal: var_subscriptionTotal,
+      subscriptionExpire: var_subscriptionExpire,
     );
   }
 
@@ -7467,6 +7482,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.proxies, serializer);
     sse_encode_String(self.updatedAt, serializer);
     sse_encode_bool(self.updatable, serializer);
+    sse_encode_bool(self.hasSubscriptionInfo, serializer);
+    sse_encode_u_64(self.subscriptionUpload, serializer);
+    sse_encode_u_64(self.subscriptionDownload, serializer);
+    sse_encode_u_64(self.subscriptionTotal, serializer);
+    sse_encode_u_64(self.subscriptionExpire, serializer);
   }
 
   @protected

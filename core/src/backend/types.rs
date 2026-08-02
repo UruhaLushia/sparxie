@@ -242,6 +242,11 @@ pub struct ProxyProviderEntry {
     pub proxies: u32,
     pub updated_at: String,
     pub updatable: bool,
+    pub has_subscription_info: bool,
+    pub subscription_upload: u64,
+    pub subscription_download: u64,
+    pub subscription_total: u64,
+    pub subscription_expire: u64,
 }
 
 #[derive(Clone, Debug, Default)]

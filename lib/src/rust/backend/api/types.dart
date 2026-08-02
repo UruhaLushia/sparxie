@@ -691,6 +691,11 @@ class ProxyProviderEntry {
   final int proxies;
   final String updatedAt;
   final bool updatable;
+  final bool hasSubscriptionInfo;
+  final BigInt subscriptionUpload;
+  final BigInt subscriptionDownload;
+  final BigInt subscriptionTotal;
+  final BigInt subscriptionExpire;
 
   const ProxyProviderEntry({
     required this.name,
@@ -698,6 +703,11 @@ class ProxyProviderEntry {
     required this.proxies,
     required this.updatedAt,
     required this.updatable,
+    required this.hasSubscriptionInfo,
+    required this.subscriptionUpload,
+    required this.subscriptionDownload,
+    required this.subscriptionTotal,
+    required this.subscriptionExpire,
   });
 
   static Future<ProxyProviderEntry> default_() =>
@@ -709,7 +719,12 @@ class ProxyProviderEntry {
       vehicleType.hashCode ^
       proxies.hashCode ^
       updatedAt.hashCode ^
-      updatable.hashCode;
+      updatable.hashCode ^
+      hasSubscriptionInfo.hashCode ^
+      subscriptionUpload.hashCode ^
+      subscriptionDownload.hashCode ^
+      subscriptionTotal.hashCode ^
+      subscriptionExpire.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -720,7 +735,12 @@ class ProxyProviderEntry {
           vehicleType == other.vehicleType &&
           proxies == other.proxies &&
           updatedAt == other.updatedAt &&
-          updatable == other.updatable;
+          updatable == other.updatable &&
+          hasSubscriptionInfo == other.hasSubscriptionInfo &&
+          subscriptionUpload == other.subscriptionUpload &&
+          subscriptionDownload == other.subscriptionDownload &&
+          subscriptionTotal == other.subscriptionTotal &&
+          subscriptionExpire == other.subscriptionExpire;
 }
 
 class RuleEntry {

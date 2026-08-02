@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import '../utils.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
 class ResourcesScreen extends StatefulWidget {
-  const ResourcesScreen({super.key, required this.store, this.compact = false});
+  const ResourcesScreen({
+    super.key,
+    required this.store,
+    required this.prefs,
+    this.compact = false,
+  });
 
   final ctl.ControllerStore store;
+  final AppPrefs prefs;
 
   /// On phone the screen runs as a stand-alone route, so it owns its own
   /// AppBar. On the wide-cards main area it's already framed, so [compact]
@@ -55,7 +63,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ProxyProviderSection(store: widget.store),
+                _ProxyProviderSection(store: widget.store, prefs: widget.prefs),
                 const SizedBox(height: 16),
                 _RuleProviderSection(store: widget.store),
               ],
@@ -85,7 +93,9 @@ abstract class _ProviderSection<T> extends StatefulWidget {
 }
 
 class _ProxyProviderSection extends _ProviderSection<_ProxyProvider> {
-  const _ProxyProviderSection({required super.store});
+  const _ProxyProviderSection({required super.store, required this.prefs});
+
+  final AppPrefs prefs;
 
   @override
   State<_ProxyProviderSection> createState() => _ProxyProviderSectionState();
@@ -105,6 +115,7 @@ class _ProxyProvider {
     required this.proxies,
     required this.updatedAt,
     required this.updatable,
+    required this.subscription,
   });
 
   factory _ProxyProvider.fromRust(rust.ProxyProviderEntry entry) {
@@ -114,6 +125,14 @@ class _ProxyProvider {
       proxies: entry.proxies,
       updatedAt: _parseDateTime(entry.updatedAt),
       updatable: entry.updatable,
+      subscription: entry.hasSubscriptionInfo
+          ? _SubscriptionInfo(
+              upload: entry.subscriptionUpload,
+              download: entry.subscriptionDownload,
+              total: entry.subscriptionTotal,
+              expire: entry.subscriptionExpire,
+            )
+          : null,
     );
   }
 
@@ -122,6 +141,23 @@ class _ProxyProvider {
   final int proxies;
   final DateTime? updatedAt;
   final bool updatable;
+  final _SubscriptionInfo? subscription;
+}
+
+class _SubscriptionInfo {
+  const _SubscriptionInfo({
+    required this.upload,
+    required this.download,
+    required this.total,
+    required this.expire,
+  });
+
+  final BigInt upload;
+  final BigInt download;
+  final BigInt total;
+  final BigInt expire;
+
+  BigInt get used => upload + download;
 }
 
 class _RuleProvider {
@@ -236,44 +272,50 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
 
   @override
   Widget build(BuildContext context) {
-    return SectionPanel(
-      title: '代理订阅',
-      icon: Icons.cloud_queue_outlined,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_items.any((p) => p.updatable))
-            IconButton(
-              tooltip: '更新全部',
-              onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
-              icon: const Icon(Icons.cloud_sync_outlined, size: 20),
-            ),
-          IconButton(
-            tooltip: '刷新',
-            onPressed: _loading ? null : _refresh,
-            icon: _loading
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 20),
+    return ListenableBuilder(
+      listenable: widget.prefs,
+      builder: (context, _) {
+        final style = widget.prefs.proxyProviderStyle;
+        return SectionPanel(
+          title: '代理订阅',
+          icon: Icons.cloud_queue_outlined,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_items.any((p) => p.updatable))
+                IconButton(
+                  tooltip: '更新全部',
+                  onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
+                  icon: const Icon(Icons.cloud_sync_outlined, size: 20),
+                ),
+              IconButton(
+                tooltip: '刷新',
+                onPressed: _loading ? null : _refresh,
+                icon: _loading
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh, size: 20),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: _ProviderBody(
-        loading: _loading && _items.isEmpty,
-        error: _error,
-        empty: _items.isEmpty,
-        emptyText: '暂无代理订阅',
-        children: [
-          for (final p in _items)
-            _ProxyProviderTile(
-              provider: p,
-              busy: _busy.contains(p.name),
-              onUpdate: () => _update(p),
-            ),
-        ],
-      ),
+          child: _ProviderBody(
+            loading: _loading && _items.isEmpty,
+            error: _error,
+            empty: _items.isEmpty,
+            emptyText: '暂无代理订阅',
+            children: [
+              _ProxyProviderList(
+                providers: _items,
+                busy: _busy,
+                liquid: style == ProxyProviderStyle.liquid,
+                onUpdate: _update,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -473,29 +515,197 @@ class _ProviderBody extends StatelessWidget {
 
 String _ago(DateTime when) {
   final diff = DateTime.now().difference(when);
-  if (diff.inSeconds < 60) return '${diff.inSeconds}s 前';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m 前';
-  if (diff.inHours < 24) return '${diff.inHours}h 前';
-  return '${diff.inDays}d 前';
+  if (diff.isNegative || diff.inSeconds < 60) return '刚刚';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+  if (diff.inHours < 24) return '${diff.inHours} 小时前';
+  if (diff.inDays < 30) return '${diff.inDays} 天前';
+  final months = (diff.inDays / 30).round();
+  if (months < 12) return '$months 个月前';
+  return '${(diff.inDays / 365).round()} 年前';
 }
 
-class _ProxyProviderTile extends StatelessWidget {
-  const _ProxyProviderTile({
+class _ProxyProviderList extends StatelessWidget {
+  const _ProxyProviderList({
+    required this.providers,
+    required this.busy,
+    required this.liquid,
+    required this.onUpdate,
+  });
+
+  final List<_ProxyProvider> providers;
+  final Set<String> busy;
+  final bool liquid;
+  final ValueChanged<_ProxyProvider> onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < providers.length; i++) ...[
+          if (i > 0)
+            liquid ? const SizedBox(height: 8) : const Divider(height: 18),
+          if (liquid)
+            _LiquidProxyProviderTile(
+              provider: providers[i],
+              busy: busy.contains(providers[i].name),
+              onUpdate: () => onUpdate(providers[i]),
+            )
+          else
+            _PlainProxyProviderTile(
+              provider: providers[i],
+              busy: busy.contains(providers[i].name),
+              onUpdate: () => onUpdate(providers[i]),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LiquidProxyProviderTile extends StatelessWidget {
+  const _LiquidProxyProviderTile({
     required this.provider,
     required this.busy,
     required this.onUpdate,
   });
+
   final _ProxyProvider provider;
   final bool busy;
   final VoidCallback onUpdate;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final updatable = provider.updatable;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final subscription = provider.subscription;
+    final progress = subscription == null
+        ? null
+        : _subscriptionRemainingProgress(subscription);
+    final secondaryStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    const radius = BorderRadius.all(Radius.circular(12));
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        ),
+        child: Stack(
+          children: [
+            if (progress != null)
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: progress,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: radius,
+                        gradient: LinearGradient(
+                          colors: [
+                            scheme.primary.withValues(alpha: 0.2),
+                            scheme.primary.withValues(alpha: 0.09),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 6, 7),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ProxyProviderHeader(
+                    provider: provider,
+                    busy: busy,
+                    compact: true,
+                    onUpdate: onUpdate,
+                  ),
+                  if (subscription != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _subscriptionRemaining(subscription),
+                            style: secondaryStyle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          _subscriptionExpiry(subscription.expire),
+                          style: secondaryStyle,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlainProxyProviderTile extends StatelessWidget {
+  const _PlainProxyProviderTile({
+    required this.provider,
+    required this.busy,
+    required this.onUpdate,
+  });
+
+  final _ProxyProvider provider;
+  final bool busy;
+  final VoidCallback onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    final subscription = provider.subscription;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ProxyProviderHeader(
+          provider: provider,
+          busy: busy,
+          onUpdate: onUpdate,
+        ),
+        if (subscription != null) ...[
+          const SizedBox(height: 8),
+          _SubscriptionUsage(info: subscription),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProxyProviderHeader extends StatelessWidget {
+  const _ProxyProviderHeader({
+    required this.provider,
+    required this.busy,
+    this.compact = false,
+    required this.onUpdate,
+  });
+
+  final _ProxyProvider provider;
+  final bool busy;
+  final bool compact;
+  final VoidCallback onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final updated = provider.updatedAt == null ? '' : _ago(provider.updatedAt!);
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
@@ -504,9 +714,9 @@ class _ProxyProviderTile extends StatelessWidget {
             children: [
               Text(
                 provider.name,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
@@ -516,18 +726,23 @@ class _ProxyProviderTile extends StatelessWidget {
                   '${provider.proxies} 个节点',
                   if (updated.isNotEmpty) updated,
                 ].join('  ·  '),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-        if (updatable)
+        if (provider.updatable)
           IconButton(
             tooltip: '更新',
             onPressed: busy ? null : onUpdate,
+            padding: compact ? EdgeInsets.zero : null,
+            constraints: compact
+                ? const BoxConstraints.tightFor(width: 36, height: 36)
+                : null,
+            visualDensity: compact ? VisualDensity.compact : null,
             icon: busy
                 ? const SizedBox.square(
                     dimension: 16,
@@ -538,6 +753,97 @@ class _ProxyProviderTile extends StatelessWidget {
       ],
     );
   }
+}
+
+class _SubscriptionUsage extends StatelessWidget {
+  const _SubscriptionUsage({required this.info});
+
+  final _SubscriptionInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progress = _subscriptionUsedProgress(info);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _subscriptionUsage(info),
+                style: style,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(_subscriptionExpiry(info.expire), style: style),
+          ],
+        ),
+        if (progress != null) ...[
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(999),
+            color: scheme.primary.withValues(alpha: 0.72),
+            backgroundColor: scheme.onSurface.withValues(alpha: 0.08),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+String _subscriptionUsage(_SubscriptionInfo info) => info.total > BigInt.zero
+    ? '${_formatSubscriptionUsage(info.used)} / ${formatBytes(info.total)}'
+    : '已用 ${_formatSubscriptionUsage(info.used)}';
+
+String _subscriptionRemaining(_SubscriptionInfo info) {
+  if (info.total <= BigInt.zero) {
+    return '已用 ${_formatSubscriptionUsage(info.used)}';
+  }
+  final remaining = info.total > info.used
+      ? info.total - info.used
+      : BigInt.zero;
+  return '剩余 ${_formatSubscriptionUsage(remaining)} / ${formatBytes(info.total)}';
+}
+
+double? _subscriptionUsedProgress(_SubscriptionInfo info) {
+  if (info.total <= BigInt.zero) return null;
+  return (info.used.toDouble() / info.total.toDouble()).clamp(0.0, 1.0);
+}
+
+double? _subscriptionRemainingProgress(_SubscriptionInfo info) {
+  if (info.total <= BigInt.zero) return null;
+  final used = (info.used.toDouble() / info.total.toDouble()).clamp(0.0, 1.0);
+  return 1 - used;
+}
+
+String _formatSubscriptionUsage(BigInt bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var size = bytes.toDouble();
+  var unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  if (unit < 3) return formatBytes(bytes);
+  return '${size.toStringAsFixed(1)} ${units[unit]}';
+}
+
+String _subscriptionExpiry(BigInt seconds) {
+  if (seconds <= BigInt.zero) return '长期有效';
+  final date = DateTime.fromMillisecondsSinceEpoch(
+    (seconds * BigInt.from(1000)).toInt(),
+    isUtc: true,
+  ).toLocal();
+  String twoDigits(int value) => value.toString().padLeft(2, '0');
+  return '${date.year}-${twoDigits(date.month)}-${twoDigits(date.day)}';
 }
 
 class _RuleProviderTile extends StatelessWidget {

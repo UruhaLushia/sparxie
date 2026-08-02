@@ -14,6 +14,11 @@ pub struct ProxyProviderEntry {
     pub proxies: u32,
     pub updated_at: String,
     pub updatable: bool,
+    pub has_subscription_info: bool,
+    pub subscription_upload: u64,
+    pub subscription_download: u64,
+    pub subscription_total: u64,
+    pub subscription_expire: u64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -48,6 +53,13 @@ pub async fn proxy_provider_catalog(
         if vehicle_type.eq_ignore_ascii_case("compatible") {
             continue;
         }
+        let subscription_info = data.get("subscriptionInfo").and_then(Value::as_object);
+        let subscription_value = |key| {
+            subscription_info
+                .and_then(|info| info.get(key))
+                .map(value_to_u64)
+                .unwrap_or_default()
+        };
         list.push(ProxyProviderEntry {
             name: name.clone(),
             proxies: data
@@ -58,6 +70,11 @@ pub async fn proxy_provider_catalog(
             updatable: vehicle_type.eq_ignore_ascii_case("http"),
             vehicle_type,
             updated_at: field_or(data, "updatedAt", ""),
+            has_subscription_info: subscription_info.is_some(),
+            subscription_upload: subscription_value("Upload"),
+            subscription_download: subscription_value("Download"),
+            subscription_total: subscription_value("Total"),
+            subscription_expire: subscription_value("Expire"),
         });
     }
     list.sort_by(|a, b| a.name.cmp(&b.name));
@@ -157,6 +174,22 @@ fn value_to_u32(value: &Value) -> u32 {
     }
     if let Some(s) = value.as_str() {
         return s.parse::<u32>().unwrap_or_default();
+    }
+    0
+}
+
+fn value_to_u64(value: &Value) -> u64 {
+    if let Some(n) = value.as_u64() {
+        return n;
+    }
+    if let Some(n) = value.as_i64() {
+        return n.max(0) as u64;
+    }
+    if let Some(n) = value.as_f64() {
+        return n.max(0.0).round() as u64;
+    }
+    if let Some(s) = value.as_str() {
+        return s.parse::<u64>().unwrap_or_default();
     }
     0
 }

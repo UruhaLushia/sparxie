@@ -159,14 +159,6 @@ class ThemeSettingsScreen extends StatelessWidget {
                       onChanged: prefs.setPureBlackMode,
                     ),
                     const Divider(height: 16),
-                    CompactSwitch.tile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('显示分割线'),
-                      subtitle: const Text('区分列表和设置项'),
-                      value: prefs.showDividers,
-                      onChanged: prefs.setShowDividers,
-                    ),
-                    const Divider(height: 16),
                     _ColorTile(
                       title: '全局主题色',
                       color: Color(prefs.globalThemeColor),
@@ -226,6 +218,24 @@ class ThemeSettingsScreen extends StatelessWidget {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionPanel(
+                title: '页面',
+                icon: Icons.view_quilt_outlined,
+                child: Column(
+                  children: [
+                    CompactSwitch.tile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('显示分割线'),
+                      subtitle: const Text('区分列表和设置项'),
+                      value: prefs.showDividers,
+                      onChanged: prefs.setShowDividers,
+                    ),
+                    const Divider(height: 24),
+                    _ProxyProviderStyleSelector(prefs: prefs),
                   ],
                 ),
               ),

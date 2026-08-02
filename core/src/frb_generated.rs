@@ -5690,12 +5690,22 @@ impl SseDecode for crate::backend::api::types::ProxyProviderEntry {
         let mut var_proxies = <u32>::sse_decode(deserializer);
         let mut var_updatedAt = <String>::sse_decode(deserializer);
         let mut var_updatable = <bool>::sse_decode(deserializer);
+        let mut var_hasSubscriptionInfo = <bool>::sse_decode(deserializer);
+        let mut var_subscriptionUpload = <u64>::sse_decode(deserializer);
+        let mut var_subscriptionDownload = <u64>::sse_decode(deserializer);
+        let mut var_subscriptionTotal = <u64>::sse_decode(deserializer);
+        let mut var_subscriptionExpire = <u64>::sse_decode(deserializer);
         return crate::backend::api::types::ProxyProviderEntry {
             name: var_name,
             vehicle_type: var_vehicleType,
             proxies: var_proxies,
             updated_at: var_updatedAt,
             updatable: var_updatable,
+            has_subscription_info: var_hasSubscriptionInfo,
+            subscription_upload: var_subscriptionUpload,
+            subscription_download: var_subscriptionDownload,
+            subscription_total: var_subscriptionTotal,
+            subscription_expire: var_subscriptionExpire,
         };
     }
 }
@@ -7265,6 +7275,11 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyProvider
             self.proxies.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
             self.updatable.into_into_dart().into_dart(),
+            self.has_subscription_info.into_into_dart().into_dart(),
+            self.subscription_upload.into_into_dart().into_dart(),
+            self.subscription_download.into_into_dart().into_dart(),
+            self.subscription_total.into_into_dart().into_dart(),
+            self.subscription_expire.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -8292,6 +8307,11 @@ impl SseEncode for crate::backend::api::types::ProxyProviderEntry {
         <u32>::sse_encode(self.proxies, serializer);
         <String>::sse_encode(self.updated_at, serializer);
         <bool>::sse_encode(self.updatable, serializer);
+        <bool>::sse_encode(self.has_subscription_info, serializer);
+        <u64>::sse_encode(self.subscription_upload, serializer);
+        <u64>::sse_encode(self.subscription_download, serializer);
+        <u64>::sse_encode(self.subscription_total, serializer);
+        <u64>::sse_encode(self.subscription_expire, serializer);
     }
 }
 

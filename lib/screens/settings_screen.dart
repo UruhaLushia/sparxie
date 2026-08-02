@@ -135,7 +135,8 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.cloud_outlined,
               title: '外部资源',
               subtitle: '代理订阅与规则集',
-              onTap: () => _push(context, ResourcesScreen(store: store)),
+              onTap: () =>
+                  _push(context, ResourcesScreen(store: store, prefs: prefs)),
             ),
         ];
         final settingsTiles = <Widget>[

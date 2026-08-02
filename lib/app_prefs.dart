@@ -54,6 +54,8 @@ enum AppSurfaceEffect { solid, blur, acrylic }
 /// Surge-style gradient cards that expand into an overlay.
 enum ProxiesLayout { list, cards }
 
+enum ProxyProviderStyle { plain, liquid }
+
 /// Where the delay-test URL comes from when testing a group.
 ///
 /// `group` first tries the group's own `testUrl`/`tester` from the backend
@@ -148,6 +150,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kProxiesShowGroupIcons = 'proxiesShowGroupIcons';
   static const _kProxiesShowHiddenGroups = 'proxiesShowHiddenGroups';
   static const _kProxiesLayout = 'proxiesLayout';
+  static const _kProxyProviderStyle = 'proxyProviderStyle';
   static const _kProxiesCardColored = 'proxiesCardColored';
   static const _kNavLayout = 'navLayout';
   static const _kNavBarStyle = 'navBarStyle';
@@ -200,6 +203,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultProxiesShowGroupIcons = true;
   static const defaultProxiesShowHiddenGroups = false;
   static const defaultProxiesLayout = ProxiesLayout.list;
+  static const defaultProxyProviderStyle = ProxyProviderStyle.liquid;
   static const defaultProxiesCardColored = false;
 
   static const defaultNavLayout = NavLayout.cards;
@@ -395,6 +399,15 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setProxiesLayout(ProxiesLayout value) async {
     if (value == proxiesLayout) return;
     _put(_kProxiesLayout, value.name);
+  }
+
+  ProxyProviderStyle get proxyProviderStyle => _decodeProxyProviderStyle(
+    _str(_kProxyProviderStyle, defaultProxyProviderStyle.name),
+  );
+
+  Future<void> setProxyProviderStyle(ProxyProviderStyle value) async {
+    if (value == proxyProviderStyle) return;
+    _put(_kProxyProviderStyle, value.name);
   }
 
   bool get proxiesCardColored =>
@@ -1145,6 +1158,13 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultProxiesLayout;
+  }
+
+  static ProxyProviderStyle _decodeProxyProviderStyle(String? raw) {
+    for (final value in ProxyProviderStyle.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultProxyProviderStyle;
   }
 
   static NavBarStyle _decodeNavBarStyle(String? raw) {

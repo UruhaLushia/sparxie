@@ -178,6 +178,11 @@ impl From<crate::clash::api::ProxyProviderEntry> for ProxyProviderEntry {
             proxies: value.proxies,
             updated_at: value.updated_at,
             updatable: value.updatable,
+            has_subscription_info: value.has_subscription_info,
+            subscription_upload: value.subscription_upload,
+            subscription_download: value.subscription_download,
+            subscription_total: value.subscription_total,
+            subscription_expire: value.subscription_expire,
         }
     }
 }

@@ -54,6 +54,48 @@ class _ThemeModeSelectorState extends State<_ThemeModeSelector> {
   }
 }
 
+class _ProxyProviderStyleSelector extends StatelessWidget {
+  const _ProxyProviderStyleSelector({required this.prefs});
+
+  final AppPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('代理订阅样式', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        CompactSegmentedButton<ProxyProviderStyle>(
+          expanded: true,
+          segments: const [
+            ButtonSegment(
+              value: ProxyProviderStyle.plain,
+              label: Text('简洁列表'),
+              icon: Icon(Icons.view_list_outlined),
+            ),
+            ButtonSegment(
+              value: ProxyProviderStyle.liquid,
+              label: Text('流量卡片'),
+              icon: Icon(Icons.data_usage_outlined),
+            ),
+          ],
+          selected: {prefs.proxyProviderStyle},
+          onSelectionChanged: (selection) =>
+              prefs.setProxyProviderStyle(selection.first),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '控制外部资源中的代理订阅显示方式',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _StyleSlider extends StatelessWidget {
   const _StyleSlider({
     required this.label,
