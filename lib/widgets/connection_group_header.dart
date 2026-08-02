@@ -66,7 +66,7 @@ class ConnectionGroupHeader extends StatelessWidget {
     return ColoredBox(
       color: surfaceTheme.pageColor(scheme.surface),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         child: AppSurfaceBackdrop(
           borderRadius: radius,
           child: Material(

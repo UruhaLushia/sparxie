@@ -1075,7 +1075,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                 ),
                 if (cn.isExpanded(group.key))
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(28, 0, 12, 0),
                     sliver: Builder(
                       builder: (_) {
                         final ids = cn.groupMemberIds(group.key);
@@ -1090,7 +1090,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                               index: groupIndex + index + 1,
                               child: Padding(
                                 key: ValueKey('grp::${group.key}::${row.id}'),
-                                padding: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.only(bottom: 4),
                                 child: ConnectionTile(
                                   row: row,
                                   // Members sit under the group's process
