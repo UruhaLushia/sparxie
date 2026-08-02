@@ -14,6 +14,24 @@ BorderRadius _indicatorRadius(
 Color _contrastingForeground(Color background) =>
     background.computeLuminance() > 0.179 ? Colors.black : Colors.white;
 
+double _contrastRatio(Color foreground, Color background) {
+  final visibleForeground = Color.alphaBlend(foreground, background);
+  final foregroundLuminance = visibleForeground.computeLuminance();
+  final backgroundLuminance = background.computeLuminance();
+  final lighter = foregroundLuminance > backgroundLuminance
+      ? foregroundLuminance
+      : backgroundLuminance;
+  final darker = foregroundLuminance > backgroundLuminance
+      ? backgroundLuminance
+      : foregroundLuminance;
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+Color _readableForeground(Color preferred, Color background) =>
+    _contrastRatio(preferred, background) >= 4.5
+    ? preferred
+    : _contrastingForeground(background);
+
 @immutable
 class CompactControlStyle {
   const CompactControlStyle({
@@ -192,9 +210,20 @@ class CompactControlStyle {
   Color foreground(BuildContext context) =>
       foregroundColor ?? Theme.of(context).colorScheme.onSurface;
 
-  Color selectedForeground(BuildContext context) =>
-      selectedForegroundColor ??
-      Theme.of(context).colorScheme.onPrimaryContainer;
+  Color selectedForeground(BuildContext context) {
+    final theme = Theme.of(context);
+    final preferred =
+        selectedForegroundColor ?? theme.colorScheme.onPrimaryContainer;
+    final controlBackground = Color.alphaBlend(
+      background(context),
+      theme.colorScheme.surface.withValues(alpha: 1),
+    );
+    final effectiveSelectedBackground = Color.alphaBlend(
+      selectedBackground(context),
+      controlBackground,
+    );
+    return _readableForeground(preferred, effectiveSelectedBackground);
+  }
 
   Color hover(BuildContext context) =>
       hoverColor ??
