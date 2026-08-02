@@ -633,7 +633,7 @@ class _FontSetEditorState extends State<_FontSetEditor> {
                               _fontLabel(family),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _fontPreviewStyle(family),
+                              style: _fontPreviewStyle(context, family),
                             ),
                           ),
                       ],
@@ -876,7 +876,7 @@ class _FontFamilyTile extends StatelessWidget {
         title: Text(
           _fontLabel(family),
           overflow: TextOverflow.ellipsis,
-          style: _fontPreviewStyle(family),
+          style: _fontPreviewStyle(context, family),
         ),
         subtitle: Text(
           subtitle,
@@ -899,8 +899,29 @@ class _FontFamilyTile extends StatelessWidget {
 String _fontLabel(String family) =>
     family == AppPrefs.systemFontFamily ? '系统' : family;
 
-TextStyle? _fontPreviewStyle(String family) =>
-    family == AppPrefs.systemFontFamily ? null : TextStyle(fontFamily: family);
+TextStyle? _fontPreviewStyle(BuildContext context, String family) {
+  if (family == AppPrefs.systemFontFamily) return null;
+  final base = Theme.of(context).textTheme.bodyMedium;
+  // A preview family replaces the theme primary, so restore that whole chain.
+  final fallback = <String>[];
+
+  void add(String? candidate) {
+    if (candidate != null &&
+        candidate != family &&
+        !fallback.contains(candidate)) {
+      fallback.add(candidate);
+    }
+  }
+
+  add(base?.fontFamily);
+  for (final candidate in base?.fontFamilyFallback ?? const <String>[]) {
+    add(candidate);
+  }
+  return TextStyle(
+    fontFamily: family,
+    fontFamilyFallback: fallback.isEmpty ? null : fallback,
+  );
+}
 
 class _OnlineResourcesRow extends StatelessWidget {
   const _OnlineResourcesRow({required this.prefs});
