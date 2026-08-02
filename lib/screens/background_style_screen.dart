@@ -3,7 +3,6 @@ part of 'theme_settings_screen.dart';
 String _backgroundSummary(AppPrefs prefs) {
   final source = switch (prefs.backgroundSource) {
     AppBackgroundSource.theme => '主题背景',
-    AppBackgroundSource.color => '纯色背景',
     AppBackgroundSource.image => '图片背景',
   };
   if (prefs.backgroundSource == AppBackgroundSource.theme) return source;
@@ -136,21 +135,11 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
           expanded: true,
           segments: const [
             ButtonSegment(value: AppBackgroundSource.theme, label: Text('主题')),
-            ButtonSegment(value: AppBackgroundSource.color, label: Text('纯色')),
             ButtonSegment(value: AppBackgroundSource.image, label: Text('图片')),
           ],
           selected: {prefs.backgroundSource},
           onSelectionChanged: (selection) => _setSource(selection.first),
         ),
-        if (prefs.backgroundSource == AppBackgroundSource.color) ...[
-          const Divider(height: 24),
-          _ColorTile(
-            title: '背景颜色',
-            color: Color(prefs.backgroundColor),
-            enabled: true,
-            onTap: () => _pickBackgroundColor(context),
-          ),
-        ],
         if (prefs.backgroundSource == AppBackgroundSource.image) ...[
           const Divider(height: 24),
           _BackgroundImageTile(
@@ -290,15 +279,6 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
   Future<void> _commitSurfaceBlur(double value) async {
     await prefs.setSurfaceBlur(value);
     if (mounted) setState(() => _surfaceBlurDraft = null);
-  }
-
-  Future<void> _pickBackgroundColor(BuildContext context) async {
-    final color = await showColorPalettePicker(
-      context,
-      title: '背景颜色',
-      color: Color(prefs.backgroundColor),
-    );
-    if (color != null) await prefs.setBackgroundColor(color.toARGB32());
   }
 
   Future<void> _editFocalPoint(BuildContext context) async {
@@ -674,7 +654,6 @@ class _BackgroundPreview extends StatelessWidget {
       borderRadius: radius,
       child: AppBackgroundFrame(
         source: prefs.backgroundSource,
-        color: Color(prefs.backgroundColor),
         imagePath: prefs.backgroundImagePath,
         fit: prefs.backgroundFit,
         focalPoint: Alignment(prefs.backgroundFocalX, prefs.backgroundFocalY),
@@ -799,7 +778,6 @@ class _BackgroundImageTile extends StatelessWidget {
               ? const Icon(Icons.image_outlined)
               : AppBackgroundFrame(
                   source: AppBackgroundSource.image,
-                  color: scheme.surface,
                   imagePath: path,
                   fit: fit,
                   focalPoint: focalPoint,

@@ -181,7 +181,6 @@ class AppBackgroundLayout {
 class AppBackgroundConfig {
   const AppBackgroundConfig({
     required this.source,
-    required this.color,
     required this.imagePath,
     required this.fit,
     required this.focalPoint,
@@ -189,7 +188,6 @@ class AppBackgroundConfig {
   });
 
   final AppBackgroundSource source;
-  final Color color;
   final String imagePath;
   final AppBackgroundFit fit;
   final Alignment focalPoint;
@@ -197,7 +195,6 @@ class AppBackgroundConfig {
 
   Object get transitionKey => switch (source) {
     AppBackgroundSource.theme => source,
-    AppBackgroundSource.color => (source, color),
     AppBackgroundSource.image => (source, imagePath),
   };
 
@@ -206,15 +203,13 @@ class AppBackgroundConfig {
       identical(this, other) ||
       other is AppBackgroundConfig &&
           source == other.source &&
-          color == other.color &&
           imagePath == other.imagePath &&
           fit == other.fit &&
           focalPoint == other.focalPoint &&
           zoom == other.zoom;
 
   @override
-  int get hashCode =>
-      Object.hash(source, color, imagePath, fit, focalPoint, zoom);
+  int get hashCode => Object.hash(source, imagePath, fit, focalPoint, zoom);
 }
 
 class AppBackgroundScope extends InheritedWidget {
@@ -240,7 +235,6 @@ class AppBackgroundFrame extends StatefulWidget {
   const AppBackgroundFrame({
     super.key,
     required this.source,
-    required this.color,
     required this.imagePath,
     required this.fit,
     this.focalPoint = Alignment.center,
@@ -249,7 +243,6 @@ class AppBackgroundFrame extends StatefulWidget {
   });
 
   final AppBackgroundSource source;
-  final Color color;
   final String imagePath;
   final AppBackgroundFit fit;
   final Alignment focalPoint;
@@ -269,9 +262,6 @@ class _AppBackgroundFrameState extends State<AppBackgroundFrame> {
     final focalPoint = image && widget.fit == AppBackgroundFit.focalPoint;
     final config = AppBackgroundConfig(
       source: widget.source,
-      color: widget.source == AppBackgroundSource.theme
-          ? Colors.transparent
-          : widget.color,
       imagePath: image ? widget.imagePath : '',
       fit: image ? widget.fit : AppBackgroundFit.cover,
       focalPoint: focalPoint ? widget.focalPoint : Alignment.center,
@@ -326,10 +316,9 @@ class _AppBackgroundVisual extends StatelessWidget {
     final fallback = Theme.of(context).colorScheme.surface.withValues(alpha: 1);
     return switch (config.source) {
       AppBackgroundSource.theme => ColoredBox(color: fallback),
-      AppBackgroundSource.color => ColoredBox(color: config.color),
       AppBackgroundSource.image => _BackgroundImage(
         path: config.imagePath,
-        fallback: config.color,
+        fallback: fallback,
         fit: config.fit,
         focalPoint: config.focalPoint,
         zoom: config.zoom,

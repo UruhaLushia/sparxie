@@ -30,7 +30,6 @@ class _BackgroundFocalPointTile extends StatelessWidget {
             child: enabled
                 ? AppBackgroundFrame(
                     source: AppBackgroundSource.image,
-                    color: scheme.surface,
                     imagePath: path,
                     fit: AppBackgroundFit.focalPoint,
                     focalPoint: focalPoint,

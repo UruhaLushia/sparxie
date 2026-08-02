@@ -44,7 +44,7 @@ enum AutomaticColorSource { system, wallpaper }
 
 enum DesktopTitleBarMode { system, custom, hidden }
 
-enum AppBackgroundSource { theme, color, image }
+enum AppBackgroundSource { theme, image }
 
 enum AppBackgroundFit { cover, focalPoint }
 
@@ -181,7 +181,6 @@ class AppPrefs extends ChangeNotifier {
   static const _kAppThemeMode = 'appThemeMode';
   static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
   static const _kBackgroundSource = 'backgroundSource';
-  static const _kBackgroundColor = 'backgroundColor';
   static const _kBackgroundImagePath = 'backgroundImagePath';
   static const _kBackgroundFit = 'backgroundFit';
   static const _kBackgroundFocalX = 'backgroundFocalX';
@@ -233,7 +232,6 @@ class AppPrefs extends ChangeNotifier {
   static const defaultAppThemeMode = AppThemeMode.system;
   static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
   static const defaultBackgroundSource = AppBackgroundSource.theme;
-  static const defaultBackgroundColor = 0xff18232c;
   static const defaultBackgroundFit = AppBackgroundFit.cover;
   static const defaultBackgroundFocalX = 0.0;
   static const defaultBackgroundFocalY = 0.0;
@@ -677,13 +675,6 @@ class AppPrefs extends ChangeNotifier {
     _put(_kBackgroundSource, value.name);
   }
 
-  int get backgroundColor => _int(_kBackgroundColor, defaultBackgroundColor);
-
-  Future<void> setBackgroundColor(int value) async {
-    if (value == backgroundColor) return;
-    _put(_kBackgroundColor, value);
-  }
-
   String get backgroundImageReference => _str(_kBackgroundImagePath, '').trim();
 
   String get backgroundImagePath =>
@@ -717,7 +708,6 @@ class AppPrefs extends ChangeNotifier {
   Future<void> resetBackgroundStyle() async {
     _putAll({
       _kBackgroundSource: defaultBackgroundSource.name,
-      _kBackgroundColor: defaultBackgroundColor,
       _kBackgroundImagePath: '',
       _kBackgroundFit: defaultBackgroundFit.name,
       _kBackgroundFocalX: defaultBackgroundFocalX,

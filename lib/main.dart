@@ -508,7 +508,6 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
 
             return AppBackgroundFrame(
               source: prefs.backgroundSource,
-              color: Color(prefs.backgroundColor),
               imagePath: prefs.backgroundImagePath,
               fit: prefs.backgroundFit,
               focalPoint: Alignment(
