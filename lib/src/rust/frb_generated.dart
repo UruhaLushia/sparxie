@@ -5340,8 +5340,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RuleEntry dco_decode_rule_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return RuleEntry(
       index: dco_decode_u_32(arr[0]),
       ruleType: dco_decode_String(arr[1]),
@@ -5350,8 +5350,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       extraParams: dco_decode_list_String(arr[4]),
       disabled: dco_decode_bool(arr[5]),
       hitCount: dco_decode_u_64(arr[6]),
-      missCount: dco_decode_u_64(arr[7]),
-      hasExtra: dco_decode_bool(arr[8]),
+      hitAt: dco_decode_String(arr[7]),
+      missCount: dco_decode_u_64(arr[8]),
+      missAt: dco_decode_String(arr[9]),
+      hasExtra: dco_decode_bool(arr[10]),
     );
   }
 
@@ -6428,7 +6430,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_extraParams = sse_decode_list_String(deserializer);
     var var_disabled = sse_decode_bool(deserializer);
     var var_hitCount = sse_decode_u_64(deserializer);
+    var var_hitAt = sse_decode_String(deserializer);
     var var_missCount = sse_decode_u_64(deserializer);
+    var var_missAt = sse_decode_String(deserializer);
     var var_hasExtra = sse_decode_bool(deserializer);
     return RuleEntry(
       index: var_index,
@@ -6438,7 +6442,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       extraParams: var_extraParams,
       disabled: var_disabled,
       hitCount: var_hitCount,
+      hitAt: var_hitAt,
       missCount: var_missCount,
+      missAt: var_missAt,
       hasExtra: var_hasExtra,
     );
   }
@@ -7499,7 +7505,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_String(self.extraParams, serializer);
     sse_encode_bool(self.disabled, serializer);
     sse_encode_u_64(self.hitCount, serializer);
+    sse_encode_String(self.hitAt, serializer);
     sse_encode_u_64(self.missCount, serializer);
+    sse_encode_String(self.missAt, serializer);
     sse_encode_bool(self.hasExtra, serializer);
   }
 

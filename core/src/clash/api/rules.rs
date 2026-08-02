@@ -32,7 +32,9 @@ pub struct RuleEntry {
     pub extra_params: Vec<String>,
     pub disabled: bool,
     pub hit_count: u64,
+    pub hit_at: String,
     pub miss_count: u64,
+    pub miss_at: String,
     pub has_extra: bool,
 }
 
@@ -202,6 +204,7 @@ fn parse_rule(item: &Value) -> RuleEntry {
     let extra = item.get("extra").filter(|v| v.is_object());
     let has_extra = extra.is_some();
     let extra_field = |key: &str| extra.and_then(|e| e.get(key));
+    let extra_str = |key: &str| extra.map(|e| take_str(e, key)).unwrap_or_default();
     RuleEntry {
         index: item.get("index").and_then(Value::as_u64).unwrap_or(0) as u32,
         rule_type: take_str(item, "type"),
@@ -212,9 +215,11 @@ fn parse_rule(item: &Value) -> RuleEntry {
             .and_then(Value::as_bool)
             .unwrap_or(false),
         hit_count: extra_field("hitCount").and_then(Value::as_u64).unwrap_or(0),
+        hit_at: extra_str("hitAt"),
         miss_count: extra_field("missCount")
             .and_then(Value::as_u64)
             .unwrap_or(0),
+        miss_at: extra_str("missAt"),
         has_extra,
     }
 }

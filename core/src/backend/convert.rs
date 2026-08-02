@@ -211,7 +211,9 @@ impl From<crate::clash::api::RuleEntry> for RuleEntry {
             extra_params: value.extra_params,
             disabled: value.disabled,
             hit_count: value.hit_count,
+            hit_at: value.hit_at,
             miss_count: value.miss_count,
+            miss_at: value.miss_at,
             has_extra: value.has_extra,
         }
     }

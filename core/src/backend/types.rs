@@ -269,7 +269,9 @@ pub struct RuleEntry {
     pub extra_params: Vec<String>,
     pub disabled: bool,
     pub hit_count: u64,
+    pub hit_at: String,
     pub miss_count: u64,
+    pub miss_at: String,
     pub has_extra: bool,
 }
 

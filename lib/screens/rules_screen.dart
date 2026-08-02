@@ -9,6 +9,8 @@ import '../widgets/app_background.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/rule_context_menu.dart';
+import '../widgets/rule_details_panel.dart';
 
 /// Read-only view of the active backend's routing rules.
 ///
@@ -28,7 +30,7 @@ class RulesScreen extends StatefulWidget {
 class _RulesScreenState extends State<RulesScreen> {
   static const int _windowOverscan = 5;
   static const int _windowRefetchMargin = 2;
-  static const double _rowHeight = 72;
+  static const double _rowHeight = _ruleCardHeight + _ruleItemSpacing;
   static const Duration _filterDebounce = Duration(milliseconds: 200);
 
   final ScrollController _scrollController = ScrollController();
@@ -272,7 +274,9 @@ class _RulesScreenState extends State<RulesScreen> {
         extraParams: r.extraParams,
         disabled: disabled,
         hitCount: r.hitCount,
+        hitAt: r.hitAt,
         missCount: r.missCount,
+        missAt: r.missAt,
         hasExtra: r.hasExtra,
       );
 
@@ -374,13 +378,16 @@ class _RulePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: _ruleItemSpacing),
       child: const _RuleSurface(child: SizedBox.expand()),
     );
   }
 }
 
 const _ruleRadius = BorderRadius.all(Radius.circular(12));
+const _ruleCardHeight = 66.0;
+const _ruleItemSpacing = 6.0;
+const _ruleSwitchExclusionSize = Size(64, 42);
 
 class _RuleSurface extends StatelessWidget {
   const _RuleSurface({required this.child});
@@ -416,79 +423,90 @@ class _RuleTile extends StatelessWidget {
   final rust.RuleEntry rule;
   final ValueChanged<bool> onToggle;
 
-  double? get _hitRate {
-    final total = rule.hitCount + rule.missCount;
-    return total > BigInt.zero ? rule.hitCount / total * 100 : null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final rate = _hitRate;
+    final rate = rule.hitRate;
     final meta = [
       if (rule.ruleType.isNotEmpty) rule.ruleType,
       if (rule.proxy.isNotEmpty) rule.proxy,
       if (rule.extraParams.isNotEmpty) rule.extraParams.join(', '),
     ].join('  ·  ');
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: _RuleSurface(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 5, 8, 5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
+      padding: const EdgeInsets.only(bottom: _ruleItemSpacing),
+      child: RuleContextMenu(
+        rule: rule,
+        excludedTopRightSize: rule.hasExtra
+            ? _ruleSwitchExclusionSize
+            : Size.zero,
+        child: SizedBox(
+          width: double.infinity,
+          height: _ruleCardHeight,
+          child: _RuleSurface(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 5, 8, 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      rule.payload.isEmpty ? 'Match' : rule.payload,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (rule.hasExtra)
-                    CompactSwitch(value: !rule.disabled, onChanged: onToggle),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      meta,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (rate != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${rate.toStringAsFixed(1)}%',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onPrimaryContainer,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          rule.payload.isEmpty ? 'Match' : rule.payload,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                      if (rule.hasExtra)
+                        CompactSwitch(
+                          value: !rule.disabled,
+                          onChanged: onToggle,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          meta,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (rate != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.primaryContainer.withValues(
+                              alpha: 0.6,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${rate.toStringAsFixed(1)}%',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: scheme.onPrimaryContainer,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),

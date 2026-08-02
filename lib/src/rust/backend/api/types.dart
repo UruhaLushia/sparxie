@@ -751,7 +751,9 @@ class RuleEntry {
   final List<String> extraParams;
   final bool disabled;
   final BigInt hitCount;
+  final String hitAt;
   final BigInt missCount;
+  final String missAt;
   final bool hasExtra;
 
   const RuleEntry({
@@ -762,7 +764,9 @@ class RuleEntry {
     required this.extraParams,
     required this.disabled,
     required this.hitCount,
+    required this.hitAt,
     required this.missCount,
+    required this.missAt,
     required this.hasExtra,
   });
 
@@ -778,7 +782,9 @@ class RuleEntry {
       extraParams.hashCode ^
       disabled.hashCode ^
       hitCount.hashCode ^
+      hitAt.hashCode ^
       missCount.hashCode ^
+      missAt.hashCode ^
       hasExtra.hashCode;
 
   @override
@@ -793,7 +799,9 @@ class RuleEntry {
           extraParams == other.extraParams &&
           disabled == other.disabled &&
           hitCount == other.hitCount &&
+          hitAt == other.hitAt &&
           missCount == other.missCount &&
+          missAt == other.missAt &&
           hasExtra == other.hasExtra;
 }
 

@@ -5720,7 +5720,9 @@ impl SseDecode for crate::backend::api::types::RuleEntry {
         let mut var_extraParams = <Vec<String>>::sse_decode(deserializer);
         let mut var_disabled = <bool>::sse_decode(deserializer);
         let mut var_hitCount = <u64>::sse_decode(deserializer);
+        let mut var_hitAt = <String>::sse_decode(deserializer);
         let mut var_missCount = <u64>::sse_decode(deserializer);
+        let mut var_missAt = <String>::sse_decode(deserializer);
         let mut var_hasExtra = <bool>::sse_decode(deserializer);
         return crate::backend::api::types::RuleEntry {
             index: var_index,
@@ -5730,7 +5732,9 @@ impl SseDecode for crate::backend::api::types::RuleEntry {
             extra_params: var_extraParams,
             disabled: var_disabled,
             hit_count: var_hitCount,
+            hit_at: var_hitAt,
             miss_count: var_missCount,
+            miss_at: var_missAt,
             has_extra: var_hasExtra,
         };
     }
@@ -7306,7 +7310,9 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::types::RuleEntry {
             self.extra_params.into_into_dart().into_dart(),
             self.disabled.into_into_dart().into_dart(),
             self.hit_count.into_into_dart().into_dart(),
+            self.hit_at.into_into_dart().into_dart(),
             self.miss_count.into_into_dart().into_dart(),
+            self.miss_at.into_into_dart().into_dart(),
             self.has_extra.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -8325,7 +8331,9 @@ impl SseEncode for crate::backend::api::types::RuleEntry {
         <Vec<String>>::sse_encode(self.extra_params, serializer);
         <bool>::sse_encode(self.disabled, serializer);
         <u64>::sse_encode(self.hit_count, serializer);
+        <String>::sse_encode(self.hit_at, serializer);
         <u64>::sse_encode(self.miss_count, serializer);
+        <String>::sse_encode(self.miss_at, serializer);
         <bool>::sse_encode(self.has_extra, serializer);
     }
 }
