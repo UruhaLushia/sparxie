@@ -174,6 +174,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kAutomaticColor = 'automaticColor';
   static const _kAutomaticColorSource = 'automaticColorSource';
   static const _kPureBlackMode = 'pureBlackMode';
+  static const _kShowDividers = 'showDividers';
   static const _kAppThemeMode = 'appThemeMode';
   static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
   static const _kBackgroundSource = 'backgroundSource';
@@ -224,6 +225,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultAutomaticColor = false;
   static const defaultAutomaticColorSource = AutomaticColorSource.system;
   static const defaultPureBlackMode = false;
+  static const defaultShowDividers = true;
   static const defaultAppThemeMode = AppThemeMode.system;
   static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
   static const defaultBackgroundSource = AppBackgroundSource.theme;
@@ -627,6 +629,13 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setPureBlackMode(bool value) async {
     if (value == pureBlackMode) return;
     _put(_kPureBlackMode, value);
+  }
+
+  bool get showDividers => _bool(_kShowDividers, defaultShowDividers);
+
+  Future<void> setShowDividers(bool value) async {
+    if (value == showDividers) return;
+    _put(_kShowDividers, value);
   }
 
   AppThemeMode get appThemeMode =>

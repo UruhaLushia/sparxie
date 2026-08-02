@@ -336,14 +336,7 @@ class _SettingsGroup extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             for (var i = 0; i < children.length; i++) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  indent: 56,
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.6,
-                  ),
-                ),
+              if (i > 0) const Divider(height: 1, indent: 56),
               children[i],
             ],
           ],

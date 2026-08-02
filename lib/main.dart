@@ -229,6 +229,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   int? _themeSeed;
   bool? _themeUsesAutomaticColors;
   bool? _themePureBlack;
+  bool? _themeShowDividers;
   AppBackgroundSource? _themeBackgroundSource;
   double? _themeSurfaceOpacity;
   AppSurfaceEffect? _themeSurfaceEffect;
@@ -274,6 +275,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     required List<String> userFonts,
     required bool useAutomaticColors,
     required bool pureBlack,
+    required bool showDividers,
     required AppBackgroundSource backgroundSource,
     required double surfaceOpacity,
     required AppSurfaceEffect surfaceEffect,
@@ -284,6 +286,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
         _themeSeed == seed &&
         _themeUsesAutomaticColors == useAutomaticColors &&
         _themePureBlack == pureBlack &&
+        _themeShowDividers == showDividers &&
         _themeBackgroundSource == backgroundSource &&
         _themeSurfaceOpacity == surfaceOpacity &&
         _themeSurfaceEffect == surfaceEffect &&
@@ -294,6 +297,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     _themeSeed = seed;
     _themeUsesAutomaticColors = useAutomaticColors;
     _themePureBlack = pureBlack;
+    _themeShowDividers = showDividers;
     _themeBackgroundSource = backgroundSource;
     _themeSurfaceOpacity = surfaceOpacity;
     _themeSurfaceEffect = surfaceEffect;
@@ -305,6 +309,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       userFonts: userFonts,
       useAutomaticColors: useAutomaticColors,
       pureBlack: false,
+      showDividers: showDividers,
       backgroundSource: backgroundSource,
       surfaceOpacity: surfaceOpacity,
       surfaceEffect: surfaceEffect,
@@ -316,6 +321,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       userFonts: userFonts,
       useAutomaticColors: useAutomaticColors,
       pureBlack: pureBlack,
+      showDividers: showDividers,
       backgroundSource: backgroundSource,
       surfaceOpacity: surfaceOpacity,
       surfaceEffect: surfaceEffect,
@@ -461,6 +467,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
           userFonts: uiFonts,
           useAutomaticColors: useAutomaticColor,
           pureBlack: prefs.pureBlackMode,
+          showDividers: prefs.showDividers,
           backgroundSource: backgroundSource,
           surfaceOpacity: surfaceOpacity,
           surfaceEffect: surfaceEffect,

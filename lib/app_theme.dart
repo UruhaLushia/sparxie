@@ -126,6 +126,7 @@ ThemeData _appTheme({
   required List<String> userFonts,
   required bool useAutomaticColors,
   required bool pureBlack,
+  required bool showDividers,
   required AppBackgroundSource backgroundSource,
   required double surfaceOpacity,
   required AppSurfaceEffect surfaceEffect,
@@ -152,13 +153,22 @@ ThemeData _appTheme({
     opacity: surfaceOpacity,
     tintColor: seedColor,
   );
+  final dividerColor = !showDividers
+      ? Colors.transparent
+      : brightness == Brightness.dark
+      ? scheme.onSurface.withValues(alpha: 0.12)
+      : scheme.outlineVariant;
   final base = ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
     scaffoldBackgroundColor: surfaceTheme.pageColor(scheme.surface),
     canvasColor: surfaceTheme.surfaceColor(scheme.surface),
     cardColor: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
-    dividerColor: surfaceTheme.outlineColor(scheme.outlineVariant),
+    dividerColor: dividerColor,
+    dividerTheme: DividerThemeData(
+      color: dividerColor,
+      thickness: brightness == Brightness.dark ? 0.5 : null,
+    ),
     focusColor: scheme.primary.withValues(alpha: 0.12),
     hoverColor: scheme.primary.withValues(alpha: 0.06),
     highlightColor: scheme.primary.withValues(alpha: 0.08),

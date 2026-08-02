@@ -160,11 +160,7 @@ class _ConnectionLogSection extends StatelessWidget {
                   child: SelectableText(logs[i], style: textStyle),
                 ),
                 if (i != logs.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: scheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
+                  const Divider(height: 1, thickness: 1),
               ],
             ],
           ),
