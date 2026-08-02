@@ -28,7 +28,7 @@ class RulesScreen extends StatefulWidget {
 class _RulesScreenState extends State<RulesScreen> {
   static const int _windowOverscan = 5;
   static const int _windowRefetchMargin = 2;
-  static const double _rowHeight = 86;
+  static const double _rowHeight = 72;
   static const Duration _filterDebounce = Duration(milliseconds: 200);
 
   final ScrollController _scrollController = ScrollController();
@@ -373,16 +373,37 @@ class _RulePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: const _RuleSurface(child: SizedBox.expand()),
+    );
+  }
+}
+
+const _ruleRadius = BorderRadius.all(Radius.circular(12));
+
+class _RuleSurface extends StatelessWidget {
+  const _RuleSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final surfaceTheme = AppSurfaceTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
+    return AppSurfaceBackdrop(
+      borderRadius: _ruleRadius,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: surfaceTheme.surfaceColor(
-            scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow, 0.05),
+          borderRadius: _ruleRadius,
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.6),
           ),
-          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ClipRRect(
+          borderRadius: _ruleRadius,
+          child: Material(type: MaterialType.transparency, child: child),
         ),
       ),
     );
@@ -403,84 +424,71 @@ class _RuleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
     final rate = _hitRate;
     final meta = [
       if (rule.ruleType.isNotEmpty) rule.ruleType,
       if (rule.proxy.isNotEmpty) rule.proxy,
       if (rule.extraParams.isNotEmpty) rule.extraParams.join(', '),
     ].join('  ·  ');
-    const radius = BorderRadius.all(Radius.circular(12));
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: AppSurfaceBackdrop(
-        borderRadius: radius,
-        child: Card(
-          margin: EdgeInsets.zero,
-          color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
-          surfaceTintColor: Colors.transparent,
-          shape: const RoundedRectangleBorder(borderRadius: radius),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: _RuleSurface(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 5, 8, 5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rule.payload.isEmpty ? 'Match' : rule.payload,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (rule.hasExtra)
+                    CompactSwitch(value: !rule.disabled, onChanged: onToggle),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      meta,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (rate != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                       child: Text(
-                        rule.payload.isEmpty ? 'Match' : rule.payload,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+                        '${rate.toStringAsFixed(1)}%',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (rule.hasExtra)
-                      CompactSwitch(value: !rule.disabled, onChanged: onToggle),
                   ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        meta,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (rate != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${rate.toStringAsFixed(1)}%',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: scheme.onPrimaryContainer,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
