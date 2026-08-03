@@ -6,21 +6,40 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
-class DiagnosticsScreen extends StatefulWidget {
+class DiagnosticsScreen extends StatelessWidget {
   const DiagnosticsScreen({super.key, required this.store});
 
   final ctl.ControllerStore store;
 
   @override
-  State<DiagnosticsScreen> createState() => _DiagnosticsScreenState();
+  Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (_, activeController, _) => _DiagnosticsView(
+        key: ValueKey((store, activeController)),
+        store: store,
+      ),
+    );
+  }
 }
 
-class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
+class _DiagnosticsView extends StatefulWidget {
+  const _DiagnosticsView({super.key, required this.store});
+
+  final ctl.ControllerStore store;
+
+  @override
+  State<_DiagnosticsView> createState() => _DiagnosticsScreenState();
+}
+
+class _DiagnosticsScreenState extends State<_DiagnosticsView> {
   String? _targetKey;
   rust.BackendTarget? _target;
   List<rust.OutboundEntry> _outbounds = const [];
@@ -29,23 +48,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_restart);
     _restart(force: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant DiagnosticsScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.store == widget.store) return;
-    oldWidget.store.removeListener(_restart);
-    widget.store.addListener(_restart);
-    _restart(force: true);
-  }
-
-  @override
-  void dispose() {
-    widget.store.removeListener(_restart);
-    super.dispose();
   }
 
   void _restart({bool force = false}) {
@@ -163,6 +166,21 @@ class _QualityPanelState extends State<_QualityPanel> {
   bool _http3 = false;
   int _maxRuntime = 20;
   String _outbound = '';
+  var _active = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = isRealtimeUiActive(context);
+  }
+
+  void _updateState(VoidCallback update) {
+    if (_active) {
+      setState(update);
+    } else {
+      update();
+    }
+  }
 
   @override
   void dispose() {
@@ -190,7 +208,7 @@ class _QualityPanelState extends State<_QualityPanel> {
         .listen(
           (progress) {
             if (!mounted) return;
-            setState(() {
+            _updateState(() {
               _progress = progress;
               if (progress.error.isNotEmpty) _error = progress.error;
               if (progress.isFinal) _running = false;
@@ -198,13 +216,15 @@ class _QualityPanelState extends State<_QualityPanel> {
           },
           onError: (Object e) {
             if (!mounted) return;
-            setState(() {
+            _updateState(() {
               _error = formatError(e);
               _running = false;
             });
           },
           onDone: () {
-            if (mounted && _running) setState(() => _running = false);
+            if (mounted && _running) {
+              _updateState(() => _running = false);
+            }
           },
         );
   }
@@ -372,6 +392,21 @@ class _StunPanelState extends State<_StunPanel> {
   String? _error;
   bool _running = false;
   String _outbound = '';
+  var _active = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = isRealtimeUiActive(context);
+  }
+
+  void _updateState(VoidCallback update) {
+    if (_active) {
+      setState(update);
+    } else {
+      update();
+    }
+  }
 
   @override
   void dispose() {
@@ -396,7 +431,7 @@ class _StunPanelState extends State<_StunPanel> {
         .listen(
           (progress) {
             if (!mounted) return;
-            setState(() {
+            _updateState(() {
               _progress = progress;
               if (progress.error.isNotEmpty) _error = progress.error;
               if (progress.isFinal) _running = false;
@@ -404,13 +439,15 @@ class _StunPanelState extends State<_StunPanel> {
           },
           onError: (Object e) {
             if (!mounted) return;
-            setState(() {
+            _updateState(() {
               _error = formatError(e);
               _running = false;
             });
           },
           onDone: () {
-            if (mounted && _running) setState(() => _running = false);
+            if (mounted && _running) {
+              _updateState(() => _running = false);
+            }
           },
         );
   }

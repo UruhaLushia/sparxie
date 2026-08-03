@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import 'controller.dart';
@@ -56,6 +57,7 @@ class MihomoSession {
   Timer? _proxiesPoll;
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
+  int _iconWarmGeneration = 0;
   _SessionErrorSource? _errorSource;
   final _retryAttempts = <_RetryKind, int>{};
   int _trafficEpoch = 0;
@@ -298,6 +300,7 @@ class MihomoSession {
     if (catalogChanged) {
       proxies.reset();
       _iconsWarmed = false;
+      _iconWarmGeneration++;
       unawaited(_refreshProxies());
     } else {
       proxies.releaseAllGroupMembers();
@@ -414,7 +417,7 @@ class MihomoSession {
     // identities alive so open routes remain valid while streams reconnect.
     _cancelAll();
     isStreaming.value = false;
-    _startLiveUpdates();
+    _startLiveUpdates(proxyDelay: const Duration(milliseconds: 120));
   }
 
   void _onStoreChange() {
@@ -477,6 +480,7 @@ class MihomoSession {
     connectionsPaused.value = false;
     ruleCount.value = 0;
     _iconsWarmed = false;
+    _iconWarmGeneration++;
     if (_target == null) {
       _showError('请先在“后端”中添加一个后端', _SessionErrorSource.controller);
       return;
@@ -488,11 +492,16 @@ class MihomoSession {
     unawaited(_probeRuleCount());
   }
 
-  void _startLiveUpdates() {
+  void _startLiveUpdates({Duration proxyDelay = Duration.zero}) {
     _subscribeTraffic();
     _subscribeConnections();
     _subscribeLogs();
-    _startProxiesPoll();
+    if (proxyDelay == Duration.zero) {
+      _startProxiesPoll();
+    } else {
+      _proxiesPoll?.cancel();
+      _proxiesPoll = Timer(proxyDelay, _startProxiesPoll);
+    }
     if (supportsMemory.value) _subscribeMemory();
   }
 
@@ -634,7 +643,8 @@ class MihomoSession {
       _clearError(_SessionErrorSource.proxyCatalog);
       if (!_iconsWarmed) {
         _iconsWarmed = true;
-        _warmIconCache(catalog.iconUrls);
+        final generation = ++_iconWarmGeneration;
+        _warmIconCache(catalog.iconUrls, generation);
       }
     } catch (e) {
       if (identical(_activeKey, controller)) {
@@ -649,9 +659,27 @@ class MihomoSession {
   // Kick off background downloads for every group/node icon right after the
   // first proxy list lands, so the disk cache is warm before the user
   // scrolls to them. Fire-and-forget; failures are non-fatal.
-  void _warmIconCache(Iterable<String> urls) {
-    for (final url in urls) {
-      unawaited(rust.fetchIcon(url: url).then((_) {}, onError: (_) {}));
+  void _warmIconCache(List<String> urls, int generation) {
+    const maxWorkers = 4;
+    final workers = math.min(maxWorkers, urls.length);
+    for (var worker = 0; worker < workers; worker++) {
+      unawaited(_warmIcons(urls, worker, workers, generation));
+    }
+  }
+
+  Future<void> _warmIcons(
+    List<String> urls,
+    int start,
+    int stride,
+    int generation,
+  ) async {
+    for (var i = start; i < urls.length; i += stride) {
+      if (generation != _iconWarmGeneration) return;
+      try {
+        await rust.fetchIcon(url: urls[i]);
+      } catch (_) {
+        // A failed icon keeps its normal letter fallback.
+      }
     }
   }
 
@@ -893,6 +921,7 @@ class MihomoSession {
   }
 
   void dispose() {
+    _iconWarmGeneration++;
     store.removeListener(_onStoreChange);
     _cancelAll();
     traffic.dispose();

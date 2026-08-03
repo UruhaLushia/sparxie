@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_background.dart';
+import 'transition_snapshot.dart';
+
 class AppPageTransitionScope extends InheritedWidget {
   const AppPageTransitionScope({
     super.key,
@@ -36,10 +39,14 @@ class AppPageBodyTransition extends StatelessWidget {
     final pageAnimation = AppPageTransitionScope.maybeOf(context);
     if (pageAnimation == null) return child;
     final animation = enabled ? pageAnimation : _complete;
+    final liveChild = RepaintBoundary(child: child);
+    final transitionChild = AppSurfaceTheme.of(context).effectiveBlur > 0
+        ? liveChild
+        : HighRefreshTransitionSnapshot(animation: animation, child: liveChild);
     return ClipRect(
       child: AnimatedBuilder(
         animation: animation,
-        child: child,
+        child: transitionChild,
         builder: (context, child) {
           final progress = animation.value.clamp(0.0, 1.0);
           if (progress >= 0.999) return child!;

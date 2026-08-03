@@ -333,12 +333,16 @@ class ConnectionListNotifier extends ChangeNotifier {
   bool _refetching = false;
   bool _refetchAgain = false;
   bool _pendingRefetchForce = false;
+  int _activityGeneration = 0;
 
   // Grouped (by-process) mode state.
   bool _grouped = false;
   rust.ConnectionGroupSort _groupSort = rust.ConnectionGroupSort.name;
   bool _groupSortAsc = true;
   final List<ConnectionGroupSummary> _groups = <ConnectionGroupSummary>[];
+  late final List<ConnectionGroupSummary> groups = UnmodifiableListView(
+    _groups,
+  );
   final Map<String, ConnectionGroupSummary> _groupsByKey =
       <String, ConnectionGroupSummary>{};
   final Set<String> _expandedGroups = <String>{};
@@ -354,9 +358,24 @@ class ConnectionListNotifier extends ChangeNotifier {
   final Set<String> _fetchingGroupMembers = <String>{};
   final Set<String> _queuedGroupMembers = <String>{};
 
+  @override
+  void removeListener(VoidCallback listener) {
+    final hadListeners = hasListeners;
+    super.removeListener(listener);
+    if (!hadListeners || hasListeners) return;
+    _activityGeneration++;
+    _refetchTimer?.cancel();
+    _refetchTimer = null;
+    _groupsTimer?.cancel();
+    _groupsTimer = null;
+    _pendingRefetchForce = false;
+    _pendingGroupsForce = false;
+    _refetchAgain = false;
+    _refreshGroupsAgain = false;
+    _queuedGroupMembers.clear();
+  }
+
   bool get grouped => _grouped;
-  List<ConnectionGroupSummary> get groups =>
-      List<ConnectionGroupSummary>.unmodifiable(_groups);
 
   set grouped(bool value) {
     if (value == _grouped) return;
@@ -476,16 +495,10 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   /// Apply a stream frame (counts only — no row data here).
   void applyFrame(rust.ConnectionsFrame frame) {
-    if (frame.isInitial) {
-      _retireRows(_activeRows.values);
-      _activeWindowIds.clear();
-      _activeRows.clear();
-      _activeOffset = 0;
-      _retireRows(_closedRows.values);
-      _closedWindowIds.clear();
-      _closedRows.clear();
-      _closedOffset = 0;
-    }
+    // A stream restart on foreground resume still targets the same backend.
+    // Keep the painted window until the forced refresh below replaces it, so
+    // resume does not tear down and rebuild the visible list twice. Controller
+    // changes and preference-driven restarts already call reset explicitly.
     final shapeChanged =
         _activeCount != frame.activeCount ||
         _closedCount != frame.closedCount ||
@@ -543,6 +556,15 @@ class ConnectionListNotifier extends ChangeNotifier {
     _scheduleRefetch(force: true);
   }
 
+  /// Refresh the retained visible view after its page becomes active again.
+  void refreshVisible() {
+    if (_grouped) {
+      _scheduleGroupsRefresh(force: true);
+    } else {
+      _scheduleRefetch(force: true);
+    }
+  }
+
   void _scheduleRefetch({bool force = false}) {
     _pendingRefetchForce |= force;
     if (_refetching) {
@@ -596,11 +618,24 @@ class ConnectionListNotifier extends ChangeNotifier {
       return;
     }
     _refetching = true;
+    final activityGeneration = _activityGeneration;
     try {
       await _refetch(force: force);
     } finally {
       _refetching = false;
-      if (_refetchAgain) {
+      if (activityGeneration != _activityGeneration) {
+        final refreshAgain = _refetchAgain;
+        final pendingForce = _pendingRefetchForce;
+        _refetchAgain = false;
+        _pendingRefetchForce = false;
+        if (refreshAgain) {
+          if (pendingForce) {
+            unawaited(_runRefetch(force: true));
+          } else {
+            _scheduleRefetch();
+          }
+        }
+      } else if (_refetchAgain) {
         _refetchAgain = false;
         final force = _pendingRefetchForce;
         _pendingRefetchForce = false;
@@ -620,11 +655,20 @@ class ConnectionListNotifier extends ChangeNotifier {
       return;
     }
     _refreshingGroups = true;
+    final activityGeneration = _activityGeneration;
     try {
       await _refreshGroups(force: force);
     } finally {
       _refreshingGroups = false;
-      if (_refreshGroupsAgain) {
+      if (activityGeneration != _activityGeneration) {
+        final refreshAgain = _refreshGroupsAgain;
+        final pendingForce = _pendingGroupsForce;
+        _refreshGroupsAgain = false;
+        _pendingGroupsForce = false;
+        if (refreshAgain) {
+          _scheduleGroupsRefresh(force: pendingForce);
+        }
+      } else if (_refreshGroupsAgain) {
         _refreshGroupsAgain = false;
         final force = _pendingGroupsForce;
         _pendingGroupsForce = false;
@@ -639,6 +683,7 @@ class ConnectionListNotifier extends ChangeNotifier {
     final tab = _visibleTab;
     final revision = _groupsRevision;
     final filterRevision = _filterRevision;
+    final activityGeneration = _activityGeneration;
     final query = _query;
     final List<rust.ConnectionGroup> fresh;
     try {
@@ -647,6 +692,7 @@ class ConnectionListNotifier extends ChangeNotifier {
       return;
     }
     if (!_grouped ||
+        activityGeneration != _activityGeneration ||
         tab != _visibleTab ||
         revision != _groupsRevision ||
         filterRevision != _filterRevision) {
@@ -716,6 +762,7 @@ class ConnectionListNotifier extends ChangeNotifier {
     final tab = _visibleTab;
     final revision = _groupsRevision;
     final filterRevision = _filterRevision;
+    final activityGeneration = _activityGeneration;
     final query = _query;
     final List<rust.Connection> rows;
     try {
@@ -723,7 +770,8 @@ class ConnectionListNotifier extends ChangeNotifier {
     } catch (_) {
       return;
     }
-    if (tab != _visibleTab ||
+    if (activityGeneration != _activityGeneration ||
+        tab != _visibleTab ||
         revision != _groupsRevision ||
         filterRevision != _filterRevision ||
         !_expandedGroups.contains(groupKey)) {
@@ -798,8 +846,10 @@ class ConnectionListNotifier extends ChangeNotifier {
     if (limit <= 0) return;
     final filterRevision = _filterRevision;
     final query = _query;
+    final activityGeneration = _activityGeneration;
     try {
       final window = await fetcher(tab, offset, limit, query);
+      if (activityGeneration != _activityGeneration) return;
       _applyWindow(tab, offset, limit, filterRevision, query, window);
     } catch (_) {
       // Silent — next frame retriggers.
@@ -1026,6 +1076,7 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
+    _activityGeneration++;
     _refetchTimer?.cancel();
     _groupsTimer?.cancel();
     for (final row in _activeRows.values) {

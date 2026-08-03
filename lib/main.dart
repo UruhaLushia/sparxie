@@ -36,6 +36,7 @@ import 'session.dart';
 import 'src/rust/frb_generated.dart';
 import 'system_accent_color.dart';
 import 'utils.dart';
+import 'widgets/active_listenable_builder.dart';
 import 'widgets/app_background.dart';
 import 'widgets/app_page_route.dart';
 import 'widgets/bottom_navigation.dart';
@@ -221,6 +222,20 @@ class MihomoControllerApp extends StatefulWidget {
   State<MihomoControllerApp> createState() => _MihomoControllerAppState();
 }
 
+@immutable
+class _AppVisualSnapshot {
+  const _AppVisualSnapshot(this.values);
+
+  final List<Object?> values;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AppVisualSnapshot && listEquals(values, other.values);
+
+  @override
+  int get hashCode => Object.hashAll(values);
+}
+
 class _MihomoControllerAppState extends State<MihomoControllerApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   late final ControllerUriImporter _controllerUriImporter;
@@ -245,6 +260,44 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   SystemAccentColor get systemAccentColor => widget.systemAccentColor;
   BackgroundAccentColor get backgroundAccentColor =>
       widget.backgroundAccentColor;
+
+  _AppVisualSnapshot _visualSnapshot() {
+    final fonts = prefs.uiFontFamilies;
+    return _AppVisualSnapshot(
+      List<Object?>.unmodifiable([
+        prefs.appThemeMode,
+        prefs.globalThemeColor,
+        prefs.automaticColor,
+        prefs.pureBlackMode,
+        prefs.showDividers,
+        prefs.backgroundSource,
+        prefs.backgroundImagePath,
+        prefs.backgroundFit,
+        prefs.backgroundFocalX,
+        prefs.backgroundFocalY,
+        prefs.backgroundZoom,
+        prefs.surfaceOpacity,
+        prefs.surfaceEffect,
+        prefs.surfaceBlur,
+        prefs.desktopTitleBarMode,
+        systemAccentColor.color,
+        backgroundAccentColor.color,
+        fonts.length,
+        ...fonts,
+        for (final kind in CompactControlKind.values) ...[
+          prefs.compactBorderRadius(kind),
+          prefs.compactControlHeight(kind),
+          prefs.compactWidthScale(kind),
+          prefs.effectiveCompactThemeColor(kind),
+        ],
+        prefs.navigationInnerThemeColor,
+        prefs.navigationInnerBorderRadius,
+        prefs.navigationInnerHeight,
+        prefs.navigationInnerWidthScale,
+        prefs.navigationFloatingHeightOffset,
+      ]),
+    );
+  }
 
   @override
   void initState() {
@@ -442,13 +495,14 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableSelector<_AppVisualSnapshot>(
       listenable: Listenable.merge([
         prefs,
         systemAccentColor,
         backgroundAccentColor,
       ]),
-      builder: (context, _) {
+      selector: _visualSnapshot,
+      builder: (context, _, _) {
         final uiFonts = prefs.uiFontFamilies;
         final globalSeed = Color(prefs.globalThemeColor);
         final useAutomaticColor = prefs.automaticColor;
@@ -532,7 +586,9 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                     navigationBarStyle:
                         compactStyles[CompactControlKind.navigationBar]!,
                     child: _SystemBarStyle(
-                      child: child ?? const SizedBox.shrink(),
+                      child: UiScrollActivityScope(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),

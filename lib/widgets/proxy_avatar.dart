@@ -54,21 +54,20 @@ class ProxyAvatar extends StatelessWidget {
   }
 
   static Color _colorFor(String name, ColorScheme scheme) {
-    final palette = <Color>[
-      scheme.primary,
-      scheme.tertiary,
-      scheme.secondary,
-      scheme.error,
-      const Color(0xff10b981),
-      const Color(0xfff97316),
-      const Color(0xff8b5cf6),
-      const Color(0xff0ea5e9),
-    ];
-    final hash = name.codeUnits.fold<int>(
-      0,
-      (h, c) => (h * 31 + c) & 0x7fffffff,
-    );
-    return palette[hash % palette.length];
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) {
+      hash = (hash * 31 + name.codeUnitAt(i)) & 0x7fffffff;
+    }
+    return switch (hash % 8) {
+      0 => scheme.primary,
+      1 => scheme.tertiary,
+      2 => scheme.secondary,
+      3 => scheme.error,
+      4 => const Color(0xff10b981),
+      5 => const Color(0xfff97316),
+      6 => const Color(0xff8b5cf6),
+      _ => const Color(0xff0ea5e9),
+    };
   }
 }
 

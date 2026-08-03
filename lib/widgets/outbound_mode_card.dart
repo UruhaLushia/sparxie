@@ -3,21 +3,40 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import 'active_listenable_builder.dart';
 import 'compact_controls.dart';
 import 'section_panel.dart';
 
 /// Launcher card for the backend's outbound modes. Tapping a segment
 /// immediately switches the active backend mode; no popup, no navigation.
-class OutboundModeCard extends StatefulWidget {
+class OutboundModeCard extends StatelessWidget {
   const OutboundModeCard({super.key, required this.store});
 
   final ctl.ControllerStore store;
 
   @override
-  State<OutboundModeCard> createState() => _OutboundModeCardState();
+  Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (_, activeController, _) => _OutboundModeCardBody(
+        key: ValueKey((store, activeController)),
+        store: store,
+      ),
+    );
+  }
 }
 
-class _OutboundModeCardState extends State<OutboundModeCard> {
+class _OutboundModeCardBody extends StatefulWidget {
+  const _OutboundModeCardBody({super.key, required this.store});
+
+  final ctl.ControllerStore store;
+
+  @override
+  State<_OutboundModeCardBody> createState() => _OutboundModeCardState();
+}
+
+class _OutboundModeCardState extends State<_OutboundModeCardBody> {
   ctl.Controller? _activeKey;
   String? _mode;
   List<String> _options = const <String>[];
@@ -26,18 +45,7 @@ class _OutboundModeCardState extends State<OutboundModeCard> {
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_onStore);
     _bind();
-  }
-
-  @override
-  void dispose() {
-    widget.store.removeListener(_onStore);
-    super.dispose();
-  }
-
-  void _onStore() {
-    if (!identical(widget.store.active, _activeKey)) _bind();
   }
 
   rust.BackendTarget? _target() {

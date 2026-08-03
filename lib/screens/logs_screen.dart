@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
@@ -58,13 +57,10 @@ class _LogsScreenState extends State<LogsScreen> {
   bool _bottomRestoreScheduled = false;
   bool _pageTransitionEnabled = true;
   bool _userScrolling = false;
+  bool _fastScrolling = false;
   int _autoScrollGeneration = 0;
   int _renderedLogCount = 0;
   int? _bottomRestoreWindowRevision;
-  TextDirection _logTextDirection = TextDirection.ltr;
-  TextScaler _logTextScaler = TextScaler.noScaling;
-  TextStyle _logBodyStyle = const TextStyle(fontSize: 14, height: 1.35);
-  TextStyle _logLabelStyle = const TextStyle(fontSize: 11);
   _LogViewportAnchor? _viewportAnchor;
 
   @override
@@ -90,9 +86,28 @@ class _LogsScreenState extends State<LogsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final active = TickerMode.valuesOf(context).enabled;
+    final active = isUiActive(context);
+    final fastScrolling = active && isUiFastScrolling(context);
+    final keepInactiveTailWarm = !active && _bottomRestorePending;
     if (_active == active) {
-      widget.session.logs.setActive(active || _bottomRestorePending);
+      if (_fastScrolling != fastScrolling) {
+        _fastScrolling = fastScrolling;
+        widget.session.logs.setActive(
+          (active && !fastScrolling) || keepInactiveTailWarm,
+        );
+        if (active && !fastScrolling) {
+          _ensureWindow();
+          if (_follow) {
+            _scheduleAutoScroll();
+          } else {
+            _scheduleAnchorCapture();
+          }
+        }
+      } else {
+        widget.session.logs.setActive(
+          (active && !fastScrolling) || keepInactiveTailWarm,
+        );
+      }
       return;
     }
     if (!active) {
@@ -100,18 +115,21 @@ class _LogsScreenState extends State<LogsScreen> {
       _bottomRestorePending = _follow;
       _bottomRestoreWindowRevision = null;
       _active = false;
+      _fastScrolling = false;
       _userScrolling = false;
       _cancelAutoScroll();
       _enteringIds.clear();
-      // Keep only the small tail window laid out while following. It remains
-      // offstage, so returning can paint the current tail on its first frame.
+      // Keep only the small tail window warm offstage so returning can paint
+      // the current tail immediately.
       widget.session.logs.setActive(_bottomRestorePending);
       return;
     }
     _active = true;
+    _fastScrolling = fastScrolling;
     _pageTransitionEnabled = !_follow;
     final logs = widget.session.logs;
-    logs.setActive(true);
+    logs.setActive(!fastScrolling);
+    if (fastScrolling) return;
     if (_bottomRestorePending) {
       _bottomRestoreWindowRevision = logs.refreshWindow();
       _syncListItems();
@@ -179,8 +197,11 @@ class _LogsScreenState extends State<LogsScreen> {
 
   bool _onUserScroll(UserScrollNotification notification) {
     if (!_active) return false;
-    _userScrolling = notification.direction != ScrollDirection.idle;
-    if (_userScrolling) {
+    final scrolling = notification.direction != ScrollDirection.idle;
+    if (scrolling) {
+      if (!_userScrolling) {
+        _userScrolling = true;
+      }
       widget.session.logs.setAnchor(null);
       if (!_autoScrolling &&
           notification.direction == ScrollDirection.forward) {
@@ -188,6 +209,7 @@ class _LogsScreenState extends State<LogsScreen> {
       }
       return false;
     }
+    _userScrolling = false;
     if (!_autoScrolling) {
       final metrics = _scroll.position;
       _setFollowing(metrics.pixels >= metrics.maxScrollExtent - 80);
@@ -384,44 +406,14 @@ class _LogsScreenState extends State<LogsScreen> {
     return _listController.getOffsetToReveal(index, 0.5);
   }
 
-  double _estimateLogExtent(int? listIndex, double crossAxisExtent) {
-    if (listIndex == null || !crossAxisExtent.isFinite) {
+  double _estimateLogExtent(int? _, double _) => _fallbackLogExtent;
+
+  double _placeholderExtent(int index) {
+    if (!_listController.isAttached || index >= _listController.numberOfItems) {
       return _fallbackLogExtent;
     }
-    final logs = widget.session.logs;
-    final entry = logs.rowAt(listIndex);
-    if (entry == null) return _fallbackLogExtent;
-
-    final messagePainter = TextPainter(
-      text: TextSpan(text: entry.message, style: _logBodyStyle),
-      textDirection: _logTextDirection,
-      textScaler: _logTextScaler,
-    )..layout(maxWidth: math.max(1, crossAxisExtent - 98));
-    var contentHeight = messagePainter.height;
-    messagePainter.dispose();
-
-    if (entry.time.isNotEmpty) {
-      final timePainter = TextPainter(
-        text: TextSpan(text: entry.time, style: _logLabelStyle),
-        textDirection: _logTextDirection,
-        textScaler: _logTextScaler,
-        maxLines: 1,
-      )..layout();
-      contentHeight += timePainter.height;
-      timePainter.dispose();
-    }
-    final badgePainter = TextPainter(
-      text: TextSpan(
-        text: entry.level.isEmpty ? 'log' : entry.level,
-        style: _logLabelStyle.copyWith(fontWeight: FontWeight.w600),
-      ),
-      textDirection: _logTextDirection,
-      textScaler: _logTextScaler,
-      maxLines: 1,
-    )..layout(maxWidth: 56);
-    final badgeHeight = badgePainter.height + 6;
-    badgePainter.dispose();
-    return math.max(contentHeight, badgeHeight) + 20;
+    final extent = _listController.extentForIndex(index).$1;
+    return extent.isFinite && extent > 0 ? extent : _fallbackLogExtent;
   }
 
   void _clearViewportAnchor() {
@@ -574,42 +566,48 @@ class _LogsScreenState extends State<LogsScreen> {
         ),
       );
     }
-    final textTheme = Theme.of(context).textTheme;
-    _logTextDirection = Directionality.of(context);
-    _logTextScaler = MediaQuery.textScalerOf(context);
-    _logBodyStyle = (textTheme.bodyMedium ?? _logBodyStyle).copyWith(
-      height: 1.35,
-    );
-    _logLabelStyle = textTheme.labelSmall ?? _logLabelStyle;
     final bottomPadding = 24 + MediaQuery.paddingOf(context).bottom;
     return NotificationListener<UserScrollNotification>(
       onNotification: _onUserScroll,
-      child: RepaintBoundary(
-        child: SuperListView.builder(
-          controller: _scroll,
-          listController: _listController,
-          physics: _KeepBottomScrollPhysics(
-            shouldKeepBottom: () => _bottomRestorePending,
-            parent: const SuperRangeMaintainingScrollPhysics(),
+      child: AppBackdropGroup(
+        child: SelectionArea(
+          child: SuperListView.builder(
+            controller: _scroll,
+            listController: _listController,
+            physics: _KeepBottomScrollPhysics(
+              shouldKeepBottom: () => _bottomRestorePending,
+              parent: const SuperRangeMaintainingScrollPhysics(),
+            ),
+            extentEstimation: _estimateLogExtent,
+            // During a fast fling, build only the visible range this frame and
+            // fill the cache area after scrolling slows down.
+            delayPopulatingCacheArea: true,
+            padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
+            addRepaintBoundaries: false,
+            addAutomaticKeepAlives: false,
+            itemCount: count,
+            findChildIndexCallback: (key) {
+              if (key is! ValueKey<BigInt>) return null;
+              return logs.indexOfId(key.value);
+            },
+            itemBuilder: (context, index) {
+              final entry = logs.rowAt(index);
+              final placeholder = _LogPlaceholder(
+                extent: _placeholderExtent(index),
+              );
+              if (entry == null) {
+                return placeholder;
+              }
+              return ScrollDeferredContent(
+                key: ValueKey(entry.id),
+                placeholder: placeholder,
+                child: _AnimatedLogTile(
+                  entry: entry,
+                  animate: _enteringIds.contains(entry.id),
+                ),
+              );
+            },
           ),
-          extentEstimation: _estimateLogExtent,
-          padding: EdgeInsets.fromLTRB(16, 8, 16, bottomPadding),
-          itemCount: count,
-          findChildIndexCallback: (key) {
-            if (key is! ValueKey<BigInt>) return null;
-            return logs.indexOfId(key.value);
-          },
-          itemBuilder: (context, index) {
-            final entry = logs.rowAt(index);
-            if (entry == null) {
-              return const _LogPlaceholder(extent: _fallbackLogExtent);
-            }
-            return _AnimatedLogTile(
-              key: ValueKey(entry.id),
-              entry: entry,
-              animate: _enteringIds.contains(entry.id),
-            );
-          },
         ),
       ),
     );
@@ -728,7 +726,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 },
               ),
               Expanded(
-                child: ListenableBuilder(
+                child: ActiveListenableBuilder(
                   listenable: logs,
                   builder: (context, _) => _buildLogsList(context),
                 ),
@@ -806,15 +804,84 @@ class _LogPlaceholder extends StatelessWidget {
   final double extent;
 
   @override
-  Widget build(BuildContext context) => SizedBox(height: extent);
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
+    final base = surfaceTheme.surfaceColor(
+      scheme.surfaceContainerLow.withValues(alpha: 0.72),
+    );
+    final badge = scheme.primaryContainer.withValues(alpha: 0.42);
+    final mark = scheme.onSurfaceVariant.withValues(alpha: 0.15);
+    return SizedBox(
+      height: extent,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: base,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(9, 9, 11, 9),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 68,
+                  height: 20,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: badge,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FractionallySizedBox(
+                        widthFactor: 0.28,
+                        child: _LogPlaceholderMark(height: 6, color: mark),
+                      ),
+                      const SizedBox(height: 8),
+                      FractionallySizedBox(
+                        widthFactor: 0.82,
+                        child: _LogPlaceholderMark(height: 8, color: mark),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogPlaceholderMark extends StatelessWidget {
+  const _LogPlaceholderMark({required this.height, required this.color});
+
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    ),
+  );
 }
 
 class _AnimatedLogTile extends StatefulWidget {
-  const _AnimatedLogTile({
-    super.key,
-    required this.entry,
-    required this.animate,
-  });
+  const _AnimatedLogTile({required this.entry, required this.animate});
 
   final rust.LogEntry entry;
   final bool animate;
@@ -824,9 +891,10 @@ class _AnimatedLogTile extends StatefulWidget {
 }
 
 class _AnimatedLogTileState extends State<_AnimatedLogTile>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   AnimationController? _controller;
   Animation<double>? _animation;
+  var _generation = 0;
 
   @override
   void initState() {
@@ -838,12 +906,40 @@ class _AnimatedLogTileState extends State<_AnimatedLogTile>
     );
     _controller = controller;
     _animation = controller.drive(CurveTween(curve: Curves.easeOutCubic));
-    controller.forward();
+    final generation = ++_generation;
+    controller.forward().whenCompleteOrCancel(() {
+      if (!mounted ||
+          generation != _generation ||
+          !identical(_controller, controller) ||
+          !controller.isCompleted) {
+        return;
+      }
+      setState(() {
+        _controller = null;
+        _animation = null;
+      });
+      controller.dispose();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!TickerMode.valuesOf(context).enabled && _controller != null) {
+      _generation++;
+      final controller = _controller;
+      _controller = null;
+      _animation = null;
+      controller?.dispose();
+    }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _generation++;
+    final controller = _controller;
+    _controller = null;
+    controller?.dispose();
     super.dispose();
   }
 
@@ -895,6 +991,7 @@ class _LogTile extends StatelessWidget {
       child: RepaintBoundary(
         child: AppSurfaceBackdrop(
           borderRadius: radius,
+          grouped: true,
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: surfaceTheme.surfaceColor(surfaceColor, -0.02),
@@ -943,7 +1040,7 @@ class _LogTile extends StatelessWidget {
                               color: scheme.onSurfaceVariant,
                             ),
                           ),
-                        SelectableText(
+                        Text(
                           entry.message,
                           style: textTheme.bodyMedium?.copyWith(height: 1.35),
                         ),

@@ -5,11 +5,12 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
-class ResourcesScreen extends StatefulWidget {
+class ResourcesScreen extends StatelessWidget {
   const ResourcesScreen({
     super.key,
     required this.store,
@@ -26,28 +27,16 @@ class ResourcesScreen extends StatefulWidget {
   final bool compact;
 
   @override
-  State<ResourcesScreen> createState() => _ResourcesScreenState();
-}
-
-class _ResourcesScreenState extends State<ResourcesScreen> {
-  @override
-  void initState() {
-    super.initState();
-    widget.store.addListener(_onStore);
-  }
-
-  @override
-  void dispose() {
-    widget.store.removeListener(_onStore);
-    super.dispose();
-  }
-
-  void _onStore() {
-    if (mounted) setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (context, activeController, _) =>
+          _buildScreen(context, activeController),
+    );
+  }
+
+  Widget _buildScreen(BuildContext context, ctl.Controller? activeController) {
     final body = SafeArea(
       bottom: false,
       child: ListView(
@@ -63,16 +52,23 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ProxyProviderSection(store: widget.store, prefs: widget.prefs),
+                _ProxyProviderSection(
+                  key: ValueKey(('proxy', store, activeController)),
+                  store: store,
+                  prefs: prefs,
+                ),
                 const SizedBox(height: 16),
-                _RuleProviderSection(store: widget.store),
+                _RuleProviderSection(
+                  key: ValueKey(('rule', store, activeController)),
+                  store: store,
+                ),
               ],
             ),
           ),
         ],
       ),
     );
-    if (widget.compact) return body;
+    if (compact) return body;
     return Scaffold(
       appBar: AppRouteAppBar(
         child: AppBar(
@@ -88,12 +84,16 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
 }
 
 abstract class _ProviderSection<T> extends StatefulWidget {
-  const _ProviderSection({required this.store});
+  const _ProviderSection({super.key, required this.store});
   final ctl.ControllerStore store;
 }
 
 class _ProxyProviderSection extends _ProviderSection<_ProxyProvider> {
-  const _ProxyProviderSection({required super.store, required this.prefs});
+  const _ProxyProviderSection({
+    super.key,
+    required super.store,
+    required this.prefs,
+  });
 
   final AppPrefs prefs;
 
@@ -102,7 +102,7 @@ class _ProxyProviderSection extends _ProviderSection<_ProxyProvider> {
 }
 
 class _RuleProviderSection extends _ProviderSection<_RuleProvider> {
-  const _RuleProviderSection({required super.store});
+  const _RuleProviderSection({super.key, required super.store});
 
   @override
   State<_RuleProviderSection> createState() => _RuleProviderSectionState();
@@ -200,6 +200,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   String? _error;
   final Set<String> _busy = <String>{};
   List<_ProxyProvider> _items = const [];
+  bool _updatingAll = false;
 
   @override
   void initState() {
@@ -247,7 +248,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
 
   Future<void> _update(_ProxyProvider p) async {
     final target = _target();
-    if (target == null) return;
+    if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
       await rust.proxyProviderUpdate(target: target, name: p.name);
@@ -263,16 +264,33 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   }
 
   Future<void> _updateAll() async {
-    for (final p in _items) {
-      if (p.updatable) {
-        await _update(p);
+    final target = _target();
+    final providers = _items.where((p) => p.updatable).toList(growable: false);
+    if (target == null || providers.isEmpty) return;
+    final failures = <String>[];
+    setState(() => _updatingAll = true);
+    try {
+      for (final provider in providers) {
+        try {
+          await rust.proxyProviderUpdate(target: target, name: provider.name);
+        } catch (error) {
+          failures.add('${provider.name}: ${_formatError(error)}');
+        }
       }
+      if (mounted) await _refresh();
+    } finally {
+      if (mounted) setState(() => _updatingAll = false);
+    }
+    if (mounted && failures.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('有 ${failures.length} 项更新失败：${failures.first}')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: widget.prefs,
       builder: (context, _) {
         final style = widget.prefs.proxyProviderStyle;
@@ -285,13 +303,20 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
               if (_items.any((p) => p.updatable))
                 IconButton(
                   tooltip: '更新全部',
-                  onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
-                  icon: const Icon(Icons.cloud_sync_outlined, size: 20),
+                  onPressed: _updatingAll || _busy.isNotEmpty || _loading
+                      ? null
+                      : _updateAll,
+                  icon: _updatingAll
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_sync_outlined, size: 20),
                 ),
               IconButton(
                 tooltip: '刷新',
-                onPressed: _loading ? null : _refresh,
-                icon: _loading
+                onPressed: _loading || _updatingAll ? null : _refresh,
+                icon: _loading && !_updatingAll && _busy.isEmpty
                     ? const SizedBox.square(
                         dimension: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -309,6 +334,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
               _ProxyProviderList(
                 providers: _items,
                 busy: _busy,
+                updatesEnabled: !_updatingAll,
                 liquid: style == ProxyProviderStyle.liquid,
                 onUpdate: _update,
               ),
@@ -328,6 +354,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   String? _error;
   final Set<String> _busy = <String>{};
   List<_RuleProvider> _items = const [];
+  bool _updatingAll = false;
 
   @override
   void initState() {
@@ -375,7 +402,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
 
   Future<void> _update(_RuleProvider p) async {
     final target = _target();
-    if (target == null) return;
+    if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
       await rust.ruleProviderUpdate(target: target, name: p.name);
@@ -391,10 +418,27 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   }
 
   Future<void> _updateAll() async {
-    for (final p in _items) {
-      if (p.updatable) {
-        await _update(p);
+    final target = _target();
+    final providers = _items.where((p) => p.updatable).toList(growable: false);
+    if (target == null || providers.isEmpty) return;
+    final failures = <String>[];
+    setState(() => _updatingAll = true);
+    try {
+      for (final provider in providers) {
+        try {
+          await rust.ruleProviderUpdate(target: target, name: provider.name);
+        } catch (error) {
+          failures.add('${provider.name}: ${_formatError(error)}');
+        }
       }
+      if (mounted) await _refresh();
+    } finally {
+      if (mounted) setState(() => _updatingAll = false);
+    }
+    if (mounted && failures.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('有 ${failures.length} 项更新失败：${failures.first}')),
+      );
     }
   }
 
@@ -412,13 +456,20 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
           if (_items.any((p) => p.updatable))
             IconButton(
               tooltip: '更新全部',
-              onPressed: _busy.isNotEmpty || _loading ? null : _updateAll,
-              icon: const Icon(Icons.cloud_sync_outlined, size: 20),
+              onPressed: _updatingAll || _busy.isNotEmpty || _loading
+                  ? null
+                  : _updateAll,
+              icon: _updatingAll
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_outlined, size: 20),
             ),
           IconButton(
             tooltip: '刷新',
-            onPressed: _loading ? null : _refresh,
-            icon: _loading
+            onPressed: _loading || _updatingAll ? null : _refresh,
+            icon: _loading && !_updatingAll && _busy.isEmpty
                 ? const SizedBox.square(
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
@@ -437,6 +488,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
             _RuleProviderTile(
               provider: p,
               busy: _busy.contains(p.name),
+              enabled: !_updatingAll,
               onUpdate: () => _update(p),
             ),
         ],
@@ -528,12 +580,14 @@ class _ProxyProviderList extends StatelessWidget {
   const _ProxyProviderList({
     required this.providers,
     required this.busy,
+    required this.updatesEnabled,
     required this.liquid,
     required this.onUpdate,
   });
 
   final List<_ProxyProvider> providers;
   final Set<String> busy;
+  final bool updatesEnabled;
   final bool liquid;
   final ValueChanged<_ProxyProvider> onUpdate;
 
@@ -548,12 +602,14 @@ class _ProxyProviderList extends StatelessWidget {
             _LiquidProxyProviderTile(
               provider: providers[i],
               busy: busy.contains(providers[i].name),
+              enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
             )
           else
             _PlainProxyProviderTile(
               provider: providers[i],
               busy: busy.contains(providers[i].name),
+              enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
             ),
         ],
@@ -566,11 +622,13 @@ class _LiquidProxyProviderTile extends StatelessWidget {
   const _LiquidProxyProviderTile({
     required this.provider,
     required this.busy,
+    required this.enabled,
     required this.onUpdate,
   });
 
   final _ProxyProvider provider;
   final bool busy;
+  final bool enabled;
   final VoidCallback onUpdate;
 
   @override
@@ -623,6 +681,7 @@ class _LiquidProxyProviderTile extends StatelessWidget {
                   _ProxyProviderHeader(
                     provider: provider,
                     busy: busy,
+                    enabled: enabled,
                     compact: true,
                     onUpdate: onUpdate,
                   ),
@@ -660,11 +719,13 @@ class _PlainProxyProviderTile extends StatelessWidget {
   const _PlainProxyProviderTile({
     required this.provider,
     required this.busy,
+    required this.enabled,
     required this.onUpdate,
   });
 
   final _ProxyProvider provider;
   final bool busy;
+  final bool enabled;
   final VoidCallback onUpdate;
 
   @override
@@ -676,6 +737,7 @@ class _PlainProxyProviderTile extends StatelessWidget {
         _ProxyProviderHeader(
           provider: provider,
           busy: busy,
+          enabled: enabled,
           onUpdate: onUpdate,
         ),
         if (subscription != null) ...[
@@ -691,12 +753,14 @@ class _ProxyProviderHeader extends StatelessWidget {
   const _ProxyProviderHeader({
     required this.provider,
     required this.busy,
+    required this.enabled,
     this.compact = false,
     required this.onUpdate,
   });
 
   final _ProxyProvider provider;
   final bool busy;
+  final bool enabled;
   final bool compact;
   final VoidCallback onUpdate;
 
@@ -737,7 +801,7 @@ class _ProxyProviderHeader extends StatelessWidget {
         if (provider.updatable)
           IconButton(
             tooltip: '更新',
-            onPressed: busy ? null : onUpdate,
+            onPressed: busy || !enabled ? null : onUpdate,
             padding: compact ? EdgeInsets.zero : null,
             constraints: compact
                 ? const BoxConstraints.tightFor(width: 36, height: 36)
@@ -850,10 +914,12 @@ class _RuleProviderTile extends StatelessWidget {
   const _RuleProviderTile({
     required this.provider,
     required this.busy,
+    required this.enabled,
     required this.onUpdate,
   });
   final _RuleProvider provider;
   final bool busy;
+  final bool enabled;
   final VoidCallback onUpdate;
 
   @override
@@ -896,7 +962,7 @@ class _RuleProviderTile extends StatelessWidget {
         if (updatable)
           IconButton(
             tooltip: '更新',
-            onPressed: busy ? null : onUpdate,
+            onPressed: busy || !enabled ? null : onUpdate,
             icon: busy
                 ? const SizedBox.square(
                     dimension: 16,

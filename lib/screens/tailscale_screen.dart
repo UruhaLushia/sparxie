@@ -9,105 +9,151 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
-class TailscaleScreen extends StatefulWidget {
+class TailscaleScreen extends StatelessWidget {
   const TailscaleScreen({super.key, required this.store});
 
   final ctl.ControllerStore store;
 
   @override
-  State<TailscaleScreen> createState() => _TailscaleScreenState();
+  Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (_, activeController, _) => _TailscaleView(
+        key: ValueKey((store, activeController)),
+        store: store,
+      ),
+    );
+  }
 }
 
-class _TailscaleScreenState extends State<TailscaleScreen> {
+class _TailscaleView extends StatefulWidget {
+  const _TailscaleView({super.key, required this.store});
+
+  final ctl.ControllerStore store;
+
+  @override
+  State<_TailscaleView> createState() => _TailscaleScreenState();
+}
+
+class _TailscaleScreenState extends State<_TailscaleView> {
   StreamSubscription<rust.TailscaleStatus>? _sub;
   rust.TailscaleStatus? _status;
   String? _error;
   bool _loading = false;
   String? _targetKey;
   final Set<String> _busy = <String>{};
+  bool _active = false;
+  bool _renderUpdates = true;
+  int _streamGeneration = 0;
 
   @override
-  void initState() {
-    super.initState();
-    widget.store.addListener(_restart);
-    _restart(force: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant TailscaleScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.store == widget.store) return;
-    oldWidget.store.removeListener(_restart);
-    widget.store.addListener(_restart);
-    _restart(force: true);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _renderUpdates = isRealtimeUiActive(context);
+    final active = isUiActive(context);
+    if (_active == active) return;
+    _active = active;
+    if (active) {
+      _restart();
+    } else {
+      _streamGeneration++;
+      final sub = _sub;
+      _sub = null;
+      unawaited(sub?.cancel());
+    }
   }
 
   @override
   void dispose() {
-    widget.store.removeListener(_restart);
+    _streamGeneration++;
     _sub?.cancel();
     super.dispose();
   }
 
-  void _restart({bool force = false}) {
+  void _restart() {
+    if (!_active) return;
     final controller = widget.store.active;
     final key = controller == null ? null : _controllerKey(controller);
-    if (!force && key == _targetKey) return;
+    if (key == _targetKey && _sub != null) return;
+    final targetChanged = key != _targetKey;
     _targetKey = key;
-    _sub?.cancel();
+    final previous = _sub;
     _sub = null;
-    _busy.clear();
+    final generation = ++_streamGeneration;
+    unawaited(previous?.cancel());
+    if (targetChanged) _busy.clear();
 
     if (controller == null) {
-      setState(() {
-        _loading = false;
-        _status = null;
-        _error = '请先在“后端”中添加一个后端';
-      });
+      _loading = false;
+      _status = null;
+      _error = '请先在“后端”中添加一个后端';
       return;
     }
     if (controller.type != ctl.BackendType.singBox) {
-      setState(() {
-        _loading = false;
-        _status = null;
-        _error = '当前后端不支持 Tailscale';
-      });
+      _loading = false;
+      _status = null;
+      _error = '当前后端不支持 Tailscale';
       return;
     }
 
     final target = rust.backendTargetForController(controller);
-    setState(() {
-      _loading = true;
-      _status = null;
-      _error = null;
-    });
+    _loading = _status == null || targetChanged;
+    if (targetChanged) _status = null;
+    _error = null;
     _sub = rust
         .tailscaleStatusStream(target: target)
         .listen(
           (status) {
-            if (!mounted || _targetKey != key) return;
-            setState(() {
+            if (!mounted ||
+                !_active ||
+                generation != _streamGeneration ||
+                _targetKey != key) {
+              return;
+            }
+            _updateStreamState(() {
               _loading = false;
               _status = status;
               _error = null;
             });
           },
           onError: (Object e) {
-            if (!mounted || _targetKey != key) return;
-            setState(() {
+            if (!mounted ||
+                !_active ||
+                generation != _streamGeneration ||
+                _targetKey != key) {
+              return;
+            }
+            _sub = null;
+            _updateStreamState(() {
               _loading = false;
               _error = formatError(e, backendName: controller.name);
             });
           },
           onDone: () {
-            if (!mounted || _targetKey != key) return;
-            if (_loading) setState(() => _loading = false);
+            if (!mounted ||
+                !_active ||
+                generation != _streamGeneration ||
+                _targetKey != key) {
+              return;
+            }
+            _sub = null;
+            if (_loading) _updateStreamState(() => _loading = false);
           },
         );
+  }
+
+  void _updateStreamState(VoidCallback update) {
+    if (_renderUpdates) {
+      setState(update);
+    } else {
+      update();
+    }
   }
 
   rust.BackendTarget? _target() {

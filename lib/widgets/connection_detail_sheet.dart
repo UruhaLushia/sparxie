@@ -17,6 +17,7 @@ class ConnectionDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final source = '${row.sourceIp}:${row.sourcePort}';
     final dest = _destinationText(row);
     final bytes = row.bytes.value;
@@ -45,70 +46,76 @@ class ConnectionDetailSheet extends StatelessWidget {
       if (row.start != null) ('连接建立时间', row.start!.toLocal().toString()),
     ];
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.host,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
+    return RepaintBoundary(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.host,
+                      style: theme.textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                if (onClose != null)
-                  FilledButton.tonalIcon(
-                    icon: const Icon(Icons.close, size: 18),
-                    label: const Text('关闭'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onClose!();
+                  if (onClose != null)
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('关闭'),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onClose!();
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SelectionArea(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: false,
+                    itemCount: entries.length + (hasConnectionLogs ? 1 : 0),
+                    separatorBuilder: (_, index) => SizedBox(
+                      height: hasConnectionLogs && index == entries.length - 1
+                          ? 12
+                          : 6,
+                    ),
+                    itemBuilder: (context, index) {
+                      if (hasConnectionLogs && index == entries.length) {
+                        return _ConnectionLogSection(logs: row.connectionLogs);
+                      }
+                      final (label, value) = entries[index];
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 96,
+                            child: Text(
+                              label,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              value,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      );
                     },
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: entries.length + (hasConnectionLogs ? 1 : 0),
-                separatorBuilder: (_, index) => SizedBox(
-                  height: hasConnectionLogs && index == entries.length - 1
-                      ? 12
-                      : 6,
                 ),
-                itemBuilder: (context, index) {
-                  if (hasConnectionLogs && index == entries.length) {
-                    return _ConnectionLogSection(logs: row.connectionLogs);
-                  }
-                  final (label, value) = entries[index];
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 96,
-                        child: Text(
-                          label,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      Expanded(
-                        child: SelectableText(
-                          value,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  );
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -157,7 +164,7 @@ class _ConnectionLogSection extends StatelessWidget {
                     horizontal: 10,
                     vertical: 8,
                   ),
-                  child: SelectableText(logs[i], style: textStyle),
+                  child: Text(logs[i], style: textStyle),
                 ),
                 if (i != logs.length - 1)
                   const Divider(height: 1, thickness: 1),

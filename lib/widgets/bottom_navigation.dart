@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../app_prefs.dart';
 import 'app_background.dart';
 import 'compact_controls/style.dart';
+import 'transient_animation.dart';
 
 class AppNavDestination {
   const AppNavDestination({required this.icon, required this.label});
@@ -137,19 +139,24 @@ class _SideNavigationRailItems extends StatelessWidget {
           height: destinations.length * itemHeight,
           child: Stack(
             children: [
-              AnimatedPositioned(
+              TransientAnimatedValue<Rect>(
+                value: Rect.fromLTWH(
+                  (constraints.maxWidth - indicatorWidth) / 2,
+                  top,
+                  indicatorWidth,
+                  indicatorHeight,
+                ),
                 duration: _navAnimationDuration,
                 curve: Curves.easeOutCubic,
-                top: top,
-                left: (constraints.maxWidth - indicatorWidth) / 2,
-                width: indicatorWidth,
-                height: indicatorHeight,
+                lerp: _lerpRect,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: _indicatorColor(context, styleConfig, isDark),
                     borderRadius: styleConfig.indicatorBorderRadius,
                   ),
                 ),
+                builder: (_, rect, child) =>
+                    Positioned.fromRect(rect: rect, child: child!),
               ),
               items,
             ],
@@ -241,34 +248,44 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
         )
         .toDouble();
     final icon = style == NavBarStyle.m3
-        ? AnimatedContainer(
+        ? TransientAnimatedValue<_NavBoxVisual>(
+            value: (
+              width: (48 * styleConfig.indicatorWidthScale)
+                  .clamp(36.0, 56.0)
+                  .toDouble(),
+              height: material3IndicatorHeight,
+              decoration: BoxDecoration(
+                color: _withStateLayer(
+                  context,
+                  styleConfig,
+                  selected
+                      ? _indicatorColor(context, styleConfig, isDark)
+                      : Colors.transparent,
+                  states,
+                ),
+                borderRadius: styleConfig.indicatorBorderRadius,
+              ),
+            ),
             duration: _navAnimationDuration,
             curve: Curves.easeOutCubic,
-            width: (48 * styleConfig.indicatorWidthScale)
-                .clamp(36.0, 56.0)
-                .toDouble(),
-            height: material3IndicatorHeight,
-            decoration: BoxDecoration(
-              color: _withStateLayer(
-                context,
-                styleConfig,
-                selected
-                    ? _indicatorColor(context, styleConfig, isDark)
-                    : Colors.transparent,
-                states,
-              ),
-              borderRadius: styleConfig.indicatorBorderRadius,
-            ),
+            lerp: _lerpNavBox,
             child: Icon(destination.icon, size: 20, color: foreground),
+            builder: (_, visual, child) => Container(
+              width: visual.width,
+              height: visual.height,
+              decoration: visual.decoration,
+              child: child,
+            ),
           )
-        : AnimatedScale(
+        : TransientAnimatedScale(
             scale: selected && style != NavBarStyle.capsule ? 1.12 : 1,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
-            child: TweenAnimationBuilder<Color?>(
-              tween: ColorTween(end: foreground),
+            child: TransientAnimatedValue<Color>(
+              value: foreground,
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOutCubic,
+              lerp: _lerpColor,
               builder: (context, color, child) =>
                   Icon(destination.icon, size: 22, color: color),
             ),
@@ -278,10 +295,11 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
         mainAxisSize: MainAxisSize.min,
         children: [
           icon,
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: showLabel ? 1 : 0),
+          TransientAnimatedValue<double>(
+            value: showLabel ? 1 : 0,
             duration: _navAnimationDuration,
             curve: Curves.easeOutCubic,
+            lerp: _lerpDouble,
             builder: (context, value, child) => ClipRect(
               child: Align(
                 heightFactor: value,
@@ -321,18 +339,27 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
         final background = capsule && selected
             ? _indicatorColor(context, styleConfig, isDark)
             : Colors.transparent;
-        final stateLayer = AnimatedContainer(
+        final stateLayer = TransientAnimatedValue<_NavBoxVisual>(
+          value: (
+            width: size.width,
+            height: style == NavBarStyle.tint
+                ? constraints.maxHeight
+                : size.height,
+            decoration: BoxDecoration(
+              color: _withStateLayer(context, styleConfig, background, states),
+              borderRadius: styleConfig.indicatorBorderRadius,
+            ),
+          ),
           duration: _navAnimationDuration,
           curve: Curves.easeOutCubic,
-          width: size.width,
-          height: style == NavBarStyle.tint
-              ? constraints.maxHeight
-              : size.height,
-          decoration: BoxDecoration(
-            color: _withStateLayer(context, styleConfig, background, states),
-            borderRadius: styleConfig.indicatorBorderRadius,
-          ),
+          lerp: _lerpNavBox,
           child: capsule ? content : null,
+          builder: (_, visual, child) => Container(
+            width: visual.width,
+            height: visual.height,
+            decoration: visual.decoration,
+            child: child,
+          ),
         );
         if (capsule) return Center(child: stateLayer);
         return Stack(
@@ -531,6 +558,57 @@ Color _surfaceAccentForeground(
 const double _navDragActivationDistance = 26;
 const Duration _navAnimationDuration = Duration(milliseconds: 220);
 
+typedef _NavBoxVisual = ({
+  double width,
+  double height,
+  BoxDecoration decoration,
+});
+typedef _HorizontalExtent = ({double left, double width});
+typedef _CapsuleContentVisual = ({double width, EdgeInsets padding});
+
+double _lerpDouble(double begin, double end, double progress) =>
+    begin + (end - begin) * progress;
+
+Color _lerpColor(Color begin, Color end, double progress) =>
+    Color.lerp(begin, end, progress)!;
+
+Alignment _lerpAlignment(Alignment begin, Alignment end, double progress) =>
+    Alignment.lerp(begin, end, progress)!;
+
+Rect _lerpRect(Rect begin, Rect end, double progress) =>
+    Rect.lerp(begin, end, progress)!;
+
+TextStyle _lerpTextStyle(TextStyle begin, TextStyle end, double progress) =>
+    TextStyle.lerp(begin, end, progress)!;
+
+_NavBoxVisual _lerpNavBox(
+  _NavBoxVisual begin,
+  _NavBoxVisual end,
+  double progress,
+) => (
+  width: _lerpDouble(begin.width, end.width, progress),
+  height: _lerpDouble(begin.height, end.height, progress),
+  decoration: BoxDecoration.lerp(begin.decoration, end.decoration, progress)!,
+);
+
+_HorizontalExtent _lerpHorizontalExtent(
+  _HorizontalExtent begin,
+  _HorizontalExtent end,
+  double progress,
+) => (
+  left: _lerpDouble(begin.left, end.left, progress),
+  width: _lerpDouble(begin.width, end.width, progress),
+);
+
+_CapsuleContentVisual _lerpCapsuleContent(
+  _CapsuleContentVisual begin,
+  _CapsuleContentVisual end,
+  double progress,
+) => (
+  width: _lerpDouble(begin.width, end.width, progress),
+  padding: EdgeInsets.lerp(begin.padding, end.padding, progress)!,
+);
+
 double _dragEdgeStrength(double alignment) =>
     ((alignment.abs() - 0.72) / 0.28).clamp(0.0, 1.0).toDouble();
 
@@ -565,10 +643,11 @@ class _ElasticDragIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: strength),
+    return TransientAnimatedValue<double>(
+      value: strength,
       duration: duration,
       curve: Curves.easeOutCubic,
+      lerp: _lerpDouble,
       builder: (context, value, child) => Transform.scale(
         scaleX: 1 + value * 0.035,
         scaleY: 1 - value * 0.025,
@@ -746,7 +825,7 @@ class _PillNavBarState extends State<_PillNavBar> {
   static const double _contentInset = _indicatorExtraWidth / 2;
 
   int? _dragIndex;
-  double? _dragCenter;
+  final _dragCenter = ValueNotifier<double?>(null);
   final _dragActivation = _HorizontalDragActivation();
 
   int _indexAt(double position, double width) {
@@ -777,10 +856,8 @@ class _PillNavBarState extends State<_PillNavBar> {
 
   void _startDrag(Offset position, double width) {
     final index = _indexAt(position.dx, width);
-    setState(() {
-      _dragIndex = index;
-      _dragCenter = _clampCenter(position.dx, width);
-    });
+    _dragCenter.value = _clampCenter(position.dx, width);
+    setState(() => _dragIndex = index);
     unawaited(HapticFeedback.selectionClick());
   }
 
@@ -796,10 +873,8 @@ class _PillNavBarState extends State<_PillNavBar> {
   void _updateDrag(Offset position, double width) {
     final index = _indexAt(position.dx, width);
     final changedIndex = index != _dragIndex;
-    setState(() {
-      _dragIndex = index;
-      _dragCenter = _clampCenter(position.dx, width);
-    });
+    _dragCenter.value = _clampCenter(position.dx, width);
+    if (changedIndex) setState(() => _dragIndex = index);
     if (changedIndex) unawaited(HapticFeedback.selectionClick());
   }
 
@@ -813,11 +888,9 @@ class _PillNavBarState extends State<_PillNavBar> {
 
   void _resetDrag() {
     _dragActivation.reset();
-    if (_dragIndex == null && _dragCenter == null) return;
-    setState(() {
-      _dragIndex = null;
-      _dragCenter = null;
-    });
+    if (_dragIndex == null && _dragCenter.value == null) return;
+    _dragCenter.value = null;
+    setState(() => _dragIndex = null);
   }
 
   @override
@@ -825,9 +898,15 @@ class _PillNavBarState extends State<_PillNavBar> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.destinationCount != widget.destinationCount) {
       _dragIndex = null;
-      _dragCenter = null;
+      _dragCenter.value = null;
       _dragActivation.reset();
     }
+  }
+
+  @override
+  void dispose() {
+    _dragCenter.dispose();
+    super.dispose();
   }
 
   Widget _indicator(
@@ -874,22 +953,6 @@ class _PillNavBarState extends State<_PillNavBar> {
                   _contentInset * 2;
         if (width <= _contentInset * 2) return const SizedBox.shrink();
         final indicatorWidth = _indicatorWidth(width);
-        final indicatorCenter =
-            _dragCenter ??
-            _clampCenter(_centerFor(widget.selectedIndex, width), width);
-        final indicatorAlignment = widget.destinationCount == 1
-            ? 0.0
-            : -1 +
-                  2 *
-                      (indicatorCenter - indicatorWidth / 2) /
-                      (width - indicatorWidth);
-        final dragging = _dragCenter != null;
-        final edgeStrength = dragging
-            ? _dragEdgeStrength(indicatorAlignment)
-            : 0.0;
-        final animationDuration = dragging
-            ? Duration.zero
-            : _navAnimationDuration;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
@@ -905,17 +968,41 @@ class _PillNavBarState extends State<_PillNavBar> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                AnimatedAlign(
-                  duration: animationDuration,
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment(indicatorAlignment, 0),
-                  child: _indicator(
-                    context,
-                    isDark,
-                    indicatorWidth,
-                    edgeStrength,
-                    animationDuration,
-                  ),
+                ValueListenableBuilder<double?>(
+                  valueListenable: _dragCenter,
+                  builder: (context, dragCenter, _) {
+                    final indicatorCenter =
+                        dragCenter ??
+                        _clampCenter(
+                          _centerFor(widget.selectedIndex, width),
+                          width,
+                        );
+                    final indicatorAlignment = widget.destinationCount == 1
+                        ? 0.0
+                        : -1 +
+                              2 *
+                                  (indicatorCenter - indicatorWidth / 2) /
+                                  (width - indicatorWidth);
+                    final dragging = dragCenter != null;
+                    final duration = dragging
+                        ? Duration.zero
+                        : _navAnimationDuration;
+                    return TransientAnimatedValue<Alignment>(
+                      value: Alignment(indicatorAlignment, 0),
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      lerp: _lerpAlignment,
+                      child: _indicator(
+                        context,
+                        isDark,
+                        indicatorWidth,
+                        dragging ? _dragEdgeStrength(indicatorAlignment) : 0,
+                        duration,
+                      ),
+                      builder: (_, alignment, child) =>
+                          Align(alignment: alignment, child: child),
+                    );
+                  },
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -961,8 +1048,23 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
   static const double _iconLabelGap = 6;
 
   int? _dragIndex;
-  double? _dragPosition;
+  final _dragPosition = ValueNotifier<double?>(null);
   final _dragActivation = _HorizontalDragActivation();
+  var _metricsDirty = true;
+  List<double> _selectedWidths = const [];
+  var _naturalWidth = 0.0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _metricsDirty = true;
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _metricsDirty = true;
+  }
 
   int _indexAt(
     double position,
@@ -980,10 +1082,8 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
   }
 
   void _startDrag(int index, double position) {
-    setState(() {
-      _dragIndex = index;
-      _dragPosition = position;
-    });
+    _dragPosition.value = position;
+    setState(() => _dragIndex = index);
     unawaited(HapticFeedback.selectionClick());
   }
 
@@ -1001,10 +1101,8 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
 
   void _updateDrag(int index, double position) {
     final changedIndex = index != _dragIndex;
-    setState(() {
-      _dragIndex = index;
-      _dragPosition = position;
-    });
+    _dragPosition.value = position;
+    if (changedIndex) setState(() => _dragIndex = index);
     if (changedIndex) unawaited(HapticFeedback.selectionClick());
   }
 
@@ -1018,21 +1116,60 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
 
   void _resetDrag() {
     _dragActivation.reset();
-    if (_dragIndex == null && _dragPosition == null) return;
-    setState(() {
-      _dragIndex = null;
-      _dragPosition = null;
-    });
+    if (_dragIndex == null && _dragPosition.value == null) return;
+    _dragPosition.value = null;
+    setState(() => _dragIndex = null);
   }
 
   @override
   void didUpdateWidget(covariant _CapsuleNavBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.destinations, widget.destinations) ||
+        oldWidget.styleConfig != widget.styleConfig) {
+      _metricsDirty = true;
+    }
     if (oldWidget.destinations.length != widget.destinations.length) {
       _dragIndex = null;
-      _dragPosition = null;
+      _dragPosition.value = null;
       _dragActivation.reset();
     }
+  }
+
+  void _ensureLabelMetrics(
+    TextStyle labelStyle,
+    TextDirection textDirection,
+    TextScaler textScaler,
+    double widthScale,
+  ) {
+    if (!_metricsDirty) return;
+    final widths = <double>[];
+    for (final destination in widget.destinations) {
+      final painter = TextPainter(
+        text: TextSpan(text: destination.label, style: labelStyle),
+        maxLines: 1,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      final textWidth = painter.width;
+      painter.dispose();
+      widths.add(
+        _selectedHorizontalPadding * widthScale * 2 +
+            _iconSize +
+            _iconLabelGap * widthScale +
+            textWidth,
+      );
+    }
+    _selectedWidths = widths;
+    _naturalWidth =
+        widths.reduce(math.max) +
+        _unselectedWidth * widthScale * (widget.destinations.length - 1);
+    _metricsDirty = false;
+  }
+
+  @override
+  void dispose() {
+    _dragPosition.dispose();
+    super.dispose();
   }
 
   @override
@@ -1055,24 +1192,9 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
     );
     final textDirection = Directionality.of(context);
     final textScaler = MediaQuery.textScalerOf(context);
-    final selectedWidths = <double>[];
-    for (final destination in widget.destinations) {
-      final painter = TextPainter(
-        text: TextSpan(text: destination.label, style: labelStyle),
-        maxLines: 1,
-        textDirection: textDirection,
-        textScaler: textScaler,
-      )..layout();
-      selectedWidths.add(
-        _selectedHorizontalPadding * widthScale * 2 +
-            _iconSize +
-            _iconLabelGap * widthScale +
-            painter.width,
-      );
-    }
-    final naturalWidth =
-        selectedWidths.reduce(math.max) +
-        _unselectedWidth * widthScale * (widget.destinations.length - 1);
+    _ensureLabelMetrics(labelStyle, textDirection, textScaler, widthScale);
+    final selectedWidths = _selectedWidths;
+    final naturalWidth = _naturalWidth;
     return LayoutBuilder(
       builder: (context, constraints) {
         final requestedWidth = widget.shrinkWrap || !constraints.hasBoundedWidth
@@ -1106,18 +1228,9 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
           unselectedWidth,
           activeIndex,
         );
-        final dragPosition = _dragPosition;
-        final indicatorLeft = dragPosition == null
-            ? activeIndex * unselectedWidth
-            : (dragPosition - selectedWidth / 2)
-                  .clamp(0, width - selectedWidth)
-                  .toDouble();
-        final positionDuration = dragPosition == null
+        final itemDuration = _dragPosition.value == null
             ? _navAnimationDuration
             : Duration.zero;
-        final edgeStrength = dragPosition == null
-            ? 0.0
-            : _dragEdgeStrength(dragPosition / width * 2 - 1);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
@@ -1133,52 +1246,74 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                AnimatedPositioned(
-                  left: indicatorLeft,
-                  top: 0,
-                  bottom: 0,
-                  width: selectedWidth,
-                  duration: positionDuration,
-                  curve: Curves.easeOutCubic,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Transform.scale(
-                        scaleX: widget.styleConfig.indicatorWidthScale,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: widget.styleConfig.indicatorHeight
-                              .clamp(24.0, widget.styleConfig.buttonHeight)
-                              .toDouble(),
-                          child: _ElasticDragIndicator(
-                            strength: edgeStrength,
-                            duration: positionDuration,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: _indicatorColor(
-                                  context,
-                                  widget.styleConfig,
-                                  isDark,
+                ValueListenableBuilder<double?>(
+                  valueListenable: _dragPosition,
+                  builder: (context, dragPosition, _) {
+                    final indicatorLeft = dragPosition == null
+                        ? activeIndex * unselectedWidth
+                        : (dragPosition - selectedWidth / 2)
+                              .clamp(0, width - selectedWidth)
+                              .toDouble();
+                    final duration = dragPosition == null
+                        ? _navAnimationDuration
+                        : Duration.zero;
+                    final edgeStrength = dragPosition == null
+                        ? 0.0
+                        : _dragEdgeStrength(dragPosition / width * 2 - 1);
+                    return TransientAnimatedValue<_HorizontalExtent>(
+                      value: (left: indicatorLeft, width: selectedWidth),
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      lerp: _lerpHorizontalExtent,
+                      builder: (_, extent, child) => Positioned(
+                        left: extent.left,
+                        top: 0,
+                        bottom: 0,
+                        width: extent.width,
+                        child: child!,
+                      ),
+                      child: IgnorePointer(
+                        child: Center(
+                          child: Transform.scale(
+                            scaleX: widget.styleConfig.indicatorWidthScale,
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: widget.styleConfig.indicatorHeight
+                                  .clamp(24.0, widget.styleConfig.buttonHeight)
+                                  .toDouble(),
+                              child: _ElasticDragIndicator(
+                                strength: edgeStrength,
+                                duration: duration,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: _indicatorColor(
+                                      context,
+                                      widget.styleConfig,
+                                      isDark,
+                                    ),
+                                    borderRadius: widget
+                                        .styleConfig
+                                        .indicatorBorderRadius,
+                                  ),
                                 ),
-                                borderRadius:
-                                    widget.styleConfig.indicatorBorderRadius,
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
                 Row(
                   children: [
                     for (var i = 0; i < widget.destinations.length; i++)
-                      AnimatedContainer(
-                        width: i == activeIndex
+                      TransientAnimatedValue<double>(
+                        value: i == activeIndex
                             ? selectedWidth
                             : unselectedWidth,
-                        height: double.infinity,
-                        duration: _navAnimationDuration,
+                        duration: itemDuration,
                         curve: Curves.easeOutCubic,
+                        lerp: _lerpDouble,
                         child: _CapsuleNavItem(
                           destination: widget.destinations[i],
                           selected: i == activeIndex,
@@ -1190,6 +1325,11 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
                           selectedColor: selectedColor,
                           unselectedColor: unselectedColor,
                           widthScale: widthScale,
+                        ),
+                        builder: (_, width, child) => SizedBox(
+                          width: width,
+                          height: double.infinity,
+                          child: child,
                         ),
                       ),
                   ],
@@ -1237,17 +1377,19 @@ class _CapsuleNavItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         child: Center(
           child: ClipRect(
-            child: AnimatedContainer(
-              width: selected ? itemWidth : 42,
-              height: 42,
+            child: TransientAnimatedValue<_CapsuleContentVisual>(
+              value: (
+                width: selected ? itemWidth : 42,
+                padding: EdgeInsets.symmetric(
+                  horizontal: selected
+                      ? _CapsuleNavBarState._selectedHorizontalPadding *
+                            widthScale
+                      : 0,
+                ),
+              ),
               duration: _navAnimationDuration,
               curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(
-                horizontal: selected
-                    ? _CapsuleNavBarState._selectedHorizontalPadding *
-                          widthScale
-                    : 0,
-              ),
+              lerp: _lerpCapsuleContent,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1257,10 +1399,11 @@ class _CapsuleNavItem extends StatelessWidget {
                     color: foreground,
                   ),
                   Flexible(
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween(end: selected ? 1 : 0),
+                    child: TransientAnimatedValue<double>(
+                      value: selected ? 1 : 0,
                       duration: _navAnimationDuration,
                       curve: Curves.easeOutCubic,
+                      lerp: _lerpDouble,
                       builder: (context, value, child) => ClipRect(
                         child: Align(
                           alignment: Alignment.centerLeft,
@@ -1288,6 +1431,12 @@ class _CapsuleNavItem extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              builder: (_, visual, child) => Container(
+                width: visual.width,
+                height: 42,
+                padding: visual.padding,
+                child: child,
               ),
             ),
           ),
@@ -1331,31 +1480,35 @@ class _LabeledNavItem extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedScale(
+              TransientAnimatedScale(
                 scale: selected ? 1.12 : 1,
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
-                child: TweenAnimationBuilder<Color?>(
-                  tween: ColorTween(end: fg),
+                child: TransientAnimatedValue<Color>(
+                  value: fg,
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
+                  lerp: _lerpColor,
                   builder: (context, color, child) =>
                       Icon(icon, size: 22, color: color),
                 ),
               ),
               const SizedBox(height: 3),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 180),
-                style: Theme.of(context).textTheme.labelSmall!.copyWith(
+              TransientAnimatedValue<TextStyle>(
+                value: Theme.of(context).textTheme.labelSmall!.copyWith(
                   fontSize: 10,
                   color: fg,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                 ),
+                duration: const Duration(milliseconds: 180),
+                lerp: _lerpTextStyle,
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                builder: (_, style, child) =>
+                    DefaultTextStyle(style: style, child: child!),
               ),
             ],
           ),
@@ -1391,25 +1544,34 @@ class _Material3NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
+            TransientAnimatedValue<_NavBoxVisual>(
+              value: (
+                width: 48 * styleConfig.indicatorWidthScale,
+                height: styleConfig.indicatorHeight
+                    .clamp(24.0, styleConfig.buttonHeight - 18)
+                    .toDouble(),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _indicatorColor(context, styleConfig, isDark)
+                      : Colors.transparent,
+                  borderRadius: styleConfig.indicatorBorderRadius,
+                ),
+              ),
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              width: 48 * styleConfig.indicatorWidthScale,
-              height: styleConfig.indicatorHeight
-                  .clamp(24.0, styleConfig.buttonHeight - 18)
-                  .toDouble(),
-              decoration: BoxDecoration(
-                color: selected
-                    ? _indicatorColor(context, styleConfig, isDark)
-                    : Colors.transparent,
-                borderRadius: styleConfig.indicatorBorderRadius,
-              ),
+              lerp: _lerpNavBox,
               child: Icon(
                 icon,
                 size: 20,
                 color: selected
                     ? _indicatorForeground(context, styleConfig, isDark)
                     : styleConfig.foreground(context),
+              ),
+              builder: (_, visual, child) => Container(
+                width: visual.width,
+                height: visual.height,
+                decoration: visual.decoration,
+                child: child,
               ),
             ),
             const SizedBox(height: 3),

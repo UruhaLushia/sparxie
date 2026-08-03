@@ -10,11 +10,13 @@ class AppPanelSurface extends StatelessWidget {
     required this.child,
     this.outlined = true,
     this.selected = false,
+    this.groupBackdrop = false,
   });
 
   final Widget child;
   final bool outlined;
   final bool selected;
+  final bool groupBackdrop;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +24,7 @@ class AppPanelSurface extends StatelessWidget {
     final surfaceTheme = AppSurfaceTheme.of(context);
     return AppSurfaceBackdrop(
       borderRadius: kAppPanelRadius,
+      grouped: groupBackdrop,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: surfaceTheme.surfaceColor(
@@ -100,17 +103,20 @@ class SectionPanel extends StatelessWidget {
     required this.icon,
     required this.child,
     this.trailing,
+    this.groupBackdrop = false,
   });
 
   final String title;
   final IconData icon;
   final Widget child;
   final Widget? trailing;
+  final bool groupBackdrop;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AppPanelSurface(
+      groupBackdrop: groupBackdrop,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

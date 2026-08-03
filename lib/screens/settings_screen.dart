@@ -11,6 +11,7 @@ import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
 import '../utils.dart';
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/compact_controls.dart';
@@ -56,7 +57,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: Listenable.merge([
         prefs,
         session.supportsCoreConfig,
@@ -216,41 +217,43 @@ class SettingsScreen extends StatelessWidget {
                     : centeredGutter > 20
                     ? centeredGutter
                     : 20.0;
-                return CustomScrollView(
-                  slivers: [
-                    if (!compact)
+                return AppBackdropGroup(
+                  child: CustomScrollView(
+                    slivers: [
+                      if (!compact)
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            28,
+                            horizontal,
+                            8,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: Text(
+                              '更多',
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
                       SliverPadding(
                         padding: EdgeInsets.fromLTRB(
                           horizontal,
-                          28,
+                          compact ? 12 : 8,
                           horizontal,
-                          8,
+                          20 + MediaQuery.paddingOf(context).bottom,
                         ),
-                        sliver: SliverToBoxAdapter(
-                          child: Text(
-                            '更多',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontal,
-                        compact ? 12 : 8,
-                        horizontal,
-                        20 + MediaQuery.paddingOf(context).bottom,
-                      ),
-                      sliver: SliverList.list(
-                        children: [
-                          for (var i = 0; i < groups.length; i++) ...[
-                            if (i > 0) const SizedBox(height: 14),
-                            groups[i],
+                        sliver: SliverList.list(
+                          children: [
+                            for (var i = 0; i < groups.length; i++) ...[
+                              if (i > 0) const SizedBox(height: 14),
+                              groups[i],
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
               },
             ),
@@ -319,6 +322,7 @@ class _SettingsGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AppPanelSurface(
+      groupBackdrop: true,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -448,7 +452,7 @@ class AppSettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
         final showFontSettings = !kIsWeb;
@@ -688,12 +692,12 @@ class _FontSetEditorState extends State<_FontSetEditor> {
   }
 
   Widget _fontDragProxy(Widget child, int index, Animation<double> animation) {
+    final shadowColor = Theme.of(context).colorScheme.shadow;
     return AnimatedBuilder(
       animation: animation,
       child: child,
       builder: (context, child) {
         final t = Curves.easeOutCubic.transform(animation.value);
-        final colorScheme = Theme.of(context).colorScheme;
         return Transform.scale(
           scale: 1 + t * 0.01,
           child: DecoratedBox(
@@ -701,7 +705,7 @@ class _FontSetEditorState extends State<_FontSetEditor> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: colorScheme.shadow.withValues(alpha: 0.10 * t),
+                  color: shadowColor.withValues(alpha: 0.10 * t),
                   blurRadius: 10 * t,
                   offset: Offset(0, 3 * t),
                 ),
@@ -1048,10 +1052,18 @@ Future<ctl.ControllerDraft?> showControllerEditorDialog(
 }
 
 class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
+  var _active = true;
+
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStore);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _active = isUiActive(context);
   }
 
   @override
@@ -1061,7 +1073,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   }
 
   void _onStore() {
-    if (mounted) setState(() {});
+    if (mounted && _active) setState(() {});
   }
 
   @override

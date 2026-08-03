@@ -54,14 +54,11 @@ class ProcessIcon extends StatelessWidget {
     final fallback = key.isEmpty
         ? 'assets/process_icons/device.png'
         : _defaultAppAsset;
-    return ActiveListenableBuilder(
+    return ActiveListenableSelector(
       listenable: cache,
-      builder: (context, _) {
-        final image = cache.iconFor(
-          key,
-          size: targetSize,
-          decodeSize: decodeSize,
-        );
+      selector: () =>
+          cache.iconFor(key, size: targetSize, decodeSize: decodeSize),
+      builder: (context, image, _) {
         return SizedBox.square(
           dimension: size,
           child: image != null

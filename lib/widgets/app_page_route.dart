@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_background.dart';
+import 'transition_snapshot.dart';
 
 /// A Material route whose translucent content remains self-contained.
 class AppPageRoute<T> extends MaterialPageRoute<T> {
@@ -186,38 +187,40 @@ class _AppHorizontalPageTransitionState
         : progress * _maxGesturePreviewDistance;
   }
 
+  double _cancelDistance(double value) {
+    final remaining = 1 - _settleStartValue;
+    if (remaining <= 0.0001) return 0.0;
+    final progress = ((value - _settleStartValue) / remaining).clamp(0.0, 1.0);
+    return _settleStartDistance * (1 - Curves.easeOutCubic.transform(progress));
+  }
+
+  double _commitDistance(double value) {
+    if (_usesContinuousCommit) {
+      if (_settleStartValue <= 0.0001) return 1.0;
+      final progress = ((_settleStartValue - value) / _settleStartValue).clamp(
+        0.0,
+        1.0,
+      );
+      return _settleStartDistance +
+          (1 - _settleStartDistance) *
+              Curves.linearToEaseOut.transform(progress);
+    }
+
+    // Other PageRoute implementations retain Flutter's reset-on-commit
+    // behavior, so keep the visual offset continuous for that fallback.
+    final progress = (1 - value).clamp(0.0, 1.0);
+    final remaining = 1 - _settleStartDistance;
+    if (remaining <= 0.0001) return 1.0;
+    final settleProgress = (progress / remaining).clamp(0.0, 1.0);
+    return _settleStartDistance +
+        remaining * Curves.linearToEaseOut.transform(settleProgress);
+  }
+
   double _distanceFor(double value) {
     return switch (_gesturePhase) {
       _BackGesturePhase.drag => _gestureDistance(value),
-      _BackGesturePhase.cancel => () {
-        final remaining = 1 - _settleStartValue;
-        if (remaining <= 0.0001) return 0.0;
-        final progress = ((value - _settleStartValue) / remaining).clamp(
-          0.0,
-          1.0,
-        );
-        return _settleStartDistance *
-            (1 - Curves.easeOutCubic.transform(progress));
-      }(),
-      _BackGesturePhase.commit => () {
-        if (_usesContinuousCommit) {
-          if (_settleStartValue <= 0.0001) return 1.0;
-          final progress = ((_settleStartValue - value) / _settleStartValue)
-              .clamp(0.0, 1.0);
-          return _settleStartDistance +
-              (1 - _settleStartDistance) *
-                  Curves.linearToEaseOut.transform(progress);
-        }
-
-        // Other PageRoute implementations retain Flutter's reset-on-commit
-        // behavior, so keep the visual offset continuous for that fallback.
-        final progress = (1 - value).clamp(0.0, 1.0);
-        final remaining = 1 - _settleStartDistance;
-        if (remaining <= 0.0001) return 1.0;
-        final settleProgress = (progress / remaining).clamp(0.0, 1.0);
-        return _settleStartDistance +
-            remaining * Curves.linearToEaseOut.transform(settleProgress);
-      }(),
+      _BackGesturePhase.cancel => _cancelDistance(value),
+      _BackGesturePhase.commit => _commitDistance(value),
       _BackGesturePhase.idle => switch (widget.animation.status) {
         AnimationStatus.reverse => Curves.easeOutCubic.transform(1 - value),
         _ => 1 - Curves.easeOutCubic.transform(value),
@@ -227,16 +230,20 @@ class _AppHorizontalPageTransitionState
 
   @override
   Widget build(BuildContext context) {
+    final direction = Directionality.of(context) == TextDirection.ltr
+        ? 1.0
+        : -1.0;
     return ClipRect(
       child: AnimatedBuilder(
         animation: widget.animation,
-        child: RepaintBoundary(child: widget.child),
+        child: HighRefreshTransitionSnapshot(
+          animation: widget.animation,
+          forceSnapshot: _gesturePhase != _BackGesturePhase.idle,
+          child: RepaintBoundary(child: widget.child),
+        ),
         builder: (context, child) {
           final value = widget.animation.value.clamp(0.0, 1.0);
           final distance = _distanceFor(value);
-          final direction = Directionality.of(context) == TextDirection.ltr
-              ? 1.0
-              : -1.0;
           if (distance <= 0.0001) return child!;
           return FractionalTranslation(
             translation: Offset(direction * distance, 0),

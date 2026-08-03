@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../session.dart';
 import '../utils.dart';
+import 'active_listenable_builder.dart';
 import 'app_background.dart';
 import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
+import 'transient_animation.dart';
 
 // Same-hue deep gradients (roughly tailwind 600 → 900) so any two adjacent
 // cards stay harmonious and white text keeps contrast.
-const _gradients = <(Color, Color)>[
+const _gradientColors = <(Color, Color)>[
   (Color(0xff2563eb), Color(0xff1e3a8a)),
   (Color(0xff0891b2), Color(0xff164e63)),
   (Color(0xff0d9488), Color(0xff134e4a)),
@@ -21,15 +23,28 @@ const _gradients = <(Color, Color)>[
   (Color(0xff475569), Color(0xff1e293b)),
 ];
 
+final _gradients = <LinearGradient>[
+  for (final (start, end) in _gradientColors)
+    LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color.lerp(start, Colors.white, 0.12)!, start, end],
+      stops: const [0, 0.3, 1],
+    ),
+];
+
+BoxDecoration _lerpBoxDecoration(
+  BoxDecoration begin,
+  BoxDecoration end,
+  double progress,
+) => BoxDecoration.lerp(begin, end, progress)!;
+
 LinearGradient _gradientFor(String name) {
-  final hash = name.codeUnits.fold<int>(0, (h, c) => (h * 31 + c) & 0x7fffffff);
-  final (start, end) = _gradients[hash % _gradients.length];
-  return LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color.lerp(start, Colors.white, 0.12)!, start, end],
-    stops: const [0, 0.3, 1],
-  );
+  var hash = 0;
+  for (var i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.codeUnitAt(i)) & 0x7fffffff;
+  }
+  return _gradients[hash % _gradients.length];
 }
 
 class _CardStyle {
@@ -113,11 +128,13 @@ class _CardSurface extends StatelessWidget {
     required this.style,
     required this.radius,
     required this.child,
+    this.groupBackdrop = false,
   });
 
   final _CardStyle style;
   final double radius;
   final Widget child;
+  final bool groupBackdrop;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +153,7 @@ class _CardSurface extends StatelessWidget {
     if (style.gradient != null) return card;
     return AppSurfaceBackdrop(
       borderRadius: BorderRadius.circular(radius),
+      grouped: groupBackdrop,
       child: card,
     );
   }
@@ -159,14 +177,17 @@ class ProxyGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = _styleFor(context, group.name, colored);
     return PressableScale(
-      child: Hero(
-        tag: 'proxy-group-card-${group.name}',
-        child: _CardSurface(
-          style: style,
-          radius: 16,
-          child: InkWell(
-            onTap: onTap,
-            child: _collapsedContent(group, showIcon, style),
+      child: RepaintBoundary(
+        child: Hero(
+          tag: 'proxy-group-card-${group.name}',
+          child: _CardSurface(
+            style: style,
+            radius: 16,
+            groupBackdrop: true,
+            child: InkWell(
+              onTap: onTap,
+              child: _collapsedContent(group, showIcon, style),
+            ),
           ),
         ),
       ),
@@ -188,7 +209,7 @@ Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
       children: [
         ProxyAvatar(name: group.name, icon: group.icon, size: 32),
         const Spacer(),
-        ValueListenableBuilder<String>(
+        ActiveValueListenableBuilder<String>(
           valueListenable: group.now,
           builder: (_, now, _) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,7 +240,7 @@ Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
 }
 
 Widget _compactCollapsedContent(ProxyGroup group, _CardStyle style) {
-  return ValueListenableBuilder<String>(
+  return ActiveValueListenableBuilder<String>(
     valueListenable: group.now,
     builder: (_, now, _) {
       final displayNow = group.hidesExactNow ? '*' : (now.isEmpty ? '-' : now);
@@ -328,7 +349,7 @@ Widget _headerRow(
           const SizedBox(width: 12),
         ],
         Expanded(
-          child: ValueListenableBuilder<String>(
+          child: ActiveValueListenableBuilder<String>(
             valueListenable: group.now,
             builder: (_, now, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,7 +395,7 @@ Widget _detailBody(
     children: [
       _headerRow(group, showIcon, style, trailing),
       Expanded(
-        child: ValueListenableBuilder<int>(
+        child: ActiveValueListenableBuilder<int>(
           valueListenable: group.membersVersion,
           builder: (_, _, _) => _memberGrid(
             group,
@@ -416,24 +437,91 @@ Widget _memberGrid(
     itemBuilder: (context, index) {
       final member = group.memberAt(index);
       if (member == null) {
-        onMissingMember?.call(index);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: style.tileBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: style.tileBorder),
-          ),
-        );
+        if (!isUiFastScrolling(context)) onMissingMember?.call(index);
+        return _CardNodePlaceholder(style: style);
       }
-      return _CardNodeTile(
+      return ScrollDeferredContent(
         key: ValueKey('${group.name}::${member.name}'),
-        group: group,
-        member: member,
-        style: style,
-        onSelect: onSelect == null ? null : () => onSelect(member.name),
-        onTestDelay: onTestNode == null ? null : () => onTestNode(member.name),
+        placeholder: _CardNodePlaceholder(style: style),
+        child: _CardNodeTile(
+          group: group,
+          member: member,
+          style: style,
+          onSelect: onSelect == null ? null : () => onSelect(member.name),
+          onTestDelay: onTestNode == null
+              ? null
+              : () => onTestNode(member.name),
+        ),
       );
     },
+  );
+}
+
+class _CardNodePlaceholder extends StatelessWidget {
+  const _CardNodePlaceholder({required this.style});
+
+  final _CardStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final mark = style.tileSubtitle.withValues(alpha: 0.2);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: style.tileBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: style.tileBorder),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FractionallySizedBox(
+                    widthFactor: 0.56,
+                    child: _CardPlaceholderMark(height: 8, color: mark),
+                  ),
+                  const SizedBox(height: 7),
+                  FractionallySizedBox(
+                    widthFactor: 0.3,
+                    child: _CardPlaceholderMark(height: 6, color: mark),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            _CardPlaceholderMark(width: 30, height: 8, color: mark),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardPlaceholderMark extends StatelessWidget {
+  const _CardPlaceholderMark({
+    this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double? width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    ),
   );
 }
 
@@ -719,7 +807,6 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
 
 class _CardNodeTile extends StatelessWidget {
   const _CardNodeTile({
-    super.key,
     required this.group,
     required this.member,
     required this.style,
@@ -735,20 +822,22 @@ class _CardNodeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<String>(
+    return ActiveValueListenableSelector<String, bool>(
       valueListenable: group.now,
-      builder: (_, now, _) {
-        final selected = !group.hidesExactNow && now == member.name;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          decoration: BoxDecoration(
-            color: selected ? style.tileSelectedBg : style.tileBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? style.tileSelectedBorder : style.tileBorder,
-              width: selected ? 1.6 : 1,
-            ),
+      selector: (now) => !group.hidesExactNow && now == member.name,
+      builder: (_, selected, _) {
+        final decoration = BoxDecoration(
+          color: selected ? style.tileSelectedBg : style.tileBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? style.tileSelectedBorder : style.tileBorder,
+            width: selected ? 1.6 : 1,
           ),
+        );
+        return TransientAnimatedValue<BoxDecoration>(
+          value: decoration,
+          duration: const Duration(milliseconds: 150),
+          lerp: _lerpBoxDecoration,
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
@@ -795,6 +884,8 @@ class _CardNodeTile extends StatelessWidget {
               ),
             ),
           ),
+          builder: (_, decoration, child) =>
+              Container(decoration: decoration, child: child),
         );
       },
     );
@@ -814,8 +905,9 @@ class _DelayPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
+    return ActiveValueListenableBuilder<int>(
       valueListenable: delay,
+      pauseWhileScrolling: true,
       builder: (_, ms, _) {
         final color = switch (classifyDelay(ms)) {
           DelayBucket.untested => untestedColor,

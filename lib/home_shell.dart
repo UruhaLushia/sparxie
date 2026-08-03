@@ -18,6 +18,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _index = 0;
+  int _resumeGeneration = 0;
 
   // Only mobile OSes silently sever backgrounded sockets; reconnecting on
   // every desktop minimize/restore would be churn for no reason.
@@ -35,6 +36,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _resumeGeneration++;
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -42,9 +44,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_needsResumeReconnect && state == AppLifecycleState.resumed) {
+    if (!_needsResumeReconnect) return;
+    final generation = ++_resumeGeneration;
+    if (state != AppLifecycleState.resumed) return;
+    // Let Flutter present the retained UI before restarting sockets. Reconnect
+    // results can then arrive on later frames instead of competing with the
+    // platform's first foreground frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _resumeGeneration ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
       widget.session.reconnect();
-    }
+    });
   }
 
   @override
@@ -207,7 +220,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           Navigator.maybeOf(context)?.maybePop();
         }
       },
-      child: ListenableBuilder(
+      child: ActiveListenableBuilder(
         listenable: Listenable.merge([
           widget.prefs,
           widget.session.supportsCoreConfig,
@@ -587,7 +600,7 @@ class _NavCardGrid extends StatelessWidget {
               ),
             ),
           ),
-          ValueListenableBuilder<bool>(
+          ActiveValueListenableBuilder<bool>(
             valueListenable: session.supportsCoreConfig,
             builder: (context, supported, child) =>
                 supported ? child! : const SizedBox.shrink(),
@@ -598,7 +611,7 @@ class _NavCardGrid extends StatelessWidget {
               ],
             ),
           ),
-          ValueListenableBuilder<bool>(
+          ActiveValueListenableBuilder<bool>(
             valueListenable: session.supportsCoreConfig,
             builder: (context, supported, _) => Opacity(
               opacity: supported ? 1 : 0.5,
@@ -701,7 +714,7 @@ class _StatusHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final colors = _navCardColors(scheme, selected);
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: store,
       builder: (context, _) {
         final name = store.active?.name ?? '未连接';
@@ -729,7 +742,7 @@ class _StatusHeroCard extends StatelessWidget {
                               ),
                         ),
                       ),
-                      ValueListenableBuilder<bool>(
+                      ActiveValueListenableBuilder<bool>(
                         valueListenable: session.isStreaming,
                         builder: (_, live, _) => Container(
                           width: 8,
@@ -752,7 +765,7 @@ class _StatusHeroCard extends StatelessWidget {
                     ).textTheme.bodySmall?.copyWith(color: colors.secondary),
                   ),
                   const Spacer(),
-                  ValueListenableBuilder<bool>(
+                  ActiveValueListenableBuilder<bool>(
                     valueListenable: session.supportsMemory,
                     builder: (_, supportsMemory, _) {
                       if (!supportsMemory) return const SizedBox.shrink();
@@ -770,26 +783,30 @@ class _StatusHeroCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Expanded(
                               child: RepaintBoundary(
-                                child: ValueListenableBuilder<rust.MemorySample>(
-                                  valueListenable: session.memory,
-                                  builder: (_, sample, _) {
-                                    final text = sample.goroutines > 0
-                                        ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
-                                        : formatBytes(sample.inuse);
-                                    return Text(
-                                      text,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            color: colors.foreground,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    );
-                                  },
-                                ),
+                                child:
+                                    ActiveValueListenableBuilder<
+                                      rust.MemorySample
+                                    >(
+                                      valueListenable: session.memory,
+                                      pauseWhileScrolling: true,
+                                      builder: (_, sample, _) {
+                                        final text = sample.goroutines > 0
+                                            ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
+                                            : formatBytes(sample.inuse);
+                                        return Text(
+                                          text,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(
+                                                color: colors.foreground,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        );
+                                      },
+                                    ),
                               ),
                             ),
                           ],
@@ -846,8 +863,9 @@ class _TrafficHeroCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   RepaintBoundary(
-                    child: ValueListenableBuilder<rust.TrafficSample>(
+                    child: ActiveValueListenableBuilder<rust.TrafficSample>(
                       valueListenable: session.traffic,
+                      pauseWhileScrolling: true,
                       builder: (context, sample, _) {
                         final textStyle = Theme.of(context).textTheme.bodySmall
                             ?.copyWith(
@@ -925,7 +943,7 @@ class _RuleNavCard extends StatelessWidget {
       label: '规则',
       selected: selected,
       onTap: onTap,
-      badge: ValueListenableBuilder<int>(
+      badge: ActiveValueListenableBuilder<int>(
         valueListenable: session.ruleCount,
         builder: (_, count, _) => count == 0
             ? const SizedBox.shrink()
@@ -942,10 +960,10 @@ class _GroupCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableSelector<int>(
       listenable: session.proxies,
-      builder: (context, _) {
-        final count = session.proxies.groups.length;
+      selector: () => session.proxies.groups.length,
+      builder: (context, count, _) {
         if (count == 0) return const SizedBox.shrink();
         return _BadgeLabel(text: '$count', selected: selected);
       },
@@ -960,11 +978,13 @@ class _ConnectionCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ConnectionsTotals>(
+    return ActiveValueListenableSelector<ConnectionsTotals, int>(
       valueListenable: session.connectionsTotals,
-      builder: (_, totals, _) {
-        if (totals.count == 0) return const SizedBox.shrink();
-        return _BadgeLabel(text: '${totals.count}', selected: selected);
+      pauseWhileScrolling: true,
+      selector: (totals) => totals.count,
+      builder: (_, count, _) {
+        if (count == 0) return const SizedBox.shrink();
+        return _BadgeLabel(text: '$count', selected: selected);
       },
     );
   }
@@ -1088,20 +1108,15 @@ class _BodyTransitionIndexedStack extends StatefulWidget {
 
 class _BodyTransitionIndexedStackState
     extends State<_BodyTransitionIndexedStack>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _complete = AlwaysStoppedAnimation<double>(1);
+  static const _duration = Duration(milliseconds: 240);
 
   late final Set<int> _visited;
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 240),
-    value: 1,
-  );
-  late final Animation<double> _animation = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeOutCubic,
-  );
+  AnimationController? _controller;
+  CurvedAnimation? _animation;
+  var _tickerEnabled = true;
+  var _generation = 0;
 
   @override
   void initState() {
@@ -1114,18 +1129,68 @@ class _BodyTransitionIndexedStackState
     super.didUpdateWidget(oldWidget);
     _visited.removeWhere((index) => index >= widget.children.length);
     _visited.add(widget.index);
-    if (oldWidget.index != widget.index) _controller.forward(from: 0);
+    if (oldWidget.index != widget.index) _startTransition();
+  }
+
+  void _startTransition() {
+    if (!_tickerEnabled) return;
+    final controller = _controller ??= AnimationController(
+      vsync: this,
+      duration: _duration,
+    );
+    _animation ??= CurvedAnimation(
+      parent: controller,
+      curve: Curves.easeOutCubic,
+    );
+    final generation = ++_generation;
+    controller.forward(from: 0).whenCompleteOrCancel(() {
+      if (!mounted ||
+          generation != _generation ||
+          !identical(_controller, controller) ||
+          !controller.isCompleted) {
+        return;
+      }
+      final animation = _animation;
+      setState(() {
+        _animation = null;
+        _controller = null;
+      });
+      animation?.dispose();
+      controller.dispose();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tickerEnabled = isUiActive(context);
+    if (!_tickerEnabled && _controller != null) {
+      _generation++;
+      final animation = _animation;
+      final controller = _controller;
+      _animation = null;
+      _controller = null;
+      animation?.dispose();
+      controller?.dispose();
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _generation++;
+    final animation = _animation;
+    final controller = _controller;
+    _animation = null;
+    _controller = null;
+    animation?.dispose();
+    controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final routeActive = TickerMode.valuesOf(context).enabled;
+    final routeActive = isUiActive(context);
+    final animation = _animation;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1139,9 +1204,11 @@ class _BodyTransitionIndexedStackState
                 child: HeroMode(
                   enabled: i == widget.index,
                   child: TickerMode(
-                    enabled: i == widget.index,
+                    enabled: routeActive && i == widget.index,
                     child: AppPageTransitionScope(
-                      animation: i == widget.index ? _animation : _complete,
+                      animation: i == widget.index && animation != null
+                          ? animation
+                          : _complete,
                       child: widget.children[i],
                     ),
                   ),
@@ -1181,7 +1248,7 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
 
   @override
   Widget build(BuildContext context) {
-    final routeActive = TickerMode.valuesOf(context).enabled;
+    final routeActive = isUiActive(context);
     return IndexedStack(
       index: widget.index,
       children: [
@@ -1193,7 +1260,7 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
               child: HeroMode(
                 enabled: i == widget.index,
                 child: TickerMode(
-                  enabled: i == widget.index,
+                  enabled: routeActive && i == widget.index,
                   child: widget.children[i],
                 ),
               ),
@@ -1263,8 +1330,6 @@ class _DeferredRouteTheme extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => _DeferredPageTheme(
-    active: TickerMode.valuesOf(context).enabled,
-    child: child,
-  );
+  Widget build(BuildContext context) =>
+      _DeferredPageTheme(active: isUiActive(context), child: child);
 }

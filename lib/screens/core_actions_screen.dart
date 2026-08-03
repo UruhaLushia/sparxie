@@ -4,6 +4,7 @@ import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../session.dart';
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
@@ -100,7 +101,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
       ),
       body: SafeArea(
         bottom: false,
-        child: ListenableBuilder(
+        child: ActiveListenableBuilder(
           listenable: Listenable.merge([
             widget.session.supportsCoreManagement,
             widget.session.supportsCacheFlush,

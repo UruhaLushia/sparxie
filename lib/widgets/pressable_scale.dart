@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'transient_animation.dart';
+
 /// Scale-down on press for a "physical button" feel. Independent of
 /// `InkWell.onTap`, which still fires for the actual tap and ripple.
 class PressableScale extends StatefulWidget {
@@ -25,7 +27,7 @@ class _PressableScaleState extends State<PressableScale> {
       onPointerCancel: (_) {
         if (_down) setState(() => _down = false);
       },
-      child: AnimatedScale(
+      child: TransientAnimatedScale(
         scale: _down ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 90),
         curve: Curves.easeOut,

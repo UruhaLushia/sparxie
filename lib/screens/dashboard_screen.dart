@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
@@ -61,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final active = TickerMode.valuesOf(context).enabled;
+    final active = isRealtimeUiActive(context);
     if (_active == active) return;
     _active = active;
     if (active) _error = widget.session.error.value;
@@ -165,40 +167,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 640;
-              return ListView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  24 + MediaQuery.paddingOf(context).bottom,
-                ),
-                children: [
-                  if (_error != null) ...[
-                    _ErrorBanner(text: _error!),
-                    const SizedBox(height: 16),
-                  ],
-                  if (wide)
-                    IntrinsicHeight(
-                      child: Row(
+              return AppBackdropGroup(
+                child: ListView(
+                  addRepaintBoundaries: false,
+                  addAutomaticKeepAlives: false,
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    24 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  children: [
+                    if (_error != null) ...[
+                      _ErrorBanner(text: _error!),
+                      const SizedBox(height: 16),
+                    ],
+                    if (wide)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(child: _uploadCard()),
                           const SizedBox(width: 12),
                           Expanded(child: _downloadCard()),
                         ],
-                      ),
-                    )
-                  else ...[
-                    _uploadCard(),
+                      )
+                    else ...[
+                      _uploadCard(),
+                      const SizedBox(height: 12),
+                      _downloadCard(),
+                    ],
                     const SizedBox(height: 12),
-                    _downloadCard(),
+                    if (widget.session.supportsMemory.value) ...[
+                      _memoryCard(),
+                      const SizedBox(height: 12),
+                    ],
+                    _connectionsCard(),
                   ],
-                  const SizedBox(height: 12),
-                  if (widget.session.supportsMemory.value) ...[
-                    _memoryCard(),
-                    const SizedBox(height: 12),
-                  ],
-                  _connectionsCard(),
-                ],
+                ),
               );
             },
           ),
@@ -210,6 +215,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _uploadCard() {
     return ActiveValueListenableBuilder<int>(
       valueListenable: _history.trafficRevision,
+      pauseWhileScrolling: true,
       builder: (context, _, _) {
         final t = widget.session.traffic.value;
         return _MetricChartCard(
@@ -218,7 +224,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           value: formatBytes(t.up),
           unit: '/s',
           footer: '总计 ${formatBytes(t.upTotal)}',
-          samples: _history.upSnapshot,
+          samples: _history.upSamples,
+          sampleRevision: _history.trafficDataRevision,
           color: const Color(0xff60a5fa),
           formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
         );
@@ -229,6 +236,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _downloadCard() {
     return ActiveValueListenableBuilder<int>(
       valueListenable: _history.trafficRevision,
+      pauseWhileScrolling: true,
       builder: (context, _, _) {
         final t = widget.session.traffic.value;
         return _MetricChartCard(
@@ -237,7 +245,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           value: formatBytes(t.down),
           unit: '/s',
           footer: '总计 ${formatBytes(t.downTotal)}',
-          samples: _history.downSnapshot,
+          samples: _history.downSamples,
+          sampleRevision: _history.trafficDataRevision,
           color: const Color(0xffa78bfa),
           formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
         );
@@ -246,17 +255,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _connectionsCard() {
-    return ActiveValueListenableBuilder<ConnectionsTotals>(
+    return ActiveValueListenableSelector<ConnectionsTotals, (int, int, int)>(
       valueListenable: widget.session.connectionsTotals,
+      pauseWhileScrolling: true,
+      selector: (totals) =>
+          (totals.connectionsIn, totals.connectionsOut, totals.count),
       builder: (context, totals, _) {
-        final hasBreakdown =
-            totals.connectionsIn > 0 || totals.connectionsOut > 0;
+        final hasBreakdown = totals.$1 > 0 || totals.$2 > 0;
         return _MetricChartCard(
           icon: Icons.hub_outlined,
           label: '连接',
-          value: hasBreakdown
-              ? '${totals.connectionsIn} / ${totals.connectionsOut}'
-              : '${totals.count}',
+          value: hasBreakdown ? '${totals.$1} / ${totals.$2}' : '${totals.$3}',
           unit: '',
           footer: hasBreakdown ? '入站 / 出站' : null,
           samples: const <double>[],
@@ -271,6 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _memoryCard() {
     return ActiveValueListenableBuilder<int>(
       valueListenable: _history.memoryRevision,
+      pauseWhileScrolling: true,
       builder: (context, _, _) {
         final mem = widget.session.memory.value;
         final limit = mem.oslimit > BigInt.zero
@@ -286,7 +296,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           value: formatBytes(mem.inuse),
           unit: '',
           footer: footer.isEmpty ? '当前使用' : footer,
-          samples: _history.memSnapshot,
+          samples: _history.memorySamples,
+          sampleRevision: _history.memoryDataRevision,
           color: const Color(0xfff59e0b),
           formatY: (v) => formatBytes(BigInt.from(v.round())),
         );
@@ -336,6 +347,7 @@ class _MetricChartCard extends StatelessWidget {
     required this.samples,
     required this.color,
     required this.formatY,
+    this.sampleRevision = 0,
     this.footer,
     this.showChart = true,
   });
@@ -346,6 +358,7 @@ class _MetricChartCard extends StatelessWidget {
   final String unit;
   final String? footer;
   final List<double> samples;
+  final int sampleRevision;
   final Color color;
   final String Function(double) formatY;
   final bool showChart;
@@ -362,134 +375,141 @@ class _MetricChartCard extends StatelessWidget {
     );
 
     return AppPanelSurface(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+      groupBackdrop: true,
+      child: RepaintBoundary(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, size: 18, color: color),
                   ),
-                  child: Icon(icon, size: 18, color: color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                height: 1.0,
-                              ),
-                            ),
-                          ),
-                          if (unit.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
                               child: Text(
-                                unit,
-                                style: textTheme.titleMedium?.copyWith(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodyMedium?.copyWith(
                                   color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
-                        ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.0,
+                                ),
+                              ),
+                            ),
+                            if (unit.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  unit,
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (showChart) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  height: 78,
+                  decoration: BoxDecoration(
+                    color: chartBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                  child: SizedBox.expand(
+                    child: CustomPaint(
+                      painter: _SparklinePainter(
+                        samples: samples,
+                        revision: sampleRevision,
+                        maxValue: chartMax,
+                        color: color,
+                        gridColor: scheme.outlineVariant.withValues(
+                          alpha: 0.24,
+                        ),
+                        pointBorderColor: chartBackground,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
-            ),
-            if (showChart) ...[
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                height: 78,
-                decoration: BoxDecoration(
-                  color: chartBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: scheme.outlineVariant.withValues(alpha: 0.25),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                child: SizedBox.expand(
-                  child: CustomPaint(
-                    painter: _SparklinePainter(
-                      samples: samples,
-                      color: color,
-                      gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
-                      pointBorderColor: chartBackground,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (footer != null || peak != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (footer != null)
-                    Expanded(
-                      child: Text(
-                        footer!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+              if (footer != null || peak != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (footer != null)
+                      Expanded(
+                        child: Text(
+                          footer!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    if (peak != null) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _MetricPill(text: '峰值 $peak', color: color),
                         ),
                       ),
-                    )
-                  else
-                    const Spacer(),
-                  if (peak != null) ...[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: _MetricPill(text: '峰值 $peak', color: color),
-                      ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -537,12 +557,16 @@ class _MetricPill extends StatelessWidget {
 class _SparklinePainter extends CustomPainter {
   _SparklinePainter({
     required this.samples,
+    required this.revision,
+    required this.maxValue,
     required this.color,
     required this.gridColor,
     required this.pointBorderColor,
   });
 
   final List<double> samples;
+  final int revision;
+  final double maxValue;
   final Color color;
   final Color gridColor;
   final Color pointBorderColor;
@@ -561,11 +585,7 @@ class _SparklinePainter extends CustomPainter {
 
     if (samples.length < 2) return;
 
-    var maxV = 0.0;
-    for (final v in samples) {
-      if (v > maxV) maxV = v;
-    }
-    if (maxV <= 0) return;
+    if (maxValue <= 0) return;
 
     const horizontalPadding = 2.0;
     const topPadding = 4.0;
@@ -577,20 +597,48 @@ class _SparklinePainter extends CustomPainter {
         ? size.height - topPadding - bottomPadding
         : size.height;
     final dx = usableWidth / (samples.length - 1);
-    final scaleMax = maxV * 1.12;
-
-    final points = <Offset>[];
-    for (var i = 0; i < samples.length; i += 1) {
-      final x = horizontalPadding + i * dx;
-      final ratio = (samples[i] / scaleMax).clamp(0.0, 1.0);
-      final y = topPadding + (1 - ratio) * usableHeight;
-      points.add(Offset(x, y));
+    final scaleMax = maxValue * 1.12;
+    final lastIndex = samples.length - 1;
+    final firstX = horizontalPadding;
+    final firstY = _sampleY(samples.first, scaleMax, topPadding, usableHeight);
+    final lastX = horizontalPadding + lastIndex * dx;
+    final lastY = _sampleY(samples.last, scaleMax, topPadding, usableHeight);
+    final line = Path()..moveTo(firstX, firstY);
+    if (samples.length == 2) {
+      line.lineTo(lastX, lastY);
+    } else {
+      for (var i = 1; i < lastIndex; i++) {
+        final currentX = horizontalPadding + i * dx;
+        final currentY = _sampleY(
+          samples[i],
+          scaleMax,
+          topPadding,
+          usableHeight,
+        );
+        final nextX = horizontalPadding + (i + 1) * dx;
+        final nextY = _sampleY(
+          samples[i + 1],
+          scaleMax,
+          topPadding,
+          usableHeight,
+        );
+        line.quadraticBezierTo(
+          currentX,
+          currentY,
+          (currentX + nextX) / 2,
+          (currentY + nextY) / 2,
+        );
+      }
+      line.quadraticBezierTo(
+        horizontalPadding + (lastIndex - 1) * dx,
+        _sampleY(samples[lastIndex - 1], scaleMax, topPadding, usableHeight),
+        lastX,
+        lastY,
+      );
     }
-
-    final line = _smoothPath(points);
     final fill = Path.from(line)
-      ..lineTo(points.last.dx, size.height)
-      ..lineTo(points.first.dx, size.height)
+      ..lineTo(lastX, size.height)
+      ..lineTo(firstX, size.height)
       ..close();
 
     final fillPaint = Paint()
@@ -617,7 +665,7 @@ class _SparklinePainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     canvas.drawPath(line, stroke);
 
-    final last = points.last;
+    final last = Offset(lastX, lastY);
     canvas.drawCircle(
       last,
       5.5,
@@ -634,33 +682,20 @@ class _SparklinePainter extends CustomPainter {
     );
   }
 
-  Path _smoothPath(List<Offset> points) {
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    if (points.length == 2) {
-      path.lineTo(points.last.dx, points.last.dy);
-      return path;
-    }
-
-    for (var i = 1; i < points.length - 1; i += 1) {
-      final current = points[i];
-      final next = points[i + 1];
-      final mid = Offset(
-        (current.dx + next.dx) / 2,
-        (current.dy + next.dy) / 2,
-      );
-      path.quadraticBezierTo(current.dx, current.dy, mid.dx, mid.dy);
-    }
-    path.quadraticBezierTo(
-      points[points.length - 2].dx,
-      points[points.length - 2].dy,
-      points.last.dx,
-      points.last.dy,
-    );
-    return path;
+  static double _sampleY(
+    double sample,
+    double scaleMax,
+    double topPadding,
+    double usableHeight,
+  ) {
+    final ratio = (sample / scaleMax).clamp(0.0, 1.0);
+    return topPadding + (1 - ratio) * usableHeight;
   }
 
   @override
   bool shouldRepaint(covariant _SparklinePainter old) =>
+      old.revision != revision ||
+      old.maxValue != maxValue ||
       old.samples != samples ||
       old.color != color ||
       old.gridColor != gridColor ||
@@ -675,27 +710,34 @@ class _SparkHistory {
   final List<double> _up = [];
   final List<double> _down = [];
   final List<double> _mem = [];
+  late final List<double> upSamples = UnmodifiableListView(_up);
+  late final List<double> downSamples = UnmodifiableListView(_down);
+  late final List<double> memorySamples = UnmodifiableListView(_mem);
   final trafficRevision = ValueNotifier(0);
   final memoryRevision = ValueNotifier(0);
+  int _trafficDataRevision = 0;
+  int _memoryDataRevision = 0;
 
-  List<double> get upSnapshot => List<double>.unmodifiable(_up);
-  List<double> get downSnapshot => List<double>.unmodifiable(_down);
-  List<double> get memSnapshot => List<double>.unmodifiable(_mem);
+  int get trafficDataRevision => _trafficDataRevision;
+  int get memoryDataRevision => _memoryDataRevision;
 
   void pushTraffic(double up, double down, {bool notify = true}) {
     _push(_up, up);
     _push(_down, down);
+    _trafficDataRevision++;
     if (notify) trafficRevision.value += 1;
   }
 
   void pushMemory(double inuse, {bool notify = true}) {
     _push(_mem, inuse);
+    _memoryDataRevision++;
     if (notify) memoryRevision.value += 1;
   }
 
   void clearMemory({bool notify = true}) {
     if (_mem.isEmpty) return;
     _mem.clear();
+    _memoryDataRevision++;
     if (notify) memoryRevision.value += 1;
   }
 
@@ -706,6 +748,8 @@ class _SparkHistory {
     _up.clear();
     _down.clear();
     _mem.clear();
+    if (hadTraffic) _trafficDataRevision++;
+    if (hadMemory) _memoryDataRevision++;
     if (notify && hadTraffic) trafficRevision.value += 1;
     if (notify && hadMemory) memoryRevision.value += 1;
   }

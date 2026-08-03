@@ -63,7 +63,14 @@ class CompactMenuButton<T> extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label, style: controlStyle.labelStyle(context)),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: controlStyle.labelStyle(context),
+                    ),
+                  ),
                   const SizedBox(width: 4),
                   const Icon(Icons.expand_more, size: 18),
                 ],

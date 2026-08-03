@@ -540,11 +540,13 @@ class AppSurfaceBackdrop extends StatelessWidget {
     required this.child,
     this.borderRadius = BorderRadius.zero,
     this.surfaceTheme,
+    this.grouped = false,
   });
 
   final Widget child;
   final BorderRadiusGeometry borderRadius;
   final AppSurfaceTheme? surfaceTheme;
+  final bool grouped;
 
   @override
   Widget build(BuildContext context) {
@@ -554,7 +556,7 @@ class AppSurfaceBackdrop extends StatelessWidget {
     // Keep mobile filters local so moving surfaces do not share a stale
     // backdrop snapshot. Page bodies no longer use an opacity layer, so the
     // platform-safe srcOver blend is also the correct choice while scrolling.
-    final filtered = isMobilePlatform
+    final filtered = isMobilePlatform && !grouped
         ? BackdropFilter(filterConfig: filterConfig, child: child)
         : BackdropFilter.grouped(filterConfig: filterConfig, child: child);
     if (borderRadius == BorderRadius.zero) return ClipRect(child: filtered);

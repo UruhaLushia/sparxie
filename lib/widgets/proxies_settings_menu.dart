@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
 import 'compact_controls.dart';
+import 'settings_drawer.dart';
 
 /// App-bar tune button. Opens a right-anchored settings sheet on tap.
 class ProxiesSettingsMenu extends StatelessWidget {
@@ -19,23 +20,10 @@ class ProxiesSettingsMenu extends StatelessWidget {
   }
 
   void _open(BuildContext context) {
-    showGeneralDialog<void>(
+    showSettingsDrawer<void>(
       context: context,
-      barrierDismissible: true,
       barrierLabel: '代理组设置',
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      transitionDuration: const Duration(milliseconds: 220),
-      transitionBuilder: (context, animation, _, child) {
-        final offset =
-            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-            );
-        return Align(
-          alignment: Alignment.centerRight,
-          child: SlideTransition(position: offset, child: child),
-        );
-      },
-      pageBuilder: (_, _, _) => _ProxiesSettingsSheet(prefs: prefs),
+      builder: (_) => _ProxiesSettingsSheet(prefs: prefs),
     );
   }
 }
@@ -47,128 +35,71 @@ class _ProxiesSettingsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final width = MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Material(
-          color: scheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
+    return SettingsDrawerSheet(
+      title: '代理组设置',
+      listenable: prefs,
+      childrenBuilder: (_) => [
+        _SettingsRow(
+          label: '布局样式',
+          trailing: _LayoutSegmented(prefs: prefs),
+        ),
+        if (prefs.proxiesLayout == ProxiesLayout.cards)
+          _SettingsRow(
+            label: '卡片渐变配色',
+            trailing: CompactSwitch(
+              value: prefs.proxiesCardColored,
+              onChanged: prefs.setProxiesCardColored,
             ),
           ),
-          clipBehavior: Clip.antiAlias,
-          elevation: 6,
-          child: SizedBox(
-            width: width,
-            height: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(onClose: () => Navigator.of(context).pop()),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: prefs,
-                    builder: (context, _) => ListView(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      children: [
-                        _SettingsRow(
-                          label: '布局样式',
-                          trailing: _LayoutSegmented(prefs: prefs),
-                        ),
-                        if (prefs.proxiesLayout == ProxiesLayout.cards)
-                          _SettingsRow(
-                            label: '卡片渐变配色',
-                            trailing: CompactSwitch(
-                              value: prefs.proxiesCardColored,
-                              onChanged: prefs.setProxiesCardColored,
-                            ),
-                          ),
-                        _SettingsRow(
-                          label: '代理节点展示列数',
-                          trailing: _ColumnsDropdown(prefs: prefs),
-                        ),
-                        _SettingsRow(
-                          label: '节点排序方式',
-                          trailing: _SortSegmented(prefs: prefs),
-                        ),
-                        _SettingsRow(
-                          label: '显示代理组图标',
-                          trailing: CompactSwitch(
-                            value: prefs.proxiesShowGroupIcons,
-                            onChanged: prefs.setProxiesShowGroupIcons,
-                          ),
-                        ),
-                        _SettingsRow(
-                          label: '显示隐藏代理组',
-                          trailing: CompactSwitch(
-                            value: prefs.proxiesShowHiddenGroups,
-                            onChanged: prefs.setProxiesShowHiddenGroups,
-                          ),
-                        ),
-                        _SettingsRow(
-                          label: '切换节点时断开连接',
-                          trailing: CompactSwitch(
-                            value: prefs.autoCloseOnSwitch,
-                            onChanged: prefs.setAutoCloseOnSwitch,
-                          ),
-                        ),
-                        if (prefs.autoCloseOnSwitch)
-                          _SettingsRow(
-                            label: '打断模式',
-                            trailing: _CloseModeSegmented(prefs: prefs),
-                          ),
-                        _DelayTestUrlRow(prefs: prefs),
-                        _SettingsRow(
-                          label: '测试地址来源',
-                          trailing: _ScopeSegmented(prefs: prefs),
-                        ),
-                        _SettingsRow(
-                          label: '使用策略组 API 测速',
-                          trailing: CompactSwitch(
-                            value: prefs.delayTestUseGroupApi,
-                            onChanged: prefs.setDelayTestUseGroupApi,
-                          ),
-                        ),
-                        if (!prefs.delayTestUseGroupApi)
-                          _DelayTestConcurrencyRow(prefs: prefs),
-                        _DelayTestTimeoutRow(prefs: prefs),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        _SettingsRow(
+          label: '代理节点展示列数',
+          trailing: _ColumnsDropdown(prefs: prefs),
+        ),
+        _SettingsRow(
+          label: '节点排序方式',
+          trailing: _SortSegmented(prefs: prefs),
+        ),
+        _SettingsRow(
+          label: '显示代理组图标',
+          trailing: CompactSwitch(
+            value: prefs.proxiesShowGroupIcons,
+            onChanged: prefs.setProxiesShowGroupIcons,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.onClose});
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
-      child: Row(
-        children: [
-          Text('代理组设置', style: Theme.of(context).textTheme.titleLarge),
-          const Spacer(),
-          IconButton(
-            tooltip: '关闭',
-            icon: const Icon(Icons.close),
-            onPressed: onClose,
+        _SettingsRow(
+          label: '显示隐藏代理组',
+          trailing: CompactSwitch(
+            value: prefs.proxiesShowHiddenGroups,
+            onChanged: prefs.setProxiesShowHiddenGroups,
           ),
-        ],
-      ),
+        ),
+        _SettingsRow(
+          label: '切换节点时断开连接',
+          trailing: CompactSwitch(
+            value: prefs.autoCloseOnSwitch,
+            onChanged: prefs.setAutoCloseOnSwitch,
+          ),
+        ),
+        if (prefs.autoCloseOnSwitch)
+          _SettingsRow(
+            label: '打断模式',
+            trailing: _CloseModeSegmented(prefs: prefs),
+          ),
+        _DelayTestUrlRow(prefs: prefs),
+        _SettingsRow(
+          label: '测试地址来源',
+          trailing: _ScopeSegmented(prefs: prefs),
+        ),
+        _SettingsRow(
+          label: '使用策略组 API 测速',
+          trailing: CompactSwitch(
+            value: prefs.delayTestUseGroupApi,
+            onChanged: prefs.setDelayTestUseGroupApi,
+          ),
+        ),
+        if (!prefs.delayTestUseGroupApi) _DelayTestConcurrencyRow(prefs: prefs),
+        _DelayTestTimeoutRow(prefs: prefs),
+      ],
     );
   }
 }

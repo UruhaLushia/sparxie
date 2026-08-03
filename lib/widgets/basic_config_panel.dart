@@ -37,18 +37,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_onStore);
     _bind();
-  }
-
-  @override
-  void dispose() {
-    widget.store.removeListener(_onStore);
-    super.dispose();
-  }
-
-  void _onStore() {
-    if (!identical(widget.store.active, _activeKey)) _bind();
   }
 
   rust.BackendTarget? _target() {

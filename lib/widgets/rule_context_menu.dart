@@ -7,10 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../rust_api.dart' as rust;
+import 'transient_animation.dart';
 import 'rule_details_panel.dart';
 
 const _previewRadius = BorderRadius.all(Radius.circular(12));
 const _menuRadius = BorderRadius.all(Radius.circular(16));
+final _contextBlur = ImageFilter.blur(sigmaX: 6, sigmaY: 6);
 const _longPressDelay = Duration(milliseconds: 750);
 const _pressFeedbackDelay = Duration(milliseconds: 220);
 
@@ -169,19 +171,21 @@ class _RuleContextMenuState extends State<RuleContextMenu> {
     return Semantics(
       hint: '长按查看规则详情',
       onLongPress: _showMenu,
-      child: AnimatedScale(
+      child: TransientAnimatedScale(
         scale: _pressing ? 1.015 : 1,
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
-        child: KeyedSubtree(
-          key: _childKey,
-          child: IgnorePointer(
-            ignoring: _open,
-            child: Opacity(
-              opacity: _open ? 0 : 1,
-              child: Stack(
-                fit: StackFit.passthrough,
-                children: [widget.child, _gestureRegions()],
+        child: RepaintBoundary(
+          child: KeyedSubtree(
+            key: _childKey,
+            child: IgnorePointer(
+              ignoring: _open,
+              child: Opacity(
+                opacity: _open ? 0 : 1,
+                child: Stack(
+                  fit: StackFit.passthrough,
+                  children: [widget.child, _gestureRegions()],
+                ),
               ),
             ),
           ),
@@ -190,8 +194,6 @@ class _RuleContextMenuState extends State<RuleContextMenu> {
     );
   }
 }
-
-enum _RuleContextSlot { preview, menu }
 
 class _RuleContextOverlay extends StatelessWidget {
   const _RuleContextOverlay({
@@ -216,190 +218,196 @@ class _RuleContextOverlay extends StatelessWidget {
     final usableCenter =
         (safePadding.top + size.height - safePadding.bottom) / 2;
     final menuBelow = sourceRect.center.dy <= usableCenter;
+    final menu = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: _menuRadius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: _menuRadius,
+        child: RuleDetailsPanel(rule: rule),
+      ),
+    );
+    final elevatedPreview = DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: _previewRadius,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: preview,
+    );
 
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final progress = Curves.easeOutCubic.transform(animation.value);
-        final menuProgress = const Interval(
-          0.12,
-          1,
-          curve: Curves.easeOutCubic,
-        ).transform(animation.value);
-        return Stack(
-          fit: StackFit.expand,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(
+          child: BackdropFilter(
+            filter: _contextBlur,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onDismiss,
+          child: AnimatedBuilder(
+            animation: animation,
+            builder: (_, _) {
+              final progress = Curves.easeOutCubic.transform(animation.value);
+              return ColoredBox(
+                color: scheme.scrim.withValues(alpha: 0.22 * progress),
+              );
+            },
+          ),
+        ),
+        Flow(
+          delegate: _RuleContextFlowDelegate(
+            animation: animation,
+            sourceRect: sourceRect,
+            safePadding: safePadding,
+            menuBelow: menuBelow,
+          ),
           children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onDismiss,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: 6 * progress,
-                  sigmaY: 6 * progress,
-                ),
-                child: ColoredBox(
-                  color: scheme.scrim.withValues(alpha: 0.22 * progress),
-                ),
-              ),
-            ),
-            CustomMultiChildLayout(
-              delegate: _RuleContextLayoutDelegate(
-                sourceRect: sourceRect,
-                safePadding: safePadding,
-                progress: progress,
-                menuBelow: menuBelow,
-              ),
-              children: [
-                LayoutId(
-                  id: _RuleContextSlot.preview,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: _previewRadius,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: 0.2 * progress,
-                            ),
-                            blurRadius: 18 * progress,
-                            offset: Offset(0, 4 * progress),
-                          ),
-                        ],
-                      ),
-                      child: preview,
-                    ),
-                  ),
-                ),
-                LayoutId(
-                  id: _RuleContextSlot.menu,
-                  child: Opacity(
-                    opacity: menuProgress,
-                    child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        (menuBelow ? -10 : 10) * (1 - menuProgress),
-                      ),
-                      child: Transform.scale(
-                        scale: 0.96 + 0.04 * menuProgress,
-                        alignment: menuBelow
-                            ? Alignment.topCenter
-                            : Alignment.bottomCenter,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: _menuRadius,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.16),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: _menuRadius,
-                            child: RuleDetailsPanel(rule: rule),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            IgnorePointer(child: RepaintBoundary(child: elevatedPreview)),
+            RepaintBoundary(child: menu),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 }
 
-class _RuleContextLayoutDelegate extends MultiChildLayoutDelegate {
-  _RuleContextLayoutDelegate({
+class _RuleContextFlowDelegate extends FlowDelegate {
+  _RuleContextFlowDelegate({
+    required this.animation,
     required this.sourceRect,
     required this.safePadding,
-    required this.progress,
     required this.menuBelow,
-  });
+  }) : super(repaint: animation);
 
+  final Animation<double> animation;
   final Rect sourceRect;
   final EdgeInsets safePadding;
-  final double progress;
   final bool menuBelow;
 
   static const _screenInset = 16.0;
   static const _menuGap = 12.0;
   static const _maxMenuWidth = 320.0;
 
+  Size _availableSize(Size size) => Size(
+    math.max(0.0, size.width - safePadding.horizontal - 2 * _screenInset),
+    math.max(0.0, size.height - safePadding.vertical - 2 * _screenInset),
+  );
+
+  Size _previewSize(Size size) {
+    final available = _availableSize(size);
+    return Size(
+      math.min(sourceRect.width * 1.02, available.width),
+      math.min(sourceRect.height * 1.02, available.height),
+    );
+  }
+
   @override
-  void performLayout(Size size) {
+  BoxConstraints getConstraintsForChild(int index, BoxConstraints constraints) {
+    final size = constraints.biggest;
+    final available = _availableSize(size);
+    final previewSize = _previewSize(size);
+    if (index == 0) return BoxConstraints.tight(previewSize);
+    final width = math.min(_maxMenuWidth, available.width);
+    return BoxConstraints(
+      minWidth: width,
+      maxWidth: width,
+      maxHeight: math.max(
+        0.0,
+        available.height - previewSize.height - _menuGap,
+      ),
+    );
+  }
+
+  @override
+  void paintChildren(FlowPaintingContext context) {
+    final size = context.size;
     final safeLeft = safePadding.left + _screenInset;
     final safeTop = safePadding.top + _screenInset;
     final safeRight = size.width - safePadding.right - _screenInset;
     final safeBottom = size.height - safePadding.bottom - _screenInset;
-    final availableWidth = math.max(0.0, safeRight - safeLeft);
-    final availableHeight = math.max(0.0, safeBottom - safeTop);
-
-    final targetPreviewWidth = math.min(
-      sourceRect.width * 1.02,
-      availableWidth,
-    );
-    final targetPreviewHeight = math.min(
-      sourceRect.height * 1.02,
-      availableHeight,
-    );
-    final menuWidth = math.min(_maxMenuWidth, availableWidth);
-    final maxMenuHeight = math.max(
-      0.0,
-      availableHeight - targetPreviewHeight - _menuGap,
-    );
-    final menuSize = layoutChild(
-      _RuleContextSlot.menu,
-      BoxConstraints(
-        minWidth: menuWidth,
-        maxWidth: menuWidth,
-        maxHeight: maxMenuHeight,
-      ),
-    );
+    final targetPreviewSize = context.getChildSize(0)!;
+    final menuSize = context.getChildSize(1)!;
 
     final previewLeft = _clamp(
-      sourceRect.center.dx - targetPreviewWidth / 2,
+      sourceRect.center.dx - targetPreviewSize.width / 2,
       safeLeft,
-      safeRight - targetPreviewWidth,
+      safeRight - targetPreviewSize.width,
     );
     late final double previewTop;
     late final double menuTop;
     if (menuBelow) {
-      final groupHeight = targetPreviewHeight + _menuGap + menuSize.height;
+      final groupHeight = targetPreviewSize.height + _menuGap + menuSize.height;
       previewTop = _clamp(sourceRect.top, safeTop, safeBottom - groupHeight);
-      menuTop = previewTop + targetPreviewHeight + _menuGap;
+      menuTop = previewTop + targetPreviewSize.height + _menuGap;
     } else {
       previewTop = _clamp(
         sourceRect.top,
         safeTop + menuSize.height + _menuGap,
-        safeBottom - targetPreviewHeight,
+        safeBottom - targetPreviewSize.height,
       );
       menuTop = previewTop - _menuGap - menuSize.height;
     }
 
-    final targetPreviewRect = Rect.fromLTWH(
-      previewLeft,
-      previewTop,
-      targetPreviewWidth,
-      targetPreviewHeight,
-    );
+    final targetPreviewRect =
+        Offset(previewLeft, previewTop) & targetPreviewSize;
+    final progress = Curves.easeOutCubic.transform(animation.value);
     final previewRect = Rect.lerp(sourceRect, targetPreviewRect, progress)!;
-    layoutChild(
-      _RuleContextSlot.preview,
-      BoxConstraints.tight(previewRect.size),
-    );
-    positionChild(_RuleContextSlot.preview, previewRect.topLeft);
+    final previewTransform = Matrix4.identity()
+      ..translateByDouble(previewRect.left, previewRect.top, 0, 1)
+      ..scaleByDouble(
+        previewRect.width / targetPreviewSize.width,
+        previewRect.height / targetPreviewSize.height,
+        1,
+        1,
+      );
+    context.paintChild(0, transform: previewTransform);
 
     final menuLeft = _clamp(
       targetPreviewRect.center.dx - menuSize.width / 2,
       safeLeft,
       safeRight - menuSize.width,
     );
-    positionChild(_RuleContextSlot.menu, Offset(menuLeft, menuTop));
+    final menuProgress = const Interval(
+      0.12,
+      1,
+      curve: Curves.easeOutCubic,
+    ).transform(animation.value);
+    final scale = 0.96 + 0.04 * menuProgress;
+    final alignmentY = menuBelow ? 0.0 : menuSize.height;
+    final offsetY = (menuBelow ? -10.0 : 10.0) * (1 - menuProgress);
+    final menuTransform = Matrix4.identity()
+      ..translateByDouble(
+        menuLeft + menuSize.width / 2,
+        menuTop + alignmentY + offsetY,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, 1, 1)
+      ..translateByDouble(-menuSize.width / 2, -alignmentY, 0, 1);
+    context.paintChild(1, transform: menuTransform, opacity: menuProgress);
+  }
+
+  @override
+  bool shouldRelayout(covariant _RuleContextFlowDelegate oldDelegate) {
+    return sourceRect != oldDelegate.sourceRect ||
+        safePadding != oldDelegate.safePadding ||
+        menuBelow != oldDelegate.menuBelow;
   }
 
   double _clamp(double value, double lower, double upper) {
@@ -408,10 +416,10 @@ class _RuleContextLayoutDelegate extends MultiChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(covariant _RuleContextLayoutDelegate oldDelegate) {
+  bool shouldRepaint(covariant _RuleContextFlowDelegate oldDelegate) {
     return sourceRect != oldDelegate.sourceRect ||
         safePadding != oldDelegate.safePadding ||
-        progress != oldDelegate.progress ||
-        menuBelow != oldDelegate.menuBelow;
+        menuBelow != oldDelegate.menuBelow ||
+        animation != oldDelegate.animation;
   }
 }

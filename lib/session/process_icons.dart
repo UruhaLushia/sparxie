@@ -19,6 +19,8 @@ class ProcessIconCache extends ChangeNotifier {
   static const _maxImages = 128;
   static const _maxNames = 512;
   static const _maxMisses = 512;
+  static const _maxConcurrentImageRequests = 5;
+  static const _maxConcurrentNameRequests = 8;
   static const _imageRetireDelay = Duration(milliseconds: 500);
 
   // Decoded, display-ready images. Encoded source bytes stay in Rust's disk
@@ -27,11 +29,18 @@ class ProcessIconCache extends ChangeNotifier {
       LinkedHashMap<String, ui.Image>();
   final Set<String> _missing = {};
   final Set<String> _requested = {};
+  final Queue<({int generation, Future<void> Function() run})>
+  _imageRequestQueue = Queue();
+  int _activeImageRequests = 0;
   int _imageGeneration = 0;
 
   final LinkedHashMap<String, String> _names = LinkedHashMap<String, String>();
   final Set<String> _nameMissing = {};
   final Set<String> _nameRequested = {};
+  final Queue<({int generation, Future<void> Function() run})>
+  _nameRequestQueue = Queue();
+  int _activeNameRequests = 0;
+  int _nameGeneration = 0;
   int? _notifyFrameCallback;
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
@@ -63,22 +72,43 @@ class ProcessIconCache extends ChangeNotifier {
     }
     _requested.add(imageKey);
     final generation = _imageGeneration;
-    (_isAndroid
+    _enqueueImageRequest(generation, () async {
+      try {
+        final bytes = await (_isAndroid
             ? _resolveAndroid(key)
-            : rust.fetchProcessIcon(path: key, size: size))
-        .then(
-          (bytes) => _complete(
-            imageKey,
-            bytes,
-            decodeSize: decodeSize,
-            generation: generation,
-          ),
-        )
-        .catchError((_) {
-          if (generation == _imageGeneration) {
-            _requested.remove(imageKey);
-          }
-        });
+            : rust.fetchProcessIcon(path: key, size: size));
+        await _complete(
+          imageKey,
+          bytes,
+          decodeSize: decodeSize,
+          generation: generation,
+        );
+      } catch (_) {
+        if (generation == _imageGeneration) {
+          _requested.remove(imageKey);
+          _remember(_missing, imageKey, _maxMisses);
+          _scheduleNotify();
+        }
+      }
+    });
+  }
+
+  void _enqueueImageRequest(int generation, Future<void> Function() run) {
+    _imageRequestQueue.add((generation: generation, run: run));
+    _drainImageRequests();
+  }
+
+  void _drainImageRequests() {
+    while (_activeImageRequests < _maxConcurrentImageRequests &&
+        _imageRequestQueue.isNotEmpty) {
+      final request = _imageRequestQueue.removeFirst();
+      if (request.generation != _imageGeneration) continue;
+      _activeImageRequests++;
+      request.run().whenComplete(() {
+        _activeImageRequests--;
+        _drainImageRequests();
+      });
+    }
   }
 
   String _imageKey(String key, int? size, int? decodeSize) {
@@ -95,11 +125,38 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _nameRequested.add(key);
-    (_isAndroid ? _resolveNameAndroid(key) : rust.fetchProcessName(path: key))
-        .then((name) => _completeName(key, name))
-        .catchError((_) {
-          _nameRequested.remove(key);
-        });
+    final generation = _nameGeneration;
+    _enqueueNameRequest(generation, () async {
+      try {
+        final name = await (_isAndroid
+            ? _resolveNameAndroid(key)
+            : rust.fetchProcessName(path: key));
+        _completeName(key, name, generation);
+      } catch (_) {
+        if (generation != _nameGeneration) return;
+        _nameRequested.remove(key);
+        _remember(_nameMissing, key, _maxMisses);
+        _scheduleNotify();
+      }
+    });
+  }
+
+  void _enqueueNameRequest(int generation, Future<void> Function() run) {
+    _nameRequestQueue.add((generation: generation, run: run));
+    _drainNameRequests();
+  }
+
+  void _drainNameRequests() {
+    while (_activeNameRequests < _maxConcurrentNameRequests &&
+        _nameRequestQueue.isNotEmpty) {
+      final request = _nameRequestQueue.removeFirst();
+      if (request.generation != _nameGeneration) continue;
+      _activeNameRequests++;
+      request.run().whenComplete(() {
+        _activeNameRequests--;
+        _drainNameRequests();
+      });
+    }
   }
 
   // Android: disk cache (persisted across launches) first, then PackageManager.
@@ -127,12 +184,12 @@ class ProcessIconCache extends ChangeNotifier {
     return resolved;
   }
 
-  void _complete(
+  Future<void> _complete(
     String key,
     Uint8List? bytes, {
     required int generation,
     int? decodeSize,
-  }) {
+  }) async {
     if (generation != _imageGeneration) return;
     if (bytes == null || bytes.isEmpty) {
       _requested.remove(key);
@@ -140,22 +197,21 @@ class ProcessIconCache extends ChangeNotifier {
       _scheduleNotify();
       return;
     }
-    _decode(bytes, targetSize: decodeSize).then((image) {
-      if (generation != _imageGeneration) {
-        image?.dispose();
-        return;
-      }
-      _requested.remove(key);
-      if (image != null) {
-        final previous = _images.remove(key);
-        if (previous != null) _retireImage(previous);
-        _images[key] = image;
-        _trimImages();
-      } else {
-        _remember(_missing, key, _maxMisses);
-      }
-      _scheduleNotify();
-    });
+    final image = await _decode(bytes, targetSize: decodeSize);
+    if (generation != _imageGeneration) {
+      image?.dispose();
+      return;
+    }
+    _requested.remove(key);
+    if (image != null) {
+      final previous = _images.remove(key);
+      if (previous != null) _retireImage(previous);
+      _images[key] = image;
+      _trimImages();
+    } else {
+      _remember(_missing, key, _maxMisses);
+    }
+    _scheduleNotify();
   }
 
   /// Decode cached PNG bytes to a display-ready [ui.Image].
@@ -177,7 +233,8 @@ class ProcessIconCache extends ChangeNotifier {
     }
   }
 
-  void _completeName(String key, String? name) {
+  void _completeName(String key, String? name, int generation) {
+    if (generation != _nameGeneration) return;
     _nameRequested.remove(key);
     if (name != null && name.isNotEmpty) {
       _names.remove(key);
@@ -232,6 +289,9 @@ class ProcessIconCache extends ChangeNotifier {
     }
     _missing.clear();
     _imageGeneration++;
+    _imageRequestQueue.clear();
+    _nameGeneration++;
+    _nameRequestQueue.clear();
     _requested.clear();
     _nameMissing.clear();
     _nameRequested.clear();
@@ -244,6 +304,7 @@ class ProcessIconCache extends ChangeNotifier {
     if (preserveLive && hasListeners) return;
     if (_images.isEmpty && _requested.isEmpty) return;
     _imageGeneration++;
+    _imageRequestQueue.clear();
     _requested.clear();
     for (final image in _images.values) {
       _retireImage(image);
@@ -256,6 +317,9 @@ class ProcessIconCache extends ChangeNotifier {
   /// wiped, so tiles re-resolve instead of showing now-stale entries.
   void clearAll() {
     _imageGeneration++;
+    _nameGeneration++;
+    _imageRequestQueue.clear();
+    _nameRequestQueue.clear();
     for (final image in _images.values) {
       _retireImage(image);
     }
@@ -271,6 +335,9 @@ class ProcessIconCache extends ChangeNotifier {
   @override
   void dispose() {
     _imageGeneration++;
+    _nameGeneration++;
+    _imageRequestQueue.clear();
+    _nameRequestQueue.clear();
     final notifyFrameCallback = _notifyFrameCallback;
     if (notifyFrameCallback != null) {
       SchedulerBinding.instance.cancelFrameCallbackWithId(notifyFrameCallback);

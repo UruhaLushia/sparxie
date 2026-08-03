@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controller.dart';
+import 'active_listenable_builder.dart';
 
 class BackendSwitcher extends StatelessWidget {
   const BackendSwitcher({
@@ -20,7 +21,7 @@ class BackendSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: store,
       builder: (context, _) {
         final controllers = store.controllers;

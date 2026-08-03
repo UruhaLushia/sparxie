@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../utils.dart';
+import 'active_listenable_builder.dart';
 
 /// Color-coded latency. Tap to retest.
 class DelayBadge extends StatelessWidget {
@@ -53,8 +54,9 @@ class NodeDelay extends StatelessWidget {
     if (notifier == null) {
       return DelayBadge(delay: -1, onTap: onTest);
     }
-    return ValueListenableBuilder<int>(
+    return ActiveValueListenableBuilder<int>(
       valueListenable: notifier,
+      pauseWhileScrolling: true,
       builder: (_, ms, _) => DelayBadge(delay: ms, onTap: onTest),
     );
   }

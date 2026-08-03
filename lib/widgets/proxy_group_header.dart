@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../session.dart';
+import 'active_listenable_builder.dart';
 import 'app_background.dart';
 import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
+import 'transient_animation.dart';
 
 class ProxyGroupHeader extends StatelessWidget {
   const ProxyGroupHeader({
@@ -112,7 +114,7 @@ class ProxyGroupHeader extends StatelessWidget {
                                     )
                                   : const Icon(Icons.speed_rounded, size: 20),
                             ),
-                            AnimatedRotation(
+                            TransientAnimatedRotation(
                               turns: expanded ? 0.5 : 0,
                               duration: const Duration(milliseconds: 200),
                               child: Icon(
@@ -177,7 +179,7 @@ class ProxyGroupHeader extends StatelessWidget {
   }
 
   Widget _title(BuildContext context, ColorScheme scheme) {
-    return ValueListenableBuilder<String>(
+    return ActiveValueListenableBuilder<String>(
       valueListenable: group.now,
       builder: (_, now, _) {
         final displayNow = group.hidesExactNow

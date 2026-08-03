@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -19,6 +20,11 @@ import '../widgets/connections_settings_menu.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/smooth_bottom_sheet.dart';
+import '../widgets/transient_animation.dart';
+
+double _lerpDouble(double begin, double end, double progress) =>
+    begin + (end - begin) * progress;
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -34,81 +40,6 @@ class ConnectionsScreen extends StatefulWidget {
 
   @override
   State<ConnectionsScreen> createState() => _ConnectionsScreenState();
-}
-
-class _TabListTransitionScope extends InheritedWidget {
-  const _TabListTransitionScope({
-    required this.animation,
-    required super.child,
-  });
-
-  final Animation<double> animation;
-
-  static _TabListTransitionScope? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_TabListTransitionScope>();
-
-  @override
-  bool updateShouldNotify(_TabListTransitionScope oldWidget) =>
-      animation != oldWidget.animation;
-}
-
-class _TabSwitchDirectionScope extends InheritedWidget {
-  const _TabSwitchDirectionScope({
-    required this.direction,
-    required super.child,
-  });
-
-  final int direction;
-
-  static _TabSwitchDirectionScope of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_TabSwitchDirectionScope>()!;
-
-  @override
-  bool updateShouldNotify(_TabSwitchDirectionScope oldWidget) =>
-      direction != oldWidget.direction;
-}
-
-class _StaggeredTabItem extends StatelessWidget {
-  const _StaggeredTabItem({
-    required this.index,
-    required this.child,
-    this.delayedEntry = false,
-  });
-
-  final int index;
-  final Widget child;
-  final bool delayedEntry;
-
-  @override
-  Widget build(BuildContext context) {
-    final scope = _TabListTransitionScope.maybeOf(context);
-    if (scope == null) return child;
-    final direction = _TabSwitchDirectionScope.of(context).direction;
-    final slot = math.min(index, 7);
-    return AnimatedBuilder(
-      animation: scope.animation,
-      child: child,
-      builder: (context, child) {
-        final incoming = scope.animation.status != AnimationStatus.reverse;
-        final start = incoming
-            ? delayedEntry
-                  ? 0.6
-                  : 0.28 + slot * 0.02
-            : 0.68 - slot * 0.02;
-        final end = incoming ? start + 0.3 : math.min(start + 0.3, 0.99);
-        final raw = Interval(start, end).transform(scope.animation.value);
-        final progress = Curves.easeInOutCubic.transform(raw);
-        final offset = (incoming ? 0.1 : -0.07) * direction * (1 - progress);
-        return Opacity(
-          opacity: progress,
-          child: FractionalTranslation(
-            translation: Offset(offset, 0),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
@@ -233,7 +164,18 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   }
 
   Widget _tabTransition(Widget child, Animation<double> animation) {
-    return _TabListTransitionScope(animation: animation, child: child);
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: Offset(0.055 * _tabDirection, 0),
+        end: Offset.zero,
+      ).animate(curved),
+      child: child,
+    );
   }
 
   void _setFilter(String value) {
@@ -313,10 +255,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       formatError(error, backendName: widget.store.active?.name);
 
   void _showDetail(ConnectionRow row) {
-    showModalBottomSheet(
+    showSmoothModalBottomSheet(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
       builder: (_) => ConnectionDetailSheet(
         row: row,
         showConnectionLog: widget.session.isStash.value,
@@ -341,9 +281,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               const SizedBox(width: 8),
               ActiveValueListenableBuilder<bool>(
                 valueListenable: widget.session.isStreaming,
-                builder: (_, live, _) => AnimatedOpacity(
+                builder: (_, live, _) => TransientAnimatedValue<double>(
+                  value: live ? 1 : 0.3,
                   duration: const Duration(milliseconds: 200),
-                  opacity: live ? 1 : 0.3,
+                  lerp: _lerpDouble,
                   child: Container(
                     width: 8,
                     height: 8,
@@ -352,20 +293,28 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       color: colorScheme.primary,
                     ),
                   ),
+                  builder: (_, opacity, child) =>
+                      Opacity(opacity: opacity, child: child),
                 ),
               ),
               const SizedBox(width: 10),
               Flexible(
-                child: ActiveValueListenableBuilder<ConnectionsTotals>(
-                  valueListenable: widget.session.connectionsTotals,
-                  builder: (_, totals, _) => Text(
-                    '↑${formatBytes(totals.upload)}/↓${formatBytes(totals.download)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                child:
+                    ActiveValueListenableSelector<
+                      ConnectionsTotals,
+                      (BigInt, BigInt)
+                    >(
+                      valueListenable: widget.session.connectionsTotals,
+                      pauseWhileScrolling: true,
+                      selector: (totals) => (totals.upload, totals.download),
+                      builder: (_, totals, _) => Text(
+                        '↑${formatBytes(totals.$1)}/↓${formatBytes(totals.$2)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
               ),
             ],
           ),
@@ -381,33 +330,30 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 icon: Icon(paused ? Icons.play_arrow : Icons.pause),
               ),
             ),
-            ActiveValueListenableBuilder<ConnectionsTotals>(
-              valueListenable: widget.session.connectionsTotals,
-              builder: (_, totals, _) {
-                if (_tab == ConnectionsTab.closed) {
-                  return ActiveListenableBuilder(
-                    listenable: widget.session.connections,
-                    builder: (_, _) {
-                      final n = widget.session.connections.closedCount;
-                      return IconButton(
-                        tooltip: '清空已关闭',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: n == 0 ? null : _clearClosed,
-                        icon: const Icon(Icons.delete_outline),
-                      );
-                    },
+            if (_tab == ConnectionsTab.closed)
+              ActiveListenableBuilder(
+                listenable: widget.session.connections,
+                builder: (_, _) {
+                  final n = widget.session.connections.closedCount;
+                  return IconButton(
+                    tooltip: '清空已关闭',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: n == 0 ? null : _clearClosed,
+                    icon: const Icon(Icons.delete_outline),
                   );
-                }
-                return IconButton(
+                },
+              )
+            else
+              ActiveValueListenableSelector<ConnectionsTotals, int>(
+                valueListenable: widget.session.connectionsTotals,
+                selector: (totals) => totals.count,
+                builder: (_, count, _) => IconButton(
                   tooltip: '关闭所有',
                   visualDensity: VisualDensity.compact,
-                  onPressed: totals.count == 0
-                      ? null
-                      : () => _closeAll(totals.count),
+                  onPressed: count == 0 ? null : () => _closeAll(count),
                   icon: const Icon(Icons.close),
-                );
-              },
-            ),
+                ),
+              ),
             ConnectionsSettingsMenu(prefs: widget.prefs),
           ],
         ),
@@ -579,23 +525,18 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                             onClose: _close,
                           );
                     return ClipRect(
-                      child: _TabSwitchDirectionScope(
-                        direction: _tabDirection,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 420),
-                          reverseDuration: const Duration(milliseconds: 420),
-                          switchInCurve: Curves.linear,
-                          switchOutCurve: Curves.linear,
-                          transitionBuilder: _tabTransition,
-                          layoutBuilder: (currentChild, previousChildren) =>
-                              Stack(
-                                fit: StackFit.expand,
-                                children: [...previousChildren, ?currentChild],
-                              ),
-                          child: KeyedSubtree(
-                            key: ValueKey(_tab),
-                            child: content,
-                          ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 240),
+                        reverseDuration: const Duration(milliseconds: 220),
+                        transitionBuilder: _tabTransition,
+                        layoutBuilder: (currentChild, previousChildren) =>
+                            Stack(
+                              fit: StackFit.expand,
+                              children: [...previousChildren, ?currentChild],
+                            ),
+                        child: KeyedSubtree(
+                          key: ValueKey(_tab),
+                          child: content,
                         ),
                       ),
                     );
@@ -634,7 +575,6 @@ class _ConnectionsList extends StatefulWidget {
 }
 
 class _ConnectionsListState extends State<_ConnectionsList> {
-  static const Duration _animDuration = Duration(milliseconds: 200);
   // Base row height at text-scale 1.0. The card sizes to its content (~70px
   // from the tile's padding); this slot adds the inter-card gap on top, so
   // the spacing is `_baseRowHeight - cardHeight` ≈ 12px. The tile clamps its
@@ -647,9 +587,11 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   double _rowHeight = _baseRowHeight;
 
   final ScrollController _scrollController = ScrollController();
+  Timer? _windowSettleTimer;
   // Coalesce ensureWindow calls to one per frame.
   bool _scheduled = false;
   var _active = true;
+  var _fastScrolling = false;
 
   @override
   void initState() {
@@ -666,8 +608,10 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   void didUpdateWidget(covariant _ConnectionsList oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session != widget.session) {
-      oldWidget.session.connections.removeListener(_onChange);
-      widget.session.connections.addListener(_onChange);
+      if (_active) {
+        oldWidget.session.connections.removeListener(_onChange);
+        widget.session.connections.addListener(_onChange);
+      }
     }
     if (oldWidget.tab != widget.tab || oldWidget.filter != widget.filter) {
       // Tab switch — jump scroll to top so the user starts at index 0
@@ -685,15 +629,31 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final active = TickerMode.valuesOf(context).enabled;
-    if (_active == active) return;
-    _active = active;
-    if (active) _scheduleEnsureWindow();
+    final active = isUiActive(context);
+    final fastScrolling = active && isUiFastScrolling(context);
+    final fastChanged = _fastScrolling != fastScrolling;
+    _fastScrolling = fastScrolling;
+    if (_active != active) {
+      _active = active;
+      if (active) {
+        widget.session.connections.addListener(_onChange);
+        widget.session.connections.refreshVisible();
+        _scheduleEnsureWindow();
+      } else {
+        widget.session.connections.removeListener(_onChange);
+      }
+    }
+    if (active && fastChanged && !fastScrolling) {
+      _windowSettleTimer?.cancel();
+      _windowSettleTimer = null;
+      _scheduleEnsureWindow();
+    }
   }
 
   @override
   void dispose() {
-    widget.session.connections.removeListener(_onChange);
+    if (_active) widget.session.connections.removeListener(_onChange);
+    _windowSettleTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -710,11 +670,25 @@ class _ConnectionsListState extends State<_ConnectionsList> {
   }
 
   void _onScroll() {
-    _scheduleEnsureWindow();
+    if (!_fastScrolling) {
+      _windowSettleTimer?.cancel();
+      _windowSettleTimer = null;
+      _scheduleEnsureWindow();
+      return;
+    }
+    _windowSettleTimer?.cancel();
+    _windowSettleTimer = Timer(const Duration(milliseconds: 90), () {
+      _windowSettleTimer = null;
+      if (mounted) _scheduleEnsureWindow();
+    });
   }
 
   void _scheduleEnsureWindow() {
     if (!_active || _scheduled) return;
+    if (_fastScrolling) {
+      _onScroll();
+      return;
+    }
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
@@ -756,18 +730,14 @@ class _ConnectionsListState extends State<_ConnectionsList> {
       return const SizedBox.expand();
     }
     if (total == 0) {
-      return _StaggeredTabItem(
-        index: 0,
-        delayedEntry: true,
-        child: Center(
-          child: Text(
-            widget.filter.isNotEmpty
-                ? '没有匹配的连接'
-                : widget.tab == ConnectionsTab.active
-                ? '暂无连接'
-                : '暂无已关闭连接',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+      return Center(
+        child: Text(
+          widget.filter.isNotEmpty
+              ? '没有匹配的连接'
+              : widget.tab == ConnectionsTab.active
+              ? '暂无连接'
+              : '暂无已关闭连接',
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
     }
@@ -776,13 +746,13 @@ class _ConnectionsListState extends State<_ConnectionsList> {
     final processIcons = widget.session.isLocalBackend
         ? widget.session.processIcons
         : null;
-    return RepaintBoundary(
-      child: ActiveListenableBuilder(
-        listenable: widget.prefs,
-        builder: (context, _) {
-          final showIcon = widget.prefs.connectionsShowProcessIcon;
-          final showAppName = widget.prefs.connectionsShowAppName;
-          return ListView.builder(
+    return ActiveListenableBuilder(
+      listenable: widget.prefs,
+      builder: (context, _) {
+        final showIcon = widget.prefs.connectionsShowProcessIcon;
+        final showAppName = widget.prefs.connectionsShowAppName;
+        return AppBackdropGroup(
+          child: ListView.builder(
             controller: _scrollController,
             padding: EdgeInsets.fromLTRB(
               16,
@@ -790,6 +760,10 @@ class _ConnectionsListState extends State<_ConnectionsList> {
               16,
               24 + MediaQuery.paddingOf(context).bottom,
             ),
+            // ConnectionTile already isolates the stable row contents. Avoid
+            // a second automatic boundary around each row.
+            addRepaintBoundaries: false,
+            addAutomaticKeepAlives: false,
             // Fixed-height items let ListView do exact scroll math without
             // measuring offscreen widgets.
             itemExtent: _rowHeight,
@@ -797,37 +771,31 @@ class _ConnectionsListState extends State<_ConnectionsList> {
             itemBuilder: (context, index) {
               final cn = widget.session.connections;
               final row = cn.rowAt(widget.tab, index);
-              return _StaggeredTabItem(
-                index: index,
-                child: _RowSlot(
-                  // Same key for the same row id keeps state across frames so
-                  // the AnimatedSwitcher inside doesn't re-trigger transitions.
-                  key: ValueKey(row?.id ?? 'idx::$index'),
-                  row: row,
-                  duration: _animDuration,
-                  processIcons: processIcons,
-                  showIcon: showIcon,
-                  showAppName: showAppName,
-                  onTap: row == null ? null : () => widget.onTap(row),
-                  onClose: row == null ? null : () => widget.onClose(row.id),
-                ),
+              return _RowSlot(
+                // Keep identity stable while the same row remains in this
+                // slot; a changed id replaces the subtree directly.
+                key: ValueKey(row?.id ?? 'idx::$index'),
+                row: row,
+                processIcons: processIcons,
+                showIcon: showIcon,
+                showAppName: showAppName,
+                onTap: row == null ? null : () => widget.onTap(row),
+                onClose: row == null ? null : () => widget.onClose(row.id),
               );
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-/// One slot in the virtualized list. AnimatedSwitcher handles the
-/// placeholder ↔ tile transition with size + fade so rows entering
-/// the window from off-screen visibly slide in.
+/// One slot in the virtualized list. The slot itself is keyed by row identity,
+/// so replacing a placeholder already replaces its subtree atomically.
 class _RowSlot extends StatelessWidget {
   const _RowSlot({
     super.key,
     required this.row,
-    required this.duration,
     this.processIcons,
     this.showIcon = false,
     this.showAppName = false,
@@ -836,7 +804,6 @@ class _RowSlot extends StatelessWidget {
   });
 
   final ConnectionRow? row;
-  final Duration duration;
   final ProcessIconCache? processIcons;
   final bool showIcon;
   final bool showAppName;
@@ -845,33 +812,26 @@ class _RowSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = row != null
-        ? Padding(
-            key: ValueKey('tile::${row!.id}'),
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ConnectionTile(
-              row: row!,
-              processIcons: processIcons,
-              showIcon: showIcon,
-              showAppName: showAppName,
-              onTap: onTap ?? () {},
-              onClose: onClose ?? () {},
-            ),
-          )
-        : const Padding(
-            key: ValueKey('placeholder'),
-            padding: EdgeInsets.only(bottom: 8),
-            child: _RowPlaceholder(),
-          );
-    return AnimatedSwitcher(
-      duration: duration,
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SizeTransition(sizeFactor: animation, child: child),
+    const placeholder = Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: _RowPlaceholder(),
+    );
+    final value = row;
+    if (value == null) return placeholder;
+    return ScrollDeferredContent(
+      placeholder: placeholder,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: ConnectionTile(
+          row: value,
+          processIcons: processIcons,
+          showIcon: showIcon,
+          showAppName: showAppName,
+          groupBackdrop: true,
+          onTap: onTap ?? () {},
+          onClose: onClose ?? () {},
+        ),
       ),
-      child: child,
     );
   }
 }
@@ -883,16 +843,67 @@ class _RowPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final surfaceTheme = AppSurfaceTheme.of(context);
-    return Container(
-      height: 66,
+    final base = surfaceTheme.surfaceColor(
+      scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+    );
+    final mark = scheme.onSurfaceVariant.withValues(alpha: 0.16);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: surfaceTheme.surfaceColor(
-          scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        ),
+        color: base,
         borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FractionallySizedBox(
+                    widthFactor: 0.55,
+                    child: _PlaceholderMark(height: 9, color: mark),
+                  ),
+                  const SizedBox(height: 8),
+                  FractionallySizedBox(
+                    widthFactor: 0.78,
+                    child: _PlaceholderMark(height: 7, color: mark),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            _PlaceholderMark(width: 28, height: 8, color: mark),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _PlaceholderMark extends StatelessWidget {
+  const _PlaceholderMark({
+    this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double? width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    ),
+  );
 }
 
 /// Grouped (by-process) connections. Each process is a pinned header
@@ -923,6 +934,7 @@ class _GroupedConnectionsList extends StatefulWidget {
 
 class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   var _active = true;
+  var _scrolling = false;
 
   @override
   void initState() {
@@ -934,26 +946,40 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   void didUpdateWidget(covariant _GroupedConnectionsList oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session != widget.session) {
-      oldWidget.session.connections.removeListener(_onChange);
-      widget.session.connections.addListener(_onChange);
+      if (_active) {
+        oldWidget.session.connections.removeListener(_onChange);
+        widget.session.connections.addListener(_onChange);
+      }
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _active = TickerMode.valuesOf(context).enabled;
+    final active = isUiActive(context);
+    final scrolling = active && isUiScrolling(context);
+    _scrolling = scrolling;
+    if (_active != active) {
+      _active = active;
+      if (active) {
+        widget.session.connections.addListener(_onChange);
+        widget.session.connections.refreshVisible();
+      } else {
+        widget.session.connections.removeListener(_onChange);
+      }
+    }
   }
 
   @override
   void dispose() {
-    widget.session.connections.removeListener(_onChange);
+    if (_active) widget.session.connections.removeListener(_onChange);
     super.dispose();
   }
 
   void _onChange() {
     if (mounted &&
         _active &&
+        !_scrolling &&
         widget.session.connections.visibleTab == widget.tab) {
       setState(() {});
     }
@@ -1023,18 +1049,14 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       return const SizedBox.expand();
     }
     if (groups.isEmpty) {
-      return _StaggeredTabItem(
-        index: 0,
-        delayedEntry: true,
-        child: Center(
-          child: Text(
-            widget.filter.isEmpty
-                ? widget.tab == ConnectionsTab.active
-                      ? '暂无连接'
-                      : '暂无已关闭连接'
-                : '没有匹配的连接',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+      return Center(
+        child: Text(
+          widget.filter.isEmpty
+              ? widget.tab == ConnectionsTab.active
+                    ? '暂无连接'
+                    : '暂无已关闭连接'
+              : '没有匹配的连接',
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
     }
@@ -1044,32 +1066,30 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     final showIcon = widget.prefs.connectionsShowProcessIcon;
     final showAppName = widget.prefs.connectionsShowAppName;
 
-    return RepaintBoundary(
+    return AppBackdropGroup(
       child: CustomScrollView(
         slivers: [
           const SliverToBoxAdapter(child: SizedBox(height: 4)),
-          for (final (groupIndex, group) in groups.indexed)
+          for (final group in groups)
             MultiSliver(
               pushPinnedChildren: true,
               children: [
                 SliverPinnedHeader(
-                  child: _StaggeredTabItem(
-                    index: groupIndex,
-                    child: RepaintBoundary(
-                      child: ConnectionGroupHeader(
-                        summary: group,
-                        expanded: cn.isExpanded(group.key),
-                        onToggle: () => cn.toggleGroup(group.key),
-                        onCloseAll: widget.tab == ConnectionsTab.active
-                            ? () => _closeGroup(group)
-                            : null,
-                        onClearAll: widget.tab == ConnectionsTab.closed
-                            ? () => _clearClosedGroup(group)
-                            : null,
-                        processIcons: processIcons,
-                        showIcon: showIcon,
-                        showAppName: showAppName,
-                      ),
+                  child: RepaintBoundary(
+                    child: ConnectionGroupHeader(
+                      summary: group,
+                      expanded: cn.isExpanded(group.key),
+                      onToggle: () => cn.toggleGroup(group.key),
+                      onCloseAll: widget.tab == ConnectionsTab.active
+                          ? () => _closeGroup(group)
+                          : null,
+                      onClearAll: widget.tab == ConnectionsTab.closed
+                          ? () => _clearClosedGroup(group)
+                          : null,
+                      processIcons: processIcons,
+                      showIcon: showIcon,
+                      showAppName: showAppName,
+                      groupBackdrop: true,
                     ),
                   ),
                 ),
@@ -1080,14 +1100,29 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                       builder: (_) {
                         final ids = cn.groupMemberIds(group.key);
                         return SliverList.builder(
+                          addRepaintBoundaries: false,
+                          addAutomaticKeepAlives: false,
                           itemCount: ids.length,
                           itemBuilder: (context, index) {
                             final row = cn.groupMemberAt(group.key, index);
                             if (row == null) {
-                              return const SizedBox(height: 60);
+                              return const SizedBox(
+                                height: 60,
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 4),
+                                  child: _RowPlaceholder(),
+                                ),
+                              );
                             }
-                            return _StaggeredTabItem(
-                              index: groupIndex + index + 1,
+                            return ScrollDeferredContent(
+                              key: ValueKey('grp::${group.key}::${row.id}'),
+                              placeholder: const SizedBox(
+                                height: 60,
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 4),
+                                  child: _RowPlaceholder(),
+                                ),
+                              ),
                               child: Padding(
                                 key: ValueKey('grp::${group.key}::${row.id}'),
                                 padding: const EdgeInsets.only(bottom: 4),
@@ -1099,6 +1134,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                                   showIcon: false,
                                   hideProcess: true,
                                   compact: true,
+                                  groupBackdrop: true,
                                   onTap: () => widget.onTap(row),
                                   onClose: () => widget.onClose(row.id),
                                 ),

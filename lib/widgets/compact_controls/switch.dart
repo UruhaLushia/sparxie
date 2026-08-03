@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../transient_animation.dart';
 import 'style.dart';
+
+const _switchAnimationDuration = Duration(milliseconds: 180);
+final _switchThumbShadows = [
+  BoxShadow(
+    color: Colors.black.withValues(alpha: 0.14),
+    blurRadius: 2,
+    offset: const Offset(0, 1),
+  ),
+];
 
 class CompactSwitch extends StatelessWidget {
   const CompactSwitch({
@@ -43,6 +53,21 @@ class CompactSwitch extends StatelessWidget {
     final enabled = onChanged != null;
     final horizontalInset =
         (controlStyle.switchHeight - controlStyle.switchThumbSize) / 2;
+    final visual = _SwitchVisual(
+      position: value ? 1 : 0,
+      trackColor: value
+          ? controlStyle.activeSwitchTrack(context)
+          : controlStyle.inactiveSwitchTrack(context),
+      outlineColor: value
+          ? Colors.transparent
+          : controlStyle.switchOutline(context),
+      thumbColor: value
+          ? controlStyle.activeSwitchThumb(context)
+          : controlStyle.inactiveSwitchThumb(context),
+      padding: EdgeInsets.all(horizontalInset),
+      borderRadius: controlStyle.switchBorderRadius,
+      thumbSize: controlStyle.switchThumbSize,
+    );
     return Semantics(
       label: semanticLabel,
       toggled: value,
@@ -61,44 +86,29 @@ class CompactSwitch extends StatelessWidget {
               hoverColor: controlStyle.hover(context),
               splashColor: controlStyle.pressed(context),
               highlightColor: controlStyle.pressed(context),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
+              child: TransientAnimatedValue<_SwitchVisual>(
+                value: visual,
+                duration: _switchAnimationDuration,
                 curve: Curves.easeOutCubic,
-                padding: EdgeInsets.all(horizontalInset),
-                decoration: BoxDecoration(
-                  color: value
-                      ? controlStyle.activeSwitchTrack(context)
-                      : controlStyle.inactiveSwitchTrack(context),
-                  borderRadius: controlStyle.switchBorderRadius,
-                  border: Border.all(
-                    color: value
-                        ? Colors.transparent
-                        : controlStyle.switchOutline(context),
+                lerp: _SwitchVisual.lerp,
+                builder: (_, visual, _) => Container(
+                  padding: visual.padding,
+                  decoration: BoxDecoration(
+                    color: visual.trackColor,
+                    borderRadius: visual.borderRadius,
+                    border: Border.all(color: visual.outlineColor),
                   ),
-                ),
-                child: AnimatedAlign(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  alignment: value
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    width: controlStyle.switchThumbSize,
-                    height: controlStyle.switchThumbSize,
-                    decoration: BoxDecoration(
-                      color: value
-                          ? controlStyle.activeSwitchThumb(context)
-                          : controlStyle.inactiveSwitchThumb(context),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.14),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
+                  child: Align(
+                    alignment: Alignment(visual.position * 2 - 1, 0),
+                    child: SizedBox.square(
+                      dimension: visual.thumbSize,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: visual.thumbColor,
+                          shape: BoxShape.circle,
+                          boxShadow: _switchThumbShadows,
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -159,4 +169,66 @@ class CompactSwitch extends StatelessWidget {
       ),
     );
   }
+}
+
+@immutable
+class _SwitchVisual {
+  const _SwitchVisual({
+    required this.position,
+    required this.trackColor,
+    required this.outlineColor,
+    required this.thumbColor,
+    required this.padding,
+    required this.borderRadius,
+    required this.thumbSize,
+  });
+
+  final double position;
+  final Color trackColor;
+  final Color outlineColor;
+  final Color thumbColor;
+  final EdgeInsets padding;
+  final BorderRadius borderRadius;
+  final double thumbSize;
+
+  static _SwitchVisual lerp(
+    _SwitchVisual begin,
+    _SwitchVisual end,
+    double progress,
+  ) => _SwitchVisual(
+    position: begin.position + (end.position - begin.position) * progress,
+    trackColor: Color.lerp(begin.trackColor, end.trackColor, progress)!,
+    outlineColor: Color.lerp(begin.outlineColor, end.outlineColor, progress)!,
+    thumbColor: Color.lerp(begin.thumbColor, end.thumbColor, progress)!,
+    padding: EdgeInsets.lerp(begin.padding, end.padding, progress)!,
+    borderRadius: BorderRadius.lerp(
+      begin.borderRadius,
+      end.borderRadius,
+      progress,
+    )!,
+    thumbSize: begin.thumbSize + (end.thumbSize - begin.thumbSize) * progress,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _SwitchVisual &&
+          position == other.position &&
+          trackColor == other.trackColor &&
+          outlineColor == other.outlineColor &&
+          thumbColor == other.thumbColor &&
+          padding == other.padding &&
+          borderRadius == other.borderRadius &&
+          thumbSize == other.thumbSize;
+
+  @override
+  int get hashCode => Object.hash(
+    position,
+    trackColor,
+    outlineColor,
+    thumbColor,
+    padding,
+    borderRadius,
+    thumbSize,
+  );
 }

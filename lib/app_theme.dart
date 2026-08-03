@@ -49,14 +49,13 @@ class _ThemeModeTransition extends StatefulWidget {
 }
 
 class _ThemeModeTransitionState extends State<_ThemeModeTransition>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 150),
-    value: 1,
-  );
+    with TickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 150);
+
+  AnimationController? _controller;
   var _overlayColor = Colors.transparent;
   var _startOpacity = 0.0;
+  var _generation = 0;
 
   @override
   void didUpdateWidget(_ThemeModeTransition oldWidget) {
@@ -64,12 +63,29 @@ class _ThemeModeTransitionState extends State<_ThemeModeTransition>
     if (oldWidget.brightness == widget.brightness) return;
     _overlayColor = oldWidget.surfaceColor;
     _startOpacity = oldWidget.brightness == Brightness.dark ? 0.18 : 0.12;
-    _controller.forward(from: 0);
+    final controller = _controller ??= AnimationController(
+      vsync: this,
+      duration: _duration,
+    );
+    final generation = ++_generation;
+    controller.forward(from: 0).whenCompleteOrCancel(() {
+      if (!mounted ||
+          generation != _generation ||
+          !identical(_controller, controller) ||
+          !controller.isCompleted) {
+        return;
+      }
+      setState(() => _controller = null);
+      controller.dispose();
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _generation++;
+    final controller = _controller;
+    _controller = null;
+    controller?.dispose();
     super.dispose();
   }
 
@@ -79,25 +95,24 @@ class _ThemeModeTransitionState extends State<_ThemeModeTransition>
       fit: StackFit.expand,
       children: [
         widget.child,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                if (_controller.isCompleted) return const SizedBox.shrink();
-                final progress = Curves.easeOutCubic.transform(
-                  _controller.value,
-                );
-                return ColoredBox(
-                  color: _overlayColor.withValues(
-                    alpha: _startOpacity * (1 - progress),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        Positioned.fill(child: IgnorePointer(child: _buildOverlay())),
       ],
+    );
+  }
+
+  Widget _buildOverlay() {
+    final controller = _controller;
+    if (controller == null) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final progress = Curves.easeOutCubic.transform(controller.value);
+        return ColoredBox(
+          color: _overlayColor.withValues(
+            alpha: _startOpacity * (1 - progress),
+          ),
+        );
+      },
     );
   }
 }

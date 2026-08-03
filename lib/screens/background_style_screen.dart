@@ -46,7 +46,7 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
+    return ActiveListenableBuilder(
       listenable: prefs,
       builder: (context, _) {
         final custom = prefs.backgroundSource != AppBackgroundSource.theme;

@@ -60,7 +60,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _active = TickerMode.valuesOf(context).enabled;
+    _active = isUiActive(context);
   }
 
   @override
@@ -450,8 +450,10 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   void didUpdateWidget(covariant _ProxiesBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session != widget.session) {
-      oldWidget.session.proxies.removeListener(_recompute);
-      widget.session.proxies.addListener(_recompute);
+      if (_active) {
+        oldWidget.session.proxies.removeListener(_recompute);
+        widget.session.proxies.addListener(_recompute);
+      }
       _recompute();
     }
   }
@@ -459,12 +461,21 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _active = TickerMode.valuesOf(context).enabled;
+    final active = isUiActive(context);
+    if (_active == active) return;
+    _active = active;
+    if (active) {
+      widget.session.proxies.addListener(_recompute);
+      _groups = widget.session.proxies.groups;
+    } else {
+      widget.session.proxies.removeListener(_recompute);
+      _pendingMemberLoads.clear();
+    }
   }
 
   @override
   void dispose() {
-    widget.session.proxies.removeListener(_recompute);
+    if (_active) widget.session.proxies.removeListener(_recompute);
     _pendingMemberLoads.clear();
     _scroll.dispose();
     super.dispose();
@@ -485,7 +496,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
 
   void _flushMemberLoads() {
     _memberLoadScheduled = false;
-    if (!mounted) {
+    if (!mounted || !_active) {
       _pendingMemberLoads.clear();
       return;
     }
@@ -544,7 +555,10 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     // ensureProxyGroupMembers only queues (returns early) while another load
     // for the group is in flight, so a single await isn't enough.
     final deadline = DateTime.now().add(const Duration(seconds: 3));
-    while (mounted && !loaded() && DateTime.now().isBefore(deadline)) {
+    while (mounted &&
+        _active &&
+        !loaded() &&
+        DateTime.now().isBefore(deadline)) {
       await widget.session.ensureProxyGroupMembers(
         group.name,
         0,
@@ -558,7 +572,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   Future<void> _locate(ProxyGroup group) async {
     if (!widget.expanded.contains(group.name)) widget.onToggle(group.name);
     await _waitForFullMembers(group);
-    if (!mounted) return;
+    if (!mounted || !_active) return;
     final now = group.hidesExactNow ? '' : group.now.value;
     final query = _queryFor(group.name);
     var row = -1;
@@ -589,7 +603,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     }
     if (row >= 0) offset += 8 + row * (_tileExtent + _tileSpacing);
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_scroll.hasClients) return;
+    if (!mounted || !_active || !_scroll.hasClients) return;
     unawaited(
       _scroll.animateTo(
         offset.clamp(0.0, _scroll.position.maxScrollExtent),
@@ -661,15 +675,19 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
       return SliverPadding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
         sliver: SliverGrid.builder(
+          addRepaintBoundaries: false,
+          addAutomaticKeepAlives: false,
           gridDelegate: _gridDelegate(),
           itemCount: group.memberCount,
           itemBuilder: (context, index) {
             final member = group.memberAt(index);
             if (member == null) {
-              _queueMemberLoad(group.name, index);
+              if (!isUiFastScrolling(context)) {
+                _queueMemberLoad(group.name, index);
+              }
               return const _ProxyNodePlaceholder();
             }
-            return _tile(group, member);
+            return _deferredTile(group, member);
           },
         ),
       );
@@ -704,9 +722,11 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       sliver: SliverGrid.builder(
+        addRepaintBoundaries: false,
+        addAutomaticKeepAlives: false,
         gridDelegate: _gridDelegate(),
         itemCount: matched.length,
-        itemBuilder: (context, index) => _tile(group, matched[index]),
+        itemBuilder: (context, index) => _deferredTile(group, matched[index]),
       ),
     );
   }
@@ -732,6 +752,14 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
       fixedListenable: group.fixed,
       onSelect: () => widget.onSelect(group, member.name),
       onTestDelay: () => widget.onTestNode(group, member.name),
+    );
+  }
+
+  Widget _deferredTile(ProxyGroup group, ProxyMember member) {
+    return ScrollDeferredContent(
+      key: ValueKey('${group.name}::${member.name}'),
+      placeholder: const _ProxyNodePlaceholder(),
+      child: _tile(group, member),
     );
   }
 
@@ -771,44 +799,52 @@ class _ProxyCardsBody extends StatelessWidget {
             child: Text('暂无代理组', style: Theme.of(context).textTheme.bodyMedium),
           );
         }
-        return GridView.builder(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            8,
-            16,
-            16 + MediaQuery.paddingOf(context).bottom,
+        return AppBackdropGroup(
+          child: GridView.builder(
+            // ProxyGroupCard places its boundary below the press transform, so
+            // the grid should not add a duplicate boundary above it.
+            addRepaintBoundaries: false,
+            addAutomaticKeepAlives: false,
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              16 + MediaQuery.paddingOf(context).bottom,
+            ),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 190,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: prefs.proxiesShowGroupIcons ? 96 : 90,
+            ),
+            itemCount: groups.length,
+            itemBuilder: (context, index) {
+              final group = groups[index];
+              return ProxyGroupCard(
+                key: ValueKey(group.name),
+                group: group,
+                showIcon: prefs.proxiesShowGroupIcons,
+                colored: prefs.proxiesCardColored,
+                onTap: () {
+                  if (group.memberCount > 0) {
+                    unawaited(
+                      session.ensureProxyGroupMembers(group.name, 0, 0),
+                    );
+                  }
+                  showProxyGroupCardDetail(
+                    context,
+                    session: session,
+                    group: group,
+                    showIcon: prefs.proxiesShowGroupIcons,
+                    colored: prefs.proxiesCardColored,
+                    onTestGroup: () => onTestGroup(group),
+                    onSelect: (name) => onSelect(group, name),
+                    onTestNode: (name) => onTestNode(group, name),
+                  );
+                },
+              );
+            },
           ),
-          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 190,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            mainAxisExtent: prefs.proxiesShowGroupIcons ? 96 : 90,
-          ),
-          itemCount: groups.length,
-          itemBuilder: (context, index) {
-            final group = groups[index];
-            return ProxyGroupCard(
-              key: ValueKey(group.name),
-              group: group,
-              showIcon: prefs.proxiesShowGroupIcons,
-              colored: prefs.proxiesCardColored,
-              onTap: () {
-                if (group.memberCount > 0) {
-                  unawaited(session.ensureProxyGroupMembers(group.name, 0, 0));
-                }
-                showProxyGroupCardDetail(
-                  context,
-                  session: session,
-                  group: group,
-                  showIcon: prefs.proxiesShowGroupIcons,
-                  colored: prefs.proxiesCardColored,
-                  onTestGroup: () => onTestGroup(group),
-                  onSelect: (name) => onSelect(group, name),
-                  onTestNode: (name) => onTestNode(group, name),
-                );
-              },
-            );
-          },
         );
       },
     );
@@ -834,6 +870,7 @@ class _ProxyNodePlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final surfaceTheme = AppSurfaceTheme.of(context);
+    final mark = scheme.onSurfaceVariant.withValues(alpha: 0.16);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surfaceTheme.surfaceColor(
@@ -844,6 +881,56 @@ class _ProxyNodePlaceholder extends StatelessWidget {
           scheme.outlineVariant.withValues(alpha: 0.4),
         ),
       ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FractionallySizedBox(
+                    widthFactor: 0.58,
+                    child: _ProxyPlaceholderMark(height: 8, color: mark),
+                  ),
+                  const SizedBox(height: 7),
+                  FractionallySizedBox(
+                    widthFactor: 0.32,
+                    child: _ProxyPlaceholderMark(height: 6, color: mark),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            _ProxyPlaceholderMark(width: 30, height: 8, color: mark),
+          ],
+        ),
+      ),
     );
   }
+}
+
+class _ProxyPlaceholderMark extends StatelessWidget {
+  const _ProxyPlaceholderMark({
+    this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double? width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+    ),
+  );
 }

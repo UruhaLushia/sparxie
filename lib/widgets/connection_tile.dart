@@ -24,6 +24,7 @@ class ConnectionTile extends StatelessWidget {
     this.showAppName = false,
     this.hideProcess = false,
     this.compact = false,
+    this.groupBackdrop = false,
   });
 
   final ConnectionRow row;
@@ -42,13 +43,22 @@ class ConnectionTile extends StatelessWidget {
   /// Tighter vertical padding for dense lists (e.g. group members).
   final bool compact;
 
+  /// Shares one blur pass with non-overlapping sibling rows in an
+  /// [AppBackdropGroup].
+  final bool groupBackdrop;
+
   // Android keys by package name (mihomo's `process`), desktop by exec path.
   String _iconKey() {
     final isAndroid = !kIsWeb && Platform.isAndroid;
     return isAndroid ? row.process : row.processPath;
   }
 
-  String _rawProcessName() => row.process.replaceAll(RegExp(r'\.exe$'), '');
+  String _rawProcessName() {
+    final process = row.process;
+    return process.endsWith('.exe')
+        ? process.substring(0, process.length - 4)
+        : process;
+  }
 
   String _titleFor(String? appName) {
     if (hideProcess) {
@@ -88,6 +98,7 @@ class ConnectionTile extends StatelessWidget {
     return RepaintBoundary(
       child: AppSurfaceBackdrop(
         borderRadius: radius,
+        grouped: groupBackdrop,
         child: InkWell(
           borderRadius: radius,
           onTap: onTap,
@@ -128,10 +139,11 @@ class ConnectionTile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: wantName
-                                ? ActiveListenableBuilder(
+                                ? ActiveListenableSelector<String?>(
                                     listenable: cache,
-                                    builder: (context, _) => Text(
-                                      _titleFor(cache.nameFor(iconKey)),
+                                    selector: () => cache.nameFor(iconKey),
+                                    builder: (context, appName, _) => Text(
+                                      _titleFor(appName),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleSmall
@@ -206,6 +218,7 @@ class ConnectionTile extends StatelessWidget {
                             // above stay stable to avoid wasted work on long lists.
                             ActiveValueListenableBuilder<RowBytes>(
                               valueListenable: row.bytes,
+                              pauseWhileScrolling: true,
                               builder: (_, bytes, _) => ConnectionTag(
                                 label:
                                     '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
@@ -214,6 +227,7 @@ class ConnectionTile extends StatelessWidget {
                             ),
                             ActiveValueListenableBuilder<RowSpeeds>(
                               valueListenable: row.speeds,
+                              pauseWhileScrolling: true,
                               builder: (_, speeds, _) {
                                 if (speeds.upload == BigInt.zero &&
                                     speeds.download == BigInt.zero) {

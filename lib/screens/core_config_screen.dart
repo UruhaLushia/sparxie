@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/basic_config_panel.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
@@ -19,6 +20,15 @@ class CoreConfigScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (context, activeController, _) =>
+          _buildScreen(context, activeController),
+    );
+  }
+
+  Widget _buildScreen(BuildContext context, ctl.Controller? activeController) {
     final hideMode = prefs?.navLayout == NavLayout.cards;
     return Scaffold(
       appBar: AppRouteAppBar(
@@ -42,6 +52,7 @@ class CoreConfigScreen extends StatelessWidget {
             MaxWidthContent(
               maxWidth: 720,
               child: BasicConfigPanel(
+                key: ValueKey((store, activeController)),
                 store: store,
                 showOutboundMode: !hideMode,
               ),

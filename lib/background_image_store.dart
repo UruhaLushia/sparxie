@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -7,7 +8,8 @@ class BackgroundImageStore {
   BackgroundImageStore._();
 
   static const _managedPrefix = 'managed:';
-  static final _imageSizes = <String, ui.Size>{};
+  static const _maxImageSizes = 32;
+  static final LinkedHashMap<String, ui.Size> _imageSizes = LinkedHashMap();
   static final _pendingImageSizes = <String, Future<ui.Size>>{};
   static Directory? _managedDirectory;
 
@@ -95,10 +97,14 @@ class BackgroundImageStore {
     }
   }
 
-  static ui.Size? cachedImageSize(String path) => _imageSizes[path];
+  static ui.Size? cachedImageSize(String path) {
+    final size = _imageSizes.remove(path);
+    if (size != null) _imageSizes[path] = size;
+    return size;
+  }
 
   static Future<ui.Size> imageSize(String path) {
-    final cached = _imageSizes[path];
+    final cached = cachedImageSize(path);
     if (cached != null) return Future.value(cached);
     return _pendingImageSizes.putIfAbsent(path, () => _readImageSize(path));
   }
@@ -113,7 +119,11 @@ class BackgroundImageStore {
             descriptor.width.toDouble(),
             descriptor.height.toDouble(),
           );
+          _imageSizes.remove(path);
           _imageSizes[path] = size;
+          while (_imageSizes.length > _maxImageSizes) {
+            _imageSizes.remove(_imageSizes.keys.first);
+          }
           return size;
         } finally {
           descriptor.dispose();

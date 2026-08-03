@@ -8,6 +8,7 @@ import '../utils.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';
 import 'process_icon.dart';
+import 'transient_animation.dart';
 
 /// Expandable header for one process group in the grouped connections view.
 /// Mirrors [ProxyGroupHeader]'s look: leading icon, label, member-count
@@ -23,6 +24,7 @@ class ConnectionGroupHeader extends StatelessWidget {
     this.processIcons,
     this.showIcon = true,
     this.showAppName = false,
+    this.groupBackdrop = false,
   });
 
   final ConnectionGroupSummary summary;
@@ -33,6 +35,9 @@ class ConnectionGroupHeader extends StatelessWidget {
   final ProcessIconCache? processIcons;
   final bool showIcon;
   final bool showAppName;
+
+  /// Shares one blur pass with sibling headers in an [AppBackdropGroup].
+  final bool groupBackdrop;
 
   /// Sentinel key for mihomo's internal connections (see Rust `INNER_KEY`).
   /// These have no source/process, so they get a fixed icon and label.
@@ -46,7 +51,8 @@ class ConnectionGroupHeader extends StatelessWidget {
 
   String _title(String? appName) {
     if (appName != null && appName.isNotEmpty) return appName;
-    final label = summary.label.replaceAll(RegExp(r'\.exe$'), '');
+    final raw = summary.label;
+    final label = raw.endsWith('.exe') ? raw.substring(0, raw.length - 4) : raw;
     return label.isEmpty ? '未知进程' : label;
   }
 
@@ -69,6 +75,7 @@ class ConnectionGroupHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         child: AppSurfaceBackdrop(
           borderRadius: radius,
+          grouped: groupBackdrop,
           child: Material(
             color: surfaceTheme.surfaceColor(
               scheme.surfaceContainerHighest.withValues(alpha: 0.7),
@@ -107,12 +114,11 @@ class ConnectionGroupHeader extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           wantName
-                              ? ActiveListenableBuilder(
+                              ? ActiveListenableSelector<String?>(
                                   listenable: cache,
-                                  builder: (_, _) => _titleText(
-                                    context,
-                                    _title(cache.nameFor(nameKey)),
-                                  ),
+                                  selector: () => cache.nameFor(nameKey),
+                                  builder: (_, appName, _) =>
+                                      _titleText(context, _title(appName)),
                                 )
                               : _titleText(context, _title(null)),
                           const SizedBox(height: 2),
@@ -123,6 +129,7 @@ class ConnectionGroupHeader extends StatelessWidget {
                     const SizedBox(width: 8),
                     ActiveValueListenableBuilder<int>(
                       valueListenable: summary.count,
+                      pauseWhileScrolling: true,
                       builder: (_, count, _) => Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -159,7 +166,7 @@ class ConnectionGroupHeader extends StatelessWidget {
                         onPressed: onClearAll,
                         icon: const Icon(Icons.delete_outline, size: 20),
                       ),
-                    AnimatedRotation(
+                    TransientAnimatedRotation(
                       turns: expanded ? 0.5 : 0,
                       duration: const Duration(milliseconds: 200),
                       child: Icon(
@@ -226,6 +233,7 @@ class _StatsLine extends StatelessWidget {
         Flexible(
           child: ActiveValueListenableBuilder<RowBytes>(
             valueListenable: summary.bytes,
+            pauseWhileScrolling: true,
             builder: (_, b, _) => Text(
               '↑${formatBytes(b.upload)} ↓${formatBytes(b.download)}',
               style: style,
@@ -236,6 +244,7 @@ class _StatsLine extends StatelessWidget {
         ),
         ActiveValueListenableBuilder<RowSpeeds>(
           valueListenable: summary.speeds,
+          pauseWhileScrolling: true,
           builder: (_, s, _) {
             if (s.upload == BigInt.zero && s.download == BigInt.zero) {
               return const SizedBox.shrink();

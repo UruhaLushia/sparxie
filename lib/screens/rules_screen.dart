@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
+import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
@@ -18,16 +19,32 @@ import '../widgets/rule_details_panel.dart';
 /// [rust.rulesLoad] fetches and caches it, [rust.rulesSetFilter] re-filters
 /// in place, and this screen only ever holds a sliding window of rows pulled
 /// via [rust.rulesWindow] as the user scrolls.
-class RulesScreen extends StatefulWidget {
+class RulesScreen extends StatelessWidget {
   const RulesScreen({super.key, required this.store});
 
   final ctl.ControllerStore store;
 
   @override
-  State<RulesScreen> createState() => _RulesScreenState();
+  Widget build(BuildContext context) {
+    return ActiveListenableSelector<ctl.Controller?>(
+      listenable: store,
+      selector: () => store.active,
+      builder: (_, activeController, _) =>
+          _RulesView(key: ValueKey((store, activeController)), store: store),
+    );
+  }
 }
 
-class _RulesScreenState extends State<RulesScreen> {
+class _RulesView extends StatefulWidget {
+  const _RulesView({super.key, required this.store});
+
+  final ctl.ControllerStore store;
+
+  @override
+  State<_RulesView> createState() => _RulesScreenState();
+}
+
+class _RulesScreenState extends State<_RulesView> {
   static const int _windowOverscan = 5;
   static const int _windowRefetchMargin = 2;
   static const double _rowHeight = _ruleCardHeight + _ruleItemSpacing;
@@ -40,6 +57,7 @@ class _RulesScreenState extends State<RulesScreen> {
   String? _error;
   String _filter = '';
   Timer? _filterTimer;
+  var _filterPending = false;
 
   int _total = 0;
   int _filtered = 0;
@@ -48,13 +66,31 @@ class _RulesScreenState extends State<RulesScreen> {
   int _limit = 0;
   final List<rust.RuleEntry> _window = <rust.RuleEntry>[];
   bool _scheduled = false;
+  var _active = true;
 
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_onStore);
     _scrollController.addListener(_onScroll);
     _bind();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = isUiActive(context);
+    if (_active == active) return;
+    _active = active;
+    if (!active) {
+      _filterTimer?.cancel();
+      _filterTimer = null;
+      return;
+    }
+    if (_filterPending) {
+      unawaited(_applyFilter());
+    } else {
+      _scheduleEnsureWindow();
+    }
   }
 
   @override
@@ -62,12 +98,15 @@ class _RulesScreenState extends State<RulesScreen> {
     _filterTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    widget.store.removeListener(_onStore);
     super.dispose();
   }
 
-  void _onStore() {
-    if (!identical(widget.store.active, _activeKey)) _bind();
+  void _updateState(VoidCallback update) {
+    if (_active) {
+      setState(update);
+    } else {
+      update();
+    }
   }
 
   rust.BackendTarget? _target() {
@@ -77,6 +116,9 @@ class _RulesScreenState extends State<RulesScreen> {
   }
 
   void _bind() {
+    _filterTimer?.cancel();
+    _filterTimer = null;
+    _filterPending = false;
     _activeKey = widget.store.active;
     _resetWindow();
     if (_activeKey == null) {
@@ -112,10 +154,10 @@ class _RulesScreenState extends State<RulesScreen> {
       _limit = _initialLimit();
       await _fetchWindow(_offset, _limit);
     } catch (e) {
-      if (mounted) setState(() => _error = _formatError(e));
+      if (mounted) _updateState(() => _error = _formatError(e));
     } finally {
       if (mounted) {
-        setState(() => _loading = false);
+        _updateState(() => _loading = false);
         _scheduleEnsureWindow();
       }
     }
@@ -123,11 +165,15 @@ class _RulesScreenState extends State<RulesScreen> {
 
   void _onFilterChanged(String value) {
     _filter = value.trim();
+    _filterPending = true;
     _filterTimer?.cancel();
     _filterTimer = Timer(_filterDebounce, _applyFilter);
   }
 
   Future<void> _applyFilter() async {
+    _filterTimer = null;
+    if (!_active) return;
+    _filterPending = false;
     final target = _target();
     if (target == null) return;
     try {
@@ -136,6 +182,10 @@ class _RulesScreenState extends State<RulesScreen> {
         filter: _filter,
       );
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      if (!_active) {
+        _filterPending = true;
+        return;
+      }
       _total = summary.total;
       _filtered = summary.filtered;
       _offset = 0;
@@ -149,22 +199,23 @@ class _RulesScreenState extends State<RulesScreen> {
   }
 
   void _onScroll() {
-    if (_scheduled) return;
+    if (!_active || _scheduled) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      _ensureWindow();
+      if (_active) _ensureWindow();
     });
   }
 
   void _scheduleEnsureWindow() {
+    if (!_active) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _ensureWindow();
+      if (mounted && _active) _ensureWindow();
     });
   }
 
   void _ensureWindow() {
-    if (!_scrollController.hasClients || _filtered == 0) return;
+    if (!_active || !_scrollController.hasClients || _filtered == 0) return;
     final pos = _scrollController.position;
     final firstIndex = (pos.pixels / _rowHeight).floor();
     final lastIndex =
@@ -205,7 +256,7 @@ class _RulesScreenState extends State<RulesScreen> {
   Future<void> _fetchWindow(int offset, int limit) async {
     final target = _target();
     if (target == null || limit <= 0) {
-      if (mounted) setState(() => _window.clear());
+      if (mounted) _updateState(() => _window.clear());
       return;
     }
     try {
@@ -220,7 +271,7 @@ class _RulesScreenState extends State<RulesScreen> {
           limit != _limit) {
         return;
       }
-      setState(() {
+      _updateState(() {
         _window
           ..clear()
           ..addAll(rows);
@@ -344,24 +395,30 @@ class _RulesScreenState extends State<RulesScreen> {
                     )
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          4,
-                          16,
-                          24 + MediaQuery.paddingOf(context).bottom,
+                      child: AppBackdropGroup(
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          // RuleContextMenu isolates each real row below its
+                          // press transform; avoid a duplicate automatic layer.
+                          addRepaintBoundaries: false,
+                          addAutomaticKeepAlives: false,
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            4,
+                            16,
+                            24 + MediaQuery.paddingOf(context).bottom,
+                          ),
+                          itemExtent: _rowHeight,
+                          itemCount: _filtered,
+                          itemBuilder: (_, index) {
+                            final rule = _ruleAt(index);
+                            if (rule == null) return const _RulePlaceholder();
+                            return _RuleTile(
+                              rule: rule,
+                              onToggle: (v) => _toggle(rule, v),
+                            );
+                          },
                         ),
-                        itemExtent: _rowHeight,
-                        itemCount: _filtered,
-                        itemBuilder: (_, index) {
-                          final rule = _ruleAt(index);
-                          if (rule == null) return const _RulePlaceholder();
-                          return _RuleTile(
-                            rule: rule,
-                            onToggle: (v) => _toggle(rule, v),
-                          );
-                        },
                       ),
                     ),
             ),
@@ -400,6 +457,7 @@ class _RuleSurface extends StatelessWidget {
     final surfaceTheme = AppSurfaceTheme.of(context);
     return AppSurfaceBackdrop(
       borderRadius: _ruleRadius,
+      grouped: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: surfaceTheme.surfaceColor(scheme.surfaceContainerLow, 0.05),
@@ -408,10 +466,7 @@ class _RuleSurface extends StatelessWidget {
             color: scheme.outlineVariant.withValues(alpha: 0.6),
           ),
         ),
-        child: ClipRRect(
-          borderRadius: _ruleRadius,
-          child: Material(type: MaterialType.transparency, child: child),
-        ),
+        child: Material(type: MaterialType.transparency, child: child),
       ),
     );
   }

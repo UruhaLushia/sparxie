@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../transient_animation.dart';
 import 'style.dart';
 
 class CompactSegmentedButton<T> extends StatefulWidget {
@@ -108,7 +109,7 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
                         top: 0,
                         bottom: 0,
                         width: constraints.maxWidth / widget.segments.length,
-                        child: AnimatedSlide(
+                        child: TransientAnimatedSlide(
                           duration: const Duration(milliseconds: 120),
                           curve: Curves.easeOutCubic,
                           offset: Offset(selectedIndex.toDouble(), 0),
@@ -124,13 +125,11 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
                         ),
                       )
                     else if (indicatorRect != null)
-                      AnimatedPositioned(
+                      TransientAnimatedValue<Rect>(
+                        value: indicatorRect,
                         duration: const Duration(milliseconds: 120),
                         curve: Curves.easeOutCubic,
-                        left: indicatorRect.left,
-                        top: indicatorRect.top,
-                        width: indicatorRect.width,
-                        height: indicatorRect.height,
+                        lerp: _lerpRect,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -139,6 +138,8 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
                             ),
                           ),
                         ),
+                        builder: (_, rect, child) =>
+                            Positioned.fromRect(rect: rect, child: child!),
                       ),
                     Row(
                       mainAxisSize: widget.expanded
@@ -189,6 +190,9 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
       ),
     );
   }
+
+  static Rect _lerpRect(Rect begin, Rect end, double progress) =>
+      Rect.lerp(begin, end, progress)!;
 }
 
 class _CompactSegment<T> extends StatelessWidget {

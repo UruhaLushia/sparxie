@@ -165,7 +165,7 @@ class LogWindowNotifier extends ChangeNotifier {
   }
 
   void ensureWindow(int firstIndex, int lastIndex) {
-    if (!_active || paused.value || _filterLoading || _total == 0) return;
+    if (paused.value || _filterLoading || _total == 0) return;
     final safeFirst = firstIndex.clamp(0, _total - 1).toInt();
     final safeLast = lastIndex.clamp(safeFirst, _total - 1).toInt();
     final desiredOffset = (safeFirst - _windowOverscan)
@@ -186,7 +186,10 @@ class LogWindowNotifier extends ChangeNotifier {
     }
     _requestedOffset = desiredOffset;
     _requestedLimit = math.max(desiredLimit, 1);
-    _scheduleRefetch();
+    // Scrolling freezes backend refreshes, but still records the latest target
+    // range. Reactivation can then fetch the settled viewport directly instead
+    // of first reloading the obsolete window from before the fling.
+    if (_active) _scheduleRefetch();
   }
 
   void clearLocal() {
