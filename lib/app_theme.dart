@@ -175,12 +175,18 @@ ThemeData _appTheme({
       : scheme.onSurface.withValues(
           alpha: brightness == Brightness.dark ? 0.12 : 0.1,
         );
+  final menuSurface = scheme.surfaceContainerHigh;
+  const noSurfaceTint = WidgetStatePropertyAll<Color?>(Colors.transparent);
+  final menuStyle = MenuStyle(
+    backgroundColor: WidgetStatePropertyAll<Color?>(menuSurface),
+    surfaceTintColor: noSurfaceTint,
+  );
   final base = ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
     scaffoldBackgroundColor: surfaceTheme.pageColor(scheme.surface),
-    canvasColor: surfaceTheme.surfaceColor(scheme.surface),
-    cardColor: surfaceTheme.surfaceColor(scheme.surfaceContainerLow),
+    canvasColor: scheme.surface,
+    cardColor: scheme.surfaceContainerLow,
     dividerColor: dividerColor,
     dividerTheme: DividerThemeData(color: dividerColor, thickness: 0.5),
     focusColor: scheme.primary.withValues(alpha: 0.12),
@@ -211,8 +217,11 @@ ThemeData _appTheme({
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: surfaceTheme.modalSurfaceColor(scheme.surfaceContainerHigh),
+      color: menuSurface,
+      surfaceTintColor: Colors.transparent,
     ),
+    dropdownMenuTheme: DropdownMenuThemeData(menuStyle: menuStyle),
+    menuTheme: MenuThemeData(style: menuStyle),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
         TargetPlatform.android: AppHorizontalPageTransitionsBuilder(),
@@ -223,7 +232,7 @@ ThemeData _appTheme({
       },
     ),
     navigationRailTheme: NavigationRailThemeData(
-      backgroundColor: surfaceTheme.surfaceColor(scheme.surface),
+      backgroundColor: scheme.surface,
     ),
     extensions: [surfaceTheme],
   );

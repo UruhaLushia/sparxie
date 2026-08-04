@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'app_background.dart';
-import 'transition_snapshot.dart';
-
 Future<T?> showSettingsDrawer<T>({
   required BuildContext context,
   required String barrierLabel,
@@ -154,20 +151,15 @@ class _SettingsDrawerTransition extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final liveChild = RepaintBoundary(child: child);
-    final transitionChild = AppSurfaceTheme.of(context).effectiveBlur > 0
-        ? liveChild
-        : HighRefreshTransitionSnapshot(animation: animation, child: liveChild);
     return Align(
       alignment: Alignment.centerRight,
       child: AnimatedBuilder(
         animation: animation,
-        child: transitionChild,
+        child: child,
         builder: (_, child) {
           final progress = Curves.easeOutCubic.transform(
             animation.value.clamp(0.0, 1.0),
           );
-          if (progress >= 0.999) return child!;
           return FractionalTranslation(
             translation: Offset(1 - progress, 0),
             child: child,
