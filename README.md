@@ -38,7 +38,7 @@ yay -S sparxie-bin
 | Clash | CMFA | 代理组、连接、日志、流量可用；核心管理和部分配置操作不可用 |
 | Clash | Stash | 代理组、Provider 节点、连接、日志、流量、基础配置可用；内存、缓存、核心管理不可用 |
 | Surge | Surge | 策略组、策略选择、连接、规则、流量、出站模式、DNS 刷新可用；核心管理、Provider 管理、内存流不可用 |
-| sing-box | sing-box | 状态信息 (协程/内存)、代理组、节点、连接、日志、tailscale 状态 (基于 1.14.0-alpha.31) |
+| sing-box | sing-box | 状态信息 (协程/内存)、代理组、节点、连接、日志、tailscale 状态 (基于 1.14.0-beta.2) |
 
 ## URI Scheme 导入
 
@@ -59,8 +59,8 @@ sparxie://install-target?url=http%3A%2F%2F192.168.1.2%3A9090&name=Home&type=clas
 | Linux(x86_64 / arm64) | ✅ |
 | Windows(x86_64 / arm64) | ✅ |
 | macOS(Apple Silicon) | ✅ |
-| macOS(Intel) | ✅ 仅 Release 构建；非 Release 不编译 |
-| iOS(arm64) | ✅ 未签名 IPA，供 SideStore 等工具自签 |
+| macOS(Intel) | ✅ |
+| iOS(arm64) | ✅ |
 | Web | 暂不支持 |
 
 ## 架构
