@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/hct/hct.dart';
 
 import '../session.dart';
 import '../utils.dart';
@@ -10,28 +11,26 @@ import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
 import 'transient_animation.dart';
 
-// Same-hue deep gradients (roughly tailwind 600 → 900) so any two adjacent
-// cards stay harmonious and white text keeps contrast.
-const _gradientColors = <(Color, Color)>[
-  (Color(0xff2563eb), Color(0xff1e3a8a)),
-  (Color(0xff0891b2), Color(0xff164e63)),
-  (Color(0xff0d9488), Color(0xff134e4a)),
-  (Color(0xff059669), Color(0xff064e3b)),
-  (Color(0xff4f46e5), Color(0xff312e81)),
-  (Color(0xff7c3aed), Color(0xff4c1d95)),
-  (Color(0xffea580c), Color(0xff7c2d12)),
-  (Color(0xff475569), Color(0xff1e293b)),
+const _gradientHueOffsets = <double>[
+  -60,
+  -52,
+  -44,
+  -36,
+  -28,
+  -20,
+  -12,
+  -4,
+  4,
+  12,
+  20,
+  28,
+  36,
+  44,
+  52,
+  60,
 ];
 
-final _gradients = <LinearGradient>[
-  for (final (start, end) in _gradientColors)
-    LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color.lerp(start, Colors.white, 0.12)!, start, end],
-      stops: const [0, 0.3, 1],
-    ),
-];
+(int, bool, Hct, List<LinearGradient?>)? _gradientCache;
 
 BoxDecoration _lerpBoxDecoration(
   BoxDecoration begin,
@@ -39,12 +38,57 @@ BoxDecoration _lerpBoxDecoration(
   double progress,
 ) => BoxDecoration.lerp(begin, end, progress)!;
 
-LinearGradient _gradientFor(String name) {
+LinearGradient _themeGradient(
+  Hct source,
+  double offset, {
+  required bool translucent,
+}) {
+  final hue = (source.hue + offset + 360) % 360;
+  final chroma = source.chroma < 8
+      ? source.chroma
+      : source.chroma.clamp(24.0, 48.0).toDouble();
+  final opacity = translucent ? 0.84 : 1.0;
+  Color tone(double hueOffset, double chromaScale, double value) => Color(
+    Hct.from(hue + hueOffset, chroma * chromaScale, value).toInt(),
+  ).withValues(alpha: opacity);
+
+  return LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: translucent
+        ? [tone(-8, 0.9, 34), tone(0, 1, 22), tone(10, 0.82, 10)]
+        : [tone(-8, 0.9, 48), tone(0, 1, 33), tone(10, 0.82, 17)],
+    stops: const [0, 0.46, 1],
+  );
+}
+
+LinearGradient _gradientFor(
+  Color primary,
+  String name, {
+  required bool translucent,
+}) {
   var hash = 0;
   for (var i = 0; i < name.length; i++) {
     hash = (hash * 31 + name.codeUnitAt(i)) & 0x7fffffff;
   }
-  return _gradients[hash % _gradients.length];
+  hash ^= hash >> 11;
+  final key = primary.toARGB32();
+  var cached = _gradientCache;
+  if (cached == null || cached.$1 != key || cached.$2 != translucent) {
+    cached = (
+      key,
+      translucent,
+      Hct.fromInt(key),
+      List<LinearGradient?>.filled(_gradientHueOffsets.length, null),
+    );
+    _gradientCache = cached;
+  }
+  final index = hash % _gradientHueOffsets.length;
+  return cached.$4[index] ??= _themeGradient(
+    cached.$3,
+    _gradientHueOffsets[index],
+    translucent: translucent,
+  );
 }
 
 class _CardStyle {
@@ -80,9 +124,18 @@ class _CardStyle {
 }
 
 _CardStyle _styleFor(BuildContext context, String name, bool colored) {
+  final scheme = Theme.of(context).colorScheme;
+  final surfaceTheme = AppSurfaceTheme.of(context);
   if (colored) {
     return _CardStyle(
-      gradient: _gradientFor(name),
+      gradient: _gradientFor(
+        scheme.primary,
+        name,
+        translucent: surfaceTheme.enabled,
+      ),
+      background: surfaceTheme.enabled
+          ? surfaceTheme.surfaceColor(scheme.surfaceContainerHigh)
+          : null,
       title: Colors.white,
       subtitle: Colors.white70,
       icon: Colors.white,
@@ -95,8 +148,6 @@ _CardStyle _styleFor(BuildContext context, String name, bool colored) {
       pillUntested: Colors.white24,
     );
   }
-  final scheme = Theme.of(context).colorScheme;
-  final surfaceTheme = AppSurfaceTheme.of(context);
   return _CardStyle(
     background: surfaceTheme.surfaceColor(scheme.surfaceContainerHigh),
     cardBorder: surfaceTheme.enabled
@@ -150,7 +201,6 @@ class _CardSurface extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Material(type: MaterialType.transparency, child: child),
     );
-    if (style.gradient != null) return card;
     return AppSurfaceBackdrop(
       borderRadius: BorderRadius.circular(radius),
       grouped: groupBackdrop,
