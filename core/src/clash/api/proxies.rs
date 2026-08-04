@@ -57,6 +57,9 @@ pub async fn proxies(
 }
 
 pub async fn proxy_detail(target: MihomoTarget, name: String) -> Result<String, MihomoError> {
+    if let Some(detail) = catalog::cached_proxy_detail(&target, &name).await? {
+        return Ok(detail);
+    }
     let path = format!("proxies/{}", urlencode(&name));
     Ok(target.client()?.get_json(&path).await?.to_string())
 }

@@ -90,8 +90,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     _prefsSnapshot = next;
     if (previous == null ||
         previous.includeHidden != next.includeHidden ||
-        previous.layout != next.layout ||
-        previous.showGroupIcons != next.showGroupIcons ||
         previous.sort != next.sort) {
       _syncProxyCatalogOptions();
     }
@@ -101,9 +99,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   void _syncProxyCatalogOptions() {
     widget.session.setProxyCatalogOptions(
       includeHidden: widget.prefs.proxiesShowHiddenGroups,
-      resolveProviderCurrentDelay:
-          widget.prefs.proxiesLayout == ProxiesLayout.cards &&
-          !widget.prefs.proxiesShowGroupIcons,
       memberSort: _memberSort(widget.prefs.proxiesSort),
     );
   }
@@ -154,6 +149,12 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     return rust.backendTargetForController(c);
   }
 
+  Future<String> _loadNodeDetails(String name) async {
+    final target = _target();
+    if (target == null) throw StateError('当前没有可用的控制器');
+    return rust.proxyDetail(target: target, name: name);
+  }
+
   /// Resolve the URL used for a group's delay test, honoring scope:
   /// `group` first tries the group-level `testUrl`, falling back to global.
   String _resolveTestUrl(ProxyGroup group) {
@@ -165,17 +166,31 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   }
 
   Future<void> _select(ProxyGroup group, String name) async {
-    if (!group.canSelectMembers) return;
+    await _setMember(group, name, fixed: false);
+  }
+
+  Future<void> _toggleFixed(ProxyGroup group, String name) async {
+    await _setMember(group, name, fixed: true);
+  }
+
+  Future<void> _setMember(
+    ProxyGroup group,
+    String name, {
+    required bool fixed,
+  }) async {
+    if (fixed ? !group.canFixMembers : !group.canSelectOnTap) return;
     final target = _target();
     if (target == null) return;
-    // Tapping the already-pinned node releases the fix instead of
-    // re-fixing it — the same gesture toggles back to automatic selection.
-    if (group.fixed.value == name) {
+    if (fixed && group.fixed.value == name) {
       await _unfix(group);
       return;
     }
-    final previous = group.now.value;
+    final previousNow = group.now.value;
+    final previousFixed = group.fixed.value;
     widget.session.proxies.setNowOptimistic(group.name, name);
+    if (fixed) {
+      widget.session.proxies.setFixedOptimistic(group.name, name);
+    }
     try {
       await rust.selectProxy(target: target, group: group.name, name: name);
       if (widget.prefs.autoCloseOnSwitch) {
@@ -191,11 +206,14 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       }
       unawaited(widget.session.refreshProxies());
     } catch (e) {
-      widget.session.proxies.setNowOptimistic(group.name, previous);
+      widget.session.proxies.setNowOptimistic(group.name, previousNow);
+      if (fixed) {
+        widget.session.proxies.setFixedOptimistic(group.name, previousFixed);
+      }
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('切换失败:$e')));
+        ).showSnackBar(SnackBar(content: Text('${fixed ? '固定' : '切换'}失败:$e')));
       }
     }
   }
@@ -203,10 +221,13 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   Future<void> _unfix(ProxyGroup group) async {
     final target = _target();
     if (target == null) return;
+    final previous = group.fixed.value;
+    widget.session.proxies.setFixedOptimistic(group.name, '');
     try {
       await rust.unfixProxy(target: target, name: group.name);
       unawaited(widget.session.refreshProxies());
     } catch (e) {
+      widget.session.proxies.setFixedOptimistic(group.name, previous);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -368,6 +389,8 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                         session: widget.session,
                         prefs: widget.prefs,
                         onSelect: _select,
+                        onToggleFixed: _toggleFixed,
+                        loadNodeDetails: _loadNodeDetails,
                         onTestGroup: _testGroup,
                         onTestNode: _testNode,
                       )
@@ -382,6 +405,8 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
                         onToggleSearch: _toggleSearch,
                         onSearchChanged: () => setState(() {}),
                         onSelect: _select,
+                        onToggleFixed: _toggleFixed,
+                        loadNodeDetails: _loadNodeDetails,
                         onTestGroup: _testGroup,
                         onTestNode: _testNode,
                       ),
@@ -406,6 +431,8 @@ class _ProxiesBody extends StatefulWidget {
     required this.onToggleSearch,
     required this.onSearchChanged,
     required this.onSelect,
+    required this.onToggleFixed,
+    required this.loadNodeDetails,
     required this.onTestGroup,
     required this.onTestNode,
   });
@@ -420,8 +447,10 @@ class _ProxiesBody extends StatefulWidget {
   final ValueChanged<ProxyGroup> onToggleSearch;
   final VoidCallback onSearchChanged;
   final void Function(ProxyGroup, String) onSelect;
+  final void Function(ProxyGroup, String) onToggleFixed;
+  final Future<String> Function(String) loadNodeDetails;
   final void Function(ProxyGroup) onTestGroup;
-  final void Function(ProxyGroup, String) onTestNode;
+  final Future<void> Function(ProxyGroup, String) onTestNode;
 
   @override
   State<_ProxiesBody> createState() => _ProxiesBodyState();
@@ -743,14 +772,11 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   Widget _tile(ProxyGroup group, ProxyMember member) {
     return ProxyNodeTile(
       key: ValueKey('${group.name}::${member.name}'),
-      name: member.name,
-      type: member.type,
-      delay: member.delay,
-      selectable: group.canSelectMembers,
-      showSelection: !group.hidesExactNow,
-      nowListenable: group.now,
-      fixedListenable: group.fixed,
+      group: group,
+      member: member,
+      loadDetails: () => widget.loadNodeDetails(member.name),
       onSelect: () => widget.onSelect(group, member.name),
+      onToggleFixed: () => widget.onToggleFixed(group, member.name),
       onTestDelay: () => widget.onTestNode(group, member.name),
     );
   }
@@ -778,6 +804,8 @@ class _ProxyCardsBody extends StatelessWidget {
     required this.session,
     required this.prefs,
     required this.onSelect,
+    required this.onToggleFixed,
+    required this.loadNodeDetails,
     required this.onTestGroup,
     required this.onTestNode,
   });
@@ -785,8 +813,10 @@ class _ProxyCardsBody extends StatelessWidget {
   final MihomoSession session;
   final AppPrefs prefs;
   final void Function(ProxyGroup, String) onSelect;
+  final void Function(ProxyGroup, String) onToggleFixed;
+  final Future<String> Function(String) loadNodeDetails;
   final Future<void> Function(ProxyGroup) onTestGroup;
-  final void Function(ProxyGroup, String) onTestNode;
+  final Future<void> Function(ProxyGroup, String) onTestNode;
 
   @override
   Widget build(BuildContext context) {
@@ -839,7 +869,9 @@ class _ProxyCardsBody extends StatelessWidget {
                     colored: prefs.proxiesCardColored,
                     onTestGroup: () => onTestGroup(group),
                     onSelect: (name) => onSelect(group, name),
+                    onToggleFixed: (name) => onToggleFixed(group, name),
                     onTestNode: (name) => onTestNode(group, name),
+                    loadNodeDetails: loadNodeDetails,
                   );
                 },
               );

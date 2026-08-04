@@ -9,6 +9,7 @@ import 'active_listenable_builder.dart';
 import 'app_background.dart';
 import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
+import 'proxy_node_context_menu.dart';
 import 'transient_animation.dart';
 
 const _gradientHueOffsets = <double>[
@@ -437,7 +438,9 @@ Widget _detailBody(
   _CardStyle style,
   Widget trailing, {
   ValueChanged<String>? onSelect,
-  ValueChanged<String>? onTestNode,
+  ValueChanged<String>? onToggleFixed,
+  Future<void> Function(String)? onTestNode,
+  Future<String> Function(String)? loadNodeDetails,
   ValueChanged<int>? onMissingMember,
   bool scrollable = true,
 }) {
@@ -451,7 +454,9 @@ Widget _detailBody(
             group,
             style,
             onSelect: onSelect,
+            onToggleFixed: onToggleFixed,
             onTestNode: onTestNode,
+            loadNodeDetails: loadNodeDetails,
             onMissingMember: onMissingMember,
             scrollable: scrollable,
           ),
@@ -465,7 +470,9 @@ Widget _memberGrid(
   ProxyGroup group,
   _CardStyle style, {
   ValueChanged<String>? onSelect,
-  ValueChanged<String>? onTestNode,
+  ValueChanged<String>? onToggleFixed,
+  Future<void> Function(String)? onTestNode,
+  Future<String> Function(String)? loadNodeDetails,
   ValueChanged<int>? onMissingMember,
   bool scrollable = true,
 }) {
@@ -497,7 +504,13 @@ Widget _memberGrid(
           group: group,
           member: member,
           style: style,
+          loadDetails: loadNodeDetails == null
+              ? null
+              : () => loadNodeDetails(member.name),
           onSelect: onSelect == null ? null : () => onSelect(member.name),
+          onToggleFixed: onToggleFixed == null
+              ? null
+              : () => onToggleFixed(member.name),
           onTestDelay: onTestNode == null
               ? null
               : () => onTestNode(member.name),
@@ -583,7 +596,9 @@ Future<void> showProxyGroupCardDetail(
   required bool colored,
   required Future<void> Function() onTestGroup,
   required ValueChanged<String> onSelect,
-  required ValueChanged<String> onTestNode,
+  required ValueChanged<String> onToggleFixed,
+  required Future<void> Function(String) onTestNode,
+  required Future<String> Function(String) loadNodeDetails,
 }) {
   return Navigator.of(context).push(
     PageRouteBuilder<void>(
@@ -601,7 +616,9 @@ Future<void> showProxyGroupCardDetail(
         colored: colored,
         onTestGroup: onTestGroup,
         onSelect: onSelect,
+        onToggleFixed: onToggleFixed,
         onTestNode: onTestNode,
+        loadNodeDetails: loadNodeDetails,
       ),
     ),
   );
@@ -615,7 +632,9 @@ class _ProxyGroupCardDetail extends StatefulWidget {
     required this.colored,
     required this.onTestGroup,
     required this.onSelect,
+    required this.onToggleFixed,
     required this.onTestNode,
+    required this.loadNodeDetails,
   });
 
   final MihomoSession session;
@@ -624,7 +643,9 @@ class _ProxyGroupCardDetail extends StatefulWidget {
   final bool colored;
   final Future<void> Function() onTestGroup;
   final ValueChanged<String> onSelect;
-  final ValueChanged<String> onTestNode;
+  final ValueChanged<String> onToggleFixed;
+  final Future<void> Function(String) onTestNode;
+  final Future<String> Function(String) loadNodeDetails;
 
   @override
   State<_ProxyGroupCardDetail> createState() => _ProxyGroupCardDetailState();
@@ -795,7 +816,9 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                             : Icon(Icons.speed_rounded, color: style.icon),
                       ),
                       onSelect: widget.onSelect,
+                      onToggleFixed: widget.onToggleFixed,
                       onTestNode: widget.onTestNode,
+                      loadNodeDetails: widget.loadNodeDetails,
                       onMissingMember: _queueMemberLoad,
                     ),
                   ),
@@ -860,84 +883,131 @@ class _CardNodeTile extends StatelessWidget {
     required this.group,
     required this.member,
     required this.style,
+    required this.loadDetails,
     required this.onSelect,
+    required this.onToggleFixed,
     required this.onTestDelay,
   });
 
   final ProxyGroup group;
   final ProxyMember member;
   final _CardStyle style;
+  final Future<String> Function()? loadDetails;
   final VoidCallback? onSelect;
-  final VoidCallback? onTestDelay;
+  final VoidCallback? onToggleFixed;
+  final Future<void> Function()? onTestDelay;
 
   @override
   Widget build(BuildContext context) {
-    return ActiveValueListenableSelector<String, bool>(
-      valueListenable: group.now,
-      selector: (now) => !group.hidesExactNow && now == member.name,
-      builder: (_, selected, _) {
-        final decoration = BoxDecoration(
-          color: selected ? style.tileSelectedBg : style.tileBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? style.tileSelectedBorder : style.tileBorder,
-            width: selected ? 1.6 : 1,
-          ),
-        );
-        return TransientAnimatedValue<BoxDecoration>(
-          value: decoration,
-          duration: const Duration(milliseconds: 150),
-          lerp: _lerpBoxDecoration,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: group.canSelectMembers ? onSelect : null,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.name,
-                      style: TextStyle(
-                        color: style.tileTitle,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            member.type,
-                            style: TextStyle(
-                              color: style.tileSubtitle,
-                              fontSize: 10,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        _DelayPill(
-                          delay: member.delay,
-                          untestedColor: style.pillUntested,
-                          onTap: onTestDelay,
-                        ),
-                      ],
-                    ),
-                  ],
+    return ProxyNodeContextMenu(
+      group: group,
+      member: member,
+      loadDetails: loadDetails,
+      onTestDelay: onTestDelay,
+      onToggleFixed: onToggleFixed,
+      requireFullyVisible: true,
+      child: ActiveValueListenableSelector<String, bool>(
+        valueListenable: group.now,
+        selector: (now) => !group.hidesExactNow && now == member.name,
+        builder: (_, selected, _) {
+          return ActiveValueListenableSelector<String, bool>(
+            valueListenable: group.fixed,
+            selector: (fixed) => group.canFixMembers && fixed == member.name,
+            builder: (_, pinned, _) {
+              const pinnedColor = Color(0xfff97316);
+              final titleColor = pinned ? Colors.white : style.tileTitle;
+              final subtitleColor = pinned
+                  ? Colors.white70
+                  : style.tileSubtitle;
+              final decoration = BoxDecoration(
+                color: pinned
+                    ? pinnedColor
+                    : selected
+                    ? style.tileSelectedBg
+                    : style.tileBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: pinned
+                      ? pinnedColor
+                      : selected
+                      ? style.tileSelectedBorder
+                      : style.tileBorder,
+                  width: selected || pinned ? 1.6 : 1,
                 ),
-              ),
-            ),
-          ),
-          builder: (_, decoration, child) =>
-              Container(decoration: decoration, child: child),
-        );
-      },
+              );
+              return TransientAnimatedValue<BoxDecoration>(
+                value: decoration,
+                duration: const Duration(milliseconds: 150),
+                lerp: _lerpBoxDecoration,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: group.canSelectOnTap ? onSelect : null,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (pinned) ...[
+                                const Icon(
+                                  Icons.push_pin,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  member.name,
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  member.type,
+                                  style: TextStyle(
+                                    color: subtitleColor,
+                                    fontSize: 10,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _DelayPill(
+                                delay: member.delay,
+                                untestedColor: style.pillUntested,
+                                onTap: onTestDelay == null
+                                    ? null
+                                    : () => unawaited(onTestDelay!()),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                builder: (_, decoration, child) =>
+                    Container(decoration: decoration, child: child),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

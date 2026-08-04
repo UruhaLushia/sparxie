@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use flutter_rust_bridge::frb;
@@ -32,6 +32,8 @@ pub(super) struct CachedCatalog {
     pub(super) lower_names: Option<Vec<String>>,
     pub(super) nodes: Vec<Option<CachedNode>>,
     pub(super) groups: HashMap<String, CachedGroup>,
+    pub(super) direct_details: HashMap<String, String>,
+    pub(super) provider_details: Arc<HashMap<String, String>>,
     pub(super) filter: String,
     pub(super) provider_nodes_checked_at: Option<Instant>,
 }
@@ -98,6 +100,27 @@ pub(super) fn provider_nodes_checked_at(target: &MihomoTarget) -> Option<Instant
     with_catalog(target, |catalog| catalog.provider_nodes_checked_at).flatten()
 }
 
+pub(super) fn provider_details(target: &MihomoTarget) -> Arc<HashMap<String, String>> {
+    with_catalog(target, |catalog| Arc::clone(&catalog.provider_details)).unwrap_or_default()
+}
+
+pub(super) fn proxy_detail(target: &MihomoTarget, name: &str) -> Option<String> {
+    with_catalog(target, |catalog| {
+        catalog
+            .direct_details
+            .get(name)
+            .or_else(|| catalog.provider_details.get(name))
+            .cloned()
+    })
+    .flatten()
+}
+
+pub(super) fn set_direct_detail(target: &MihomoTarget, name: String, detail: String) {
+    let _ = with_catalog(target, |catalog| {
+        catalog.direct_details.insert(name, detail);
+    });
+}
+
 pub(super) fn mark_provider_nodes_checked(target: &MihomoTarget, checked_at: Instant) {
     let _ = with_catalog(target, |catalog| {
         catalog.provider_nodes_checked_at = Some(checked_at);
@@ -159,11 +182,13 @@ pub(super) fn group_needs_provider_nodes(target: &MihomoTarget, group_name: &str
     .unwrap_or(false)
 }
 
-pub(super) fn merge_nodes(target: &MihomoTarget, incoming: HashMap<String, CachedNode>) {
-    if incoming.is_empty() {
-        return;
-    }
+pub(super) fn merge_provider_nodes(
+    target: &MihomoTarget,
+    incoming: HashMap<String, CachedNode>,
+    details: HashMap<String, String>,
+) {
     let _ = with_catalog(target, |catalog| {
+        catalog.provider_details = Arc::new(details);
         let mut changed = false;
         for (id, name) in catalog.names.iter().enumerate() {
             let Some(node) = incoming.get(name) else {

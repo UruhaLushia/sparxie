@@ -1,11 +1,12 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
 use crate::MihomoError;
-use crate::clash::api::MihomoTarget;
+use crate::clash::api::{MihomoTarget, urlencode};
 
 use super::value::{field_or, first_field};
 
@@ -25,11 +26,23 @@ const PROVIDER_NODES_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
 pub async fn proxy_catalog(
     target: MihomoTarget,
     include_hidden: bool,
-    resolve_provider_current_delay: bool,
+    _resolve_provider_current_delay: bool,
     filter: String,
 ) -> Result<ProxyCatalog, MihomoError> {
     let client = target.client()?;
-    let raw = client.get_json("proxies").await?;
+    let previous_nodes = cache::node_details(&target);
+    let previous_provider_nodes_checked_at = cache::provider_nodes_checked_at(&target);
+    let previous_provider_details = cache::provider_details(&target);
+    let refresh_provider_nodes = provider_nodes_are_stale(previous_provider_nodes_checked_at);
+    let provider_request = async {
+        if refresh_provider_nodes {
+            provider_nodes(&client).await.ok()
+        } else {
+            None
+        }
+    };
+    let (raw, fresh_provider_nodes) = tokio::join!(client.get_json("proxies"), provider_request);
+    let raw = raw?;
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
         return Ok(ProxyCatalog::default());
     };
@@ -39,9 +52,6 @@ pub async fn proxy_catalog(
     let mut name_ids = HashMap::new();
     let mut icon_urls = Vec::new();
     let mut seen_icons = HashSet::new();
-    let previous_nodes = cache::node_details(&target);
-    let previous_provider_nodes_checked_at = cache::provider_nodes_checked_at(&target);
-    let mut has_provider_current = false;
 
     let filter = filter.trim();
     let filter = if filter.is_ascii() {
@@ -81,9 +91,6 @@ pub async fn proxy_catalog(
             .map(proxy_delay)
             .or_else(|| cached_node.map(|node| node.delay))
             .unwrap_or(-1);
-        if resolve_provider_current_delay && !now.is_empty() && top_level_node.is_none() {
-            has_provider_current = true;
-        }
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
         cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
@@ -102,25 +109,17 @@ pub async fn proxy_catalog(
         ));
     }
 
-    let provider_refresh_due = previous_provider_nodes_checked_at
-        .is_none_or(|checked_at| checked_at.elapsed() >= PROVIDER_NODES_REFRESH_INTERVAL);
-    let refresh_provider_nodes = has_provider_current && provider_refresh_due;
     let provider_nodes_checked_at = if refresh_provider_nodes {
         Some(Instant::now())
     } else {
         previous_provider_nodes_checked_at
-    };
-    let fresh_provider_nodes = if refresh_provider_nodes {
-        provider_nodes(&client).await.ok()
-    } else {
-        None
     };
     if let Some(nodes) = fresh_provider_nodes.as_ref() {
         for (_, group) in &mut groups {
             if proxies.contains_key(group.now.as_str()) {
                 continue;
             }
-            if let Some(node) = nodes.get(group.now.as_str()) {
+            if let Some(node) = nodes.summaries.get(group.now.as_str()) {
                 group.now_delay = node.delay;
             }
         }
@@ -150,12 +149,29 @@ pub async fn proxy_catalog(
                 .or_else(|| {
                     fresh_provider_nodes
                         .as_ref()
-                        .and_then(|nodes| nodes.get(name))
+                        .and_then(|nodes| nodes.summaries.get(name))
                         .cloned()
                 })
                 .or_else(|| previous_nodes.get(name).cloned()),
         );
     }
+    let mut direct_details = HashMap::new();
+    for data in proxies.values() {
+        let Some(members) = data.get("all").and_then(Value::as_array) else {
+            continue;
+        };
+        for name in members.iter().filter_map(Value::as_str) {
+            if direct_details.contains_key(name) {
+                continue;
+            }
+            if let Some(detail) = proxies.get(name) {
+                direct_details.insert(name.to_string(), detail.to_string());
+            }
+        }
+    }
+    let provider_details = fresh_provider_nodes
+        .map(|nodes| Arc::new(nodes.details))
+        .unwrap_or(previous_provider_details);
     cache::replace_catalog(
         &target,
         CachedCatalog {
@@ -163,6 +179,8 @@ pub async fn proxy_catalog(
             lower_names: None,
             nodes,
             groups: cached_groups,
+            direct_details,
+            provider_details,
             filter: filter.into_owned(),
             provider_nodes_checked_at,
         },
@@ -174,15 +192,21 @@ pub async fn proxy_catalog(
     })
 }
 
+struct ProviderNodes {
+    summaries: HashMap<String, CachedNode>,
+    details: HashMap<String, String>,
+}
+
 async fn provider_nodes(
     client: &crate::clash::client::MihomoClient,
-) -> Result<HashMap<String, CachedNode>, MihomoError> {
+) -> Result<ProviderNodes, MihomoError> {
     let raw = client.get_json("providers/proxies").await?;
-    let mut out = HashMap::new();
+    let mut summaries = HashMap::new();
+    let mut details = HashMap::new();
     let Some(providers) = raw.get("providers").and_then(Value::as_object) else {
-        return Ok(out);
+        return Ok(ProviderNodes { summaries, details });
     };
-    for provider in providers.values() {
+    for (provider_name, provider) in providers {
         if field_or(provider, "vehicleType", "") == "Compatible" {
             continue;
         }
@@ -192,19 +216,56 @@ async fn provider_nodes(
         for node in nodes {
             let name = field_or(node, "name", "");
             if !name.is_empty() {
-                out.insert(name, cached_node(node));
+                let provider_name =
+                    node_provider_name(node).unwrap_or_else(|| provider_name.clone());
+                details.insert(name.clone(), provider_node_detail(node, &provider_name));
+                summaries.insert(name, cached_node_with_provider(node, Some(provider_name)));
             }
         }
     }
-    Ok(out)
+    Ok(ProviderNodes { summaries, details })
 }
 
-async fn refresh_cached_provider_nodes(target: &MihomoTarget) -> Result<(), MihomoError> {
+pub(crate) async fn refresh_cached_provider_nodes(
+    target: &MihomoTarget,
+) -> Result<(), MihomoError> {
     cache::mark_provider_nodes_checked(target, Instant::now());
     let client = target.client()?;
     if let Ok(nodes) = provider_nodes(&client).await {
-        cache::merge_nodes(target, nodes);
+        cache::merge_provider_nodes(target, nodes.summaries, nodes.details);
     }
+    Ok(())
+}
+
+pub(crate) async fn cached_proxy_detail(
+    target: &MihomoTarget,
+    name: &str,
+) -> Result<Option<String>, MihomoError> {
+    if !cache::has_catalog(target) {
+        refresh_cached_catalog(target).await?;
+    }
+    if let Some(detail) = cache::proxy_detail(target, name) {
+        return Ok(Some(detail));
+    }
+    refresh_cached_provider_nodes(target).await?;
+    Ok(cache::proxy_detail(target, name))
+}
+
+fn provider_nodes_are_stale(checked_at: Option<Instant>) -> bool {
+    checked_at.is_none_or(|checked_at| checked_at.elapsed() >= PROVIDER_NODES_REFRESH_INTERVAL)
+}
+
+pub(crate) async fn refresh_cached_node_detail(
+    target: &MihomoTarget,
+    name: &str,
+    provider_backed: bool,
+) -> Result<(), MihomoError> {
+    if provider_backed {
+        return refresh_cached_provider_nodes(target).await;
+    }
+    let path = format!("proxies/{}", urlencode(name));
+    let detail = target.client()?.get_json(&path).await?.to_string();
+    cache::set_direct_detail(target, name.to_string(), detail);
     Ok(())
 }
 
@@ -218,6 +279,20 @@ fn cached_node_with_provider(data: &Value, provider: Option<String>) -> CachedNo
         delay: proxy_delay(data),
         provider,
     }
+}
+
+fn provider_node_detail(data: &Value, provider: &str) -> String {
+    if !field_or(data, "provider-name", "").is_empty() {
+        return data.to_string();
+    }
+    let mut detail = data.clone();
+    if let Some(fields) = detail.as_object_mut() {
+        fields.insert(
+            "provider-name".to_string(),
+            Value::String(provider.to_string()),
+        );
+    }
+    detail.to_string()
 }
 
 fn node_provider_name(data: &Value) -> Option<String> {

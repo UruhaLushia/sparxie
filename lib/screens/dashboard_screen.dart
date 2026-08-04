@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
@@ -225,7 +226,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           unit: '/s',
           footer: '总计 ${formatBytes(t.upTotal)}',
           samples: _history.upSamples,
-          sampleRevision: _history.trafficDataRevision,
           color: const Color(0xff60a5fa),
           formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
         );
@@ -246,7 +246,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           unit: '/s',
           footer: '总计 ${formatBytes(t.downTotal)}',
           samples: _history.downSamples,
-          sampleRevision: _history.trafficDataRevision,
           color: const Color(0xffa78bfa),
           formatY: (v) => '${formatBytes(BigInt.from(v.round()))}/s',
         );
@@ -297,7 +296,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           unit: '',
           footer: footer.isEmpty ? '当前使用' : footer,
           samples: _history.memorySamples,
-          sampleRevision: _history.memoryDataRevision,
           color: const Color(0xfff59e0b),
           formatY: (v) => formatBytes(BigInt.from(v.round())),
         );
@@ -337,7 +335,7 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Sparkline-backed metric card with a compact header and peak summary.
+/// Trend-chart metric card with a compact header and peak summary.
 class _MetricChartCard extends StatelessWidget {
   const _MetricChartCard({
     required this.icon,
@@ -347,7 +345,6 @@ class _MetricChartCard extends StatelessWidget {
     required this.samples,
     required this.color,
     required this.formatY,
-    this.sampleRevision = 0,
     this.footer,
     this.showChart = true,
   });
@@ -358,7 +355,6 @@ class _MetricChartCard extends StatelessWidget {
   final String unit;
   final String? footer;
   final List<double> samples;
-  final int sampleRevision;
   final Color color;
   final String Function(double) formatY;
   final bool showChart;
@@ -463,19 +459,13 @@ class _MetricChartCard extends StatelessWidget {
                     ),
                   ),
                   padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: SizedBox.expand(
-                    child: CustomPaint(
-                      painter: _SparklinePainter(
-                        samples: samples,
-                        revision: sampleRevision,
-                        maxValue: chartMax,
-                        color: color,
-                        gridColor: scheme.outlineVariant.withValues(
-                          alpha: 0.24,
-                        ),
-                        pointBorderColor: chartBackground,
-                      ),
-                    ),
+                  child: _MetricLineChart(
+                    samples: samples,
+                    maxValue: chartMax,
+                    color: color,
+                    gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
+                    pointBorderColor: chartBackground,
+                    formatY: formatY,
                   ),
                 ),
               ],
@@ -554,152 +544,126 @@ class _MetricPill extends StatelessWidget {
   }
 }
 
-class _SparklinePainter extends CustomPainter {
-  _SparklinePainter({
+class _MetricLineChart extends StatelessWidget {
+  const _MetricLineChart({
     required this.samples,
-    required this.revision,
     required this.maxValue,
     required this.color,
     required this.gridColor,
     required this.pointBorderColor,
+    required this.formatY,
   });
 
   final List<double> samples;
-  final int revision;
   final double maxValue;
   final Color color;
   final Color gridColor;
   final Color pointBorderColor;
+  final String Function(double) formatY;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1.0
-      ..style = PaintingStyle.stroke;
-
-    for (final ratio in const [0.25, 0.5, 0.75]) {
-      final y = size.height * ratio;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-
-    if (samples.length < 2) return;
-
-    if (maxValue <= 0) return;
-
-    const horizontalPadding = 2.0;
-    const topPadding = 4.0;
-    const bottomPadding = 4.0;
-    final usableWidth = size.width > horizontalPadding * 2
-        ? size.width - horizontalPadding * 2
-        : size.width;
-    final usableHeight = size.height > topPadding + bottomPadding
-        ? size.height - topPadding - bottomPadding
-        : size.height;
-    final dx = usableWidth / (samples.length - 1);
-    final scaleMax = maxValue * 1.12;
-    final lastIndex = samples.length - 1;
-    final firstX = horizontalPadding;
-    final firstY = _sampleY(samples.first, scaleMax, topPadding, usableHeight);
-    final lastX = horizontalPadding + lastIndex * dx;
-    final lastY = _sampleY(samples.last, scaleMax, topPadding, usableHeight);
-    final line = Path()..moveTo(firstX, firstY);
-    if (samples.length == 2) {
-      line.lineTo(lastX, lastY);
-    } else {
-      for (var i = 1; i < lastIndex; i++) {
-        final currentX = horizontalPadding + i * dx;
-        final currentY = _sampleY(
-          samples[i],
-          scaleMax,
-          topPadding,
-          usableHeight,
-        );
-        final nextX = horizontalPadding + (i + 1) * dx;
-        final nextY = _sampleY(
-          samples[i + 1],
-          scaleMax,
-          topPadding,
-          usableHeight,
-        );
-        line.quadraticBezierTo(
-          currentX,
-          currentY,
-          (currentX + nextX) / 2,
-          (currentY + nextY) / 2,
-        );
-      }
-      line.quadraticBezierTo(
-        horizontalPadding + (lastIndex - 1) * dx,
-        _sampleY(samples[lastIndex - 1], scaleMax, topPadding, usableHeight),
-        lastX,
-        lastY,
-      );
-    }
-    final fill = Path.from(line)
-      ..lineTo(lastX, size.height)
-      ..lineTo(firstX, size.height)
-      ..close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.03)],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(fill, fillPaint);
-
-    final glow = Paint()
-      ..color = color.withValues(alpha: 0.18)
-      ..strokeWidth = 5.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(line, glow);
-
-    final stroke = Paint()
-      ..color = color
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(line, stroke);
-
-    final last = Offset(lastX, lastY);
-    canvas.drawCircle(
-      last,
-      5.5,
-      Paint()..color = color.withValues(alpha: 0.18),
-    );
-    canvas.drawCircle(last, 3.2, Paint()..color = color);
-    canvas.drawCircle(
-      last,
-      3.2,
-      Paint()
-        ..color = pointBorderColor
-        ..strokeWidth = 1.2
-        ..style = PaintingStyle.stroke,
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final maxX = samples.length <= 1 ? 1.0 : (samples.length - 1).toDouble();
+    final maxY = maxValue > 0 ? maxValue * 1.12 : 1.0;
+    final spots = [
+      for (var i = 0; i < samples.length; i++)
+        FlSpot(samples.length == 1 ? 0.5 : i.toDouble(), samples[i]),
+    ];
+    return LineChart(
+      LineChartData(
+        minX: 0,
+        maxX: maxX,
+        minY: 0,
+        maxY: maxY,
+        clipData: const FlClipData.all(),
+        borderData: FlBorderData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        gridData: FlGridData(
+          drawVerticalLine: false,
+          horizontalInterval: maxY / 3,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: gridColor, strokeWidth: 0.7),
+        ),
+        lineTouchData: LineTouchData(
+          enabled: spots.isNotEmpty,
+          touchSpotThreshold: 18,
+          getTouchedSpotIndicator: (_, indexes) => [
+            for (final _ in indexes)
+              TouchedSpotIndicatorData(
+                FlLine(color: color.withValues(alpha: 0.28), strokeWidth: 1),
+                FlDotData(
+                  getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+                    radius: 4,
+                    color: color,
+                    strokeWidth: 1.5,
+                    strokeColor: pointBorderColor,
+                  ),
+                ),
+              ),
+          ],
+          touchTooltipData: LineTouchTooltipData(
+            tooltipPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
+            tooltipMargin: 6,
+            tooltipBorderRadius: BorderRadius.circular(8),
+            fitInsideHorizontally: true,
+            fitInsideVertically: true,
+            getTooltipColor: (_) => scheme.inverseSurface,
+            getTooltipItems: (spots) => [
+              for (final spot in spots)
+                LineTooltipItem(
+                  formatY(spot.y),
+                  TextStyle(
+                    color: scheme.onInverseSurface,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        lineBarsData: spots.isEmpty
+            ? const []
+            : [
+                LineChartBarData(
+                  spots: spots,
+                  color: color,
+                  barWidth: 2,
+                  isCurved: true,
+                  curveSmoothness: 0.22,
+                  preventCurveOverShooting: true,
+                  isStrokeCapRound: true,
+                  isStrokeJoinRound: true,
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        color.withValues(alpha: 0.2),
+                        color.withValues(alpha: 0.015),
+                      ],
+                    ),
+                  ),
+                  dotData: FlDotData(
+                    checkToShowDot: (spot, _) => spot.x == spots.last.x,
+                    getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+                      radius: 3,
+                      color: color,
+                      strokeWidth: 1.2,
+                      strokeColor: pointBorderColor,
+                    ),
+                  ),
+                ),
+              ],
+      ),
+      duration: Duration.zero,
     );
   }
-
-  static double _sampleY(
-    double sample,
-    double scaleMax,
-    double topPadding,
-    double usableHeight,
-  ) {
-    final ratio = (sample / scaleMax).clamp(0.0, 1.0);
-    return topPadding + (1 - ratio) * usableHeight;
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.revision != revision ||
-      old.maxValue != maxValue ||
-      old.samples != samples ||
-      old.color != color ||
-      old.gridColor != gridColor ||
-      old.pointBorderColor != pointBorderColor;
 }
 
 /// Ring-buffer-backed sample history. Traffic and memory revisions are kept
@@ -715,29 +679,21 @@ class _SparkHistory {
   late final List<double> memorySamples = UnmodifiableListView(_mem);
   final trafficRevision = ValueNotifier(0);
   final memoryRevision = ValueNotifier(0);
-  int _trafficDataRevision = 0;
-  int _memoryDataRevision = 0;
-
-  int get trafficDataRevision => _trafficDataRevision;
-  int get memoryDataRevision => _memoryDataRevision;
 
   void pushTraffic(double up, double down, {bool notify = true}) {
     _push(_up, up);
     _push(_down, down);
-    _trafficDataRevision++;
     if (notify) trafficRevision.value += 1;
   }
 
   void pushMemory(double inuse, {bool notify = true}) {
     _push(_mem, inuse);
-    _memoryDataRevision++;
     if (notify) memoryRevision.value += 1;
   }
 
   void clearMemory({bool notify = true}) {
     if (_mem.isEmpty) return;
     _mem.clear();
-    _memoryDataRevision++;
     if (notify) memoryRevision.value += 1;
   }
 
@@ -748,8 +704,6 @@ class _SparkHistory {
     _up.clear();
     _down.clear();
     _mem.clear();
-    if (hadTraffic) _trafficDataRevision++;
-    if (hadMemory) _memoryDataRevision++;
     if (notify && hadTraffic) trafficRevision.value += 1;
     if (notify && hadMemory) memoryRevision.value += 1;
   }

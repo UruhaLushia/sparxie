@@ -72,7 +72,6 @@ class MihomoSession {
   int _closedConnectionsCapacity;
   int _proxiesIntervalMs = 3000;
   bool _includeHiddenProxyGroups = false;
-  bool _resolveProxyProviderCurrentDelay = false;
   String _proxyCatalogFilter = '';
   rust.ProxyMemberSort _proxyMemberSort = rust.ProxyMemberSort.original;
   String _logsLevel = 'info';
@@ -279,7 +278,6 @@ class MihomoSession {
 
   void setProxyCatalogOptions({
     bool? includeHidden,
-    bool? resolveProviderCurrentDelay,
     String? filter,
     rust.ProxyMemberSort? memberSort,
   }) {
@@ -287,11 +285,6 @@ class MihomoSession {
     var sortChanged = false;
     if (includeHidden != null && includeHidden != _includeHiddenProxyGroups) {
       _includeHiddenProxyGroups = includeHidden;
-      catalogChanged = true;
-    }
-    if (resolveProviderCurrentDelay != null &&
-        resolveProviderCurrentDelay != _resolveProxyProviderCurrentDelay) {
-      _resolveProxyProviderCurrentDelay = resolveProviderCurrentDelay;
       catalogChanged = true;
     }
     if (filter != null) {
@@ -635,17 +628,15 @@ class MihomoSession {
     var refreshAgain = false;
     try {
       final includeHidden = _includeHiddenProxyGroups;
-      final resolveProviderCurrentDelay = _resolveProxyProviderCurrentDelay;
       final filter = _proxyCatalogFilter;
       final catalog = await rust.proxyCatalog(
         target: t,
         includeHidden: includeHidden,
-        resolveProviderCurrentDelay: resolveProviderCurrentDelay,
+        resolveProviderCurrentDelay: false,
         filter: filter,
       );
       if (!identical(_activeKey, controller)) return;
       if (includeHidden != _includeHiddenProxyGroups ||
-          resolveProviderCurrentDelay != _resolveProxyProviderCurrentDelay ||
           filter != _proxyCatalogFilter) {
         refreshAgain = true;
         return;

@@ -6,7 +6,8 @@ use crate::clash::client::MihomoClient;
 
 use super::catalog::{
     ProxyMemberEntry, ProxyMemberSort, cached_group_member_names, cached_node_providers,
-    update_cached_node_delay, update_cached_node_delay_window, update_cached_node_delays,
+    refresh_cached_node_detail, update_cached_node_delay, update_cached_node_delay_window,
+    update_cached_node_delays,
 };
 use super::value::value_to_i32;
 
@@ -142,11 +143,12 @@ pub async fn proxy_delay_window(
     let client = target.client()?;
     let providers = cached_node_providers(target.clone(), std::slice::from_ref(&name)).await?;
     let provider = providers.get(&name).map(String::as_str);
-    proxy_delay_window_with_client(
+    let provider_backed = provider.is_some();
+    let event = proxy_delay_window_with_client(
         &target,
         &client,
         &group,
-        name,
+        name.clone(),
         provider,
         &test_url,
         timeout_ms,
@@ -156,7 +158,9 @@ pub async fn proxy_delay_window(
         window_limit,
         window_members_hash,
     )
-    .await
+    .await?;
+    let _ = refresh_cached_node_detail(&target, &name, provider_backed).await;
+    Ok(event)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -93,6 +93,10 @@ class ProxiesNotifier extends ChangeNotifier {
     g._setNow(nodeName);
   }
 
+  void setFixedOptimistic(String groupName, String nodeName) {
+    _groupsById[groupName]?._setFixed(nodeName);
+  }
+
   /// Push delays from `/group/<name>/delay` into per-node notifiers.
   void applyGroupDelay(List<rust.GroupDelayEntry> delays) {
     final delayByName = <String, int>{};
@@ -242,6 +246,10 @@ class ProxyGroup {
   String get type => _type;
   String get icon => _icon;
   bool get canSelectMembers => _selectable;
+  bool get usesManualSelection =>
+      _type == 'Selector' || _type == 'select' || _type == 'Select';
+  bool get canSelectOnTap => _selectable && usesManualSelection;
+  bool get canFixMembers => _selectable && !usesManualSelection;
   bool get hidesExactNow => _type == 'LoadBalance';
   ValueListenable<int> get membersVersion => _membersVersion;
 

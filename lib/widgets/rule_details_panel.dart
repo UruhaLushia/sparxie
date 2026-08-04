@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../rust_api.dart' as rust;
-import 'app_background.dart';
+import 'anchored_details_panel_surface.dart';
 
 extension RuleEntryStats on rust.RuleEntry {
   double? get hitRate {
@@ -17,52 +17,31 @@ class RuleDetailsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final surfaceTheme = AppSurfaceTheme.of(context);
-    return DecoratedBox(
-      position: DecorationPosition.foreground,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Material(
-        color: surfaceTheme.modalSurfaceColor(scheme.surfaceContainerLow),
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(14, 13, 14, 15),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _RuleHeader(rule: rule),
-              if (rule.hasExtra) ...[
-                const SizedBox(height: 12),
-                _RuleExtraSummary(rule: rule),
-              ],
-              const SizedBox(height: 12),
-              _RuleDetailField(
-                label: '规则内容',
-                value: rule.payload.isEmpty ? 'Match' : rule.payload,
-                prominent: true,
-              ),
-              if (rule.proxy.isNotEmpty) ...[
-                const SizedBox(height: 9),
-                _RuleDetailField(label: '出站', value: rule.proxy),
-              ],
-              if (rule.extraParams.isNotEmpty) ...[
-                const SizedBox(height: 9),
-                _RuleDetailField(
-                  label: '附加参数',
-                  value: rule.extraParams.join('\n'),
-                ),
-              ],
-            ],
+    return AnchoredDetailsPanelSurface(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _RuleHeader(rule: rule),
+          if (rule.hasExtra) ...[
+            const SizedBox(height: 12),
+            _RuleExtraSummary(rule: rule),
+          ],
+          const SizedBox(height: 12),
+          _RuleDetailField(
+            label: '规则内容',
+            value: rule.payload.isEmpty ? 'Match' : rule.payload,
+            prominent: true,
           ),
-        ),
+          if (rule.proxy.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            _RuleDetailField(label: '出站', value: rule.proxy),
+          ],
+          if (rule.extraParams.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            _RuleDetailField(label: '附加参数', value: rule.extraParams.join('\n')),
+          ],
+        ],
       ),
     );
   }
