@@ -159,38 +159,37 @@ class AnchoredDetailsOverlay extends StatelessWidget {
         previewAlwaysAbove || sourceRect.center.dy <= usableCenter;
     final background = backgroundImage;
 
-    final elevatedPreview = DecoratedBox(
+    final transitioningPreview = DecoratedBox(
       decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
         boxShadow: [
           BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 18,
-            offset: Offset(0, 4),
+            color: Color(0x24000000),
+            blurRadius: 16,
+            offset: Offset(0, 3),
           ),
         ],
       ),
-      child: Material(type: MaterialType.transparency, child: preview),
+      child: HighRefreshTransitionSnapshot(
+        animation: animation,
+        child: Material(type: MaterialType.transparency, child: preview),
+      ),
     );
-    final transitioningPreview = HighRefreshTransitionSnapshot(
-      animation: animation,
-      child: elevatedPreview,
-    );
-    final elevatedDetails = HighRefreshTransitionSnapshot(
-      animation: animation,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.16),
-              blurRadius: 20,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+    final elevatedDetails = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.13),
+            blurRadius: 18,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: HighRefreshTransitionSnapshot(
+          animation: animation,
           child: details,
         ),
       ),
@@ -261,12 +260,16 @@ class _AnchoredDetailsFlowDelegate extends FlowDelegate {
   final double maxDetailsWidth;
 
   static const _screenInset = 16.0;
+  static const _desktopShadowInset = 24.0;
   static const _detailsGap = 12.0;
   static const _minimumVisibleDetailsHeight = 240.0;
 
+  double get _edgeInset =>
+      preserveSourcePosition ? _desktopShadowInset : _screenInset;
+
   Size _availableSize(Size size) => Size(
-    math.max(0.0, size.width - safePadding.horizontal - 2 * _screenInset),
-    math.max(0.0, size.height - safePadding.vertical - 2 * _screenInset),
+    math.max(0.0, size.width - safePadding.horizontal - 2 * _edgeInset),
+    math.max(0.0, size.height - safePadding.vertical - 2 * _edgeInset),
   );
 
   Size _previewSize(Size size) {
@@ -290,8 +293,8 @@ class _AnchoredDetailsFlowDelegate extends FlowDelegate {
     var maxHeight = fullHeight;
     if (preserveSourcePosition && fullHeight > 0) {
       final size = constraints.biggest;
-      final safeTop = safePadding.top + _screenInset;
-      final safeBottom = size.height - safePadding.bottom - _screenInset;
+      final safeTop = safePadding.top + _edgeInset;
+      final safeBottom = size.height - safePadding.bottom - _edgeInset;
       final previewTop = _clamp(
         sourceRect.top,
         safeTop,
@@ -313,10 +316,10 @@ class _AnchoredDetailsFlowDelegate extends FlowDelegate {
   @override
   void paintChildren(FlowPaintingContext context) {
     final size = context.size;
-    final safeLeft = safePadding.left + _screenInset;
-    final safeTop = safePadding.top + _screenInset;
-    final safeRight = size.width - safePadding.right - _screenInset;
-    final safeBottom = size.height - safePadding.bottom - _screenInset;
+    final safeLeft = safePadding.left + _edgeInset;
+    final safeTop = safePadding.top + _edgeInset;
+    final safeRight = size.width - safePadding.right - _edgeInset;
+    final safeBottom = size.height - safePadding.bottom - _edgeInset;
     final targetPreviewSize = context.getChildSize(0)!;
     final detailsSize = context.getChildSize(1)!;
 
