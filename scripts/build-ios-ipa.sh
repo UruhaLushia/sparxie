@@ -5,6 +5,7 @@
 #   ./scripts/build-ios-ipa.sh
 #   OUTPUT_DIR=out ./scripts/build-ios-ipa.sh
 #   IOS_BUILD_NUMBER=123 ./scripts/build-ios-ipa.sh
+#   SPARXIE_BUILD_NUMBER=123 ./scripts/build-ios-ipa.sh
 #   IOS_XCARCHIVE_OUTPUT=out/sparxie-ios-unsigned.xcarchive.zip ./scripts/build-ios-ipa.sh
 
 set -euo pipefail
@@ -16,6 +17,7 @@ PROJECT_ROOT="$(pwd)"
 : "${IOS_RUST_TARGET:=aarch64-apple-ios}"
 : "${IPA_NAME:=sparxie-ios.ipa}"
 : "${IOS_BUILD_NUMBER:=$(awk -F+ '/^version:/ { print $2; exit }' pubspec.yaml)}"
+: "${SPARXIE_BUILD_NUMBER:=$(./scripts/git-build-number.sh)}"
 : "${IOS_XCARCHIVE_OUTPUT:=}"
 : "${SPARXIE_UPDATE_CHANNEL:=stable}"
 
@@ -55,7 +57,7 @@ if [[ -n "$IOS_XCARCHIVE_OUTPUT" ]]; then
   echo ">>> Building unsigned iOS archive"
   flutter build ipa --release --no-codesign \
     --build-number "$IOS_BUILD_NUMBER" \
-    --dart-define="SPARXIE_BUILD_NUMBER=$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_BUILD_NUMBER=$SPARXIE_BUILD_NUMBER" \
     --dart-define="SPARXIE_UPDATE_CHANNEL=$SPARXIE_UPDATE_CHANNEL"
 
   shopt -s nullglob
@@ -71,7 +73,7 @@ else
   echo ">>> Building unsigned iOS app"
   flutter build ios --release --no-codesign \
     --build-number "$IOS_BUILD_NUMBER" \
-    --dart-define="SPARXIE_BUILD_NUMBER=$IOS_BUILD_NUMBER" \
+    --dart-define="SPARXIE_BUILD_NUMBER=$SPARXIE_BUILD_NUMBER" \
     --dart-define="SPARXIE_UPDATE_CHANNEL=$SPARXIE_UPDATE_CHANNEL"
   APP_BUNDLE="$(find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | head -n1)"
 fi

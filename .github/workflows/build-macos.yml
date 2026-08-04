@@ -77,8 +77,9 @@ jobs:
             -verify_arch "$TARGET_ARCH"
           lipo "updater/target/$RUST_TARGET/release/sparxie-updater" \
             -verify_arch "$TARGET_ARCH"
+          BUILD_NUMBER="$(./scripts/git-build-number.sh)"
           flutter build macos --release \
-            --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --dart-define=SPARXIE_BUILD_NUMBER="$BUILD_NUMBER" \
             --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           APP=$(ls -d build/macos/Build/Products/Release/*.app | head -n1)
           mkdir -p "$APP/Contents/Helpers"

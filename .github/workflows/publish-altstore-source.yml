@@ -28,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v7
         with:
@@ -48,7 +50,7 @@ jobs:
 
           version_spec=$(awk '/^version:/ { print $2; exit }' pubspec.yaml)
           version=${version_spec%%+*}
-          build=$GITHUB_RUN_NUMBER
+          build=$(./scripts/git-build-number.sh)
           size=$(stat --format=%s "$IPA_PATH")
           released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           repository_url="https://github.com/$GITHUB_REPOSITORY"

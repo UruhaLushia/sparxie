@@ -74,8 +74,9 @@ jobs:
           cargo build --manifest-path core/Cargo.toml --release
           cargo build --manifest-path updater/Cargo.toml --release --locked \
             --target ${{ matrix.rust_target }}
+          BUILD_NUMBER="$(./scripts/git-build-number.sh)"
           flutter build windows --release \
-            --dart-define=SPARXIE_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
+            --dart-define=SPARXIE_BUILD_NUMBER="$BUILD_NUMBER" \
             --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
           BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
           cp core/target/release/sparxie.dll "$BUNDLE/"
