@@ -236,7 +236,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           // the full destination set and trims itself by measured height
           // (see _computeRail); only the compact bottom bar uses a reduced
           // set, since a NavigationBar can't grow.
-          final wide = size.width >= 800;
+          final wide = size.width >= appWideLayoutBreakpoint;
           final layout = widget.prefs.navLayout;
           final cards = layout == NavLayout.cards;
           final destinations = _destinationsFor(

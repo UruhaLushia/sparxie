@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
+import '../layout_breakpoints.dart';
 import '../session.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
@@ -27,6 +28,9 @@ class ConnectionDetailsPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final surfaceTheme = AppSurfaceTheme.of(context);
+    final closeAtBottom =
+        MediaQuery.sizeOf(context).width < appWideLayoutBreakpoint &&
+        onClose != null;
     final source = _sourceText(row);
     final dest = _destinationText(row);
     final host = _distinctHostText(row, dest);
@@ -71,30 +75,52 @@ class ConnectionDetailsPanel extends StatelessWidget {
         color: surfaceTheme.modalSurfaceColor(scheme.surfaceContainerLow),
         borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 13),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ConnectionHeader(onClose: onClose),
-                const SizedBox(height: 8),
-                _ConnectionTransferSummary(row: row, timeTicks: timeTicks),
-                const SizedBox(height: 8),
-                SelectionArea(
-                  child: _ConnectionInfoBody(
-                    endpointEntries: endpointEntries,
-                    connectionEntries: connectionEntries,
-                    processEntries: processEntries,
-                    routingEntries: routingEntries,
-                    logs: hasConnectionLogs ? row.connectionLogs : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              fit: FlexFit.loose,
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    10,
+                    12,
+                    closeAtBottom ? 8 : 13,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ConnectionHeader(
+                        onClose: closeAtBottom ? null : onClose,
+                      ),
+                      const SizedBox(height: 8),
+                      _ConnectionTransferSummary(
+                        row: row,
+                        timeTicks: timeTicks,
+                      ),
+                      const SizedBox(height: 8),
+                      SelectionArea(
+                        child: _ConnectionInfoBody(
+                          endpointEntries: endpointEntries,
+                          connectionEntries: connectionEntries,
+                          processEntries: processEntries,
+                          routingEntries: routingEntries,
+                          logs: hasConnectionLogs ? row.connectionLogs : null,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            if (closeAtBottom) _ConnectionCloseAction(onClose: onClose!),
+          ],
         ),
       ),
     );
@@ -146,6 +172,39 @@ class _ConnectionHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ConnectionCloseAction extends StatelessWidget {
+  const _ConnectionCloseAction({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.42)),
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.tonalIcon(
+          style: FilledButton.styleFrom(
+            foregroundColor: scheme.onErrorContainer,
+            backgroundColor: scheme.errorContainer,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          onPressed: onClose,
+          icon: const Icon(Icons.link_off_rounded, size: 16),
+          label: const Text('关闭连接'),
+        ),
+      ),
     );
   }
 }

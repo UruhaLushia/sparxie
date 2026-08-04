@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
-import '../platform_capabilities.dart';
+import '../layout_breakpoints.dart';
 import '../session.dart';
 import 'anchored_details_overlay.dart';
 import 'connection_detail_sheet.dart';
@@ -25,6 +25,7 @@ Future<void> showConnectionDetailsOverlay({
       Overlay.of(context, rootOverlay: true).context.findRenderObject()
           as RenderBox?;
   if (sourceBox == null || overlayBox == null || !sourceBox.hasSize) return;
+  final wide = MediaQuery.sizeOf(context).width >= appWideLayoutBreakpoint;
 
   final sourceRect = Rect.fromPoints(
     sourceBox.localToGlobal(Offset.zero, ancestor: overlayBox),
@@ -42,8 +43,10 @@ Future<void> showConnectionDetailsOverlay({
       context: context,
       sourceRect: sourceRect,
       preview: previewBuilder(liveRow, updater.timeTicks),
-      previewAlwaysAbove: isMobilePlatform,
-      preserveSourcePosition: !isMobilePlatform,
+      previewPlacement: wide
+          ? AnchoredPreviewPlacement.automatic
+          : AnchoredPreviewPlacement.below,
+      preserveSourcePosition: wide,
       maxDetailsWidth: 760,
       barrierLabel: '关闭连接详情',
       detailsBuilder: (dialogContext) => ConnectionDetailsPanel(

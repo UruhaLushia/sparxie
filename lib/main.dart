@@ -20,6 +20,7 @@ import 'config_store.dart';
 import 'controller.dart';
 import 'controller_uri_import.dart';
 import 'imported_fonts.dart';
+import 'layout_breakpoints.dart';
 import 'rust_api.dart' as rust;
 import 'screens/core_config_screen.dart';
 import 'screens/connections_screen.dart';

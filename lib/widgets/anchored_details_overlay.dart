@@ -12,6 +12,8 @@ final _backgroundBlur = ui.ImageFilter.blur(
   sigmaY: anchoredDetailsBlurSigma,
 );
 
+enum AnchoredPreviewPlacement { automatic, above, below }
+
 /// Captures and pre-blurs the current Flutter view at logical-pixel
 /// resolution. Blur hides the downsampling while keeping the transient image
 /// small enough to release immediately with the overlay route.
@@ -84,7 +86,8 @@ Future<void> showAnchoredDetailsOverlay({
   required Widget preview,
   required WidgetBuilder detailsBuilder,
   required String barrierLabel,
-  bool previewAlwaysAbove = false,
+  AnchoredPreviewPlacement previewPlacement =
+      AnchoredPreviewPlacement.automatic,
   bool preserveSourcePosition = false,
   double maxDetailsWidth = 320,
 }) async {
@@ -105,7 +108,7 @@ Future<void> showAnchoredDetailsOverlay({
       animation: animation,
       sourceRect: sourceRect,
       preview: preview,
-      previewAlwaysAbove: previewAlwaysAbove,
+      previewPlacement: previewPlacement,
       preserveSourcePosition: preserveSourcePosition,
       backgroundImage: backgroundImage,
       maxDetailsWidth: maxDetailsWidth,
@@ -133,7 +136,7 @@ class AnchoredDetailsOverlay extends StatelessWidget {
     required this.details,
     required this.onDismiss,
     this.maxDetailsWidth = 320,
-    this.previewAlwaysAbove = false,
+    this.previewPlacement = AnchoredPreviewPlacement.automatic,
     this.preserveSourcePosition = false,
     this.backgroundImage,
   });
@@ -144,7 +147,7 @@ class AnchoredDetailsOverlay extends StatelessWidget {
   final Widget details;
   final VoidCallback onDismiss;
   final double maxDetailsWidth;
-  final bool previewAlwaysAbove;
+  final AnchoredPreviewPlacement previewPlacement;
   final bool preserveSourcePosition;
   final ui.Image? backgroundImage;
 
@@ -155,8 +158,12 @@ class AnchoredDetailsOverlay extends StatelessWidget {
     final safePadding = MediaQuery.paddingOf(context);
     final usableCenter =
         (safePadding.top + size.height - safePadding.bottom) / 2;
-    final detailsBelow =
-        previewAlwaysAbove || sourceRect.center.dy <= usableCenter;
+    final detailsBelow = switch (previewPlacement) {
+      AnchoredPreviewPlacement.automatic =>
+        sourceRect.center.dy <= usableCenter,
+      AnchoredPreviewPlacement.above => true,
+      AnchoredPreviewPlacement.below => false,
+    };
     final background = backgroundImage;
 
     final transitioningPreview = DecoratedBox(
