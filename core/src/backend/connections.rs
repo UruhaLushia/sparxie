@@ -5,8 +5,8 @@ use crate::MihomoError;
 use crate::frb_generated::StreamSink;
 
 use super::{
-    BackendTarget, BackendType, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionWindow,
-    ConnectionsFrame, ConnectionsListKind, ConnectionsSort,
+    BackendTarget, BackendType, Connection, ConnectionGroup, ConnectionGroupSort, ConnectionStats,
+    ConnectionWindow, ConnectionsFrame, ConnectionsListKind, ConnectionsSort,
 };
 use super::{clash_conn_sort, clash_group_sort, clash_list_kind};
 
@@ -178,6 +178,45 @@ pub async fn fetch_connection_window(
             ConnectionWindow { total, rows }
         }
     }
+}
+
+pub async fn fetch_connection_stats_by_id(
+    target: BackendTarget,
+    interval_ms: u32,
+    id: String,
+) -> Option<ConnectionStats> {
+    let stats = match target.backend_type {
+        BackendType::Clash => {
+            crate::clash::state::connections::fetch_connection_stats_by_id(
+                target.clash(),
+                interval_ms,
+                id,
+            )
+            .await
+        }
+        BackendType::Surge => {
+            crate::surge::state::connections::fetch_connection_stats_by_id(
+                target.surge(),
+                interval_ms,
+                id,
+            )
+            .await
+        }
+        BackendType::SingBox => {
+            crate::sing_box::state::connections::fetch_connection_stats_by_id(
+                target.sing_box(),
+                interval_ms,
+                id,
+            )
+            .await
+        }
+    }?;
+    Some(ConnectionStats {
+        upload: stats.0,
+        download: stats.1,
+        upload_speed: stats.2,
+        download_speed: stats.3,
+    })
 }
 
 pub async fn fetch_connection_groups(

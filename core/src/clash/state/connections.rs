@@ -243,6 +243,29 @@ pub async fn fetch_window(
     }
 }
 
+/// Return one connection's volatile counters outside the paged window.
+pub async fn fetch_connection_stats_by_id(
+    target: MihomoTarget,
+    interval_ms: u32,
+    id: String,
+) -> Option<(u64, u64, u64, u64)> {
+    let slot = slot_for(&target, interval_ms).await?;
+    let state = slot.state.lock().expect("connections state poisoned");
+    let connection = state.active.get(&id).or_else(|| {
+        state
+            .closed
+            .iter()
+            .rev()
+            .find(|connection| connection.id == id)
+    })?;
+    Some((
+        connection.upload,
+        connection.download,
+        connection.upload_speed,
+        connection.download_speed,
+    ))
+}
+
 /// Aggregate active or closed connections into source groups.
 pub async fn fetch_groups(
     target: MihomoTarget,

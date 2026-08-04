@@ -120,6 +120,14 @@ pub struct ConnectionWindow {
     pub rows: Vec<Connection>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub struct ConnectionStats {
+    pub upload: u64,
+    pub download: u64,
+    pub upload_speed: u64,
+    pub download_speed: u64,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ConnectionsTotals {
     pub upload: u64,

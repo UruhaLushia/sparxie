@@ -117,6 +117,16 @@ class MihomoSession {
     );
   }
 
+  Future<rust.ConnectionStats?> fetchConnectionStats(String id) async {
+    final t = _target;
+    if (t == null) return null;
+    return rust.fetchConnectionStatsById(
+      target: t,
+      intervalMs: _connectionsIntervalMs,
+      id: id,
+    );
+  }
+
   Future<rust.LogWindow> _fetchLogsWindow(
     int offset,
     int limit,
@@ -225,6 +235,7 @@ class MihomoSession {
 
   Controller? get activeController => _activeKey;
   rust.BackendTarget? get target => _target;
+  int get connectionsIntervalMs => _connectionsIntervalMs;
 
   /// True when the active controller's host is this machine — process-icon
   /// resolution only makes sense for a local mihomo (the executable paths

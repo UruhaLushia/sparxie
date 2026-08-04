@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
@@ -29,10 +30,13 @@ typedef _ConnectionDetailsCallback =
     void Function(
       ConnectionRow row,
       BuildContext sourceContext,
-      Widget preview,
+      ConnectionPreviewBuilder previewBuilder,
     );
 typedef _ConnectionPreviewCallback =
-    void Function(BuildContext sourceContext, Widget preview);
+    void Function(
+      BuildContext sourceContext,
+      ConnectionPreviewBuilder previewBuilder,
+    );
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -266,7 +270,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   void _showDetail(
     ConnectionRow row,
     BuildContext sourceContext,
-    Widget preview,
+    ConnectionPreviewBuilder previewBuilder,
   ) {
     if (_detailsOverlayOpen) return;
     _detailsOverlayOpen = true;
@@ -274,8 +278,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       showConnectionDetailsOverlay(
         context: context,
         sourceContext: sourceContext,
+        session: widget.session,
         row: row,
-        preview: preview,
+        previewBuilder: previewBuilder,
         showConnectionLog: widget.session.isStash.value,
         onClose: () => _close(row.id),
       ).whenComplete(() => _detailsOverlayOpen = false),
@@ -847,13 +852,20 @@ class _RowSlot extends StatelessWidget {
     );
     final value = row;
     if (value == null) return placeholder;
-    Widget buildTile(VoidCallback handleTap, {required bool preview}) {
+    Widget buildTile(
+      ConnectionRow tileRow,
+      VoidCallback handleTap, {
+      required bool preview,
+      ValueListenable<int>? timeTicks,
+    }) {
       return ConnectionTile(
-        row: value,
+        row: tileRow,
         processIcons: processIcons,
         showIcon: showIcon,
         showAppName: showAppName,
         titleStyle: titleStyle,
+        timeTicks: timeTicks,
+        pauseUpdatesWhileScrolling: !preview,
         groupBackdrop: !preview,
         onTap: handleTap,
         onClose: onClose ?? () {},
@@ -865,10 +877,18 @@ class _RowSlot extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Builder(
-          builder: (sourceContext) => buildTile(() {
+          builder: (sourceContext) => buildTile(value, () {
             final callback = onTap;
             if (callback == null) return;
-            callback(sourceContext, buildTile(() {}, preview: true));
+            callback(
+              sourceContext,
+              (liveRow, timeTicks) => buildTile(
+                liveRow,
+                () {},
+                preview: true,
+                timeTicks: timeTicks,
+              ),
+            );
           }, preview: false),
         ),
       ),
@@ -1157,17 +1177,21 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                                 );
                               }
                               Widget buildTile(
+                                ConnectionRow tileRow,
                                 VoidCallback handleTap, {
                                 required bool preview,
+                                ValueListenable<int>? timeTicks,
                               }) {
                                 return ConnectionTile(
-                                  row: row,
+                                  row: tileRow,
                                   // Members sit under the group's process
                                   // header, so the per-row icon and process
                                   // prefix are redundant.
                                   showIcon: false,
                                   hideProcess: true,
                                   compact: true,
+                                  timeTicks: timeTicks,
+                                  pauseUpdatesWhileScrolling: !preview,
                                   groupBackdrop: !preview,
                                   onTap: handleTap,
                                   onClose: () => widget.onClose(row.id),
@@ -1188,10 +1212,16 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: Builder(
                                     builder: (sourceContext) => buildTile(
+                                      row,
                                       () => widget.onTap(
                                         row,
                                         sourceContext,
-                                        buildTile(() {}, preview: true),
+                                        (liveRow, timeTicks) => buildTile(
+                                          liveRow,
+                                          () {},
+                                          preview: true,
+                                          timeTicks: timeTicks,
+                                        ),
                                       ),
                                       preview: false,
                                     ),

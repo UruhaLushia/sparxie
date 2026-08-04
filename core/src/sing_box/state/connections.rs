@@ -188,6 +188,32 @@ pub async fn fetch_window(
     (total, window)
 }
 
+/// Return one connection's volatile counters outside the paged window.
+pub async fn fetch_connection_stats_by_id(
+    target: SingBoxTarget,
+    interval_ms: u32,
+    id: String,
+) -> Option<(u64, u64, u64, u64)> {
+    let slot = slot_for(&target, interval_ms).await?;
+    let state = slot
+        .state
+        .lock()
+        .expect("sing-box connections state poisoned");
+    let connection = state.active.get(&id).or_else(|| {
+        state
+            .closed
+            .iter()
+            .rev()
+            .find(|connection| connection.id == id)
+    })?;
+    Some((
+        connection.upload,
+        connection.download,
+        connection.upload_speed,
+        connection.download_speed,
+    ))
+}
+
 pub async fn fetch_groups(
     target: SingBoxTarget,
     interval_ms: u32,

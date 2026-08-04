@@ -95,6 +95,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
+  ConnectionStats dco_decode_box_autoadd_connection_stats(dynamic raw);
+
+  @protected
   TailscalePeer dco_decode_box_autoadd_tailscale_peer(dynamic raw);
 
   @protected
@@ -108,6 +111,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionGroupSort dco_decode_connection_group_sort(dynamic raw);
+
+  @protected
+  ConnectionStats dco_decode_connection_stats(dynamic raw);
 
   @protected
   ConnectionWindow dco_decode_connection_window(dynamic raw);
@@ -215,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
+  ConnectionStats? dco_decode_opt_box_autoadd_connection_stats(dynamic raw);
 
   @protected
   TailscalePeer? dco_decode_opt_box_autoadd_tailscale_peer(dynamic raw);
@@ -366,6 +375,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
+  ConnectionStats sse_decode_box_autoadd_connection_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TailscalePeer sse_decode_box_autoadd_tailscale_peer(
     SseDeserializer deserializer,
   );
@@ -383,6 +397,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionGroupSort sse_decode_connection_group_sort(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ConnectionStats sse_decode_connection_stats(SseDeserializer deserializer);
 
   @protected
   ConnectionWindow sse_decode_connection_window(SseDeserializer deserializer);
@@ -514,6 +531,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
+  ConnectionStats? sse_decode_opt_box_autoadd_connection_stats(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TailscalePeer? sse_decode_opt_box_autoadd_tailscale_peer(
@@ -690,6 +712,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_connection_stats(
+    ConnectionStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_tailscale_peer(
     TailscalePeer self,
     SseSerializer serializer,
@@ -710,6 +738,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_connection_group_sort(
     ConnectionGroupSort self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_connection_stats(
+    ConnectionStats self,
     SseSerializer serializer,
   );
 
@@ -880,6 +914,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_connection_stats(
+    ConnectionStats? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_tailscale_peer(

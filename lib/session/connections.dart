@@ -196,6 +196,67 @@ class ConnectionRow {
     );
   }
 
+  factory ConnectionRow.detached(ConnectionRow source) => ConnectionRow(
+    id: source.id,
+    host: source.host,
+    network: source.network,
+    connType: source.connType,
+    process: source.process,
+    processPath: source.processPath,
+    rule: source.rule,
+    rulePayload: source.rulePayload,
+    chains: source.chains,
+    connectionLogs: source.connectionLogs,
+    start: source.start,
+    sourceIp: source.sourceIp,
+    sourcePort: source.sourcePort,
+    destinationIp: source.destinationIp,
+    destinationPort: source.destinationPort,
+    inboundIp: source.inboundIp,
+    inboundPort: source.inboundPort,
+    inboundName: source.inboundName,
+    dnsMode: source.dnsMode,
+    uid: source.uid,
+    specialProxy: source.specialProxy,
+    specialRules: source.specialRules,
+    remoteDestination: source.remoteDestination,
+    sniffHost: source.sniffHost,
+    isClosed: source.isClosed,
+    initialBytes: source.bytes.value,
+    initialSpeeds: source.speeds.value,
+  );
+
+  void updateFromConnection(rust.Connection connection) {
+    _updateCounters(
+      upload: connection.upload,
+      download: connection.download,
+      uploadSpeed: connection.uploadSpeed,
+      downloadSpeed: connection.downloadSpeed,
+    );
+  }
+
+  void updateStats(rust.ConnectionStats stats) {
+    _updateCounters(
+      upload: stats.upload,
+      download: stats.download,
+      uploadSpeed: stats.uploadSpeed,
+      downloadSpeed: stats.downloadSpeed,
+    );
+  }
+
+  void _updateCounters({
+    required BigInt upload,
+    required BigInt download,
+    required BigInt uploadSpeed,
+    required BigInt downloadSpeed,
+  }) {
+    if (_disposed) return;
+    final nextBytes = RowBytes(upload, download);
+    if (bytes.value != nextBytes) bytes.value = nextBytes;
+    final nextSpeeds = RowSpeeds(uploadSpeed, downloadSpeed);
+    if (speeds.value != nextSpeeds) speeds.value = nextSpeeds;
+  }
+
   void dispose() {
     if (_disposed) return;
     _disposed = true;
@@ -789,10 +850,7 @@ class ConnectionListNotifier extends ChangeNotifier {
       newIds.add(c.id);
       final existing = rowMap[c.id];
       if (existing != null) {
-        final bytes = RowBytes(c.upload, c.download);
-        if (existing.bytes.value != bytes) existing.bytes.value = bytes;
-        final speeds = RowSpeeds(c.uploadSpeed, c.downloadSpeed);
-        if (existing.speeds.value != speeds) existing.speeds.value = speeds;
+        existing.updateFromConnection(c);
       } else {
         rowMap[c.id] = ConnectionRow.fromConnection(c);
       }
@@ -906,10 +964,7 @@ class ConnectionListNotifier extends ChangeNotifier {
       newIds.add(c.id);
       final existing = rowMap[c.id];
       if (existing != null) {
-        final bytes = RowBytes(c.upload, c.download);
-        if (existing.bytes.value != bytes) existing.bytes.value = bytes;
-        final speeds = RowSpeeds(c.uploadSpeed, c.downloadSpeed);
-        if (existing.speeds.value != speeds) existing.speeds.value = speeds;
+        existing.updateFromConnection(c);
       } else {
         rowMap[c.id] = ConnectionRow.fromConnection(c);
       }

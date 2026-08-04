@@ -24,6 +24,8 @@ class ConnectionTile extends StatelessWidget {
     this.showIcon = false,
     this.showAppName = false,
     this.titleStyle = ConnectionTitleStyle.sourceToTarget,
+    this.timeTicks,
+    this.pauseUpdatesWhileScrolling = true,
     this.hideProcess = false,
     this.compact = false,
     this.groupBackdrop = false,
@@ -38,6 +40,8 @@ class ConnectionTile extends StatelessWidget {
   final bool showIcon;
   final bool showAppName;
   final ConnectionTitleStyle titleStyle;
+  final ValueListenable<int>? timeTicks;
+  final bool pauseUpdatesWhileScrolling;
 
   /// Drop the leading `process →` from the title — used for group members,
   /// where the process already labels the group header.
@@ -85,9 +89,27 @@ class ConnectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final surfaceTheme = AppSurfaceTheme.of(context);
-    final timeText = row.start == null ? '' : _ago(row.start!);
+    final start = row.start;
+    Widget? timeLabel;
+    if (start != null) {
+      Widget buildTimeLabel() => Text(
+        _ago(start),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+          height: 1.1,
+        ),
+      );
+      final ticks = timeTicks;
+      timeLabel = ticks == null
+          ? buildTimeLabel()
+          : ValueListenableBuilder<int>(
+              valueListenable: ticks,
+              builder: (_, _, _) => buildTimeLabel(),
+            );
+    }
     final cache = processIcons;
     final iconKey = _iconKey();
     final wantIcon = showIcon && cache != null;
@@ -174,16 +196,9 @@ class ConnectionTile extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                           ),
-                          if (timeText.isNotEmpty) ...[
+                          if (timeLabel != null) ...[
                             const SizedBox(width: 8),
-                            Text(
-                              timeText,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                    height: 1.1,
-                                  ),
-                            ),
+                            timeLabel,
                           ],
                           IconButton(
                             tooltip: '关闭',
@@ -226,7 +241,7 @@ class ConnectionTile extends StatelessWidget {
                             // above stay stable to avoid wasted work on long lists.
                             ActiveValueListenableBuilder<RowBytes>(
                               valueListenable: row.bytes,
-                              pauseWhileScrolling: true,
+                              pauseWhileScrolling: pauseUpdatesWhileScrolling,
                               builder: (_, bytes, _) => ConnectionTag(
                                 label:
                                     '↑ ${formatBytes(bytes.upload)}  ↓ ${formatBytes(bytes.download)}',
@@ -235,7 +250,7 @@ class ConnectionTile extends StatelessWidget {
                             ),
                             ActiveValueListenableBuilder<RowSpeeds>(
                               valueListenable: row.speeds,
-                              pauseWhileScrolling: true,
+                              pauseWhileScrolling: pauseUpdatesWhileScrolling,
                               builder: (_, speeds, _) {
                                 if (speeds.upload == BigInt.zero &&
                                     speeds.download == BigInt.zero) {

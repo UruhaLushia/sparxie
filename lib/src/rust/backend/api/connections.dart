@@ -67,6 +67,16 @@ Future<ConnectionWindow> fetchConnectionWindow({
   query: query,
 );
 
+Future<ConnectionStats?> fetchConnectionStatsById({
+  required BackendTarget target,
+  required int intervalMs,
+  required String id,
+}) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionStatsById(
+  target: target,
+  intervalMs: intervalMs,
+  id: id,
+);
+
 Future<List<ConnectionGroup>> fetchConnectionGroups({
   required BackendTarget target,
   required int intervalMs,

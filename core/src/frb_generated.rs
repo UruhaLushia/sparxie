@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 591822298;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1671270766;
 
 // Section: executor
 
@@ -625,6 +625,40 @@ fn wire__crate__backend__api__types__connection_group_sort_default_impl(
         },
     )
 }
+fn wire__crate__backend__api__types__connection_stats_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "connection_stats_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::types::ConnectionStats::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__backend__api__types__connection_window_default_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1058,6 +1092,52 @@ fn wire__crate__backend__api__connections__fetch_connection_groups_impl(
                                 api_sort,
                                 api_asc,
                                 api_query,
+                            )
+                            .await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__connections__fetch_connection_stats_by_id_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "fetch_connection_stats_by_id",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_target =
+                <crate::backend::api::target::BackendTarget>::sse_decode(&mut deserializer);
+            let api_interval_ms = <u32>::sse_decode(&mut deserializer);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::backend::api::connections::fetch_connection_stats_by_id(
+                                api_target,
+                                api_interval_ms,
+                                api_id,
                             )
                             .await,
                         )?;
@@ -5026,6 +5106,22 @@ impl SseDecode for crate::backend::api::types::ConnectionGroupSort {
     }
 }
 
+impl SseDecode for crate::backend::api::types::ConnectionStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_upload = <u64>::sse_decode(deserializer);
+        let mut var_download = <u64>::sse_decode(deserializer);
+        let mut var_uploadSpeed = <u64>::sse_decode(deserializer);
+        let mut var_downloadSpeed = <u64>::sse_decode(deserializer);
+        return crate::backend::api::types::ConnectionStats {
+            upload: var_upload,
+            download: var_download,
+            upload_speed: var_uploadSpeed,
+            download_speed: var_downloadSpeed,
+        };
+    }
+}
+
 impl SseDecode for crate::backend::api::types::ConnectionWindow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5530,6 +5626,19 @@ impl SseDecode for Option<bool> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<bool>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::backend::api::types::ConnectionStats> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::backend::api::types::ConnectionStats>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -6082,534 +6191,546 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__backend__api__types__connection_window_default_impl(
+        16 => wire__crate__backend__api__types__connection_stats_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__backend__api__connections__connections_impl(
+        17 => wire__crate__backend__api__types__connection_window_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__backend__api__types__connections_frame_default_impl(
+        18 => wire__crate__backend__api__connections__connections_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__backend__api__types__connections_sort_default_impl(
+        19 => wire__crate__backend__api__types__connections_frame_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__backend__api__connections__connections_stream_impl(
+        20 => wire__crate__backend__api__types__connections_sort_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__backend__api__types__connections_totals_default_impl(
+        21 => wire__crate__backend__api__connections__connections_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__backend__api__types__core_config_default_impl(
+        22 => wire__crate__backend__api__types__connections_totals_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__backend__api__diagnostics__diagnostics_outbounds_impl(
+        23 => wire__crate__backend__api__types__core_config_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__backend__api__control__dns_query_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__backend__api__connections__fetch_connection_group_members_impl(
+        24 => wire__crate__backend__api__diagnostics__diagnostics_outbounds_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__backend__api__connections__fetch_connection_groups_impl(
+        25 => wire__crate__backend__api__control__dns_query_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__backend__api__connections__fetch_connection_group_members_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__backend__api__connections__fetch_connection_window_impl(
+        27 => wire__crate__backend__api__connections__fetch_connection_groups_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => {
+        28 => wire__crate__backend__api__connections__fetch_connection_stats_by_id_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        29 => wire__crate__backend__api__connections__fetch_connection_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        30 => {
             wire__crate__backend__api__resources__fetch_icon_impl(port, ptr, rust_vec_len, data_len)
         }
-        29 => wire__crate__backend__api__streams__fetch_logs_window_impl(
+        31 => wire__crate__backend__api__streams__fetch_logs_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__backend__api__resources__fetch_process_icon_impl(
+        32 => wire__crate__backend__api__resources__fetch_process_icon_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__backend__api__resources__fetch_process_name_impl(
+        33 => wire__crate__backend__api__resources__fetch_process_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__backend__api__control__flush_dns_impl(port, ptr, rust_vec_len, data_len),
-        33 => {
+        34 => wire__crate__backend__api__control__flush_dns_impl(port, ptr, rust_vec_len, data_len),
+        35 => {
             wire__crate__backend__api__control__flush_fakeip_impl(port, ptr, rust_vec_len, data_len)
         }
-        34 => wire__crate__backend__api__proxy_delay__group_delay_impl(
+        36 => wire__crate__backend__api__proxy_delay__group_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__backend__api__types__group_delay_entry_default_impl(
+        37 => wire__crate__backend__api__types__group_delay_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__backend__api__proxies__groups_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__backend__api__resources__icon_cache_size_impl(
+        38 => wire__crate__backend__api__proxies__groups_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__backend__api__resources__icon_cache_size_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__backend__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        39 => {
+        40 => wire__crate__backend__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        41 => {
             wire__crate__backend__api__resources__init_cache_impl(port, ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__backend__api__types__log_entry_default_impl(
+        42 => wire__crate__backend__api__types__log_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__backend__api__types__log_window_default_impl(
+        43 => wire__crate__backend__api__types__log_window_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__backend__api__types__logs_frame_default_impl(
+        44 => wire__crate__backend__api__types__logs_frame_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => {
+        45 => {
             wire__crate__backend__api__streams__logs_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        44 => wire__crate__backend__api__types__memory_sample_default_impl(
+        46 => wire__crate__backend__api__types__memory_sample_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__backend__api__streams__memory_stream_impl(
+        47 => wire__crate__backend__api__streams__memory_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__backend__api__diagnostics__network_quality_progress_default_impl(
+        48 => wire__crate__backend__api__diagnostics__network_quality_progress_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__backend__api__diagnostics__network_quality_test_stream_impl(
+        49 => wire__crate__backend__api__diagnostics__network_quality_test_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__backend__api__diagnostics__outbound_entry_default_impl(
+        50 => wire__crate__backend__api__diagnostics__outbound_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__backend__api__proxies__proxies_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__backend__api__proxy_delay__proxy_batch_delay_impl(
+        51 => wire__crate__backend__api__proxies__proxies_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__backend__api__proxy_delay__proxy_batch_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__backend__api__proxies__proxy_catalog_impl(
+        53 => wire__crate__backend__api__proxies__proxy_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__backend__api__types__proxy_catalog_default_impl(
+        54 => wire__crate__backend__api__types__proxy_catalog_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__backend__api__proxy_delay__proxy_delay_impl(
+        55 => wire__crate__backend__api__proxy_delay__proxy_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__backend__api__types__proxy_delay_entry_default_impl(
+        56 => wire__crate__backend__api__types__proxy_delay_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__backend__api__types__proxy_delay_event_default_impl(
+        57 => wire__crate__backend__api__types__proxy_delay_event_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__backend__api__proxy_delay__proxy_delay_window_impl(
+        58 => wire__crate__backend__api__proxy_delay__proxy_delay_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => {
+        59 => {
             wire__crate__backend__api__proxies__proxy_detail_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__backend__api__proxy_delay__proxy_group_batch_delay_impl(
+        60 => wire__crate__backend__api__proxy_delay__proxy_group_batch_delay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__backend__api__proxy_delay__proxy_group_delay_stream_impl(
+        61 => wire__crate__backend__api__proxy_delay__proxy_group_delay_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__backend__api__types__proxy_group_entry_default_impl(
+        62 => wire__crate__backend__api__types__proxy_group_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__backend__api__proxies__proxy_group_members_impl(
+        63 => wire__crate__backend__api__proxies__proxy_group_members_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__backend__api__types__proxy_member_entry_default_impl(
+        64 => wire__crate__backend__api__types__proxy_member_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__backend__api__types__proxy_member_sort_default_impl(
+        65 => wire__crate__backend__api__types__proxy_member_sort_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__backend__api__providers__proxy_provider_catalog_impl(
+        66 => wire__crate__backend__api__providers__proxy_provider_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(
+        67 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__backend__api__providers__proxy_provider_healthcheck_impl(
+        68 => wire__crate__backend__api__providers__proxy_provider_healthcheck_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__backend__api__providers__proxy_provider_update_impl(
+        69 => wire__crate__backend__api__providers__proxy_provider_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__backend__api__providers__proxy_providers_impl(
+        70 => wire__crate__backend__api__providers__proxy_providers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__backend__api__control__reload_configs_impl(
+        71 => wire__crate__backend__api__control__reload_configs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(
+        72 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => {
+        73 => {
             wire__crate__backend__api__control__restart_core_impl(port, ptr, rust_vec_len, data_len)
         }
-        72 => wire__crate__backend__api__types__rule_entry_default_impl(
+        74 => wire__crate__backend__api__types__rule_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__backend__api__providers__rule_provider_catalog_impl(
+        75 => wire__crate__backend__api__providers__rule_provider_catalog_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__backend__api__types__rule_provider_entry_default_impl(
+        76 => wire__crate__backend__api__types__rule_provider_entry_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__backend__api__providers__rule_provider_update_impl(
+        77 => wire__crate__backend__api__providers__rule_provider_update_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__backend__api__providers__rule_providers_impl(
+        78 => wire__crate__backend__api__providers__rule_providers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__backend__api__rules__rules_count_impl(port, ptr, rust_vec_len, data_len),
-        78 => {
+        79 => wire__crate__backend__api__rules__rules_count_impl(port, ptr, rust_vec_len, data_len),
+        80 => {
             wire__crate__backend__api__rules__rules_disable_impl(port, ptr, rust_vec_len, data_len)
         }
-        79 => wire__crate__backend__api__rules__rules_load_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__backend__api__rules__rules_set_filter_impl(
+        81 => wire__crate__backend__api__rules__rules_load_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__backend__api__rules__rules_set_filter_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__backend__api__types__rules_summary_default_impl(
+        83 => wire__crate__backend__api__types__rules_summary_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => {
+        84 => {
             wire__crate__backend__api__rules__rules_window_impl(port, ptr, rust_vec_len, data_len)
         }
-        83 => {
+        85 => {
             wire__crate__backend__api__proxies__select_proxy_impl(port, ptr, rust_vec_len, data_len)
         }
-        84 => wire__crate__backend__api__control__set_config_bool_impl(
+        86 => wire__crate__backend__api__control__set_config_bool_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__backend__api__control__set_config_log_level_impl(
+        87 => wire__crate__backend__api__control__set_config_log_level_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__backend__api__control__set_config_mode_impl(
+        88 => wire__crate__backend__api__control__set_config_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__backend__api__control__set_config_port_impl(
+        89 => wire__crate__backend__api__control__set_config_port_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__backend__api__control__set_config_tun_enabled_impl(
+        90 => wire__crate__backend__api__control__set_config_tun_enabled_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__backend__api__connections__set_connections_sort_impl(
+        91 => wire__crate__backend__api__connections__set_connections_sort_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(
+        92 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__backend__api__connections__stop_target_streams_impl(
+        93 => wire__crate__backend__api__connections__stop_target_streams_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__backend__api__providers__storage_delete_impl(
+        94 => wire__crate__backend__api__providers__storage_delete_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__backend__api__providers__storage_get_impl(
+        95 => wire__crate__backend__api__providers__storage_get_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__backend__api__providers__storage_set_impl(
+        96 => wire__crate__backend__api__providers__storage_set_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__backend__api__resources__store_process_icon_impl(
+        97 => wire__crate__backend__api__resources__store_process_icon_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__backend__api__resources__store_process_name_impl(
+        98 => wire__crate__backend__api__resources__store_process_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(
+        99 => wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__backend__api__diagnostics__stun_test_stream_impl(
+        100 => wire__crate__backend__api__diagnostics__stun_test_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__backend__api__resources__system_font_families_impl(
+        101 => wire__crate__backend__api__resources__system_font_families_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
+        102 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__backend__api__tailscale__tailscale_logout_impl(
+        103 => wire__crate__backend__api__tailscale__tailscale_logout_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
+        104 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(
+        105 => wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(
+        106 => wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
+        107 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(
+        108 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
+        109 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
+        110 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        109 => wire__crate__backend__api__types__traffic_sample_default_impl(
+        111 => wire__crate__backend__api__types__traffic_sample_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__backend__api__streams__traffic_stream_impl(
+        112 => wire__crate__backend__api__streams__traffic_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => {
+        113 => {
             wire__crate__backend__api__proxies__unfix_proxy_impl(port, ptr, rust_vec_len, data_len)
         }
-        112 => {
+        114 => {
             wire__crate__backend__api__control__update_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        113 => {
+        115 => {
             wire__crate__backend__api__control__upgrade_core_impl(port, ptr, rust_vec_len, data_len)
         }
-        114 => {
+        116 => {
             wire__crate__backend__api__control__upgrade_geo_impl(port, ptr, rust_vec_len, data_len)
         }
-        115 => {
+        117 => {
             wire__crate__backend__api__control__upgrade_ui_impl(port, ptr, rust_vec_len, data_len)
         }
-        116 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
-        117 => {
+        118 => wire__crate__backend__api__control__version_impl(port, ptr, rust_vec_len, data_len),
+        119 => {
             wire__crate__backend__api__control__version_info_impl(port, ptr, rust_vec_len, data_len)
         }
-        118 => wire__crate__backend__api__types__version_info_default_impl(
+        120 => wire__crate__backend__api__types__version_info_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -6777,6 +6898,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ConnectionGro
     for crate::backend::api::types::ConnectionGroupSort
 {
     fn into_into_dart(self) -> crate::backend::api::types::ConnectionGroupSort {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ConnectionStats {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.upload.into_into_dart().into_dart(),
+            self.download.into_into_dart().into_dart(),
+            self.upload_speed.into_into_dart().into_dart(),
+            self.download_speed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::types::ConnectionStats
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ConnectionStats>
+    for crate::backend::api::types::ConnectionStats
+{
+    fn into_into_dart(self) -> crate::backend::api::types::ConnectionStats {
         self
     }
 }
@@ -7812,6 +7956,16 @@ impl SseEncode for crate::backend::api::types::ConnectionGroupSort {
     }
 }
 
+impl SseEncode for crate::backend::api::types::ConnectionStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.upload, serializer);
+        <u64>::sse_encode(self.download, serializer);
+        <u64>::sse_encode(self.upload_speed, serializer);
+        <u64>::sse_encode(self.download_speed, serializer);
+    }
+}
+
 impl SseEncode for crate::backend::api::types::ConnectionWindow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8191,6 +8345,16 @@ impl SseEncode for Option<bool> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <bool>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::backend::api::types::ConnectionStats> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::backend::api::types::ConnectionStats>::sse_encode(value, serializer);
         }
     }
 }

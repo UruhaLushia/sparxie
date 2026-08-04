@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../session.dart';
@@ -13,11 +14,13 @@ class ConnectionDetailsPanel extends StatelessWidget {
     required this.row,
     required this.showConnectionLog,
     required this.onClose,
+    this.timeTicks,
   });
 
   final ConnectionRow row;
   final bool showConnectionLog;
   final VoidCallback? onClose;
+  final ValueListenable<int>? timeTicks;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +81,7 @@ class ConnectionDetailsPanel extends StatelessWidget {
               children: [
                 _ConnectionHeader(onClose: onClose),
                 const SizedBox(height: 8),
-                _ConnectionTransferSummary(row: row),
+                _ConnectionTransferSummary(row: row, timeTicks: timeTicks),
                 const SizedBox(height: 8),
                 SelectionArea(
                   child: _ConnectionInfoBody(
@@ -148,9 +151,10 @@ class _ConnectionHeader extends StatelessWidget {
 }
 
 class _ConnectionTransferSummary extends StatelessWidget {
-  const _ConnectionTransferSummary({required this.row});
+  const _ConnectionTransferSummary({required this.row, this.timeTicks});
 
   final ConnectionRow row;
+  final ValueListenable<int>? timeTicks;
 
   @override
   Widget build(BuildContext context) {
@@ -160,20 +164,27 @@ class _ConnectionTransferSummary extends StatelessWidget {
       '传输统计',
       style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
     );
+    Widget buildDuration() => _ConnectionMetric(
+      label: '持续',
+      value: _formatDuration(row.start),
+      emphasized: true,
+    );
+    final ticks = timeTicks;
+    final duration = ticks == null
+        ? buildDuration()
+        : ValueListenableBuilder<int>(
+            valueListenable: ticks,
+            builder: (_, _, _) => buildDuration(),
+          );
     final metrics = ActiveValueListenableBuilder<RowBytes>(
       valueListenable: row.bytes,
-      pauseWhileScrolling: true,
       builder: (_, bytes, _) => Row(
         children: [
           _ConnectionMetric(label: '上传', value: formatBytes(bytes.upload)),
           const _MetricSeparator(),
           _ConnectionMetric(label: '下载', value: formatBytes(bytes.download)),
           const _MetricSeparator(),
-          _ConnectionMetric(
-            label: '持续',
-            value: _formatDuration(row.start),
-            emphasized: true,
-          ),
+          duration,
         ],
       ),
     );
