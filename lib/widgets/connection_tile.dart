@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../app_prefs.dart';
 import '../session.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
@@ -22,6 +23,7 @@ class ConnectionTile extends StatelessWidget {
     this.processIcons,
     this.showIcon = false,
     this.showAppName = false,
+    this.titleStyle = ConnectionTitleStyle.sourceToTarget,
     this.hideProcess = false,
     this.compact = false,
     this.groupBackdrop = false,
@@ -35,6 +37,7 @@ class ConnectionTile extends StatelessWidget {
   final ProcessIconCache? processIcons;
   final bool showIcon;
   final bool showAppName;
+  final ConnectionTitleStyle titleStyle;
 
   /// Drop the leading `process →` from the title — used for group members,
   /// where the process already labels the group header.
@@ -64,6 +67,7 @@ class ConnectionTile extends StatelessWidget {
     if (hideProcess) {
       return row.host.isEmpty ? row.sourceIp : row.host;
     }
+    if (titleStyle == ConnectionTitleStyle.targetOnly) return row.host;
     final p = (appName != null && appName.isNotEmpty)
         ? appName
         : _rawProcessName();
@@ -88,7 +92,11 @@ class ConnectionTile extends StatelessWidget {
     final iconKey = _iconKey();
     final wantIcon = showIcon && cache != null;
     final wantName =
-        !hideProcess && showAppName && cache != null && iconKey.isNotEmpty;
+        !hideProcess &&
+        titleStyle == ConnectionTitleStyle.sourceToTarget &&
+        showAppName &&
+        cache != null &&
+        iconKey.isNotEmpty;
     if (wantName) cache.requestName(iconKey);
     final verticalPadding = compact ? 7.0 : (wantIcon ? 6.0 : 10.0);
     const radius = BorderRadius.all(Radius.circular(14));

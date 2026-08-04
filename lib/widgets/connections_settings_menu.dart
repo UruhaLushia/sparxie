@@ -79,7 +79,28 @@ class _ConnectionsSettingsSheet extends StatelessWidget {
             value: prefs.connectionsGroupByProcess,
             onChanged: prefs.setConnectionsGroupByProcess,
           ),
-          if (prefs.connectionsGroupByProcess) _GroupSortRow(prefs: prefs),
+          if (prefs.connectionsGroupByProcess)
+            _GroupSortRow(prefs: prefs)
+          else
+            SettingsDrawerSection(
+              label: '连接标题样式',
+              hint: '来源归类关闭时，可显示来源与目标，或仅显示目标。',
+              child: CompactSegmentedButton<ConnectionTitleStyle>(
+                segments: const [
+                  ButtonSegment(
+                    value: ConnectionTitleStyle.sourceToTarget,
+                    label: Text('来源 → 目标'),
+                  ),
+                  ButtonSegment(
+                    value: ConnectionTitleStyle.targetOnly,
+                    label: Text('仅目标'),
+                  ),
+                ],
+                selected: {prefs.connectionTitleStyle},
+                onSelectionChanged: (selection) =>
+                    prefs.setConnectionTitleStyle(selection.first),
+              ),
+            ),
         ];
       },
     );

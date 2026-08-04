@@ -12,7 +12,7 @@ import '../session.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
-import '../widgets/connection_detail_sheet.dart';
+import '../widgets/connection_details_overlay.dart';
 import '../widgets/connection_group_header.dart';
 import '../widgets/connection_tile.dart';
 import '../widgets/compact_controls.dart';
@@ -20,11 +20,19 @@ import '../widgets/connections_settings_menu.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
-import '../widgets/smooth_bottom_sheet.dart';
 import '../widgets/transient_animation.dart';
 
 double _lerpDouble(double begin, double end, double progress) =>
     begin + (end - begin) * progress;
+
+typedef _ConnectionDetailsCallback =
+    void Function(
+      ConnectionRow row,
+      BuildContext sourceContext,
+      Widget preview,
+    );
+typedef _ConnectionPreviewCallback =
+    void Function(BuildContext sourceContext, Widget preview);
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -46,6 +54,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   String _filter = '';
   ConnectionsTab _tab = ConnectionsTab.active;
   int _tabDirection = 1;
+  bool _detailsOverlayOpen = false;
   ({
     int refreshMs,
     ConnectionsSort sort,
@@ -254,14 +263,22 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   String _formatError(Object error) =>
       formatError(error, backendName: widget.store.active?.name);
 
-  void _showDetail(ConnectionRow row) {
-    showSmoothModalBottomSheet(
-      context: context,
-      builder: (_) => ConnectionDetailSheet(
+  void _showDetail(
+    ConnectionRow row,
+    BuildContext sourceContext,
+    Widget preview,
+  ) {
+    if (_detailsOverlayOpen) return;
+    _detailsOverlayOpen = true;
+    unawaited(
+      showConnectionDetailsOverlay(
+        context: context,
+        sourceContext: sourceContext,
         row: row,
+        preview: preview,
         showConnectionLog: widget.session.isStash.value,
         onClose: () => _close(row.id),
-      ),
+      ).whenComplete(() => _detailsOverlayOpen = false),
     );
   }
 
@@ -567,7 +584,7 @@ class _ConnectionsList extends StatefulWidget {
   final AppPrefs prefs;
   final ConnectionsTab tab;
   final String filter;
-  final ValueChanged<ConnectionRow> onTap;
+  final _ConnectionDetailsCallback onTap;
   final ValueChanged<String> onClose;
 
   @override
@@ -751,38 +768,48 @@ class _ConnectionsListState extends State<_ConnectionsList> {
       builder: (context, _) {
         final showIcon = widget.prefs.connectionsShowProcessIcon;
         final showAppName = widget.prefs.connectionsShowAppName;
+        final titleStyle = widget.prefs.connectionTitleStyle;
         return AppBackdropGroup(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              24 + MediaQuery.paddingOf(context).bottom,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(
+              context,
+            ).copyWith(scrollbars: false),
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                24 + MediaQuery.paddingOf(context).bottom,
+              ),
+              // ConnectionTile already isolates the stable row contents. Avoid
+              // a second automatic boundary around each row.
+              addRepaintBoundaries: false,
+              addAutomaticKeepAlives: false,
+              // Fixed-height items let ListView do exact scroll math without
+              // measuring offscreen widgets.
+              itemExtent: _rowHeight,
+              itemCount: total,
+              itemBuilder: (context, index) {
+                final cn = widget.session.connections;
+                final row = cn.rowAt(widget.tab, index);
+                return _RowSlot(
+                  // Keep identity stable while the same row remains in this
+                  // slot; a changed id replaces the subtree directly.
+                  key: ValueKey(row?.id ?? 'idx::$index'),
+                  row: row,
+                  processIcons: processIcons,
+                  showIcon: showIcon,
+                  showAppName: showAppName,
+                  titleStyle: titleStyle,
+                  onTap: row == null
+                      ? null
+                      : (sourceContext, preview) =>
+                            widget.onTap(row, sourceContext, preview),
+                  onClose: row == null ? null : () => widget.onClose(row.id),
+                );
+              },
             ),
-            // ConnectionTile already isolates the stable row contents. Avoid
-            // a second automatic boundary around each row.
-            addRepaintBoundaries: false,
-            addAutomaticKeepAlives: false,
-            // Fixed-height items let ListView do exact scroll math without
-            // measuring offscreen widgets.
-            itemExtent: _rowHeight,
-            itemCount: total,
-            itemBuilder: (context, index) {
-              final cn = widget.session.connections;
-              final row = cn.rowAt(widget.tab, index);
-              return _RowSlot(
-                // Keep identity stable while the same row remains in this
-                // slot; a changed id replaces the subtree directly.
-                key: ValueKey(row?.id ?? 'idx::$index'),
-                row: row,
-                processIcons: processIcons,
-                showIcon: showIcon,
-                showAppName: showAppName,
-                onTap: row == null ? null : () => widget.onTap(row),
-                onClose: row == null ? null : () => widget.onClose(row.id),
-              );
-            },
           ),
         );
       },
@@ -799,6 +826,7 @@ class _RowSlot extends StatelessWidget {
     this.processIcons,
     this.showIcon = false,
     this.showAppName = false,
+    this.titleStyle = ConnectionTitleStyle.sourceToTarget,
     this.onTap,
     this.onClose,
   });
@@ -807,7 +835,8 @@ class _RowSlot extends StatelessWidget {
   final ProcessIconCache? processIcons;
   final bool showIcon;
   final bool showAppName;
-  final VoidCallback? onTap;
+  final ConnectionTitleStyle titleStyle;
+  final _ConnectionPreviewCallback? onTap;
   final VoidCallback? onClose;
 
   @override
@@ -818,18 +847,29 @@ class _RowSlot extends StatelessWidget {
     );
     final value = row;
     if (value == null) return placeholder;
+    Widget buildTile(VoidCallback handleTap, {required bool preview}) {
+      return ConnectionTile(
+        row: value,
+        processIcons: processIcons,
+        showIcon: showIcon,
+        showAppName: showAppName,
+        titleStyle: titleStyle,
+        groupBackdrop: !preview,
+        onTap: handleTap,
+        onClose: onClose ?? () {},
+      );
+    }
+
     return ScrollDeferredContent(
       placeholder: placeholder,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: ConnectionTile(
-          row: value,
-          processIcons: processIcons,
-          showIcon: showIcon,
-          showAppName: showAppName,
-          groupBackdrop: true,
-          onTap: onTap ?? () {},
-          onClose: onClose ?? () {},
+        child: Builder(
+          builder: (sourceContext) => buildTile(() {
+            final callback = onTap;
+            if (callback == null) return;
+            callback(sourceContext, buildTile(() {}, preview: true));
+          }, preview: false),
         ),
       ),
     );
@@ -924,7 +964,7 @@ class _GroupedConnectionsList extends StatefulWidget {
   final AppPrefs prefs;
   final ConnectionsTab tab;
   final String filter;
-  final ValueChanged<ConnectionRow> onTap;
+  final _ConnectionDetailsCallback onTap;
   final ValueChanged<String> onClose;
 
   @override
@@ -1067,66 +1107,60 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     final showAppName = widget.prefs.connectionsShowAppName;
 
     return AppBackdropGroup(
-      child: CustomScrollView(
-        slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 4)),
-          for (final group in groups)
-            MultiSliver(
-              pushPinnedChildren: true,
-              children: [
-                SliverPinnedHeader(
-                  child: RepaintBoundary(
-                    child: ConnectionGroupHeader(
-                      summary: group,
-                      expanded: cn.isExpanded(group.key),
-                      onToggle: () => cn.toggleGroup(group.key),
-                      onCloseAll: widget.tab == ConnectionsTab.active
-                          ? () => _closeGroup(group)
-                          : null,
-                      onClearAll: widget.tab == ConnectionsTab.closed
-                          ? () => _clearClosedGroup(group)
-                          : null,
-                      processIcons: processIcons,
-                      showIcon: showIcon,
-                      showAppName: showAppName,
-                      groupBackdrop: true,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: CustomScrollView(
+          slivers: [
+            const SliverToBoxAdapter(child: SizedBox(height: 4)),
+            for (final group in groups)
+              MultiSliver(
+                pushPinnedChildren: true,
+                children: [
+                  SliverPinnedHeader(
+                    child: RepaintBoundary(
+                      child: ConnectionGroupHeader(
+                        summary: group,
+                        expanded: cn.isExpanded(group.key),
+                        onToggle: () => cn.toggleGroup(group.key),
+                        onCloseAll: widget.tab == ConnectionsTab.active
+                            ? () => _closeGroup(group)
+                            : null,
+                        onClearAll: widget.tab == ConnectionsTab.closed
+                            ? () => _clearClosedGroup(group)
+                            : null,
+                        processIcons: processIcons,
+                        showIcon: showIcon,
+                        showAppName: showAppName,
+                        groupBackdrop: true,
+                      ),
                     ),
                   ),
-                ),
-                if (cn.isExpanded(group.key))
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(28, 0, 12, 0),
-                    sliver: Builder(
-                      builder: (_) {
-                        final ids = cn.groupMemberIds(group.key);
-                        return SliverList.builder(
-                          addRepaintBoundaries: false,
-                          addAutomaticKeepAlives: false,
-                          itemCount: ids.length,
-                          itemBuilder: (context, index) {
-                            final row = cn.groupMemberAt(group.key, index);
-                            if (row == null) {
-                              return const SizedBox(
-                                height: 60,
-                                child: Padding(
-                                  padding: EdgeInsets.only(bottom: 4),
-                                  child: _RowPlaceholder(),
-                                ),
-                              );
-                            }
-                            return ScrollDeferredContent(
-                              key: ValueKey('grp::${group.key}::${row.id}'),
-                              placeholder: const SizedBox(
-                                height: 60,
-                                child: Padding(
-                                  padding: EdgeInsets.only(bottom: 4),
-                                  child: _RowPlaceholder(),
-                                ),
-                              ),
-                              child: Padding(
-                                key: ValueKey('grp::${group.key}::${row.id}'),
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: ConnectionTile(
+                  if (cn.isExpanded(group.key))
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(28, 0, 12, 0),
+                      sliver: Builder(
+                        builder: (_) {
+                          final ids = cn.groupMemberIds(group.key);
+                          return SliverList.builder(
+                            addRepaintBoundaries: false,
+                            addAutomaticKeepAlives: false,
+                            itemCount: ids.length,
+                            itemBuilder: (context, index) {
+                              final row = cn.groupMemberAt(group.key, index);
+                              if (row == null) {
+                                return const SizedBox(
+                                  height: 60,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(bottom: 4),
+                                    child: _RowPlaceholder(),
+                                  ),
+                                );
+                              }
+                              Widget buildTile(
+                                VoidCallback handleTap, {
+                                required bool preview,
+                              }) {
+                                return ConnectionTile(
                                   row: row,
                                   // Members sit under the group's process
                                   // header, so the per-row icon and process
@@ -1134,23 +1168,50 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                                   showIcon: false,
                                   hideProcess: true,
                                   compact: true,
-                                  groupBackdrop: true,
-                                  onTap: () => widget.onTap(row),
+                                  groupBackdrop: !preview,
+                                  onTap: handleTap,
                                   onClose: () => widget.onClose(row.id),
+                                );
+                              }
+
+                              return ScrollDeferredContent(
+                                key: ValueKey('grp::${group.key}::${row.id}'),
+                                placeholder: const SizedBox(
+                                  height: 60,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(bottom: 4),
+                                    child: _RowPlaceholder(),
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                                child: Padding(
+                                  key: ValueKey('grp::${group.key}::${row.id}'),
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Builder(
+                                    builder: (sourceContext) => buildTile(
+                                      () => widget.onTap(
+                                        row,
+                                        sourceContext,
+                                        buildTile(() {}, preview: true),
+                                      ),
+                                      preview: false,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 24 + MediaQuery.paddingOf(context).bottom,
+              ),
             ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

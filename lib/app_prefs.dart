@@ -84,6 +84,9 @@ enum ConnectionsSort {
   process,
 }
 
+/// Title content used by the flat (ungrouped) connections list.
+enum ConnectionTitleStyle { sourceToTarget, targetOnly }
+
 /// Sort key for the process-group list (grouped connections view).
 enum GroupSort {
   /// Process / group name.
@@ -166,6 +169,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kShowProcessIcon = 'connectionsShowProcessIcon';
   static const _kShowAppName = 'connectionsShowAppName';
   static const _kGroupByProcess = 'connectionsGroupByProcess';
+  static const _kConnectionTitleStyle = 'connectionTitleStyle';
   static const _kGroupSort = 'connectionsGroupSort';
   static const _kGroupSortAsc = 'connectionsGroupSortAsc';
   static const _kUiFontFamily = 'uiFontFamily';
@@ -220,6 +224,8 @@ class AppPrefs extends ChangeNotifier {
   static const defaultShowProcessIcon = true;
   static const defaultShowAppName = false;
   static const defaultGroupByProcess = false;
+  static const defaultConnectionTitleStyle =
+      ConnectionTitleStyle.sourceToTarget;
   static const defaultGroupSort = GroupSort.name;
   static const defaultGroupSortAsc = true;
   static const defaultAllowInsecureOnlineResources = false;
@@ -539,6 +545,16 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setConnectionsGroupByProcess(bool value) async {
     if (value == connectionsGroupByProcess) return;
     _put(_kGroupByProcess, value);
+  }
+
+  /// Title content for rows when source grouping is disabled.
+  ConnectionTitleStyle get connectionTitleStyle => _decodeConnectionTitleStyle(
+    _str(_kConnectionTitleStyle, defaultConnectionTitleStyle.name),
+  );
+
+  Future<void> setConnectionTitleStyle(ConnectionTitleStyle value) async {
+    if (value == connectionTitleStyle) return;
+    _put(_kConnectionTitleStyle, value.name);
   }
 
   /// Sort key for the grouped connections view (groups, not connections).
@@ -1195,6 +1211,13 @@ class AppPrefs extends ChangeNotifier {
       if (v.name == raw) return v;
     }
     return defaultConnectionsSort;
+  }
+
+  static ConnectionTitleStyle _decodeConnectionTitleStyle(String? raw) {
+    for (final value in ConnectionTitleStyle.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultConnectionTitleStyle;
   }
 
   static GroupSort _decodeGroupSort(String? raw) {
