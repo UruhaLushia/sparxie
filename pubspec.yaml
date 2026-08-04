@@ -80,6 +80,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/backend_icons/
     - assets/process_icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see

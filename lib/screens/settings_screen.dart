@@ -14,6 +14,7 @@ import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_page_route.dart';
+import '../widgets/backend_avatar.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
@@ -1134,6 +1135,7 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
         name: result.name,
         type: result.type,
         baseUrl: result.baseUrl,
+        icon: result.icon,
         secret: result.secret,
         allowInsecure: result.allowInsecure,
       );
@@ -1184,10 +1186,7 @@ class _ControllerTile extends StatelessWidget {
     return ListTile(
       minTileHeight: 64,
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      leading: PanelIconChip(
-        icon: active ? Icons.check_rounded : Icons.dns_outlined,
-        active: active,
-      ),
+      leading: _ControllerAvatar(controller: controller, active: active),
       title: Text(controller.name),
       subtitle: Text(
         [
@@ -1220,6 +1219,43 @@ class _ControllerTile extends StatelessWidget {
   }
 }
 
+class _ControllerAvatar extends StatelessWidget {
+  const _ControllerAvatar({required this.controller, required this.active});
+
+  final ctl.Controller controller;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        BackendAvatar(controller: controller, size: 40),
+        if (active)
+          Positioned(
+            right: -3,
+            bottom: -3,
+            child: Container(
+              width: 17,
+              height: 17,
+              decoration: BoxDecoration(
+                color: scheme.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: scheme.surface, width: 1.5),
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 12,
+                color: scheme.onPrimary,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _EditDialog extends StatefulWidget {
   const _EditDialog({this.existing, this.initial, this.importMode = false});
   final ctl.Controller? existing;
@@ -1234,10 +1270,12 @@ enum _Scheme { http, https, unix, pipe, sparkleService }
 
 class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
+  late final TextEditingController _icon;
   late final TextEditingController _address;
   late final TextEditingController _secret;
   late ctl.BackendType _type;
   late bool _allowInsecure;
+  var _showSecret = false;
   late _Scheme _scheme;
   final _formKey = GlobalKey<FormState>();
 
@@ -1307,6 +1345,7 @@ class _EditDialogState extends State<_EditDialog> {
     final c = widget.existing;
     final initial = widget.initial;
     _name = TextEditingController(text: c?.name ?? initial?.name ?? '');
+    _icon = TextEditingController(text: c?.icon ?? initial?.icon ?? '');
     _type = c?.type ?? initial?.type ?? ctl.BackendType.clash;
     final (scheme, addr) = _decompose(
       c?.baseUrl ?? initial?.baseUrl ?? 'http://127.0.0.1:9090',
@@ -1440,6 +1479,7 @@ class _EditDialogState extends State<_EditDialog> {
   @override
   void dispose() {
     _name.dispose();
+    _icon.dispose();
     _address.dispose();
     _secret.dispose();
     super.dispose();
@@ -1468,6 +1508,27 @@ class _EditDialogState extends State<_EditDialog> {
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _icon,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(
+                  labelText: '图标 URL (可选)',
+                  hintText: 'https://example.com/icon.png',
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.image_outlined),
+                ),
+                validator: (value) {
+                  try {
+                    ctl.normalizeControllerIconUrl(value);
+                    return null;
+                  } on FormatException catch (error) {
+                    return error.message;
+                  }
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ctl.BackendType>(
@@ -1532,11 +1593,23 @@ class _EditDialogState extends State<_EditDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _secret,
-                  decoration: const InputDecoration(
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
                     labelText: '密钥 (可选)',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      tooltip: _showSecret ? '隐藏密钥' : '显示密钥',
+                      onPressed: () =>
+                          setState(() => _showSecret = !_showSecret),
+                      icon: Icon(
+                        _showSecret
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: !_showSecret,
                 ),
               ],
               if (_scheme == _Scheme.https) ...[
@@ -1567,6 +1640,7 @@ class _EditDialogState extends State<_EditDialog> {
                 name: _name.text.trim(),
                 type: _type,
                 baseUrl: _composeUrl(),
+                icon: ctl.normalizeControllerIconUrl(_icon.text),
                 // Secret is only meaningful for TCP backends.
                 secret: _isIpc ? '' : _secret.text.trim(),
                 allowInsecure: _scheme == _Scheme.https && _allowInsecure,

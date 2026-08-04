@@ -1,104 +1,12 @@
-import 'package:flutter/material.dart';
+import 'named_avatar.dart';
 
-import 'rust_icon_image.dart';
-
-/// Circular proxy avatar — image when [icon] is non-empty, otherwise a
+/// Proxy avatar — image when [icon] is non-empty, otherwise a
 /// color-tinted letter chip derived from [name].
-class ProxyAvatar extends StatelessWidget {
+class ProxyAvatar extends NamedAvatar {
   const ProxyAvatar({
     super.key,
-    required this.name,
-    this.icon = '',
-    this.size = 44,
+    required super.name,
+    super.icon = '',
+    super.size = 44,
   });
-
-  final String name;
-  final String icon;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = _colorFor(name, scheme);
-    final hasIcon = icon.isNotEmpty;
-    // Keep modest resampling headroom without retaining every icon at its
-    // full source size; proxy catalogs can contain hundreds of images.
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cachePx = (size * dpr * 1.25).ceil().clamp(1, 160);
-    return SizedBox.square(
-      dimension: size,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: hasIcon
-            ? Image(
-                image: ResizeImage(
-                  RustIconImage(icon),
-                  width: cachePx,
-                  height: cachePx,
-                ),
-                fit: BoxFit.cover,
-                width: size,
-                height: size,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, _, _) =>
-                    _LetterChip(name: name, color: color),
-                frameBuilder: (_, child, frame, wasSync) {
-                  if (wasSync || frame != null) return child;
-                  return _LetterChip(name: name, color: color);
-                },
-              )
-            : _LetterChip(name: name, color: color),
-      ),
-    );
-  }
-
-  static Color _colorFor(String name, ColorScheme scheme) {
-    var hash = 0;
-    for (var i = 0; i < name.length; i++) {
-      hash = (hash * 31 + name.codeUnitAt(i)) & 0x7fffffff;
-    }
-    return switch (hash % 8) {
-      0 => scheme.primary,
-      1 => scheme.tertiary,
-      2 => scheme.secondary,
-      3 => scheme.error,
-      4 => const Color(0xff10b981),
-      5 => const Color(0xfff97316),
-      6 => const Color(0xff8b5cf6),
-      _ => const Color(0xff0ea5e9),
-    };
-  }
-}
-
-class _LetterChip extends StatelessWidget {
-  const _LetterChip({required this.name, required this.color});
-  final String name;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        color: color.withValues(alpha: 0.18),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        _letterOf(name),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 15,
-        ),
-      ),
-    );
-  }
-
-  static String _letterOf(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return '?';
-    return trimmed.characters.first.toUpperCase();
-  }
 }

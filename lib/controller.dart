@@ -21,12 +21,28 @@ enum BackendType {
   };
 }
 
+String normalizeControllerIconUrl(String? value) {
+  final icon = value?.trim() ?? '';
+  if (icon.isEmpty) return '';
+  if (icon.length > 4096) {
+    throw const FormatException('目标服务图标地址过长');
+  }
+  final uri = Uri.tryParse(icon);
+  if (uri == null ||
+      !(uri.scheme == 'http' || uri.scheme == 'https') ||
+      uri.host.isEmpty) {
+    throw const FormatException('目标服务图标必须是 http 或 https URL');
+  }
+  return icon;
+}
+
 class Controller {
   Controller({
     required this.id,
     required this.name,
     this.type = BackendType.clash,
     required this.baseUrl,
+    this.icon = '',
     this.secret = '',
     this.allowInsecure = false,
   });
@@ -35,6 +51,7 @@ class Controller {
   final String name;
   final BackendType type;
   final String baseUrl;
+  final String icon;
   final String secret;
 
   /// Skip TLS certificate validation for https/wss backends.
@@ -44,6 +61,7 @@ class Controller {
     String? name,
     BackendType? type,
     String? baseUrl,
+    String? icon,
     String? secret,
     bool? allowInsecure,
   }) {
@@ -52,6 +70,7 @@ class Controller {
       name: name ?? this.name,
       type: type ?? this.type,
       baseUrl: baseUrl ?? this.baseUrl,
+      icon: icon ?? this.icon,
       secret: secret ?? this.secret,
       allowInsecure: allowInsecure ?? this.allowInsecure,
     );
@@ -62,6 +81,7 @@ class Controller {
     'name': name,
     'type': type.name,
     'baseUrl': baseUrl,
+    'icon': icon,
     'secret': secret,
     'allowInsecure': allowInsecure,
   };
@@ -71,6 +91,7 @@ class Controller {
     name: json['name'] as String? ?? '',
     type: BackendType.fromJson(json['type']),
     baseUrl: json['baseUrl'] as String? ?? '',
+    icon: json['icon'] as String? ?? '',
     secret: json['secret'] as String? ?? '',
     allowInsecure: json['allowInsecure'] as bool? ?? false,
   );
@@ -81,6 +102,7 @@ class ControllerDraft {
     required this.name,
     required this.type,
     required this.baseUrl,
+    this.icon = '',
     this.secret = '',
     this.allowInsecure = false,
   });
@@ -88,6 +110,7 @@ class ControllerDraft {
   final String name;
   final BackendType type;
   final String baseUrl;
+  final String icon;
   final String secret;
   final bool allowInsecure;
 }
@@ -127,6 +150,9 @@ class ControllerImportRequest {
 
     final type = _parseType(params['type']);
     final baseUrl = _normalizeBaseUrl(rawUrl, type);
+    final icon = normalizeControllerIconUrl(
+      params['icon'] ?? params['iconUrl'] ?? params['icon-url'],
+    );
     final ipc = _isIpcUrl(baseUrl);
     final rawName = params['name']?.trim();
     final name = rawName == null || rawName.isEmpty
@@ -141,6 +167,7 @@ class ControllerImportRequest {
         name: name,
         type: type,
         baseUrl: baseUrl,
+        icon: icon,
         secret: ipc ? '' : params['secret']?.trim() ?? '',
         allowInsecure:
             !ipc &&
@@ -317,6 +344,7 @@ class ControllerStore extends ChangeNotifier {
     required String name,
     BackendType type = BackendType.clash,
     required String baseUrl,
+    String icon = '',
     String secret = '',
     bool allowInsecure = false,
   }) async {
@@ -325,6 +353,7 @@ class ControllerStore extends ChangeNotifier {
       name: name,
       type: type,
       baseUrl: baseUrl,
+      icon: icon,
       secret: secret,
       allowInsecure: allowInsecure,
     );
@@ -339,6 +368,7 @@ class ControllerStore extends ChangeNotifier {
     name: draft.name,
     type: draft.type,
     baseUrl: draft.baseUrl,
+    icon: draft.icon,
     secret: draft.secret,
     allowInsecure: draft.allowInsecure,
   );
@@ -348,6 +378,7 @@ class ControllerStore extends ChangeNotifier {
     String? name,
     BackendType? type,
     String? baseUrl,
+    String? icon,
     String? secret,
     bool? allowInsecure,
   }) async {
@@ -358,6 +389,7 @@ class ControllerStore extends ChangeNotifier {
                   name: name,
                   type: type,
                   baseUrl: baseUrl,
+                  icon: icon,
                   secret: secret,
                   allowInsecure: allowInsecure,
                 )

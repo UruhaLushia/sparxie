@@ -48,7 +48,8 @@ yay -S sparxie-bin
 sparxie://install-target?url=http%3A%2F%2F192.168.1.2%3A9090&name=Home&type=clash&secret=token
 ```
 
-`url` 为必填项；`name`、`secret`、`allowInsecure` 可选。`type` 支持
+`url` 为必填项；`name`、`icon`、`secret`、`allowInsecure` 可选，`icon` 接受
+HTTP(S) 图片 URL。`type` 支持
 `clash`（默认，也接受 `mihomo`）、`surge` 和 `sing-box`。所有参数均应进行 URL 编码。
 
 ## 平台
