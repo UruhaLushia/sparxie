@@ -185,6 +185,7 @@ class _ColumnsDropdown extends StatelessWidget {
       value: prefs.proxiesColumns,
       label: _label(prefs.proxiesColumns),
       semanticLabel: '每行列数',
+      enabled: prefs.proxiesLayout == ProxiesLayout.list,
       itemBuilder: (_) => [
         for (final v in _options)
           PopupMenuItem(value: v, child: Text(_label(v))),
