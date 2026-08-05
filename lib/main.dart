@@ -303,6 +303,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     _controllerUriImporter = ControllerUriImporter(
       widget.appLinks,
       store: store,
@@ -312,8 +313,35 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _controllerUriImporter.dispose();
     super.dispose();
+  }
+
+  bool _requestBackNavigation() {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || !navigator.canPop()) return false;
+    unawaited(navigator.maybePop());
+    return true;
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.browserBack ||
+        key == LogicalKeyboardKey.goBack ||
+        event.physicalKey == PhysicalKeyboardKey.browserBack) {
+      return _requestBackNavigation();
+    }
+    return false;
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (event.kind == PointerDeviceKind.mouse &&
+        event.buttons & kBackMouseButton != 0) {
+      _requestBackNavigation();
+    }
   }
 
   @override
@@ -561,7 +589,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                 ? _darkCompactStyles
                 : _lightCompactStyles;
 
-            return AppBackgroundFrame(
+            final appFrame = AppBackgroundFrame(
               source: prefs.backgroundSource,
               imagePath: prefs.backgroundImagePath,
               fit: prefs.backgroundFit,
@@ -594,6 +622,11 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                   ),
                 ),
               ),
+            );
+            return Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: _handlePointerDown,
+              child: appFrame,
             );
           },
           onGenerateRoute: (settings) {

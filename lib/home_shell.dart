@@ -30,14 +30,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     _resumeGeneration++;
-    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -64,18 +62,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void didHaveMemoryPressure() {
     // Flutter clears its global ImageCache before notifying observers.
     widget.session.processIcons.clearImages(preserveLive: true);
-  }
-
-  bool _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.escape) {
-      final nav = Navigator.maybeOf(context);
-      if (nav != null && nav.canPop()) {
-        nav.pop();
-        return true;
-      }
-    }
-    return false;
   }
 
   AppSurfaceTheme _navigationSurfaceTheme(BuildContext context) {
@@ -213,55 +199,47 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      // Mouse back button (button 8) → pop the navigator if possible.
-      onPointerDown: (event) {
-        if (event.buttons & kBackMouseButton != 0) {
-          Navigator.maybeOf(context)?.maybePop();
+    return ActiveListenableBuilder(
+      listenable: Listenable.merge([
+        widget.prefs,
+        widget.session.supportsCoreConfig,
+        widget.session.supportsCoreActions,
+        widget.session.supportsExternalResources,
+        widget.session.supportsRules,
+        widget.session.supportsTailscale,
+        widget.session.supportsDiagnostics,
+      ]),
+      builder: (context, _) {
+        final size = MediaQuery.sizeOf(context);
+        // `wide` picks rail-vs-bar chrome. In wide standard the rail gets
+        // the full destination set and trims itself by measured height
+        // (see _computeRail); only the compact bottom bar uses a reduced
+        // set, since a NavigationBar can't grow.
+        final wide = size.width >= appWideLayoutBreakpoint;
+        final layout = widget.prefs.navLayout;
+        final cards = layout == NavLayout.cards;
+        final destinations = _destinationsFor(
+          layout,
+          isCompact: !wide,
+          supportsCoreConfig: widget.session.supportsCoreConfig.value,
+          supportsCoreActions: widget.session.supportsCoreActions.value,
+          supportsExternalResources:
+              widget.session.supportsExternalResources.value,
+          supportsRules: widget.session.supportsRules.value,
+          supportsTailscale: widget.session.supportsTailscale.value,
+          supportsDiagnostics: widget.session.supportsDiagnostics.value,
+        );
+        if (wide) {
+          return cards
+              ? _buildWideCards(destinations)
+              : _buildWideStandard(destinations);
         }
+        if (cards) return _buildCompactLauncher(context, destinations);
+        if (layout == NavLayout.floating) {
+          return _buildCompactFloating(destinations);
+        }
+        return _buildCompactStandard(destinations);
       },
-      child: ActiveListenableBuilder(
-        listenable: Listenable.merge([
-          widget.prefs,
-          widget.session.supportsCoreConfig,
-          widget.session.supportsCoreActions,
-          widget.session.supportsExternalResources,
-          widget.session.supportsRules,
-          widget.session.supportsTailscale,
-          widget.session.supportsDiagnostics,
-        ]),
-        builder: (context, _) {
-          final size = MediaQuery.sizeOf(context);
-          // `wide` picks rail-vs-bar chrome. In wide standard the rail gets
-          // the full destination set and trims itself by measured height
-          // (see _computeRail); only the compact bottom bar uses a reduced
-          // set, since a NavigationBar can't grow.
-          final wide = size.width >= appWideLayoutBreakpoint;
-          final layout = widget.prefs.navLayout;
-          final cards = layout == NavLayout.cards;
-          final destinations = _destinationsFor(
-            layout,
-            isCompact: !wide,
-            supportsCoreConfig: widget.session.supportsCoreConfig.value,
-            supportsCoreActions: widget.session.supportsCoreActions.value,
-            supportsExternalResources:
-                widget.session.supportsExternalResources.value,
-            supportsRules: widget.session.supportsRules.value,
-            supportsTailscale: widget.session.supportsTailscale.value,
-            supportsDiagnostics: widget.session.supportsDiagnostics.value,
-          );
-          if (wide) {
-            return cards
-                ? _buildWideCards(destinations)
-                : _buildWideStandard(destinations);
-          }
-          if (cards) return _buildCompactLauncher(context, destinations);
-          if (layout == NavLayout.floating) {
-            return _buildCompactFloating(destinations);
-          }
-          return _buildCompactStandard(destinations);
-        },
-      ),
     );
   }
 
