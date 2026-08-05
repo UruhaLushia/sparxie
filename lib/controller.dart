@@ -409,6 +409,19 @@ class ControllerStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> reorder(int oldIndex, int newIndex) async {
+    RangeError.checkValidIndex(oldIndex, _controllers, 'oldIndex');
+    RangeError.checkValidIndex(newIndex, _controllers, 'newIndex');
+    if (oldIndex == newIndex) return;
+
+    final reordered = List<Controller>.of(_controllers);
+    final controller = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, controller);
+    _controllers = reordered;
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> activate(String id) async {
     if (_controllers.any((c) => c.id == id)) {
       _activeId = id;

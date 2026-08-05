@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 
@@ -1084,40 +1085,79 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
     return SectionPanel(
       title: '后端',
       icon: Icons.dns_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (controllers.isEmpty)
-            Padding(
+      trailing: FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          visualDensity: VisualDensity.compact,
+        ),
+        onPressed: () => _edit(),
+        icon: const Icon(Icons.add, size: 17),
+        label: const Text('新增'),
+      ),
+      child: controllers.isEmpty
+          ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                '还没有后端，点击下方“新增”按钮添加',
+                '还没有后端，点击“新增”按钮添加',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             )
-          else
-            for (var i = 0; i < controllers.length; i++) ...[
-              if (i > 0) const Divider(height: 1, indent: 64),
-              _ControllerTile(
-                controller: controllers[i],
-                active: controllers[i].id == activeId,
-                canRemove: controllers.length > 1,
-                onActivate: () => widget.store.activate(controllers[i].id),
-                onEdit: () => _edit(existing: controllers[i]),
-                onRemove: () => _confirmRemove(controllers[i]),
-              ),
-            ],
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.tonalIcon(
-              onPressed: () => _edit(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('新增后端'),
+          : ReorderableListView.builder(
+              primary: false,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemExtent: 64,
+              buildDefaultDragHandles: false,
+              proxyDecorator: _dragProxy,
+              itemCount: controllers.length,
+              onReorderItem: _reorder,
+              itemBuilder: (context, index) {
+                final controller = controllers[index];
+                return _BackendReorderDragStartListener(
+                  key: ValueKey(controller.id),
+                  index: index,
+                  enabled: controllers.length > 1,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: _ControllerTile(
+                      controller: controller,
+                      active: controller.id == activeId,
+                      canRemove: controllers.length > 1,
+                      onActivate: () => widget.store.activate(controller.id),
+                      onEdit: () => _edit(existing: controller),
+                      onRemove: () => _confirmRemove(controller),
+                    ),
+                  ),
+                );
+              },
             ),
+    );
+  }
+
+  void _reorder(int oldIndex, int newIndex) {
+    unawaited(widget.store.reorder(oldIndex, newIndex));
+  }
+
+  Widget _dragProxy(Widget child, int index, Animation<double> animation) {
+    final scheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final t = Curves.easeOutCubic.transform(animation.value);
+        return Transform.scale(
+          scale: 1 + t * 0.01,
+          child: Material(
+            color: scheme.surfaceContainerHigh,
+            elevation: 4 * t,
+            shadowColor: scheme.shadow.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: child,
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1164,6 +1204,23 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
   }
 }
 
+class _BackendReorderDragStartListener extends ReorderableDragStartListener {
+  const _BackendReorderDragStartListener({
+    super.key,
+    required super.child,
+    required super.index,
+    super.enabled,
+  });
+
+  @override
+  MultiDragGestureRecognizer createRecognizer() {
+    return DelayedMultiDragGestureRecognizer(
+      delay: const Duration(milliseconds: 700),
+      debugOwner: this,
+    );
+  }
+}
+
 class _ControllerTile extends StatelessWidget {
   const _ControllerTile({
     required this.controller,
@@ -1183,37 +1240,102 @@ class _ControllerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return ListTile(
-      minTileHeight: 64,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      dense: true,
+      minTileHeight: 60,
+      minLeadingWidth: 36,
+      horizontalTitleGap: 12,
+      contentPadding: const EdgeInsetsDirectional.only(start: 10, end: 2),
+      tileColor: active
+          ? scheme.primaryContainer.withValues(alpha: 0.22)
+          : scheme.surfaceContainerHigh.withValues(alpha: 0.14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       leading: _ControllerAvatar(controller: controller, active: active),
-      title: Text(controller.name),
-      subtitle: Text(
-        [
-          controller.type.label,
-          controller.baseUrl,
-          if (controller.secret.isNotEmpty) '已设置密钥',
-        ].join('  •  '),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              controller.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
+          if (controller.secret.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: '已设置密钥',
+              child: Icon(
+                Icons.key_rounded,
+                size: 15,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (controller.allowInsecure) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: '已跳过证书验证',
+              child: Icon(
+                Icons.gpp_bad_outlined,
+                size: 16,
+                color: scheme.error,
+              ),
+            ),
+          ],
+        ],
+      ),
+      subtitle: Row(
+        children: [
+          Text(
+            controller.type.label,
+            maxLines: 1,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              controller.baseUrl,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
       onTap: active ? null : onActivate,
-      trailing: PopupMenuButton<String>(
-        onSelected: (value) {
-          switch (value) {
-            case 'activate':
-              onActivate();
-            case 'edit':
-              onEdit();
-            case 'remove':
-              onRemove();
-          }
-        },
-        itemBuilder: (context) => [
-          if (!active)
-            const PopupMenuItem(value: 'activate', child: Text('设为当前')),
-          const PopupMenuItem(value: 'edit', child: Text('编辑')),
-          if (canRemove)
-            const PopupMenuItem(value: 'remove', child: Text('删除')),
-        ],
+      trailing: SizedBox.square(
+        dimension: 40,
+        child: PopupMenuButton<String>(
+          padding: EdgeInsets.zero,
+          iconSize: 20,
+          onSelected: (value) {
+            switch (value) {
+              case 'activate':
+                onActivate();
+              case 'edit':
+                onEdit();
+              case 'remove':
+                onRemove();
+            }
+          },
+          itemBuilder: (context) => [
+            if (!active)
+              const PopupMenuItem(value: 'activate', child: Text('设为当前')),
+            const PopupMenuItem(value: 'edit', child: Text('编辑')),
+            if (canRemove)
+              const PopupMenuItem(value: 'remove', child: Text('删除')),
+          ],
+        ),
       ),
     );
   }
@@ -1231,14 +1353,14 @@ class _ControllerAvatar extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        BackendAvatar(controller: controller, size: 40),
+        BackendAvatar(controller: controller, size: 36),
         if (active)
           Positioned(
-            right: -3,
-            bottom: -3,
+            right: -2,
+            bottom: -2,
             child: Container(
-              width: 17,
-              height: 17,
+              width: 15,
+              height: 15,
               decoration: BoxDecoration(
                 color: scheme.primary,
                 shape: BoxShape.circle,
@@ -1246,7 +1368,7 @@ class _ControllerAvatar extends StatelessWidget {
               ),
               child: Icon(
                 Icons.check_rounded,
-                size: 12,
+                size: 10,
                 color: scheme.onPrimary,
               ),
             ),
