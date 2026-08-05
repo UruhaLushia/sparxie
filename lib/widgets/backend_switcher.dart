@@ -36,21 +36,29 @@ class BackendSwitcher extends StatelessWidget {
           showType: showType,
         );
         if (!canSwitch) return label;
-        return PopupMenuButton<String>(
-          tooltip: '切换后端',
-          initialValue: active?.id,
-          onSelected: (id) {
-            if (id != active?.id) store.activate(id);
-          },
-          itemBuilder: (context) => [
-            for (final c in controllers)
-              CheckedPopupMenuItem<String>(
-                value: c.id,
-                checked: c.id == active?.id,
-                child: _BackendMenuItem(controller: c),
-              ),
-          ],
-          child: label,
+        return Theme(
+          data: Theme.of(context).copyWith(
+            focusColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+          ),
+          child: PopupMenuButton<String>(
+            tooltip: '切换后端',
+            initialValue: active?.id,
+            onSelected: (id) {
+              if (id != active?.id) store.activate(id);
+            },
+            itemBuilder: (context) => [
+              for (final c in controllers)
+                CheckedPopupMenuItem<String>(
+                  value: c.id,
+                  checked: c.id == active?.id,
+                  child: _BackendMenuItem(controller: c),
+                ),
+            ],
+            child: label,
+          ),
         );
       },
     );
