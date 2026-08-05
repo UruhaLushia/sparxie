@@ -77,7 +77,7 @@ class MihomoSession {
   String _logsLevel = 'info';
   int _logInfoCapacity;
 
-  final ValueNotifier<rust.TrafficSample> traffic = ValueNotifier(
+  final ValueNotifier<rust.TrafficSample> traffic = _TelemetryValueNotifier(
     rust.TrafficSample(
       up: BigInt.zero,
       down: BigInt.zero,
@@ -86,7 +86,7 @@ class MihomoSession {
     ),
   );
 
-  final ValueNotifier<rust.MemorySample> memory = ValueNotifier(
+  final ValueNotifier<rust.MemorySample> memory = _TelemetryValueNotifier(
     rust.MemorySample(inuse: BigInt.zero, oslimit: BigInt.zero, goroutines: 0),
   );
 
@@ -958,6 +958,22 @@ class MihomoSession {
 enum _RetryKind { traffic, memory, connections, logs }
 
 enum _SessionErrorSource { controller, proxyCatalog, proxyMember, stream }
+
+/// Streaming samples represent time even when their values are unchanged.
+/// ValueNotifier normally suppresses equal values, which would collapse flat
+/// sections of the 1 Hz dashboard history into a single point.
+class _TelemetryValueNotifier<T> extends ValueNotifier<T> {
+  _TelemetryValueNotifier(super.value);
+
+  @override
+  set value(T newValue) {
+    if (value == newValue) {
+      notifyListeners();
+      return;
+    }
+    super.value = newValue;
+  }
+}
 
 class _QueuedProxyMemberLoad {
   const _QueuedProxyMemberLoad({

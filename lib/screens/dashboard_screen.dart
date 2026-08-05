@@ -29,7 +29,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  static const _historyCapacity = 60;
+  // Traffic and memory streams emit once per second.
+  static const _historyCapacity = 30;
 
   ctl.Controller? _activeKey;
   String? _error;
