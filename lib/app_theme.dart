@@ -125,6 +125,13 @@ class _AppScrollBehavior extends MaterialScrollBehavior {
   const _AppScrollBehavior();
 
   @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+
+  @override
   Widget buildOverscrollIndicator(
     BuildContext context,
     Widget child,

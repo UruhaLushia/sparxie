@@ -386,11 +386,13 @@ class AppFocusHighlight extends StatelessWidget {
     required this.child,
     required this.borderRadius,
     this.focused,
+    this.showShadow = true,
   });
 
   final Widget child;
   final BorderRadius borderRadius;
   final bool? focused;
+  final bool showShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -406,7 +408,7 @@ class AppFocusHighlight extends StatelessWidget {
             width: 2,
           ),
           borderRadius: borderRadius,
-          boxShadow: showHighlight
+          boxShadow: showHighlight && showShadow
               ? [
                   BoxShadow(
                     color: colorScheme.primary.withValues(alpha: 0.3),

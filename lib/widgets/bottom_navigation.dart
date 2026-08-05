@@ -1410,11 +1410,6 @@ class _CapsuleNavItemState extends State<_CapsuleNavItem> {
     final focused =
         states.contains(WidgetState.focused) &&
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    final color = states.contains(WidgetState.pressed)
-        ? style.pressed(context)
-        : states.contains(WidgetState.hovered)
-        ? style.hover(context)
-        : Colors.transparent;
     final baseWidth = widget.selected ? widget.itemWidth : 42.0;
     return Center(
       child: Container(
@@ -1423,24 +1418,13 @@ class _CapsuleNavItemState extends State<_CapsuleNavItem> {
             .clamp(24.0, style.buttonHeight)
             .toDouble(),
         decoration: BoxDecoration(
-          color: color,
+          color: Colors.transparent,
           borderRadius: style.indicatorBorderRadius,
           border: focused
               ? Border.all(
                   color: Theme.of(context).colorScheme.primary,
                   width: 2,
                 )
-              : null,
-          boxShadow: focused
-              ? [
-                  BoxShadow(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                    blurRadius: 0,
-                    spreadRadius: 1,
-                  ),
-                ]
               : null,
         ),
       ),
@@ -1574,9 +1558,12 @@ class _LabeledNavItem extends StatelessWidget {
       excludeSemantics: true,
       child: AppFocusHighlight(
         borderRadius: BorderRadius.circular(12),
+        showShadow: false,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1641,9 +1628,12 @@ class _Material3NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppFocusHighlight(
       borderRadius: BorderRadius.circular(12),
+      showShadow: false,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        splashFactory: NoSplash.splashFactory,
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
