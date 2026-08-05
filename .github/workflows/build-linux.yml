@@ -33,10 +33,14 @@ jobs:
           - os: ubuntu-latest
             arch: x86_64
             flutter_channel: stable
+            flutter_version: ''
             rust_target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             arch: arm64
             flutter_channel: master
+            # Stable has no Linux ARM64 host SDK archive; pin a master revision
+            # whose ARM64 Dart and desktop engine artifacts are all published.
+            flutter_version: cfc8706bbdd5e25d5e0d7c28fc2e0e33f2220f1a
             rust_target: aarch64-unknown-linux-gnu
 
     steps:
@@ -47,6 +51,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ matrix.flutter_channel }}
+          flutter-version: ${{ matrix.flutter_version }}
           cache: false
           pub-cache: true
           pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
