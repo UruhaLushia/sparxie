@@ -414,6 +414,7 @@ class _RulesScreenState extends State<_RulesView> {
                             final rule = _ruleAt(index);
                             if (rule == null) return const _RulePlaceholder();
                             return _RuleTile(
+                              key: ValueKey(rule.index),
                               rule: rule,
                               onToggle: (v) => _toggle(rule, v),
                             );
@@ -473,7 +474,7 @@ class _RuleSurface extends StatelessWidget {
 }
 
 class _RuleTile extends StatelessWidget {
-  const _RuleTile({required this.rule, required this.onToggle});
+  const _RuleTile({super.key, required this.rule, required this.onToggle});
 
   final rust.RuleEntry rule;
   final ValueChanged<bool> onToggle;

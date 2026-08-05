@@ -203,19 +203,22 @@ class ConnectionTile extends StatelessWidget {
                               const SizedBox(width: 8),
                               timeLabel,
                             ],
-                            IconButton(
-                              tooltip: '关闭',
-                              onPressed: onClose,
-                              icon: const Icon(Icons.close, size: 18),
-                              visualDensity: VisualDensity.compact,
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ExcludeFocus(
+                              child: IconButton(
+                                tooltip: '关闭',
+                                onPressed: onClose,
+                                icon: const Icon(Icons.close, size: 18),
+                                visualDensity: VisualDensity.compact,
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 28,
+                                  minHeight: 28,
+                                ),
+                                padding: EdgeInsets.zero,
                               ),
-                              constraints: const BoxConstraints(
-                                minWidth: 28,
-                                minHeight: 28,
-                              ),
-                              padding: EdgeInsets.zero,
                             ),
                           ],
                         ),

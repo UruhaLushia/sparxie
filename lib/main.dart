@@ -11,6 +11,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gamepads/flutter_gamepads.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     as frb;
+import 'package:gamepads/gamepads.dart';
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
@@ -243,6 +244,8 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _homeShellKey = GlobalKey<_HomeShellState>();
   final _focusNavigatorObserver = DirectionalFocusNavigatorObserver();
+  final _navigationInputController = NavigationInputController();
+  late final StreamSubscription<NormalizedGamepadEvent> _gamepadEvents;
   late final ControllerUriImporter _controllerUriImporter;
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
@@ -308,6 +311,10 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    _gamepadEvents = Gamepads.normalizedEvents.listen(
+      _handleGamepadEvent,
+      onError: (_) {},
+    );
     _controllerUriImporter = ControllerUriImporter(
       widget.appLinks,
       store: store,
@@ -318,6 +325,8 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    unawaited(_gamepadEvents.cancel());
+    _navigationInputController.dispose();
     _controllerUriImporter.dispose();
     super.dispose();
   }
@@ -350,7 +359,65 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     return true;
   }
 
+  void _handleGamepadEvent(NormalizedGamepadEvent event) {
+    final button = event.button;
+    if (button == GamepadButton.a) {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTraditional;
+      final source = (event.gamepadId, button);
+      if (event.value == 0) {
+        _navigationInputController.release(source);
+      } else {
+        _navigationInputController.press(source);
+      }
+      return;
+    }
+
+    final axis = event.axis;
+    if (axis != GamepadAxis.rightStickX && axis != GamepadAxis.rightStickY) {
+      return;
+    }
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    final value =
+        axis == GamepadAxis.rightStickY &&
+            defaultTargetPlatform == TargetPlatform.android
+        ? -event.value
+        : event.value;
+    _navigationInputController.updateScrollAxis(
+      horizontal: axis == GamepadAxis.rightStickX ? value : null,
+      vertical: axis == GamepadAxis.rightStickY ? value : null,
+    );
+  }
+
+  bool _handleActivationKey(KeyEvent event) {
+    final key = event.logicalKey;
+    final activationKey =
+        key == LogicalKeyboardKey.gameButtonA ||
+        key == LogicalKeyboardKey.gameButton1 ||
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter;
+    if (!activationKey ||
+        (_isEditableTextFocused() &&
+            (key == LogicalKeyboardKey.enter ||
+                key == LogicalKeyboardKey.numpadEnter))) {
+      return false;
+    }
+
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    final source = event.physicalKey;
+    if (event is KeyUpEvent) {
+      _navigationInputController.release(source);
+    } else if (event is KeyDownEvent) {
+      _navigationInputController.press(source);
+    }
+    return true;
+  }
+
   bool _handleKeyEvent(KeyEvent event) {
+    if (_handleActivationKey(event)) return true;
     final action = gamepadNavigationActionFor(event.logicalKey);
     if (action == GamepadNavigationAction.back ||
         event.physicalKey == PhysicalKeyboardKey.browserBack) {
@@ -713,11 +780,8 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                           onBeforeIntent: _handleGamepadIntent,
                           shortcuts: gamepadShortcuts,
                           repeatIntents: gamepadRepeatIntents,
-                          child: Shortcuts(
-                            shortcuts: gamepadKeyboardShortcuts,
-                            child: FocusTraversalGroup(
-                              child: child ?? const SizedBox.shrink(),
-                            ),
+                          child: FocusTraversalGroup(
+                            child: child ?? const SizedBox.shrink(),
                           ),
                         ),
                       ),

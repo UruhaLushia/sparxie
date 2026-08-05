@@ -442,48 +442,53 @@ class FloatingBottomNavBar extends StatelessWidget {
         ? surfaceTheme.effectiveSurfaceOpacity()
         : 1.0;
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
-    final surface = AppSurfaceBackdrop(
-      borderRadius: controlStyle.borderRadius,
-      surfaceTheme: surfaceTheme,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          borderRadius: controlStyle.borderRadius,
-          border: surfaceTheme.outlineBorder(
-            isDark
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.08),
-            width: 0.5,
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: controlStyle.borderRadius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: (isDark ? 0.3 : 0.08) * shadowStrength,
+            ),
+            blurRadius: 16,
+            spreadRadius: -2,
+            offset: const Offset(0, 4),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: (isDark ? 0.3 : 0.08) * shadowStrength,
-              ),
-              blurRadius: 16,
-              spreadRadius: -2,
-              offset: const Offset(0, 4),
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: (isDark ? 0.12 : 0.03) * shadowStrength,
             ),
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: (isDark ? 0.12 : 0.03) * shadowStrength,
-              ),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: AppSurfaceBackdrop(
+        borderRadius: controlStyle.borderRadius,
+        surfaceTheme: surfaceTheme,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: controlStyle.borderRadius,
+            border: surfaceTheme.outlineBorder(
+              isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.08),
+              width: 0.5,
             ),
-          ],
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: SizedBox(
-            height: height,
-            child: BottomNavBarItems(
-              style: style,
-              styleConfig: controlStyle,
-              destinations: destinations,
-              selectedIndex: selectedIndex,
-              onSelected: onSelected,
-              shrinkWrap: true,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: SizedBox(
+              height: height,
+              child: BottomNavBarItems(
+                style: style,
+                styleConfig: controlStyle,
+                destinations: destinations,
+                selectedIndex: selectedIndex,
+                onSelected: onSelected,
+                shrinkWrap: true,
+              ),
             ),
           ),
         ),
@@ -1330,6 +1335,7 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
                           selectedColor: selectedColor,
                           unselectedColor: unselectedColor,
                           widthScale: widthScale,
+                          styleConfig: widget.styleConfig,
                         ),
                         builder: (_, width, child) => SizedBox(
                           width: width,
@@ -1348,7 +1354,7 @@ class _CapsuleNavBarState extends State<_CapsuleNavBar> {
   }
 }
 
-class _CapsuleNavItem extends StatelessWidget {
+class _CapsuleNavItem extends StatefulWidget {
   const _CapsuleNavItem({
     required this.destination,
     required this.selected,
@@ -1358,6 +1364,7 @@ class _CapsuleNavItem extends StatelessWidget {
     required this.selectedColor,
     required this.unselectedColor,
     required this.widthScale,
+    required this.styleConfig,
   });
 
   final AppNavDestination destination;
@@ -1368,83 +1375,166 @@ class _CapsuleNavItem extends StatelessWidget {
   final Color selectedColor;
   final Color unselectedColor;
   final double widthScale;
+  final CompactControlStyle styleConfig;
+
+  @override
+  State<_CapsuleNavItem> createState() => _CapsuleNavItemState();
+}
+
+class _CapsuleNavItemState extends State<_CapsuleNavItem> {
+  final _statesController = WidgetStatesController();
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addHighlightModeListener(_handleHighlightModeChange);
+  }
+
+  void _handleHighlightModeChange(FocusHighlightMode _) {
+    if (mounted && _statesController.value.contains(WidgetState.focused)) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeHighlightModeListener(
+      _handleHighlightModeChange,
+    );
+    _statesController.dispose();
+    super.dispose();
+  }
+
+  Widget _stateLayer(BuildContext context, Set<WidgetState> states) {
+    final style = widget.styleConfig;
+    final focused =
+        states.contains(WidgetState.focused) &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    final color = states.contains(WidgetState.pressed)
+        ? style.pressed(context)
+        : states.contains(WidgetState.hovered)
+        ? style.hover(context)
+        : Colors.transparent;
+    final baseWidth = widget.selected ? widget.itemWidth : 42.0;
+    return Center(
+      child: Container(
+        width: baseWidth * style.indicatorWidthScale,
+        height: style.indicatorHeight
+            .clamp(24.0, style.buttonHeight)
+            .toDouble(),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: style.indicatorBorderRadius,
+          border: focused
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                )
+              : null,
+          boxShadow: focused
+              ? [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
+                    blurRadius: 0,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? selectedColor : unselectedColor;
+    final foreground = widget.selected
+        ? widget.selectedColor
+        : widget.unselectedColor;
     return Semantics(
       button: true,
-      selected: selected,
-      label: destination.label,
+      selected: widget.selected,
+      label: widget.destination.label,
       excludeSemantics: true,
-      child: AppFocusHighlight(
-        borderRadius: BorderRadius.circular(24),
+      child: Material(
+        type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Center(
-            child: ClipRect(
-              child: TransientAnimatedValue<_CapsuleContentVisual>(
-                value: (
-                  width: selected ? itemWidth : 42,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: selected
-                        ? _CapsuleNavBarState._selectedHorizontalPadding *
-                              widthScale
-                        : 0,
-                  ),
-                ),
-                duration: _navAnimationDuration,
-                curve: Curves.easeOutCubic,
-                lerp: _lerpCapsuleContent,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      destination.icon,
-                      size: _CapsuleNavBarState._iconSize,
-                      color: foreground,
+          statesController: _statesController,
+          onTap: widget.onTap,
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
+          child: ValueListenableBuilder<Set<WidgetState>>(
+            valueListenable: _statesController,
+            builder: (context, states, child) => Stack(
+              fit: StackFit.expand,
+              children: [_stateLayer(context, states), child!],
+            ),
+            child: Center(
+              child: ClipRect(
+                child: TransientAnimatedValue<_CapsuleContentVisual>(
+                  value: (
+                    width: widget.selected ? widget.itemWidth : 42,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.selected
+                          ? _CapsuleNavBarState._selectedHorizontalPadding *
+                                widget.widthScale
+                          : 0,
                     ),
-                    Flexible(
-                      child: TransientAnimatedValue<double>(
-                        value: selected ? 1 : 0,
-                        duration: _navAnimationDuration,
-                        curve: Curves.easeOutCubic,
-                        lerp: _lerpDouble,
-                        builder: (context, value, child) => ClipRect(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: value,
-                            child: Opacity(
-                              opacity: ((value - 0.95) / 0.05)
-                                  .clamp(0.0, 1.0)
-                                  .toDouble(),
-                              child: child,
+                  ),
+                  duration: _navAnimationDuration,
+                  curve: Curves.easeOutCubic,
+                  lerp: _lerpCapsuleContent,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        widget.destination.icon,
+                        size: _CapsuleNavBarState._iconSize,
+                        color: foreground,
+                      ),
+                      Flexible(
+                        child: TransientAnimatedValue<double>(
+                          value: widget.selected ? 1 : 0,
+                          duration: _navAnimationDuration,
+                          curve: Curves.easeOutCubic,
+                          lerp: _lerpDouble,
+                          builder: (context, value, child) => ClipRect(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: value,
+                              child: Opacity(
+                                opacity: ((value - 0.95) / 0.05)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble(),
+                                child: child,
+                              ),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              left:
+                                  _CapsuleNavBarState._iconLabelGap *
+                                  widget.widthScale,
+                            ),
+                            child: Text(
+                              widget.destination.label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                              style: widget.labelStyle,
                             ),
                           ),
                         ),
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            left:
-                                _CapsuleNavBarState._iconLabelGap * widthScale,
-                          ),
-                          child: Text(
-                            destination.label,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.clip,
-                            style: labelStyle,
-                          ),
-                        ),
                       ),
-                    ),
-                  ],
-                ),
-                builder: (_, visual, child) => Container(
-                  width: visual.width,
-                  height: 42,
-                  padding: visual.padding,
-                  child: child,
+                    ],
+                  ),
+                  builder: (_, visual, child) => Container(
+                    width: visual.width,
+                    height: 42,
+                    padding: visual.padding,
+                    child: child,
+                  ),
                 ),
               ),
             ),

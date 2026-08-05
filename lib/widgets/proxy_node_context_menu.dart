@@ -46,7 +46,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
               }
             : null,
       ),
-      child: child,
+      child: ExcludeFocus(child: child),
     );
   }
 }

@@ -89,6 +89,7 @@ Future<void> showAnchoredDetailsOverlay({
   AnchoredPreviewPlacement previewPlacement =
       AnchoredPreviewPlacement.automatic,
   bool preserveSourcePosition = false,
+  bool previewInteractive = false,
   double maxDetailsWidth = 320,
 }) async {
   final backgroundImage = await _captureAnchoredDetailsBackground(context);
@@ -110,6 +111,7 @@ Future<void> showAnchoredDetailsOverlay({
       preview: preview,
       previewPlacement: previewPlacement,
       preserveSourcePosition: preserveSourcePosition,
+      previewInteractive: previewInteractive,
       backgroundImage: backgroundImage,
       maxDetailsWidth: maxDetailsWidth,
       details: detailsBuilder(dialogContext),
@@ -138,6 +140,7 @@ class AnchoredDetailsOverlay extends StatelessWidget {
     this.maxDetailsWidth = 320,
     this.previewPlacement = AnchoredPreviewPlacement.automatic,
     this.preserveSourcePosition = false,
+    this.previewInteractive = false,
     this.backgroundImage,
   });
 
@@ -149,6 +152,7 @@ class AnchoredDetailsOverlay extends StatelessWidget {
   final double maxDetailsWidth;
   final AnchoredPreviewPlacement previewPlacement;
   final bool preserveSourcePosition;
+  final bool previewInteractive;
   final ui.Image? backgroundImage;
 
   @override
@@ -240,7 +244,10 @@ class AnchoredDetailsOverlay extends StatelessWidget {
             maxDetailsWidth: maxDetailsWidth,
           ),
           children: [
-            IgnorePointer(child: RepaintBoundary(child: transitioningPreview)),
+            IgnorePointer(
+              ignoring: !previewInteractive,
+              child: RepaintBoundary(child: transitioningPreview),
+            ),
             RepaintBoundary(child: elevatedDetails),
           ],
         ),

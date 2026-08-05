@@ -53,6 +53,7 @@ dependencies:
   material_color_utilities: ^0.13.0
   fl_chart: ^1.2.0
   flutter_gamepads: ^0.1.11+4
+  gamepads: ^0.1.10+5
 
 dev_dependencies:
   flutter_test:

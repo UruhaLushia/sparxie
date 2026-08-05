@@ -9,7 +9,6 @@ import '../gamepad_navigation.dart';
 import 'anchored_details_overlay.dart';
 import 'transient_animation.dart';
 
-const _longPressDelay = Duration(milliseconds: 750);
 const _pressFeedbackDelay = Duration(milliseconds: 220);
 
 class AnchoredDetailsTrigger extends StatefulWidget {
@@ -23,6 +22,8 @@ class AnchoredDetailsTrigger extends StatefulWidget {
     this.excludedTopRightSize = Size.zero,
     this.maxDetailsWidth = 320,
     this.requireFullyVisible = false,
+    this.excludeChildFocus = false,
+    this.previewInteractive = false,
     this.borderRadius = const BorderRadius.all(Radius.circular(12)),
   });
 
@@ -34,6 +35,8 @@ class AnchoredDetailsTrigger extends StatefulWidget {
   final Size excludedTopRightSize;
   final double maxDetailsWidth;
   final bool requireFullyVisible;
+  final bool excludeChildFocus;
+  final bool previewInteractive;
   final BorderRadius borderRadius;
 
   @override
@@ -42,16 +45,36 @@ class AnchoredDetailsTrigger extends StatefulWidget {
 
 class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
   final GlobalKey _childKey = GlobalKey();
+  final FocusNode _focusNode = FocusNode();
+  final ValueNotifier<int> _contentRevision = ValueNotifier(0);
   Timer? _pressTimer;
   ({Rect rect, bool fullyVisible})? _pendingGeometry;
   bool _open = false;
   bool _pressing = false;
   bool _focused = false;
+  bool _contentRefreshScheduled = false;
+
+  @override
+  void didUpdateWidget(covariant AnchoredDetailsTrigger oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_open) _scheduleContentRefresh();
+  }
 
   @override
   void dispose() {
     _pressTimer?.cancel();
+    _contentRevision.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _scheduleContentRefresh() {
+    if (_contentRefreshScheduled) return;
+    _contentRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _contentRefreshScheduled = false;
+      if (mounted && _open) _contentRevision.value++;
+    });
   }
 
   Future<void> _showDetails() async {
@@ -59,6 +82,9 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
       _pendingGeometry = null;
       return;
     }
+    final sourceFocus = _focusNode.hasFocus
+        ? FocusManager.instance.primaryFocus
+        : null;
     final geometry = _pendingGeometry ?? _sourceGeometry();
     _pendingGeometry = null;
     if (geometry == null ||
@@ -79,13 +105,34 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
       await showAnchoredDetailsOverlay(
         context: context,
         sourceRect: sourceRect,
-        preview: widget.child,
+        preview: ListenableBuilder(
+          listenable: _contentRevision,
+          builder: (_, _) => widget.child,
+        ),
         barrierLabel: widget.barrierLabel,
         maxDetailsWidth: widget.maxDetailsWidth,
-        detailsBuilder: widget.detailsBuilder,
+        previewInteractive: widget.previewInteractive,
+        detailsBuilder: (context) => ListenableBuilder(
+          listenable: _contentRevision,
+          builder: (context, _) => widget.detailsBuilder(context),
+        ),
       );
     } finally {
-      if (mounted) setState(() => _open = false);
+      if (mounted) {
+        setState(() => _open = false);
+        if (sourceFocus != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final sourceContext = sourceFocus.context;
+            if (!mounted ||
+                sourceContext == null ||
+                !sourceContext.mounted ||
+                !sourceFocus.canRequestFocus) {
+              return;
+            }
+            sourceFocus.requestFocus();
+          });
+        }
+      }
     }
   }
 
@@ -139,6 +186,10 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
   }
 
   void _handlePressDown(LongPressDownDetails _) {
+    _startPressFeedback();
+  }
+
+  void _startPressFeedback() {
     _pressTimer?.cancel();
     _pressTimer = Timer(_pressFeedbackDelay, () {
       _pressTimer = null;
@@ -169,12 +220,7 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
   }
 
   void _activate() {
-    final callback = widget.onActivate;
-    if (callback != null) {
-      callback();
-    } else {
-      unawaited(_showDetails());
-    }
+    widget.onActivate?.call();
   }
 
   Widget _gestureDetector({required Widget child}) {
@@ -189,7 +235,7 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
           LongPressGestureRecognizer:
               GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
                 () => LongPressGestureRecognizer(
-                  duration: _longPressDelay,
+                  duration: gamepadLongPressDuration,
                   debugOwner: this,
                   allowedButtonsFilter: _allowLongPress,
                 ),
@@ -232,9 +278,19 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
+      focusNode: _focusNode,
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) => _activate(),
+        ),
+        LongPressActivateIntent: CallbackAction<LongPressActivateIntent>(
+          onInvoke: (_) => unawaited(_showDetails()),
+        ),
+        ActivationPressStartIntent: CallbackAction<ActivationPressStartIntent>(
+          onInvoke: (_) => _startPressFeedback(),
+        ),
+        ActivationPressEndIntent: CallbackAction<ActivationPressEndIntent>(
+          onInvoke: (_) => _cancelPress(),
         ),
       },
       onFocusChange: (value) {
@@ -247,7 +303,7 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
         borderRadius: widget.borderRadius,
         child: Semantics(
           hint: widget.semanticsHint,
-          onTap: _activate,
+          onTap: widget.onActivate == null ? null : _activate,
           onLongPress: _showDetails,
           child: TransientAnimatedScale(
             scale: _pressing ? 1.015 : 1,
@@ -256,11 +312,14 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
             child: RepaintBoundary(
               child: KeyedSubtree(
                 key: _childKey,
-                child: IgnorePointer(
-                  ignoring: _open,
-                  child: Opacity(
-                    opacity: _open ? 0 : 1,
-                    child: _interactiveChild(),
+                child: ExcludeFocus(
+                  excluding: _open || widget.excludeChildFocus,
+                  child: IgnorePointer(
+                    ignoring: _open,
+                    child: Opacity(
+                      opacity: _open ? 0 : 1,
+                      child: _interactiveChild(),
+                    ),
                   ),
                 ),
               ),

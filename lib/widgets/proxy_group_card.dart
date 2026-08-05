@@ -182,21 +182,35 @@ class _CardSurface extends StatelessWidget {
     required this.radius,
     required this.child,
     this.groupBackdrop = false,
+    this.focused = false,
   });
 
   final _CardStyle style;
   final double radius;
   final Widget child;
   final bool groupBackdrop;
+  final bool focused;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final focusColor = Color.alphaBlend(
+      scheme.onSurface.withValues(alpha: 0.18),
+      scheme.primary,
+    );
     final card = Container(
       decoration: BoxDecoration(
         gradient: style.gradient,
-        color: style.background,
+        color: focused && style.gradient == null
+            ? Color.alphaBlend(
+                focusColor.withValues(alpha: 0.14),
+                style.background ?? Colors.transparent,
+              )
+            : style.background,
         borderRadius: BorderRadius.circular(radius),
-        border: style.cardBorder == null
+        border: focused
+            ? Border.all(color: focusColor, width: 3)
+            : style.cardBorder == null
             ? null
             : Border.all(color: style.cardBorder!),
       ),
@@ -211,7 +225,7 @@ class _CardSurface extends StatelessWidget {
   }
 }
 
-class ProxyGroupCard extends StatelessWidget {
+class ProxyGroupCard extends StatefulWidget {
   const ProxyGroupCard({
     super.key,
     required this.group,
@@ -223,24 +237,87 @@ class ProxyGroupCard extends StatelessWidget {
   final ProxyGroup group;
   final bool showIcon;
   final bool colored;
-  final VoidCallback onTap;
+  final Future<void> Function(FocusNode sourceFocusNode) onTap;
+
+  @override
+  State<ProxyGroupCard> createState() => _ProxyGroupCardState();
+}
+
+class _ProxyGroupCardState extends State<ProxyGroupCard> {
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocusChange);
+    FocusManager.instance.addHighlightModeListener(_handleHighlightModeChange);
+  }
+
+  void _handleFocusChange() {
+    if (mounted) setState(() {});
+  }
+
+  void _handleHighlightModeChange(FocusHighlightMode _) {
+    if (mounted && _focusNode.hasFocus) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeHighlightModeListener(
+      _handleHighlightModeChange,
+    );
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _activate() async {
+    _focusNode.requestFocus();
+    FocusManager.instance.applyFocusChangesIfNeeded();
+    await Future<void>.value();
+    if (!mounted) return;
+    try {
+      await widget.onTap(_focusNode);
+    } finally {
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _focusNode.canRequestFocus) {
+            _focusNode.requestFocus();
+          }
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final style = _styleFor(context, group.name, colored);
-    return AppFocusHighlight(
-      borderRadius: BorderRadius.circular(16),
+    final style = _styleFor(context, widget.group.name, widget.colored);
+    final showFocus =
+        _focusNode.hasFocus &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    return FocusableActionDetector(
+      focusNode: _focusNode,
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            unawaited(_activate());
+            return null;
+          },
+        ),
+      },
       child: PressableScale(
         child: RepaintBoundary(
           child: Hero(
-            tag: 'proxy-group-card-${group.name}',
+            tag: 'proxy-group-card-${widget.group.name}',
             child: _CardSurface(
               style: style,
               radius: 16,
               groupBackdrop: true,
+              focused: showFocus,
               child: InkWell(
-                onTap: onTap,
-                child: _collapsedContent(group, showIcon, style),
+                canRequestFocus: false,
+                onTap: () => unawaited(_activate()),
+                child: _collapsedContent(widget.group, widget.showIcon, style),
               ),
             ),
           ),
@@ -592,6 +669,25 @@ class _CardPlaceholderMark extends StatelessWidget {
   );
 }
 
+class _ProxyGroupCardDetailRoute extends PageRouteBuilder<void>
+    implements FocusRestorationRoute {
+  _ProxyGroupCardDetailRoute({
+    required this.sourceFocusNode,
+    required super.pageBuilder,
+  }) : super(
+         opaque: false,
+         allowSnapshotting: false,
+         barrierDismissible: true,
+         barrierLabel: '关闭',
+         barrierColor: Colors.black.withValues(alpha: 0.45),
+         transitionDuration: const Duration(milliseconds: 300),
+         reverseTransitionDuration: const Duration(milliseconds: 240),
+       );
+
+  @override
+  final FocusNode? sourceFocusNode;
+}
+
 Future<void> showProxyGroupCardDetail(
   BuildContext context, {
   required MihomoSession session,
@@ -603,29 +699,33 @@ Future<void> showProxyGroupCardDetail(
   required ValueChanged<String> onToggleFixed,
   required Future<void> Function(String) onTestNode,
   required Future<String> Function(String) loadNodeDetails,
-}) {
-  return Navigator.of(context).push(
-    PageRouteBuilder<void>(
-      opaque: false,
-      allowSnapshotting: false,
-      barrierDismissible: true,
-      barrierLabel: '关闭',
-      barrierColor: Colors.black.withValues(alpha: 0.45),
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (_, _, _) => _ProxyGroupCardDetail(
-        session: session,
-        group: group,
-        showIcon: showIcon,
-        colored: colored,
-        onTestGroup: onTestGroup,
-        onSelect: onSelect,
-        onToggleFixed: onToggleFixed,
-        onTestNode: onTestNode,
-        loadNodeDetails: loadNodeDetails,
-      ),
+  required FocusNode sourceFocusNode,
+}) async {
+  final navigator = Navigator.of(context);
+  final route = _ProxyGroupCardDetailRoute(
+    sourceFocusNode: sourceFocusNode,
+    pageBuilder: (_, _, _) => _ProxyGroupCardDetail(
+      session: session,
+      group: group,
+      showIcon: showIcon,
+      colored: colored,
+      onTestGroup: onTestGroup,
+      onSelect: onSelect,
+      onToggleFixed: onToggleFixed,
+      onTestNode: onTestNode,
+      loadNodeDetails: loadNodeDetails,
     ),
   );
+  final popped = navigator.push(route);
+  await popped;
+  final sourceContext = sourceFocusNode.context;
+  if (sourceContext != null &&
+      sourceContext.mounted &&
+      sourceFocusNode.canRequestFocus) {
+    sourceFocusNode.requestFocus();
+    FocusManager.instance.applyFocusChangesIfNeeded();
+  }
+  await route.completed;
 }
 
 class _ProxyGroupCardDetail extends StatefulWidget {

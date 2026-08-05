@@ -855,13 +855,13 @@ class _ProxyCardsBody extends StatelessWidget {
                 group: group,
                 showIcon: prefs.proxiesShowGroupIcons,
                 colored: prefs.proxiesCardColored,
-                onTap: () {
+                onTap: (sourceFocusNode) {
                   if (group.memberCount > 0) {
                     unawaited(
                       session.ensureProxyGroupMembers(group.name, 0, 0),
                     );
                   }
-                  showProxyGroupCardDetail(
+                  return showProxyGroupCardDetail(
                     context,
                     session: session,
                     group: group,
@@ -872,6 +872,7 @@ class _ProxyCardsBody extends StatelessWidget {
                     onToggleFixed: (name) => onToggleFixed(group, name),
                     onTestNode: (name) => onTestNode(group, name),
                     loadNodeDetails: loadNodeDetails,
+                    sourceFocusNode: sourceFocusNode,
                   );
                 },
               );

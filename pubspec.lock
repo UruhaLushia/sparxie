@@ -422,7 +422,7 @@ packages:
     source: hosted
     version: "3.1.0"
   gamepads:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: gamepads
       sha256: bc2b4368f7f01e0390187f63c063f1fa26f420224e159fed1aaa2c449f5a1125

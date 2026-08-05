@@ -22,9 +22,8 @@ class HighRefreshTransitionSnapshot extends StatefulWidget {
 
 class _HighRefreshTransitionSnapshotState
     extends State<HighRefreshTransitionSnapshot> {
-  final _controller = SnapshotController();
+  final _controller = SnapshotController(allowSnapshotting: true);
   var _useSnapshot = false;
-  var _releaseGeneration = 0;
 
   @override
   void initState() {
@@ -37,7 +36,6 @@ class _HighRefreshTransitionSnapshotState
     super.didChangeDependencies();
     final refreshRate = View.maybeOf(context)?.display.refreshRate ?? 60;
     _useSnapshot = !kIsWeb && refreshRate > 60;
-    _syncSnapshot();
   }
 
   @override
@@ -47,33 +45,17 @@ class _HighRefreshTransitionSnapshotState
       oldWidget.animation?.removeStatusListener(_handleAnimationStatus);
       widget.animation?.addStatusListener(_handleAnimationStatus);
     }
-    _syncSnapshot();
   }
 
-  void _handleAnimationStatus(AnimationStatus _) => _syncSnapshot();
+  void _handleAnimationStatus(AnimationStatus _) {
+    if (mounted) setState(() {});
+  }
 
   bool get _snapshotActive =>
       widget.forceSnapshot || (widget.animation?.isAnimating ?? false);
 
-  void _syncSnapshot() {
-    if (_useSnapshot && _snapshotActive) {
-      _releaseGeneration++;
-      _controller.allowSnapshotting = true;
-      return;
-    }
-
-    final generation = ++_releaseGeneration;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _releaseGeneration || _snapshotActive) {
-        return;
-      }
-      _controller.allowSnapshotting = false;
-    });
-  }
-
   @override
   void dispose() {
-    _releaseGeneration++;
     widget.animation?.removeStatusListener(_handleAnimationStatus);
     _controller.dispose();
     super.dispose();
@@ -81,7 +63,11 @@ class _HighRefreshTransitionSnapshotState
 
   @override
   Widget build(BuildContext context) {
-    if (!_useSnapshot) return widget.child;
+    // Remove the render object entirely once motion ends. Toggling
+    // allowSnapshotting can leave a stale texture attached on some high
+    // refresh-rate Android renderers even though the live subtree keeps
+    // receiving layout and gestures underneath it.
+    if (!_useSnapshot || !_snapshotActive) return widget.child;
     return SnapshotWidget(
       controller: _controller,
       mode: SnapshotMode.permissive,
