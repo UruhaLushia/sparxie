@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../gamepad_navigation.dart';
 import '../transient_animation.dart';
 import 'style.dart';
 
@@ -73,6 +74,16 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  VoidCallback? _onPressed(int index, int selectedIndex) {
+    final segment = widget.segments[index];
+    if (!segment.enabled) return null;
+    return () {
+      if (index != selectedIndex) {
+        widget.onSelectionChanged({segment.value});
+      }
+    };
   }
 
   @override
@@ -155,13 +166,7 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
                                 selected: selectedIndex == i,
                                 fallbackBackground: !hasIndicator,
                                 style: controlStyle,
-                                onPressed:
-                                    widget.segments[i].enabled &&
-                                        selectedIndex != i
-                                    ? () => widget.onSelectionChanged({
-                                        widget.segments[i].value,
-                                      })
-                                    : null,
+                                onPressed: _onPressed(i, selectedIndex),
                               ),
                             )
                           else
@@ -171,13 +176,7 @@ class _CompactSegmentedButtonState<T> extends State<CompactSegmentedButton<T>> {
                               selected: selectedIndex == i,
                               fallbackBackground: !hasIndicator,
                               style: controlStyle,
-                              onPressed:
-                                  widget.segments[i].enabled &&
-                                      selectedIndex != i
-                                  ? () => widget.onSelectionChanged({
-                                      widget.segments[i].value,
-                                    })
-                                  : null,
+                              onPressed: _onPressed(i, selectedIndex),
                             ),
                       ],
                     ),
@@ -220,43 +219,48 @@ class _CompactSegment<T> extends StatelessWidget {
       button: true,
       selected: selected,
       enabled: segment.enabled,
-      child: Container(
-        height: style.buttonHeight - style.segmentInset * 2,
-        decoration: BoxDecoration(
-          color: selected && fallbackBackground
-              ? style.selectedBackground(context)
-              : Colors.transparent,
-          borderRadius: selected && fallbackBackground
-              ? style.indicatorBorderRadius
-              : style.borderRadius,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: style.borderRadius,
-            hoverColor: style.hover(context),
-            splashColor: style.pressed(context),
-            highlightColor: style.pressed(context),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12 * style.widthScale),
-              child: Opacity(
-                opacity: segment.enabled ? 1 : 0.38,
-                child: IconTheme(
-                  data: IconThemeData(color: foreground, size: 18),
-                  child: DefaultTextStyle.merge(
-                    style: style
-                        .labelStyle(context)
-                        ?.copyWith(color: foreground),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (segment.icon != null) ...[segment.icon!],
-                        if (segment.icon != null && segment.label != null)
-                          const SizedBox(width: 6),
-                        if (segment.label != null) segment.label!,
-                      ],
+      child: AppFocusHighlight(
+        borderRadius: style.borderRadius,
+        child: Container(
+          height: style.buttonHeight - style.segmentInset * 2,
+          decoration: BoxDecoration(
+            color: selected && fallbackBackground
+                ? style.selectedBackground(context)
+                : Colors.transparent,
+            borderRadius: selected && fallbackBackground
+                ? style.indicatorBorderRadius
+                : style.borderRadius,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: style.borderRadius,
+              hoverColor: style.hover(context),
+              splashColor: style.pressed(context),
+              highlightColor: style.pressed(context),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 12 * style.widthScale,
+                ),
+                child: Opacity(
+                  opacity: segment.enabled ? 1 : 0.38,
+                  child: IconTheme(
+                    data: IconThemeData(color: foreground, size: 18),
+                    child: DefaultTextStyle.merge(
+                      style: style
+                          .labelStyle(context)
+                          ?.copyWith(color: foreground),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (segment.icon != null) ...[segment.icon!],
+                          if (segment.icon != null && segment.label != null)
+                            const SizedBox(width: 6),
+                          if (segment.label != null) segment.label!,
+                        ],
+                      ),
                     ),
                   ),
                 ),

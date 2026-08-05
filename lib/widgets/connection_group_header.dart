@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../gamepad_navigation.dart';
 import '../session.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
@@ -73,108 +74,111 @@ class ConnectionGroupHeader extends StatelessWidget {
       color: surfaceTheme.pageColor(scheme.surface),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-        child: AppSurfaceBackdrop(
+        child: AppFocusHighlight(
           borderRadius: radius,
-          grouped: groupBackdrop,
-          child: Material(
-            color: surfaceTheme.surfaceColor(
-              scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-              0.04,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: radius,
-              side: surfaceTheme.outlineSide(
-                scheme.outlineVariant.withValues(alpha: 0.5),
+          child: AppSurfaceBackdrop(
+            borderRadius: radius,
+            grouped: groupBackdrop,
+            child: Material(
+              color: surfaceTheme.surfaceColor(
+                scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                0.04,
               ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              borderRadius: radius,
-              onTap: onToggle,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
-                child: Row(
-                  children: [
-                    // Icons only make sense for a local backend (cache present).
-                    if (_isInner && showIcon && cache != null) ...[
-                      _InnerIcon(scheme: scheme),
-                      const SizedBox(width: 12),
-                    ] else if (wantIcon) ...[
-                      ProcessIcon(
-                        cache: cache,
-                        process: summary.process,
-                        processPath: summary.processPath,
-                        size: 40,
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          wantName
-                              ? ActiveListenableSelector<String?>(
-                                  listenable: cache,
-                                  selector: () => cache.nameFor(nameKey),
-                                  builder: (_, appName, _) =>
-                                      _titleText(context, _title(appName)),
-                                )
-                              : _titleText(context, _title(null)),
-                          const SizedBox(height: 2),
-                          _StatsLine(summary: summary, scheme: scheme),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ActiveValueListenableBuilder<int>(
-                      valueListenable: summary.count,
-                      pauseWhileScrolling: true,
-                      builder: (_, count, _) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: radius,
+                side: surfaceTheme.outlineSide(
+                  scheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                borderRadius: radius,
+                onTap: onToggle,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+                  child: Row(
+                    children: [
+                      // Icons only make sense for a local backend (cache present).
+                      if (_isInner && showIcon && cache != null) ...[
+                        _InnerIcon(scheme: scheme),
+                        const SizedBox(width: 12),
+                      ] else if (wantIcon) ...[
+                        ProcessIcon(
+                          cache: cache,
+                          process: summary.process,
+                          processPath: summary.processPath,
+                          size: 40,
                         ),
-                        decoration: BoxDecoration(
-                          color: scheme.secondaryContainer.withValues(
-                            alpha: 0.6,
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            wantName
+                                ? ActiveListenableSelector<String?>(
+                                    listenable: cache,
+                                    selector: () => cache.nameFor(nameKey),
+                                    builder: (_, appName, _) =>
+                                        _titleText(context, _title(appName)),
+                                  )
+                                : _titleText(context, _title(null)),
+                            const SizedBox(height: 2),
+                            _StatsLine(summary: summary, scheme: scheme),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ActiveValueListenableBuilder<int>(
+                        valueListenable: summary.count,
+                        pauseWhileScrolling: true,
+                        builder: (_, count, _) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
                           ),
-                          borderRadius: BorderRadius.circular(999),
+                          decoration: BoxDecoration(
+                            color: scheme.secondaryContainer.withValues(
+                              alpha: 0.6,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
                         ),
-                        child: Text(
-                          '$count',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
+                      ),
+                      if (onCloseAll != null)
+                        IconButton(
+                          tooltip: '关闭该来源全部连接',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: onCloseAll,
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      if (onClearAll != null)
+                        IconButton(
+                          tooltip: '清空该组已关闭连接',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: onClearAll,
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                        ),
+                      TransientAnimatedRotation(
+                        turns: expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.expand_more,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
-                    if (onCloseAll != null)
-                      IconButton(
-                        tooltip: '关闭该来源全部连接',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onCloseAll,
-                        icon: const Icon(Icons.close, size: 20),
-                      ),
-                    if (onClearAll != null)
-                      IconButton(
-                        tooltip: '清空该组已关闭连接',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onClearAll,
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                      ),
-                    TransientAnimatedRotation(
-                      turns: expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        Icons.expand_more,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

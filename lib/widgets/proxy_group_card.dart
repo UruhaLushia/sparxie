@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_color_utilities/hct/hct.dart';
 
+import '../gamepad_navigation.dart';
 import '../session.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
@@ -227,17 +228,20 @@ class ProxyGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = _styleFor(context, group.name, colored);
-    return PressableScale(
-      child: RepaintBoundary(
-        child: Hero(
-          tag: 'proxy-group-card-${group.name}',
-          child: _CardSurface(
-            style: style,
-            radius: 16,
-            groupBackdrop: true,
-            child: InkWell(
-              onTap: onTap,
-              child: _collapsedContent(group, showIcon, style),
+    return AppFocusHighlight(
+      borderRadius: BorderRadius.circular(16),
+      child: PressableScale(
+        child: RepaintBoundary(
+          child: Hero(
+            tag: 'proxy-group-card-${group.name}',
+            child: _CardSurface(
+              style: style,
+              radius: 16,
+              groupBackdrop: true,
+              child: InkWell(
+                onTap: onTap,
+                child: _collapsedContent(group, showIcon, style),
+              ),
             ),
           ),
         ),
@@ -905,6 +909,7 @@ class _CardNodeTile extends StatelessWidget {
       loadDetails: loadDetails,
       onTestDelay: onTestDelay,
       onToggleFixed: onToggleFixed,
+      onActivate: group.canSelectOnTap ? onSelect : null,
       requireFullyVisible: true,
       child: ActiveValueListenableSelector<String, bool>(
         valueListenable: group.now,
@@ -943,6 +948,7 @@ class _CardNodeTile extends StatelessWidget {
                   type: MaterialType.transparency,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
+                    canRequestFocus: false,
                     onTap: group.canSelectOnTap ? onSelect : null,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
@@ -1035,22 +1041,23 @@ class _DelayPill extends StatelessWidget {
           DelayBucket.fast => const Color(0xff22c55e),
           DelayBucket.slow => const Color(0xfff59e0b),
         };
-        return InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              delayLabel(ms),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                fontFeatures: [FontFeature.tabularFigures()],
+        final radius = BorderRadius.circular(999);
+        return AppFocusHighlight(
+          borderRadius: radius,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: color, borderRadius: radius),
+              child: Text(
+                delayLabel(ms),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ),

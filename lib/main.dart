@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_gamepads/flutter_gamepads.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
     as frb;
 
@@ -19,6 +20,7 @@ import 'background_image_store.dart';
 import 'config_store.dart';
 import 'controller.dart';
 import 'controller_uri_import.dart';
+import 'gamepad_navigation.dart';
 import 'imported_fonts.dart';
 import 'layout_breakpoints.dart';
 import 'rust_api.dart' as rust;
@@ -239,6 +241,8 @@ class _AppVisualSnapshot {
 
 class _MihomoControllerAppState extends State<MihomoControllerApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  final _homeShellKey = GlobalKey<_HomeShellState>();
+  final _focusNavigatorObserver = DirectionalFocusNavigatorObserver();
   late final ControllerUriImporter _controllerUriImporter;
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
@@ -319,25 +323,113 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   }
 
   bool _requestBackNavigation() {
+    if (_homeShellKey.currentState?._returnToPrimaryNavigation() ?? false) {
+      return true;
+    }
     final navigator = _navigatorKey.currentState;
     if (navigator == null || !navigator.canPop()) return false;
     unawaited(navigator.maybePop());
     return true;
   }
 
-  bool _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return false;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.escape ||
-        key == LogicalKeyboardKey.browserBack ||
-        key == LogicalKeyboardKey.goBack ||
-        event.physicalKey == PhysicalKeyboardKey.browserBack) {
-      return _requestBackNavigation();
+  bool _handleGamepadIntent(GamepadActivator _, Intent intent) {
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    if (intent is GamepadDirectionalFocusIntent) {
+      _moveFocus(intent.direction, allowFromEditable: true);
+      return false;
     }
-    return false;
+    if (intent is SwitchPageIntent) {
+      _homeShellKey.currentState?._switchNavigation(intent.delta);
+      return false;
+    }
+    if (intent is DismissIntent &&
+        (_dismissTextInput() || _requestBackNavigation())) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    final action = gamepadNavigationActionFor(event.logicalKey);
+    if (action == GamepadNavigationAction.back ||
+        event.physicalKey == PhysicalKeyboardKey.browserBack) {
+      if (event is! KeyDownEvent) return false;
+      return _dismissTextInput() || _requestBackNavigation();
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (action == GamepadNavigationAction.previousPage ||
+        action == GamepadNavigationAction.nextPage) {
+      if (event is! KeyDownEvent) return true;
+      _homeShellKey.currentState?._switchNavigation(
+        action == GamepadNavigationAction.previousPage ? -1 : 1,
+      );
+      return true;
+    }
+    final direction = switch (action) {
+      GamepadNavigationAction.up => TraversalDirection.up,
+      GamepadNavigationAction.down => TraversalDirection.down,
+      GamepadNavigationAction.left => TraversalDirection.left,
+      GamepadNavigationAction.right => TraversalDirection.right,
+      _ => null,
+    };
+    if (direction == null) return false;
+    if (_isSliderFocused() &&
+        (direction == TraversalDirection.left ||
+            direction == TraversalDirection.right)) {
+      return false;
+    }
+    return _moveFocus(
+      direction,
+      allowFromEditable: _usesDirectionalNavigation(),
+    );
+  }
+
+  bool _moveFocus(
+    TraversalDirection direction, {
+    bool allowFromEditable = false,
+  }) {
+    if (!allowFromEditable && _isEditableTextFocused()) return false;
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null || focus == FocusManager.instance.rootScope) {
+      return _focusFirst();
+    }
+    return focus.focusInDirection(direction) ||
+        (_homeShellKey.currentState?._handleFocusBoundary(direction) ?? false);
+  }
+
+  bool _isEditableTextFocused() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    return context?.widget is EditableText ||
+        context?.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  bool _isSliderFocused() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    return context?.widget is Slider ||
+        context?.findAncestorWidgetOfExactType<Slider>() != null;
+  }
+
+  bool _usesDirectionalNavigation() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    return context != null &&
+        MediaQuery.maybeNavigationModeOf(context) == NavigationMode.directional;
+  }
+
+  bool _dismissTextInput() {
+    if (!_isEditableTextFocused()) return false;
+    FocusManager.instance.primaryFocus?.unfocus();
+    return true;
+  }
+
+  bool _focusFirst() {
+    final context = _navigatorKey.currentContext;
+    if (context == null) return false;
+    return FocusScope.of(context).nextFocus();
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;
     if (event.kind == PointerDeviceKind.mouse &&
         event.buttons & kBackMouseButton != 0) {
       _requestBackNavigation();
@@ -583,6 +675,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
           },
           theme: _lightTheme!,
           darkTheme: _darkTheme!,
+          navigatorObservers: [_focusNavigatorObserver],
           builder: (context, child) {
             final compactStyles =
                 Theme.of(context).brightness == Brightness.dark
@@ -616,7 +709,17 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                         compactStyles[CompactControlKind.navigationBar]!,
                     child: _SystemBarStyle(
                       child: UiScrollActivityScope(
-                        child: child ?? const SizedBox.shrink(),
+                        child: GamepadControl(
+                          onBeforeIntent: _handleGamepadIntent,
+                          shortcuts: gamepadShortcuts,
+                          repeatIntents: gamepadRepeatIntents,
+                          child: Shortcuts(
+                            shortcuts: gamepadKeyboardShortcuts,
+                            child: FocusTraversalGroup(
+                              child: child ?? const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -634,7 +737,12 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
             return AppPageRoute<void>(
               settings: settings,
               builder: (_) => _DeferredRouteTheme(
-                child: HomeShell(store: store, prefs: prefs, session: session),
+                child: HomeShell(
+                  key: _homeShellKey,
+                  store: store,
+                  prefs: prefs,
+                  session: session,
+                ),
               ),
             );
           },

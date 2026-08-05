@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../app_prefs.dart';
 import '../background_image_store.dart';
+import '../gamepad_navigation.dart';
 import '../platform_capabilities.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';

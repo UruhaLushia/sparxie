@@ -189,10 +189,24 @@ ThemeData _appTheme({
     cardColor: scheme.surfaceContainerLow,
     dividerColor: dividerColor,
     dividerTheme: DividerThemeData(color: dividerColor, thickness: 0.5),
-    focusColor: scheme.primary.withValues(alpha: 0.12),
+    focusColor: scheme.primary.withValues(alpha: 0.18),
     hoverColor: scheme.primary.withValues(alpha: 0.06),
     highlightColor: scheme.primary.withValues(alpha: 0.08),
     splashColor: scheme.primary.withValues(alpha: 0.1),
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(
+        side: WidgetStateProperty.resolveWith<BorderSide?>((states) {
+          return states.contains(WidgetState.focused)
+              ? BorderSide(color: scheme.primary, width: 2)
+              : const BorderSide(color: Colors.transparent, width: 2);
+        }),
+        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          return states.contains(WidgetState.focused)
+              ? scheme.primary.withValues(alpha: 0.18)
+              : null;
+        }),
+      ),
+    ),
     listTileTheme: const ListTileThemeData(
       contentPadding: EdgeInsets.symmetric(horizontal: 8),
       shape: RoundedRectangleBorder(

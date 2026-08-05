@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../gamepad_navigation.dart';
 import '../transient_animation.dart';
 import 'style.dart';
 
@@ -68,45 +69,48 @@ class CompactSwitch extends StatelessWidget {
       borderRadius: controlStyle.switchBorderRadius,
       thumbSize: controlStyle.switchThumbSize,
     );
-    return Semantics(
-      label: semanticLabel,
-      toggled: value,
-      enabled: enabled,
-      onTap: enabled ? () => onChanged!(!value) : null,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.38,
-        child: SizedBox(
-          width: controlStyle.switchWidth,
-          height: controlStyle.switchHeight,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: enabled ? () => onChanged!(!value) : null,
-              borderRadius: controlStyle.switchBorderRadius,
-              hoverColor: controlStyle.hover(context),
-              splashColor: controlStyle.pressed(context),
-              highlightColor: controlStyle.pressed(context),
-              child: TransientAnimatedValue<_SwitchVisual>(
-                value: visual,
-                duration: _switchAnimationDuration,
-                curve: Curves.easeOutCubic,
-                lerp: _SwitchVisual.lerp,
-                builder: (_, visual, _) => Container(
-                  padding: visual.padding,
-                  decoration: BoxDecoration(
-                    color: visual.trackColor,
-                    borderRadius: visual.borderRadius,
-                    border: Border.all(color: visual.outlineColor),
-                  ),
-                  child: Align(
-                    alignment: Alignment(visual.position * 2 - 1, 0),
-                    child: SizedBox.square(
-                      dimension: visual.thumbSize,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: visual.thumbColor,
-                          shape: BoxShape.circle,
-                          boxShadow: _switchThumbShadows,
+    return AppFocusHighlight(
+      borderRadius: controlStyle.switchBorderRadius,
+      child: Semantics(
+        label: semanticLabel,
+        toggled: value,
+        enabled: enabled,
+        onTap: enabled ? () => onChanged!(!value) : null,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.38,
+          child: SizedBox(
+            width: controlStyle.switchWidth,
+            height: controlStyle.switchHeight,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: enabled ? () => onChanged!(!value) : null,
+                borderRadius: controlStyle.switchBorderRadius,
+                hoverColor: controlStyle.hover(context),
+                splashColor: controlStyle.pressed(context),
+                highlightColor: controlStyle.pressed(context),
+                child: TransientAnimatedValue<_SwitchVisual>(
+                  value: visual,
+                  duration: _switchAnimationDuration,
+                  curve: Curves.easeOutCubic,
+                  lerp: _SwitchVisual.lerp,
+                  builder: (_, visual, _) => Container(
+                    padding: visual.padding,
+                    decoration: BoxDecoration(
+                      color: visual.trackColor,
+                      borderRadius: visual.borderRadius,
+                      border: Border.all(color: visual.outlineColor),
+                    ),
+                    child: Align(
+                      alignment: Alignment(visual.position * 2 - 1, 0),
+                      child: SizedBox.square(
+                        dimension: visual.thumbSize,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: visual.thumbColor,
+                            shape: BoxShape.circle,
+                            boxShadow: _switchThumbShadows,
+                          ),
                         ),
                       ),
                     ),
@@ -123,47 +127,57 @@ class CompactSwitch extends StatelessWidget {
   Widget _buildTile(BuildContext context) {
     final theme = Theme.of(context);
     final enabled = onChanged != null;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? () => onChanged!(!value) : null,
-      child: Padding(
-        padding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
-          child: Row(
-            children: [
-              Expanded(
-                child: Opacity(
-                  opacity: enabled ? 1 : 0.38,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DefaultTextStyle.merge(
-                        style: theme.textTheme.bodyLarge,
-                        child: title!,
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        DefaultTextStyle.merge(
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+    const radius = BorderRadius.all(Radius.circular(12));
+    return AppFocusHighlight(
+      borderRadius: radius,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: enabled ? () => onChanged!(!value) : null,
+          child: Padding(
+            padding:
+                contentPadding ?? const EdgeInsets.symmetric(horizontal: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Opacity(
+                      opacity: enabled ? 1 : 0.38,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DefaultTextStyle.merge(
+                            style: theme.textTheme.bodyLarge,
+                            child: title!,
                           ),
-                          child: subtitle!,
-                        ),
-                      ],
-                    ],
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            DefaultTextStyle.merge(
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              child: subtitle!,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  ExcludeFocus(
+                    child: CompactSwitch(
+                      value: value,
+                      onChanged: onChanged,
+                      semanticLabel: semanticLabel,
+                      style: style,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              CompactSwitch(
-                value: value,
-                onChanged: onChanged,
-                semanticLabel: semanticLabel,
-                style: style,
-              ),
-            ],
+            ),
           ),
         ),
       ),

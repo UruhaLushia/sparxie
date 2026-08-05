@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../gamepad_navigation.dart';
+
 Future<Color?> showColorPalettePicker(
   BuildContext context, {
   required String title,
@@ -87,11 +89,18 @@ class _ColorPaletteDialogState extends State<_ColorPaletteDialog> {
                 children: [
                   const Icon(Icons.palette_outlined, size: 18),
                   Expanded(
-                    child: Slider(
+                    child: GamepadSliderControl(
                       value: _hsv.hue,
                       min: 0,
                       max: 360,
+                      divisions: 360,
                       onChanged: (hue) => _setHsv(_hsv.withHue(hue)),
+                      child: Slider(
+                        value: _hsv.hue,
+                        min: 0,
+                        max: 360,
+                        onChanged: (hue) => _setHsv(_hsv.withHue(hue)),
+                      ),
                     ),
                   ),
                   SizedBox(
@@ -122,20 +131,23 @@ class _ColorPaletteDialogState extends State<_ColorPaletteDialog> {
                 runSpacing: 8,
                 children: [
                   for (final color in _presets)
-                    InkWell(
-                      onTap: () => _setColor(color),
+                    AppFocusHighlight(
                       borderRadius: BorderRadius.circular(18),
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _color.toARGB32() == color.toARGB32()
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Colors.transparent,
-                            width: 2,
+                      child: InkWell(
+                        onTap: () => _setColor(color),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _color.toARGB32() == color.toARGB32()
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
                           ),
                         ),
                       ),

@@ -164,13 +164,21 @@ class _StyleSlider extends StatelessWidget {
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
               tickMarkShape: SliderTickMarkShape.noTickMark,
             ),
-            child: Slider(
+            child: GamepadSliderControl(
               value: value,
               min: min,
               max: max,
               divisions: divisions,
               onChanged: onChanged,
               onChangeEnd: onChangeEnd,
+              child: Slider(
+                value: value,
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+                onChangeEnd: onChangeEnd,
+              ),
             ),
           ),
         ],
@@ -224,60 +232,66 @@ class _ColorTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final radius = BorderRadius.circular(14);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
-      child: Material(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Opacity(
-              opacity: enabled ? 1 : 0.58,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
+      child: AppFocusHighlight(
+        borderRadius: radius,
+        child: Material(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
+          borderRadius: radius,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: radius,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Opacity(
+                opacity: enabled ? 1 : 0.58,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          enabled ? '#${_hex(color)}' : disabledLabel,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                          const SizedBox(height: 2),
+                          Text(
+                            enabled ? '#${_hex(color)}' : disabledLabel,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: enabled ? color : scheme.primary,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(
-                        color: scheme.outline.withValues(alpha: 0.32),
+                        ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                     ),
-                  ),
-                ],
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: enabled ? color : scheme.primary,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: scheme.outline.withValues(alpha: 0.32),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

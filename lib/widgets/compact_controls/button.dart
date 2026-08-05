@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../gamepad_navigation.dart';
 import 'style.dart';
 
 class CompactMenuButton<T> extends StatelessWidget {
@@ -80,7 +81,10 @@ class CompactMenuButton<T> extends StatelessWidget {
         ),
       ),
     );
-    return SizedBox(width: width, height: resolvedHeight, child: content);
+    return AppFocusHighlight(
+      borderRadius: controlStyle.borderRadius,
+      child: SizedBox(width: width, height: resolvedHeight, child: content),
+    );
   }
 }
 
@@ -101,30 +105,33 @@ class CompactIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controlStyle = style ?? CompactControlTheme.buttonOf(context);
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: SizedBox(
-        width: controlStyle.buttonHeight * controlStyle.widthScale,
-        height: controlStyle.buttonHeight,
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          constraints: BoxConstraints.tightFor(
-            width: controlStyle.buttonHeight * controlStyle.widthScale,
-            height: controlStyle.buttonHeight,
-          ),
-          onPressed: onPressed,
-          style: IconButton.styleFrom(
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            backgroundColor: controlStyle.background(context),
-            hoverColor: controlStyle.hover(context),
-            highlightColor: controlStyle.pressed(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: controlStyle.borderRadius,
+    return AppFocusHighlight(
+      borderRadius: controlStyle.borderRadius,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        child: SizedBox(
+          width: controlStyle.buttonHeight * controlStyle.widthScale,
+          height: controlStyle.buttonHeight,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            constraints: BoxConstraints.tightFor(
+              width: controlStyle.buttonHeight * controlStyle.widthScale,
+              height: controlStyle.buttonHeight,
             ),
+            onPressed: onPressed,
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              backgroundColor: controlStyle.background(context),
+              hoverColor: controlStyle.hover(context),
+              highlightColor: controlStyle.pressed(context),
+              shape: RoundedRectangleBorder(
+                borderRadius: controlStyle.borderRadius,
+              ),
+            ),
+            icon: icon,
           ),
-          icon: icon,
         ),
       ),
     );

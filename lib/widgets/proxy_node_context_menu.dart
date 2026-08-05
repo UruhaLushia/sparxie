@@ -12,6 +12,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
     this.loadDetails,
     this.onTestDelay,
     this.onToggleFixed,
+    this.onActivate,
     this.requireFullyVisible = false,
     required this.child,
   });
@@ -21,6 +22,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
   final ProxyNodeDetailsLoader? loadDetails;
   final Future<void> Function()? onTestDelay;
   final VoidCallback? onToggleFixed;
+  final VoidCallback? onActivate;
   final bool requireFullyVisible;
   final Widget child;
 
@@ -30,6 +32,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
     return AnchoredDetailsTrigger(
       barrierLabel: '关闭节点详情',
       semanticsHint: '长按打开节点菜单',
+      onActivate: onActivate,
       requireFullyVisible: requireFullyVisible,
       detailsBuilder: (dialogContext) => ProxyNodeDetailsPanel(
         group: group,

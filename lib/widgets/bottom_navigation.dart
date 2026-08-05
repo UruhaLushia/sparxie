@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_prefs.dart';
+import '../gamepad_navigation.dart';
 import 'app_background.dart';
 import 'compact_controls/style.dart';
 import 'transient_animation.dart';
@@ -378,24 +379,28 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          statesController: _statesController,
-          onTap: widget.onTap,
-          excludeFromSemantics: true,
-          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-          splashFactory: NoSplash.splashFactory,
-          child: Semantics(
-            button: true,
-            selected: widget.selected,
-            label: widget.destination.label,
-            excludeSemantics: true,
-            child: Tooltip(
-              message: widget.destination.label,
-              child: ValueListenableBuilder<Set<WidgetState>>(
-                valueListenable: _statesController,
-                builder: (context, states, _) => _buildVisual(context, states),
+      child: AppFocusHighlight(
+        borderRadius: BorderRadius.circular(12),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            statesController: _statesController,
+            onTap: widget.onTap,
+            excludeFromSemantics: true,
+            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+            splashFactory: NoSplash.splashFactory,
+            child: Semantics(
+              button: true,
+              selected: widget.selected,
+              label: widget.destination.label,
+              excludeSemantics: true,
+              child: Tooltip(
+                message: widget.destination.label,
+                child: ValueListenableBuilder<Set<WidgetState>>(
+                  valueListenable: _statesController,
+                  builder: (context, states, _) =>
+                      _buildVisual(context, states),
+                ),
               ),
             ),
           ),
@@ -1372,71 +1377,75 @@ class _CapsuleNavItem extends StatelessWidget {
       selected: selected,
       label: destination.label,
       excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Center(
-          child: ClipRect(
-            child: TransientAnimatedValue<_CapsuleContentVisual>(
-              value: (
-                width: selected ? itemWidth : 42,
-                padding: EdgeInsets.symmetric(
-                  horizontal: selected
-                      ? _CapsuleNavBarState._selectedHorizontalPadding *
-                            widthScale
-                      : 0,
-                ),
-              ),
-              duration: _navAnimationDuration,
-              curve: Curves.easeOutCubic,
-              lerp: _lerpCapsuleContent,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    destination.icon,
-                    size: _CapsuleNavBarState._iconSize,
-                    color: foreground,
+      child: AppFocusHighlight(
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Center(
+            child: ClipRect(
+              child: TransientAnimatedValue<_CapsuleContentVisual>(
+                value: (
+                  width: selected ? itemWidth : 42,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: selected
+                        ? _CapsuleNavBarState._selectedHorizontalPadding *
+                              widthScale
+                        : 0,
                   ),
-                  Flexible(
-                    child: TransientAnimatedValue<double>(
-                      value: selected ? 1 : 0,
-                      duration: _navAnimationDuration,
-                      curve: Curves.easeOutCubic,
-                      lerp: _lerpDouble,
-                      builder: (context, value, child) => ClipRect(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: value,
-                          child: Opacity(
-                            opacity: ((value - 0.95) / 0.05)
-                                .clamp(0.0, 1.0)
-                                .toDouble(),
-                            child: child,
+                ),
+                duration: _navAnimationDuration,
+                curve: Curves.easeOutCubic,
+                lerp: _lerpCapsuleContent,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      destination.icon,
+                      size: _CapsuleNavBarState._iconSize,
+                      color: foreground,
+                    ),
+                    Flexible(
+                      child: TransientAnimatedValue<double>(
+                        value: selected ? 1 : 0,
+                        duration: _navAnimationDuration,
+                        curve: Curves.easeOutCubic,
+                        lerp: _lerpDouble,
+                        builder: (context, value, child) => ClipRect(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: value,
+                            child: Opacity(
+                              opacity: ((value - 0.95) / 0.05)
+                                  .clamp(0.0, 1.0)
+                                  .toDouble(),
+                              child: child,
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            left:
+                                _CapsuleNavBarState._iconLabelGap * widthScale,
+                          ),
+                          child: Text(
+                            destination.label,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.clip,
+                            style: labelStyle,
                           ),
                         ),
                       ),
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          left: _CapsuleNavBarState._iconLabelGap * widthScale,
-                        ),
-                        child: Text(
-                          destination.label,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.clip,
-                          style: labelStyle,
-                        ),
-                      ),
                     ),
-                  ),
-                ],
-              ),
-              builder: (_, visual, child) => Container(
-                width: visual.width,
-                height: 42,
-                padding: visual.padding,
-                child: child,
+                  ],
+                ),
+                builder: (_, visual, child) => Container(
+                  width: visual.width,
+                  height: 42,
+                  padding: visual.padding,
+                  child: child,
+                ),
               ),
             ),
           ),
@@ -1473,44 +1482,47 @@ class _LabeledNavItem extends StatelessWidget {
       selected: selected,
       label: label,
       excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TransientAnimatedScale(
-                scale: selected ? 1.12 : 1,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                child: TransientAnimatedValue<Color>(
-                  value: fg,
+      child: AppFocusHighlight(
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TransientAnimatedScale(
+                  scale: selected ? 1.12 : 1,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  child: TransientAnimatedValue<Color>(
+                    value: fg,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    lerp: _lerpColor,
+                    builder: (context, color, child) =>
+                        Icon(icon, size: 22, color: color),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                TransientAnimatedValue<TextStyle>(
+                  value: Theme.of(context).textTheme.labelSmall!.copyWith(
+                    fontSize: 10,
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  ),
                   duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  lerp: _lerpColor,
-                  builder: (context, color, child) =>
-                      Icon(icon, size: 22, color: color),
+                  lerp: _lerpTextStyle,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  builder: (_, style, child) =>
+                      DefaultTextStyle(style: style, child: child!),
                 ),
-              ),
-              const SizedBox(height: 3),
-              TransientAnimatedValue<TextStyle>(
-                value: Theme.of(context).textTheme.labelSmall!.copyWith(
-                  fontSize: 10,
-                  color: fg,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                ),
-                duration: const Duration(milliseconds: 180),
-                lerp: _lerpTextStyle,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                builder: (_, style, child) =>
-                    DefaultTextStyle(style: style, child: child!),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1537,59 +1549,62 @@ class _Material3NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TransientAnimatedValue<_NavBoxVisual>(
-              value: (
-                width: 48 * styleConfig.indicatorWidthScale,
-                height: styleConfig.indicatorHeight
-                    .clamp(24.0, styleConfig.buttonHeight - 18)
-                    .toDouble(),
-                decoration: BoxDecoration(
+    return AppFocusHighlight(
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TransientAnimatedValue<_NavBoxVisual>(
+                value: (
+                  width: 48 * styleConfig.indicatorWidthScale,
+                  height: styleConfig.indicatorHeight
+                      .clamp(24.0, styleConfig.buttonHeight - 18)
+                      .toDouble(),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? _indicatorColor(context, styleConfig, isDark)
+                        : Colors.transparent,
+                    borderRadius: styleConfig.indicatorBorderRadius,
+                  ),
+                ),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                lerp: _lerpNavBox,
+                child: Icon(
+                  icon,
+                  size: 20,
                   color: selected
-                      ? _indicatorColor(context, styleConfig, isDark)
-                      : Colors.transparent,
-                  borderRadius: styleConfig.indicatorBorderRadius,
+                      ? _indicatorForeground(context, styleConfig, isDark)
+                      : styleConfig.foreground(context),
+                ),
+                builder: (_, visual, child) => Container(
+                  width: visual.width,
+                  height: visual.height,
+                  decoration: visual.decoration,
+                  child: child,
                 ),
               ),
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              lerp: _lerpNavBox,
-              child: Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? _indicatorForeground(context, styleConfig, isDark)
-                    : styleConfig.foreground(context),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontSize: 10,
+                  // The label sits on the navigation surface, not inside the
+                  // selected indicator, so it must use the surface foreground.
+                  color: styleConfig
+                      .foreground(context)
+                      .withValues(alpha: selected ? 1 : 0.72),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
-              builder: (_, visual, child) => Container(
-                width: visual.width,
-                height: visual.height,
-                decoration: visual.decoration,
-                child: child,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 10,
-                // The label sits on the navigation surface, not inside the
-                // selected indicator, so it must use the surface foreground.
-                color: styleConfig
-                    .foreground(context)
-                    .withValues(alpha: selected ? 1 : 0.72),
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

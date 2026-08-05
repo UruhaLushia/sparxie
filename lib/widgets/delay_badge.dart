@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../gamepad_navigation.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
 
@@ -20,18 +21,22 @@ class DelayBadge extends StatelessWidget {
       DelayBucket.fast => const Color(0xff10b981),
       DelayBucket.slow => const Color(0xfff59e0b),
     };
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Text(
-          delayLabel(delay),
-          style: TextStyle(
-            color: color,
-            fontSize: 13,
-            fontFeatures: const [FontFeature.tabularFigures()],
-            fontWeight: FontWeight.w600,
+    final radius = BorderRadius.circular(6);
+    return AppFocusHighlight(
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Text(
+            delayLabel(delay),
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),

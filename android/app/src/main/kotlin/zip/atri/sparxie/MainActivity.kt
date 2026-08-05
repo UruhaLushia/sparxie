@@ -6,19 +6,24 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.hardware.input.InputManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.provider.Settings
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMethodCodec
+import org.flame_engine.gamepads_android.GamepadsCompatibleActivity
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
     private val channel = "zip.atri.sparxie/process_icons"
     private val systemColorsChannel = "zip.atri.sparxie/system_colors"
     private val updateInstallerChannel = "zip.atri.sparxie/update_installer"
@@ -27,6 +32,34 @@ class MainActivity : FlutterActivity() {
     private val updateDirectory = "sparxie_updates"
     private var installPermissionResult: MethodChannel.Result? = null
     private var cleanupUpdatePackageOnResume = false
+    private var gamepadKeyListener: ((KeyEvent) -> Boolean)? = null
+    private var gamepadMotionListener: ((MotionEvent) -> Boolean)? = null
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (gamepadKeyListener?.invoke(event) == true) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (gamepadMotionListener?.invoke(event) == true) return true
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    override fun registerInputDeviceListener(
+        listener: InputManager.InputDeviceListener,
+        handler: Handler?,
+    ) {
+        val inputManager = getSystemService(INPUT_SERVICE) as InputManager
+        inputManager.registerInputDeviceListener(listener, handler)
+    }
+
+    override fun registerKeyEventHandler(handler: (KeyEvent) -> Boolean) {
+        gamepadKeyListener = handler
+    }
+
+    override fun registerMotionEventHandler(handler: (MotionEvent) -> Boolean) {
+        gamepadMotionListener = handler
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../gamepad_navigation.dart';
 import '../session.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';
@@ -53,76 +54,79 @@ class ProxyGroupHeader extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            PressableScale(
-              child: SizedBox(
-                height: cardHeight,
-                child: AppSurfaceBackdrop(
-                  borderRadius: radius,
-                  child: Material(
-                    color: surfaceTheme.surfaceColor(
-                      scheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                      0.04,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: radius,
-                      side: surfaceTheme.outlineSide(
-                        scheme.outlineVariant.withValues(alpha: 0.5),
+            AppFocusHighlight(
+              borderRadius: radius,
+              child: PressableScale(
+                child: SizedBox(
+                  height: cardHeight,
+                  child: AppSurfaceBackdrop(
+                    borderRadius: radius,
+                    child: Material(
+                      color: surfaceTheme.surfaceColor(
+                        scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                        0.04,
                       ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      borderRadius: radius,
-                      onTap: onToggle,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 6, 0),
-                        child: Row(
-                          children: [
-                            if (showIcon) ...[
-                              ProxyAvatar(name: group.name, icon: group.icon),
-                              const SizedBox(width: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: radius,
+                        side: surfaceTheme.outlineSide(
+                          scheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        borderRadius: radius,
+                        onTap: onToggle,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 6, 0),
+                          child: Row(
+                            children: [
+                              if (showIcon) ...[
+                                ProxyAvatar(name: group.name, icon: group.icon),
+                                const SizedBox(width: 10),
+                              ],
+                              Expanded(child: _title(context, scheme)),
+                              IconButton(
+                                tooltip: '搜索节点',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: onToggleSearch,
+                                icon: Icon(
+                                  Icons.search_rounded,
+                                  size: 20,
+                                  color: searchOpen ? scheme.primary : null,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '定位当前节点',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: onLocate,
+                                icon: const Icon(
+                                  Icons.my_location_rounded,
+                                  size: 18,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '组内延迟测试',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: testing ? null : onTest,
+                                icon: testing
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.speed_rounded, size: 20),
+                              ),
+                              TransientAnimatedRotation(
+                                turns: expanded ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  Icons.expand_more,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
-                            Expanded(child: _title(context, scheme)),
-                            IconButton(
-                              tooltip: '搜索节点',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: onToggleSearch,
-                              icon: Icon(
-                                Icons.search_rounded,
-                                size: 20,
-                                color: searchOpen ? scheme.primary : null,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '定位当前节点',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: onLocate,
-                              icon: const Icon(
-                                Icons.my_location_rounded,
-                                size: 18,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '组内延迟测试',
-                              visualDensity: VisualDensity.compact,
-                              onPressed: testing ? null : onTest,
-                              icon: testing
-                                  ? const SizedBox.square(
-                                      dimension: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.speed_rounded, size: 20),
-                            ),
-                            TransientAnimatedRotation(
-                              turns: expanded ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 200),
-                              child: Icon(
-                                Icons.expand_more,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),

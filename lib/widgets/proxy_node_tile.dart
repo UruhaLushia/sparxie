@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../gamepad_navigation.dart';
 import '../session.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';
@@ -38,6 +39,7 @@ class ProxyNodeTile extends StatelessWidget {
       loadDetails: loadDetails,
       onTestDelay: onTestDelay,
       onToggleFixed: onToggleFixed,
+      onActivate: group.canSelectOnTap ? onSelect : null,
       child: ActiveValueListenableSelector<String, bool>(
         valueListenable: group.now,
         selector: (now) => !group.hidesExactNow && now == member.name,
@@ -86,6 +88,7 @@ class ProxyNodeTile extends StatelessWidget {
                     : Clip.antiAlias,
                 child: InkWell(
                   borderRadius: radius,
+                  canRequestFocus: false,
                   onTap: group.canSelectOnTap ? onSelect : null,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
@@ -143,9 +146,10 @@ class ProxyNodeTile extends StatelessWidget {
                   ),
                 ),
               );
-              return isPinned
+              final surface = isPinned
                   ? tile
                   : AppSurfaceBackdrop(borderRadius: radius, child: tile);
+              return AppFocusHighlight(borderRadius: radius, child: surface);
             },
           );
         },

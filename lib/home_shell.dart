@@ -19,6 +19,14 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _index = 0;
   int _resumeGeneration = 0;
+  final _pageFocusNodes = <String, FocusScopeNode>{};
+  final _bottomNavigationFocusNode = FocusScopeNode(
+    debugLabel: 'Bottom navigation',
+  );
+  final _cardNavigationFocusNode = FocusScopeNode(
+    debugLabel: 'Card navigation',
+  );
+  final _cardFocusNodes = <int, FocusNode>{};
 
   // Only mobile OSes silently sever backgrounded sockets; reconnecting on
   // every desktop minimize/restore would be churn for no reason.
@@ -37,7 +45,93 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void dispose() {
     _resumeGeneration++;
     WidgetsBinding.instance.removeObserver(this);
+    for (final node in _pageFocusNodes.values) {
+      node.dispose();
+    }
+    _bottomNavigationFocusNode.dispose();
+    for (final node in _cardFocusNodes.values) {
+      node.dispose();
+    }
+    _cardNavigationFocusNode.dispose();
     super.dispose();
+  }
+
+  FocusScopeNode _pageFocusNode(String page) => _pageFocusNodes.putIfAbsent(
+    page,
+    () => FocusScopeNode(debugLabel: 'Page $page'),
+  );
+
+  FocusNode _cardFocusNode(int index) => _cardFocusNodes.putIfAbsent(
+    index,
+    () => FocusNode(debugLabel: 'Card navigation item $index'),
+  );
+
+  Widget _focusablePage(String page, Widget child) {
+    return FocusScope(node: _pageFocusNode(page), child: child);
+  }
+
+  void _focusPage(String page) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final node = _pageFocusNodes[page];
+      if (!mounted || node == null || !node.canRequestFocus) return;
+      node.requestFocus();
+      if (node.hasPrimaryFocus) node.nextFocus();
+    });
+  }
+
+  bool _handleFocusBoundary(TraversalDirection direction) {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return false;
+    final compact = MediaQuery.sizeOf(context).width < appWideLayoutBreakpoint;
+    final layout = widget.prefs.navLayout;
+    if (!compact && layout == NavLayout.cards) {
+      final destinations = _currentDestinations(layout, isCompact: false);
+      if (_cardNavigationFocusNode.hasFocus) {
+        if (direction != TraversalDirection.right) return false;
+        _focusPage(_pageName(_effectiveCardIndex, destinations));
+        return true;
+      }
+      return direction == TraversalDirection.left && _focusSelectedCard();
+    }
+    if (!compact || layout == NavLayout.cards) return false;
+
+    if (_bottomNavigationFocusNode.hasFocus) {
+      if (direction != TraversalDirection.up) return false;
+      final destinations = _currentDestinations(
+        widget.prefs.navLayout,
+        isCompact: true,
+      );
+      _focusPage(_pageName(_index, destinations));
+      return true;
+    }
+    if (direction != TraversalDirection.down) return false;
+
+    final nodes = _bottomNavigationFocusNode.traversalDescendants
+        .where((node) => node.canRequestFocus)
+        .toList(growable: false);
+    if (nodes.isEmpty) return false;
+    nodes[_index.clamp(0, nodes.length - 1)].requestFocus();
+    return true;
+  }
+
+  int get _effectiveCardIndex =>
+      !widget.session.supportsRules.value && _index == -3 ? 0 : _index;
+
+  bool _focusSelectedCard() {
+    final node = _cardFocusNodes[_effectiveCardIndex];
+    if (node == null || !node.canRequestFocus) return false;
+    node.requestFocus();
+    return true;
+  }
+
+  bool _returnToPrimaryNavigation() {
+    if (!mounted ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        MediaQuery.sizeOf(context).width < appWideLayoutBreakpoint ||
+        widget.prefs.navLayout != NavLayout.cards ||
+        _cardNavigationFocusNode.hasFocus) {
+      return false;
+    }
+    return _focusSelectedCard();
   }
 
   @override
@@ -141,6 +235,79 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     ];
   }
 
+  List<AppNavDestination> _currentDestinations(
+    NavLayout layout, {
+    required bool isCompact,
+  }) {
+    return _destinationsFor(
+      layout,
+      isCompact: isCompact,
+      supportsCoreConfig: widget.session.supportsCoreConfig.value,
+      supportsCoreActions: widget.session.supportsCoreActions.value,
+      supportsExternalResources: widget.session.supportsExternalResources.value,
+      supportsRules: widget.session.supportsRules.value,
+      supportsTailscale: widget.session.supportsTailscale.value,
+      supportsDiagnostics: widget.session.supportsDiagnostics.value,
+    );
+  }
+
+  bool _switchNavigation(int delta) {
+    if (!mounted || delta == 0 || ModalRoute.of(context)?.isCurrent != true) {
+      return false;
+    }
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= appWideLayoutBreakpoint;
+    final layout = widget.prefs.navLayout;
+    if (layout == NavLayout.cards && !wide) return false;
+
+    final supportsCoreConfig = widget.session.supportsCoreConfig.value;
+    final supportsRules = widget.session.supportsRules.value;
+    final destinations = _currentDestinations(layout, isCompact: !wide);
+    final indices = <int>[];
+    if (layout == NavLayout.cards) {
+      if (supportsCoreConfig) indices.add(-1);
+      indices.add(-2);
+      for (var i = 0; i < destinations.length; i++) {
+        indices.add(i);
+        if (i == 1 && supportsRules) indices.add(-3);
+      }
+    } else if (wide) {
+      final navigationStyle = CompactControlTheme.navigationBarOf(context);
+      final itemHeight = SideNavigationRail.itemHeightFor(navigationStyle);
+      final n = destinations.length;
+      final otherIndex = n - 1;
+      final topInset = MediaQuery.paddingOf(context).top;
+      final fit = ((size.height - topInset) / itemHeight).floor().clamp(2, n);
+      final shownLeading = fit >= n ? otherIndex : fit - 1;
+      indices.addAll([for (var i = 0; i < shownLeading; i++) i, otherIndex]);
+    } else {
+      indices.addAll(List<int>.generate(destinations.length, (i) => i));
+    }
+    if (indices.isEmpty) return false;
+
+    final currentPosition = indices.indexOf(_index);
+    final position = currentPosition < 0 ? 0 : currentPosition;
+    final nextPosition = (position + delta) % indices.length;
+    final nextIndex = indices[nextPosition];
+    _selectPage(nextIndex, destinations);
+    return true;
+  }
+
+  String _pageName(int index, List<AppNavDestination> destinations) =>
+      switch (index) {
+        -1 => '核心配置',
+        -2 => '连接',
+        -3 => '分流规则',
+        _ => destinations[index].label,
+      };
+
+  void _selectPage(int index, List<AppNavDestination> destinations) {
+    if (_index != index) setState(() => _index = index);
+    if (FocusManager.instance.highlightMode == FocusHighlightMode.traditional) {
+      _focusPage(_pageName(index, destinations));
+    }
+  }
+
   Widget _buildPage(AppNavDestination dest) {
     return switch (dest.label) {
       '概览' => DashboardScreen(store: widget.store, session: widget.session),
@@ -188,7 +355,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         !listEquals(_stackLabels, labels)) {
       _stackLayout = layout;
       _stackLabels = labels;
-      _stackPages = [for (final d in destinations) _buildPage(d)];
+      _stackPages = [
+        for (final d in destinations) _focusablePage(d.label, _buildPage(d)),
+      ];
       if (_index >= destinations.length ||
           (layout == NavLayout.standard && _index < 0)) {
         _index = 0;
@@ -218,17 +387,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         final wide = size.width >= appWideLayoutBreakpoint;
         final layout = widget.prefs.navLayout;
         final cards = layout == NavLayout.cards;
-        final destinations = _destinationsFor(
-          layout,
-          isCompact: !wide,
-          supportsCoreConfig: widget.session.supportsCoreConfig.value,
-          supportsCoreActions: widget.session.supportsCoreActions.value,
-          supportsExternalResources:
-              widget.session.supportsExternalResources.value,
-          supportsRules: widget.session.supportsRules.value,
-          supportsTailscale: widget.session.supportsTailscale.value,
-          supportsDiagnostics: widget.session.supportsDiagnostics.value,
-        );
+        final destinations = _currentDestinations(layout, isCompact: !wide);
         if (wide) {
           return cards
               ? _buildWideCards(destinations)
@@ -292,12 +451,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           final children = [
             for (var i = 0; i < pages.length; i++)
               if (i == otherIndex)
-                SettingsScreen(
-                  store: widget.store,
-                  prefs: widget.prefs,
-                  session: widget.session,
-                  extras: extras,
-                  railManagesPages: true,
+                _focusablePage(
+                  '更多',
+                  SettingsScreen(
+                    store: widget.store,
+                    prefs: widget.prefs,
+                    session: widget.session,
+                    extras: extras,
+                    railManagesPages: true,
+                  ),
                 )
               else
                 pages[i],
@@ -308,7 +470,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               SideNavigationRail(
                 destinations: [for (final i in visibleReal) destinations[i]],
                 selectedIndex: visibleReal.indexOf(effectiveIndex),
-                onSelected: (pos) => setState(() => _index = visibleReal[pos]),
+                onSelected: (pos) =>
+                    _selectPage(visibleReal[pos], destinations),
                 style: widget.prefs.navBarStyle,
                 styleConfig: navigationStyle,
                 surfaceTheme: navigationSurface,
@@ -331,49 +494,69 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final surfaceTheme = AppSurfaceTheme.of(context);
     final pages = _ensureStackPages(NavLayout.cards, destinations);
     final supportsRules = widget.session.supportsRules.value;
-    final effectiveIndex = !supportsRules && _index == -3 ? 0 : _index;
+    final effectiveIndex = _effectiveCardIndex;
     // Sentinel _index < 0 means a hero-card-driven main area:
     //   -1: 核心配置
     //   -2: 连接列表  (实时流量 / 连接 hero card)
     //   -3: 分流规则  (规则 card)
     final Widget mainArea = switch (effectiveIndex) {
-      -1 => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
-      -2 => ConnectionsScreen(
-        store: widget.store,
-        prefs: widget.prefs,
-        session: widget.session,
+      -1 => _focusablePage(
+        '核心配置',
+        CoreConfigScreen(store: widget.store, prefs: widget.prefs),
       ),
-      -3 => RulesScreen(store: widget.store),
+      -2 => _focusablePage(
+        '连接',
+        ConnectionsScreen(
+          store: widget.store,
+          prefs: widget.prefs,
+          session: widget.session,
+        ),
+      ),
+      -3 => _focusablePage('分流规则', RulesScreen(store: widget.store)),
       _ => _LazyIndexedStack(index: effectiveIndex, children: pages),
     };
-    return Scaffold(
-      body: Row(
-        children: [
-          AppSurfaceBackdrop(
-            child: Container(
-              width: 300,
-              color: surfaceTheme.chromeColor(scheme.surface),
-              child: SafeArea(
-                child: _NavCardGrid(
-                  store: widget.store,
-                  session: widget.session,
-                  destinations: destinations,
-                  selectedIndex: effectiveIndex,
-                  onSelected: (i) => setState(() => _index = i),
-                  onKernelTap: () => setState(() => _index = -1),
-                  kernelSelected: effectiveIndex == -1,
-                  onConnectionsTap: () => setState(() => _index = -2),
-                  connectionsSelected: effectiveIndex == -2,
-                  supportsRules: supportsRules,
-                  onRulesTap: () => setState(() => _index = -3),
-                  rulesSelected: effectiveIndex == -3,
-                  onBackendSettingsTap: _openBackendSettings,
+    return ListenableBuilder(
+      listenable: _cardNavigationFocusNode,
+      builder: (context, child) => PopScope<void>(
+        canPop: _cardNavigationFocusNode.hasFocus,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _focusSelectedCard();
+        },
+        child: child!,
+      ),
+      child: Scaffold(
+        body: Row(
+          children: [
+            AppSurfaceBackdrop(
+              child: Container(
+                width: 300,
+                color: surfaceTheme.chromeColor(scheme.surface),
+                child: SafeArea(
+                  child: FocusScope(
+                    node: _cardNavigationFocusNode,
+                    child: _NavCardGrid(
+                      store: widget.store,
+                      session: widget.session,
+                      destinations: destinations,
+                      selectedIndex: effectiveIndex,
+                      focusNodeFor: _cardFocusNode,
+                      onSelected: (i) => _selectPage(i, destinations),
+                      onKernelTap: () => _selectPage(-1, destinations),
+                      kernelSelected: effectiveIndex == -1,
+                      onConnectionsTap: () => _selectPage(-2, destinations),
+                      connectionsSelected: effectiveIndex == -2,
+                      supportsRules: supportsRules,
+                      onRulesTap: () => _selectPage(-3, destinations),
+                      rulesSelected: effectiveIndex == -3,
+                      onBackendSettingsTap: _openBackendSettings,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(child: mainArea),
-        ],
+            Expanded(child: mainArea),
+          ],
+        ),
       ),
     );
   }
@@ -398,7 +581,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               styleConfig: navigationStyle,
               destinations: destinations,
               selectedIndex: _index,
-              onSelected: (i) => setState(() => _index = i),
+              onSelected: (i) => _selectPage(i, destinations),
             ),
           ),
         ),
@@ -421,7 +604,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           );
         },
       ),
-      bottomNavigationBar: ClipRect(child: AppBackdropGroup(child: bottomBar)),
+      bottomNavigationBar: FocusScope(
+        node: _bottomNavigationFocusNode,
+        child: ClipRect(child: AppBackdropGroup(child: bottomBar)),
+      ),
     );
   }
 
@@ -444,12 +630,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           );
         },
       ),
-      bottomNavigationBar: FloatingBottomNavBar(
-        selectedIndex: _index,
-        onSelected: (i) => setState(() => _index = i),
-        destinations: destinations,
-        style: widget.prefs.navBarStyle,
-        surfaceTheme: navigationSurface,
+      bottomNavigationBar: FocusScope(
+        node: _bottomNavigationFocusNode,
+        child: FloatingBottomNavBar(
+          selectedIndex: _index,
+          onSelected: (i) => _selectPage(i, destinations),
+          destinations: destinations,
+          style: widget.prefs.navBarStyle,
+          surfaceTheme: navigationSurface,
+        ),
       ),
     );
   }
@@ -528,6 +717,7 @@ class _NavCardGrid extends StatelessWidget {
     required this.onRulesTap,
     required this.rulesSelected,
     required this.onBackendSettingsTap,
+    this.focusNodeFor,
   });
 
   final ControllerStore store;
@@ -543,6 +733,7 @@ class _NavCardGrid extends StatelessWidget {
   final VoidCallback onRulesTap;
   final bool rulesSelected;
   final VoidCallback onBackendSettingsTap;
+  final FocusNode Function(int index)? focusNodeFor;
 
   @override
   Widget build(BuildContext context) {
@@ -560,18 +751,21 @@ class _NavCardGrid extends StatelessWidget {
             padding: const EdgeInsets.only(left: 4, bottom: 16),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: InkWell(
-                onTap: onBackendSettingsTap,
+              child: AppFocusHighlight(
                 borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
-                  child: Text(
-                    'Sparxie',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+                child: InkWell(
+                  onTap: onBackendSettingsTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      'Sparxie',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -598,6 +792,7 @@ class _NavCardGrid extends StatelessWidget {
                 session: session,
                 selected: kernelSelected,
                 onTap: supported ? onKernelTap : null,
+                focusNode: focusNodeFor?.call(-1),
               ),
             ),
           ),
@@ -606,6 +801,7 @@ class _NavCardGrid extends StatelessWidget {
             session: session,
             selected: connectionsSelected,
             onTap: onConnectionsTap,
+            focusNode: focusNodeFor?.call(-2),
           ),
           const SizedBox(height: 12),
           ..._buildNavRows(context),
@@ -622,6 +818,7 @@ class _NavCardGrid extends StatelessWidget {
           label: destinations[i].label,
           selected: selectedIndex == i,
           onTap: () => onSelected(i),
+          focusNode: focusNodeFor?.call(i),
           badge: _badgeFor(i, selected: selectedIndex == i),
         ),
     ];
@@ -631,6 +828,7 @@ class _NavCardGrid extends StatelessWidget {
         session: session,
         selected: rulesSelected,
         onTap: onRulesTap,
+        focusNode: focusNodeFor?.call(-3),
       );
       cards.insert(cards.length < 2 ? cards.length : 2, ruleCard);
     }
@@ -681,12 +879,14 @@ class _StatusHeroCard extends StatelessWidget {
     required this.session,
     this.selected = false,
     this.onTap,
+    this.focusNode,
   });
 
   final ControllerStore store;
   final MihomoSession session;
   final bool selected;
   final VoidCallback? onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -700,6 +900,7 @@ class _StatusHeroCard extends StatelessWidget {
           height: 110,
           selected: selected,
           child: InkWell(
+            focusNode: focusNode,
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -807,11 +1008,13 @@ class _TrafficHeroCard extends StatelessWidget {
     required this.session,
     this.selected = false,
     this.onTap,
+    this.focusNode,
   });
 
   final MihomoSession session;
   final bool selected;
   final VoidCallback? onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -821,6 +1024,7 @@ class _TrafficHeroCard extends StatelessWidget {
       height: 96,
       selected: selected,
       child: InkWell(
+        focusNode: focusNode,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
@@ -909,10 +1113,12 @@ class _RuleNavCard extends StatelessWidget {
     required this.session,
     required this.selected,
     required this.onTap,
+    this.focusNode,
   });
   final MihomoSession session;
   final bool selected;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -921,6 +1127,7 @@ class _RuleNavCard extends StatelessWidget {
       label: '规则',
       selected: selected,
       onTap: onTap,
+      focusNode: focusNode,
       badge: ActiveValueListenableBuilder<int>(
         valueListenable: session.ruleCount,
         builder: (_, count, _) => count == 0
@@ -1002,12 +1209,15 @@ class _CardSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: AppPanelSurface(
-        outlined: !selected,
-        selected: selected,
-        child: child,
+    return AppFocusHighlight(
+      borderRadius: kAppPanelRadius,
+      child: SizedBox(
+        height: height,
+        child: AppPanelSurface(
+          outlined: !selected,
+          selected: selected,
+          child: child,
+        ),
       ),
     );
   }
@@ -1020,6 +1230,7 @@ class _NavCard extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.badge,
+    this.focusNode,
   });
 
   final IconData icon;
@@ -1027,6 +1238,7 @@ class _NavCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final Widget? badge;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1037,6 +1249,7 @@ class _NavCard extends StatelessWidget {
       height: 110,
       selected: selected,
       child: InkWell(
+        focusNode: focusNode,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -1177,17 +1390,20 @@ class _BodyTransitionIndexedStackState
             Offstage(
               key: ValueKey(i),
               offstage: i != widget.index,
-              child: _DeferredPageTheme(
-                active: routeActive && i == widget.index,
-                child: HeroMode(
-                  enabled: i == widget.index,
-                  child: TickerMode(
-                    enabled: routeActive && i == widget.index,
-                    child: AppPageTransitionScope(
-                      animation: i == widget.index && animation != null
-                          ? animation
-                          : _complete,
-                      child: widget.children[i],
+              child: ExcludeFocus(
+                excluding: i != widget.index,
+                child: _DeferredPageTheme(
+                  active: routeActive && i == widget.index,
+                  child: HeroMode(
+                    enabled: i == widget.index,
+                    child: TickerMode(
+                      enabled: routeActive && i == widget.index,
+                      child: AppPageTransitionScope(
+                        animation: i == widget.index && animation != null
+                            ? animation
+                            : _complete,
+                        child: widget.children[i],
+                      ),
                     ),
                   ),
                 ),
@@ -1232,14 +1448,17 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
       children: [
         for (var i = 0; i < widget.children.length; i++)
           if (_visited.contains(i))
-            _DeferredPageTheme(
+            ExcludeFocus(
               key: ValueKey(i),
-              active: routeActive && i == widget.index,
-              child: HeroMode(
-                enabled: i == widget.index,
-                child: TickerMode(
-                  enabled: routeActive && i == widget.index,
-                  child: widget.children[i],
+              excluding: i != widget.index,
+              child: _DeferredPageTheme(
+                active: routeActive && i == widget.index,
+                child: HeroMode(
+                  enabled: i == widget.index,
+                  child: TickerMode(
+                    enabled: routeActive && i == widget.index,
+                    child: widget.children[i],
+                  ),
                 ),
               ),
             )
@@ -1251,11 +1470,7 @@ class _LazyIndexedStackState extends State<_LazyIndexedStack> {
 }
 
 class _DeferredPageTheme extends StatefulWidget {
-  const _DeferredPageTheme({
-    super.key,
-    required this.active,
-    required this.child,
-  });
+  const _DeferredPageTheme({required this.active, required this.child});
 
   final bool active;
   final Widget child;

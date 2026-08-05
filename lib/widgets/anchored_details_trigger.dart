@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../gamepad_navigation.dart';
 import 'anchored_details_overlay.dart';
 import 'transient_animation.dart';
 
@@ -18,18 +19,22 @@ class AnchoredDetailsTrigger extends StatefulWidget {
     required this.barrierLabel,
     required this.semanticsHint,
     required this.detailsBuilder,
+    this.onActivate,
     this.excludedTopRightSize = Size.zero,
     this.maxDetailsWidth = 320,
     this.requireFullyVisible = false,
+    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
   });
 
   final Widget child;
   final String barrierLabel;
   final String semanticsHint;
   final WidgetBuilder detailsBuilder;
+  final VoidCallback? onActivate;
   final Size excludedTopRightSize;
   final double maxDetailsWidth;
   final bool requireFullyVisible;
+  final BorderRadius borderRadius;
 
   @override
   State<AnchoredDetailsTrigger> createState() => _AnchoredDetailsTriggerState();
@@ -41,6 +46,7 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
   ({Rect rect, bool fullyVisible})? _pendingGeometry;
   bool _open = false;
   bool _pressing = false;
+  bool _focused = false;
 
   @override
   void dispose() {
@@ -162,6 +168,15 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
     _setPressing(false);
   }
 
+  void _activate() {
+    final callback = widget.onActivate;
+    if (callback != null) {
+      callback();
+    } else {
+      unawaited(_showDetails());
+    }
+  }
+
   Widget _gestureDetector({required Widget child}) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -216,21 +231,38 @@ class _AnchoredDetailsTriggerState extends State<AnchoredDetailsTrigger> {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      hint: widget.semanticsHint,
-      onLongPress: _showDetails,
-      child: TransientAnimatedScale(
-        scale: _pressing ? 1.015 : 1,
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        child: RepaintBoundary(
-          child: KeyedSubtree(
-            key: _childKey,
-            child: IgnorePointer(
-              ignoring: _open,
-              child: Opacity(
-                opacity: _open ? 0 : 1,
-                child: _interactiveChild(),
+    return FocusableActionDetector(
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) => _activate(),
+        ),
+      },
+      onFocusChange: (value) {
+        if (mounted && value != _focused) {
+          setState(() => _focused = value);
+        }
+      },
+      child: AppFocusHighlight(
+        focused: _focused,
+        borderRadius: widget.borderRadius,
+        child: Semantics(
+          hint: widget.semanticsHint,
+          onTap: _activate,
+          onLongPress: _showDetails,
+          child: TransientAnimatedScale(
+            scale: _pressing ? 1.015 : 1,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            child: RepaintBoundary(
+              child: KeyedSubtree(
+                key: _childKey,
+                child: IgnorePointer(
+                  ignoring: _open,
+                  child: Opacity(
+                    opacity: _open ? 0 : 1,
+                    child: _interactiveChild(),
+                  ),
+                ),
               ),
             ),
           ),
