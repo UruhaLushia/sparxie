@@ -531,25 +531,23 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               child: Container(
                 width: 300,
                 color: surfaceTheme.chromeColor(scheme.surface),
-                child: SafeArea(
-                  child: FocusScope(
-                    node: _cardNavigationFocusNode,
-                    child: _NavCardGrid(
-                      store: widget.store,
-                      session: widget.session,
-                      destinations: destinations,
-                      selectedIndex: effectiveIndex,
-                      focusNodeFor: _cardFocusNode,
-                      onSelected: (i) => _selectPage(i, destinations),
-                      onKernelTap: () => _selectPage(-1, destinations),
-                      kernelSelected: effectiveIndex == -1,
-                      onConnectionsTap: () => _selectPage(-2, destinations),
-                      connectionsSelected: effectiveIndex == -2,
-                      supportsRules: supportsRules,
-                      onRulesTap: () => _selectPage(-3, destinations),
-                      rulesSelected: effectiveIndex == -3,
-                      onBackendSettingsTap: _openBackendSettings,
-                    ),
+                child: FocusScope(
+                  node: _cardNavigationFocusNode,
+                  child: _NavCardGrid(
+                    store: widget.store,
+                    session: widget.session,
+                    destinations: destinations,
+                    selectedIndex: effectiveIndex,
+                    focusNodeFor: _cardFocusNode,
+                    onSelected: (i) => _selectPage(i, destinations),
+                    onKernelTap: () => _selectPage(-1, destinations),
+                    kernelSelected: effectiveIndex == -1,
+                    onConnectionsTap: () => _selectPage(-2, destinations),
+                    connectionsSelected: effectiveIndex == -2,
+                    supportsRules: supportsRules,
+                    onRulesTap: () => _selectPage(-3, destinations),
+                    rulesSelected: effectiveIndex == -3,
+                    onBackendSettingsTap: _openBackendSettings,
                   ),
                 ),
               ),
@@ -742,7 +740,7 @@ class _NavCardGrid extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.fromLTRB(
           16,
-          16,
+          16 + MediaQuery.paddingOf(context).top,
           16,
           24 + MediaQuery.paddingOf(context).bottom,
         ),
@@ -948,48 +946,45 @@ class _StatusHeroCard extends StatelessWidget {
                     valueListenable: session.supportsMemory,
                     builder: (_, supportsMemory, _) {
                       if (!supportsMemory) return const SizedBox.shrink();
-                      return Tooltip(
-                        message: '后端核心 RSS，不是 Sparxie 客户端内存',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.memory_outlined,
-                              size: 16,
-                              color: colors.accent.withValues(
-                                alpha: selected ? 0.72 : 1,
-                              ),
+                      return Row(
+                        children: [
+                          Icon(
+                            Icons.memory_outlined,
+                            size: 16,
+                            color: colors.accent.withValues(
+                              alpha: selected ? 0.72 : 1,
                             ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: RepaintBoundary(
-                                child:
-                                    ActiveValueListenableBuilder<
-                                      rust.MemorySample
-                                    >(
-                                      valueListenable: session.memory,
-                                      pauseWhileScrolling: true,
-                                      builder: (_, sample, _) {
-                                        final text = sample.goroutines > 0
-                                            ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
-                                            : formatBytes(sample.inuse);
-                                        return Text(
-                                          text,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall
-                                              ?.copyWith(
-                                                color: colors.foreground,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        );
-                                      },
-                                    ),
-                              ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: RepaintBoundary(
+                              child:
+                                  ActiveValueListenableBuilder<
+                                    rust.MemorySample
+                                  >(
+                                    valueListenable: session.memory,
+                                    pauseWhileScrolling: true,
+                                    builder: (_, sample, _) {
+                                      final text = sample.goroutines > 0
+                                          ? '${formatBytes(sample.inuse)} · 协程 ${sample.goroutines}'
+                                          : formatBytes(sample.inuse);
+                                      return Text(
+                                        text,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              color: colors.foreground,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      );
+                                    },
+                                  ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       );
                     },
                   ),
