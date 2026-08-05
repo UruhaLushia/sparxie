@@ -37,6 +37,7 @@ class SettingsDrawerSheet extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final width = MediaQuery.sizeOf(context).width.clamp(0, 420).toDouble();
     return SafeArea(
+      minimum: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Material(
@@ -61,6 +62,8 @@ class SettingsDrawerSheet extends StatelessWidget {
                   child: ListenableBuilder(
                     listenable: listenable,
                     builder: (context, _) => ListView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       children: childrenBuilder(context),
                     ),
