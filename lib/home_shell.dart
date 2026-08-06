@@ -303,7 +303,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   void _selectPage(int index, List<AppNavDestination> destinations) {
     if (_index != index) setState(() => _index = index);
-    if (FocusManager.instance.highlightMode == FocusHighlightMode.traditional) {
+    if (isDirectionalNavigationActive) {
       _focusPage(_pageName(index, destinations));
     }
   }

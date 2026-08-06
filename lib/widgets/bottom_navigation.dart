@@ -1387,7 +1387,14 @@ class _CapsuleNavItemState extends State<_CapsuleNavItem> {
   @override
   void initState() {
     super.initState();
+    directionalNavigationMode.addListener(_handleDirectionalModeChange);
     FocusManager.instance.addHighlightModeListener(_handleHighlightModeChange);
+  }
+
+  void _handleDirectionalModeChange() {
+    if (mounted && _statesController.value.contains(WidgetState.focused)) {
+      setState(() {});
+    }
   }
 
   void _handleHighlightModeChange(FocusHighlightMode _) {
@@ -1401,6 +1408,7 @@ class _CapsuleNavItemState extends State<_CapsuleNavItem> {
     FocusManager.instance.removeHighlightModeListener(
       _handleHighlightModeChange,
     );
+    directionalNavigationMode.removeListener(_handleDirectionalModeChange);
     _statesController.dispose();
     super.dispose();
   }
@@ -1409,6 +1417,7 @@ class _CapsuleNavItemState extends State<_CapsuleNavItem> {
     final style = widget.styleConfig;
     final focused =
         states.contains(WidgetState.focused) &&
+        isDirectionalNavigationActive &&
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     final baseWidth = widget.selected ? widget.itemWidth : 42.0;
     return Center(

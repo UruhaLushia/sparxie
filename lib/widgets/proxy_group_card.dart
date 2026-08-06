@@ -250,11 +250,16 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   void initState() {
     super.initState();
     _focusNode.addListener(_handleFocusChange);
+    directionalNavigationMode.addListener(_handleDirectionalModeChange);
     FocusManager.instance.addHighlightModeListener(_handleHighlightModeChange);
   }
 
   void _handleFocusChange() {
     if (mounted) setState(() {});
+  }
+
+  void _handleDirectionalModeChange() {
+    if (mounted && _focusNode.hasFocus) setState(() {});
   }
 
   void _handleHighlightModeChange(FocusHighlightMode _) {
@@ -266,6 +271,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     FocusManager.instance.removeHighlightModeListener(
       _handleHighlightModeChange,
     );
+    directionalNavigationMode.removeListener(_handleDirectionalModeChange);
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     super.dispose();
@@ -294,6 +300,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     final style = _styleFor(context, widget.group.name, widget.colored);
     final showFocus =
         _focusNode.hasFocus &&
+        isDirectionalNavigationActive &&
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     return FocusableActionDetector(
       focusNode: _focusNode,

@@ -42,6 +42,21 @@ class ActivationPressEndIntent extends Intent {
 
 const gamepadLongPressDuration = Duration(milliseconds: 750);
 
+final directionalNavigationMode = ValueNotifier(false);
+
+bool get isDirectionalNavigationActive => directionalNavigationMode.value;
+
+void activateDirectionalNavigation() {
+  directionalNavigationMode.value = true;
+  FocusManager.instance.highlightStrategy =
+      FocusHighlightStrategy.alwaysTraditional;
+}
+
+void deactivateDirectionalNavigation() {
+  directionalNavigationMode.value = false;
+  FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;
+}
+
 class NavigationInputController {
   static const _scrollDeadzone = 0.16;
   static const _scrollSpeed = 900.0;
@@ -263,8 +278,7 @@ class DirectionalFocusNavigatorObserver extends NavigatorObserver {
     if (route is! ModalRoute<dynamic>) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = route.subtreeContext;
-      if (FocusManager.instance.highlightMode !=
-          FocusHighlightMode.traditional) {
+      if (!isDirectionalNavigationActive) {
         return;
       }
       if (!route.isCurrent || context == null || !context.mounted) {
@@ -400,6 +414,7 @@ class AppFocusHighlight extends StatelessWidget {
     Widget highlight(bool hasFocus) {
       final showHighlight =
           hasFocus &&
+          isDirectionalNavigationActive &&
           FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
       return DecoratedBox(
         decoration: BoxDecoration(
@@ -422,15 +437,20 @@ class AppFocusHighlight extends StatelessWidget {
       );
     }
 
-    final forcedFocus = focused;
-    if (forcedFocus != null) return highlight(forcedFocus);
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      includeSemantics: false,
-      child: Builder(
-        builder: (context) => highlight(Focus.of(context).hasFocus),
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: directionalNavigationMode,
+      builder: (context, _, _) {
+        final forcedFocus = focused;
+        if (forcedFocus != null) return highlight(forcedFocus);
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          includeSemantics: false,
+          child: Builder(
+            builder: (context) => highlight(Focus.of(context).hasFocus),
+          ),
+        );
+      },
     );
   }
 }

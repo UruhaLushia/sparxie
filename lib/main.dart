@@ -342,8 +342,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   }
 
   bool _handleGamepadIntent(GamepadActivator _, Intent intent) {
-    FocusManager.instance.highlightStrategy =
-        FocusHighlightStrategy.alwaysTraditional;
+    activateDirectionalNavigation();
     if (intent is GamepadDirectionalFocusIntent) {
       _moveFocus(intent.direction, allowFromEditable: true);
       return false;
@@ -362,12 +361,11 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   void _handleGamepadEvent(NormalizedGamepadEvent event) {
     final button = event.button;
     if (button == GamepadButton.a) {
-      FocusManager.instance.highlightStrategy =
-          FocusHighlightStrategy.alwaysTraditional;
       final source = (event.gamepadId, button);
       if (event.value == 0) {
         _navigationInputController.release(source);
       } else {
+        activateDirectionalNavigation();
         _navigationInputController.press(source);
       }
       return;
@@ -377,13 +375,12 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     if (axis != GamepadAxis.rightStickX && axis != GamepadAxis.rightStickY) {
       return;
     }
-    FocusManager.instance.highlightStrategy =
-        FocusHighlightStrategy.alwaysTraditional;
     final value =
         axis == GamepadAxis.rightStickY &&
             defaultTargetPlatform == TargetPlatform.android
         ? -event.value
         : event.value;
+    if (value.abs() > 0.16) activateDirectionalNavigation();
     _navigationInputController.updateScrollAxis(
       horizontal: axis == GamepadAxis.rightStickX ? value : null,
       vertical: axis == GamepadAxis.rightStickY ? value : null,
@@ -405,12 +402,11 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       return false;
     }
 
-    FocusManager.instance.highlightStrategy =
-        FocusHighlightStrategy.alwaysTraditional;
     final source = event.physicalKey;
     if (event is KeyUpEvent) {
       _navigationInputController.release(source);
     } else if (event is KeyDownEvent) {
+      activateDirectionalNavigation();
       _navigationInputController.press(source);
     }
     return true;
@@ -425,9 +421,14 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       return _dismissTextInput() || _requestBackNavigation();
     }
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      activateDirectionalNavigation();
+      return false;
+    }
     if (action == GamepadNavigationAction.previousPage ||
         action == GamepadNavigationAction.nextPage) {
       if (event is! KeyDownEvent) return true;
+      activateDirectionalNavigation();
       _homeShellKey.currentState?._switchNavigation(
         action == GamepadNavigationAction.previousPage ? -1 : 1,
       );
@@ -441,15 +442,14 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       _ => null,
     };
     if (direction == null) return false;
+    activateDirectionalNavigation();
     if (_isSliderFocused() &&
         (direction == TraversalDirection.left ||
             direction == TraversalDirection.right)) {
       return false;
     }
-    return _moveFocus(
-      direction,
-      allowFromEditable: _usesDirectionalNavigation(),
-    );
+    _moveFocus(direction, allowFromEditable: _usesDirectionalNavigation());
+    return true;
   }
 
   bool _moveFocus(
@@ -496,7 +496,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;
+    deactivateDirectionalNavigation();
     if (event.kind == PointerDeviceKind.mouse &&
         event.buttons & kBackMouseButton != 0) {
       _requestBackNavigation();
