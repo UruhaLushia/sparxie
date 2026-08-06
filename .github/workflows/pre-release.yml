@@ -57,6 +57,15 @@ jobs:
           prerelease: true
           files: release/*
 
+  cleanup-cache:
+    name: Cache GC
+    if: always()
+    needs: build
+    uses: ./.github/workflows/cleanup-cache.yml
+    with:
+      run_id: ${{ github.run_id }}
+    secrets: inherit
+
   publish-altstore-source:
     name: Publish AltStore source
     needs: publish

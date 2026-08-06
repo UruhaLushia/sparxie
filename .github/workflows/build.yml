@@ -66,3 +66,18 @@ jobs:
     with:
       update_channel: ${{ inputs.update_channel }}
       include_xcarchive: ${{ inputs.include_ios_xcarchive }}
+
+  cleanup-cache:
+    name: Cache GC
+    if: always()
+    needs:
+      - verify-generated-bindings
+      - android
+      - linux
+      - windows
+      - macos
+      - ios
+    uses: ./.github/workflows/cleanup-cache.yml
+    with:
+      run_id: ${{ github.run_id }}
+    secrets: inherit

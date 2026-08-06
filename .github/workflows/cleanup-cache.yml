@@ -1,0 +1,127 @@
+name: Cache GC
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: Caller workflow run id used to keep caches created by this run
+        required: true
+        type: string
+      cache_key_pattern:
+        description: Regex matched against cache keys; empty matches all caches
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  actions: write
+
+concurrency:
+  group: cleanup-cache
+  cancel-in-progress: false
+
+jobs:
+  cleanup-cache:
+    name: Delete superseded caches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete superseded caches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CALLER_RUN_ID: ${{ inputs.run_id }}
+          CACHE_KEY_PATTERN: ${{ inputs.cache_key_pattern }}
+        run: |-
+          set -euo pipefail
+
+          caller_created="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CALLER_RUN_ID" --jq '.created_at'
+          )"
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --paginate \
+            --jq '.workflow_runs[] | [.id, .name] | @tsv' > "$RUNNER_TEMP/active-runs.tsv"
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/caches?per_page=100" --paginate \
+            --jq '.actions_caches[] | [.id, .ref, .created_at, .last_accessed_at, .size_in_bytes, .key] | @tsv' > "$RUNNER_TEMP/caches.tsv"
+
+          python3 - \
+            "$GITHUB_REPOSITORY" \
+            "$CALLER_RUN_ID" \
+            "$caller_created" \
+            "$CACHE_KEY_PATTERN" \
+            "$RUNNER_TEMP/caches.tsv" \
+            "$RUNNER_TEMP/active-runs.tsv" <<'EOF'
+          import datetime
+          import re
+          import subprocess
+          import sys
+
+          def parse_time(value):
+              return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+          repository = sys.argv[1]
+          caller_run_id = sys.argv[2]
+          caller_created = parse_time(sys.argv[3])
+          pattern = sys.argv[4]
+          cache_path = sys.argv[5]
+          runs_path = sys.argv[6]
+
+          with open(runs_path, encoding="utf-8") as runs_file:
+              for line in runs_file:
+                  run_id, name = line.rstrip("\n").split("\t")
+                  if run_id == caller_run_id or name == "Cache GC":
+                      continue
+                  print("skip cache GC while another workflow run is active")
+                  sys.exit(0)
+
+          rows = []
+          with open(cache_path, encoding="utf-8") as cache_file:
+              for line in cache_file:
+                  cache_id, ref, created_at, accessed_at, size, key = line.rstrip("\n").split("\t")
+                  if pattern and re.search(pattern, key) is None:
+                      continue
+                  family = key
+                  while True:
+                      stripped = re.sub(r"-[0-9a-f]{16,}$", "", family)
+                      if stripped == family:
+                          break
+                      family = stripped
+                  rows.append({
+                      "id": cache_id,
+                      "ref": ref,
+                      "created": created_at,
+                      "created_at": parse_time(created_at),
+                      "accessed": accessed_at,
+                      "size": int(size),
+                      "key": key,
+                      "family": family,
+                  })
+
+          newest = {}
+          for row in rows:
+              group = (row["ref"], row["family"])
+              if group not in newest or row["created_at"] > newest[group]["created_at"]:
+                  newest[group] = row
+
+          protected_ids = {row["id"] for row in rows if row["created_at"] >= caller_created}
+          doomed_ids = {
+              row["id"]
+              for row in rows
+              if row["id"] not in protected_ids and newest[(row["ref"], row["family"])] is not row
+          }
+
+          kept = [row for row in rows if row["id"] not in doomed_ids]
+          total = sum(row["size"] for row in kept)
+
+          for row in rows:
+              if row["id"] not in doomed_ids:
+                  continue
+              print(f"delete {row['size'] >> 20}MB {row['key']} ({row['ref']})")
+              subprocess.run(
+                  ["gh", "api", "-X", "DELETE", f"repos/{repository}/actions/caches/{row['id']}"],
+                  check=False,
+              )
+
+          kept_count = len(rows) - len(doomed_ids)
+          print(f"kept {kept_count} caches, {total >> 20}MB total")
+          EOF

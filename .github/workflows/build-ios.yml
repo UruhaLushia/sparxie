@@ -55,6 +55,7 @@ jobs:
           channel: stable
           cache: false
           pub-cache: true
+          pub-cache-key: 'pub-ios-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
 
       - uses: dtolnay/rust-toolchain@master
         with:

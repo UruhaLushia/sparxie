@@ -18,7 +18,6 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       update_channel: stable
-      include_ios_xcarchive: true
     secrets: inherit
 
   publish:
@@ -44,12 +43,13 @@ jobs:
           files: release/*
           generate_release_notes: true
 
-  push-testflight:
-    name: Push TestFlight
+  cleanup-cache:
+    name: Cache GC
+    if: always()
     needs: build
-    uses: ./.github/workflows/publish-testflight.yml
+    uses: ./.github/workflows/cleanup-cache.yml
     with:
-      source_path: .github/workflows/release.yml
+      run_id: ${{ github.run_id }}
     secrets: inherit
 
   publish-altstore-source:
