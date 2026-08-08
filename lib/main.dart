@@ -25,7 +25,7 @@ import 'gamepad_navigation.dart';
 import 'imported_fonts.dart';
 import 'layout_breakpoints.dart';
 import 'rust_api.dart' as rust;
-import 'screens/core_config_screen.dart';
+import 'screens/remote_core_config_screen.dart';
 import 'screens/connections_screen.dart';
 import 'screens/core_actions_screen.dart';
 import 'screens/dashboard_screen.dart';

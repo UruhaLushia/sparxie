@@ -290,7 +290,7 @@ pub struct RulesSummary {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct CoreConfig {
+pub struct ControllerConfig {
     pub mode: Option<String>,
     pub mode_options: Vec<String>,
     pub log_level: Option<String>,

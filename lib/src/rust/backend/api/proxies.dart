@@ -9,66 +9,66 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<String> groups({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiProxiesGroups(target: target);
+Future<String> controllerGroups({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiProxiesControllerGroups(target: target);
 
-Future<String> proxies({
+Future<String> controllerProxies({
   required BackendTarget target,
   String? namePattern,
   String? typePattern,
   required bool groupsOnly,
-}) => RustLib.instance.api.crateBackendApiProxiesProxies(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerProxies(
   target: target,
   namePattern: namePattern,
   typePattern: typePattern,
   groupsOnly: groupsOnly,
 );
 
-Future<String> proxyDetail({
+Future<String> controllerProxyDetail({
   required BackendTarget target,
   required String name,
-}) => RustLib.instance.api.crateBackendApiProxiesProxyDetail(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerProxyDetail(
   target: target,
   name: name,
 );
 
-Future<void> selectProxy({
+Future<void> controllerSelectProxy({
   required BackendTarget target,
   required String group,
   required String name,
-}) => RustLib.instance.api.crateBackendApiProxiesSelectProxy(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerSelectProxy(
   target: target,
   group: group,
   name: name,
 );
 
-Future<void> unfixProxy({
+Future<void> controllerUnfixProxy({
   required BackendTarget target,
   required String name,
-}) => RustLib.instance.api.crateBackendApiProxiesUnfixProxy(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerUnfixProxy(
   target: target,
   name: name,
 );
 
-Future<ProxyCatalog> proxyCatalog({
+Future<ProxyCatalog> controllerProxyCatalog({
   required BackendTarget target,
   required bool includeHidden,
   required bool resolveProviderCurrentDelay,
   required String filter,
-}) => RustLib.instance.api.crateBackendApiProxiesProxyCatalog(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerProxyCatalog(
   target: target,
   includeHidden: includeHidden,
   resolveProviderCurrentDelay: resolveProviderCurrentDelay,
   filter: filter,
 );
 
-Future<List<ProxyMemberEntry>> proxyGroupMembers({
+Future<List<ProxyMemberEntry>> controllerProxyGroupMembers({
   required BackendTarget target,
   required String group,
   required int offset,
   required int limit,
   required ProxyMemberSort memberSort,
-}) => RustLib.instance.api.crateBackendApiProxiesProxyGroupMembers(
+}) => RustLib.instance.api.crateBackendApiProxiesControllerProxyGroupMembers(
   target: target,
   group: group,
   offset: offset,

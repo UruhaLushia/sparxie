@@ -9,70 +9,74 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<String> proxyProviders({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiProvidersProxyProviders(target: target);
+Future<String> controllerProxyProviders({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiProvidersControllerProxyProviders(
+      target: target,
+    );
 
-Future<List<ProxyProviderEntry>> proxyProviderCatalog({
+Future<List<ProxyProviderEntry>> controllerProxyProviderCatalog({
   required BackendTarget target,
-}) => RustLib.instance.api.crateBackendApiProvidersProxyProviderCatalog(
-  target: target,
-);
+}) => RustLib.instance.api
+    .crateBackendApiProvidersControllerProxyProviderCatalog(target: target);
 
-Future<void> proxyProviderUpdate({
+Future<void> controllerProxyProviderUpdate({
   required BackendTarget target,
   required String name,
-}) => RustLib.instance.api.crateBackendApiProvidersProxyProviderUpdate(
+}) =>
+    RustLib.instance.api.crateBackendApiProvidersControllerProxyProviderUpdate(
+      target: target,
+      name: name,
+    );
+
+Future<void> controllerProxyProviderHealthcheck({
+  required BackendTarget target,
+  required String name,
+}) => RustLib.instance.api
+    .crateBackendApiProvidersControllerProxyProviderHealthcheck(
+      target: target,
+      name: name,
+    );
+
+Future<String> controllerRuleProviders({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiProvidersControllerRuleProviders(
+      target: target,
+    );
+
+Future<List<RuleProviderEntry>> controllerRuleProviderCatalog({
+  required BackendTarget target,
+}) => RustLib.instance.api
+    .crateBackendApiProvidersControllerRuleProviderCatalog(target: target);
+
+Future<void> controllerRuleProviderUpdate({
+  required BackendTarget target,
+  required String name,
+}) => RustLib.instance.api.crateBackendApiProvidersControllerRuleProviderUpdate(
   target: target,
   name: name,
 );
 
-Future<void> proxyProviderHealthcheck({
-  required BackendTarget target,
-  required String name,
-}) => RustLib.instance.api.crateBackendApiProvidersProxyProviderHealthcheck(
-  target: target,
-  name: name,
-);
-
-Future<String> ruleProviders({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiProvidersRuleProviders(target: target);
-
-Future<List<RuleProviderEntry>> ruleProviderCatalog({
-  required BackendTarget target,
-}) => RustLib.instance.api.crateBackendApiProvidersRuleProviderCatalog(
-  target: target,
-);
-
-Future<void> ruleProviderUpdate({
-  required BackendTarget target,
-  required String name,
-}) => RustLib.instance.api.crateBackendApiProvidersRuleProviderUpdate(
-  target: target,
-  name: name,
-);
-
-Future<String> storageGet({
+Future<String> controllerStorageGet({
   required BackendTarget target,
   required String key,
-}) => RustLib.instance.api.crateBackendApiProvidersStorageGet(
+}) => RustLib.instance.api.crateBackendApiProvidersControllerStorageGet(
   target: target,
   key: key,
 );
 
-Future<void> storageSet({
+Future<void> controllerStorageSet({
   required BackendTarget target,
   required String key,
   required String value,
-}) => RustLib.instance.api.crateBackendApiProvidersStorageSet(
+}) => RustLib.instance.api.crateBackendApiProvidersControllerStorageSet(
   target: target,
   key: key,
   value: value,
 );
 
-Future<void> storageDelete({
+Future<void> controllerStorageDelete({
   required BackendTarget target,
   required String key,
-}) => RustLib.instance.api.crateBackendApiProvidersStorageDelete(
+}) => RustLib.instance.api.crateBackendApiProvidersControllerStorageDelete(
   target: target,
   key: key,
 );

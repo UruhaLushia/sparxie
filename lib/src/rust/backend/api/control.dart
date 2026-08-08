@@ -11,106 +11,126 @@ import 'types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `bool_value`, `core_config_from_value`, `patch_config_value`, `string_list_value`, `string_value`, `u32_value`
 
-Future<CoreConfig> configs({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlConfigs(target: target);
+Future<ControllerConfig> controllerConfigs({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiControlControllerConfigs(
+      target: target,
+    );
 
-Future<String> configMode({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlConfigMode(target: target);
+Future<String> controllerConfigMode({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerConfigMode(target: target);
 
-Future<void> setConfigMode({
+Future<void> controllerSetConfigMode({
   required BackendTarget target,
   required String mode,
-}) => RustLib.instance.api.crateBackendApiControlSetConfigMode(
+}) => RustLib.instance.api.crateBackendApiControlControllerSetConfigMode(
   target: target,
   mode: mode,
 );
 
-Future<void> setConfigLogLevel({
+Future<void> controllerSetConfigLogLevel({
   required BackendTarget target,
   required String level,
-}) => RustLib.instance.api.crateBackendApiControlSetConfigLogLevel(
+}) => RustLib.instance.api.crateBackendApiControlControllerSetConfigLogLevel(
   target: target,
   level: level,
 );
 
-Future<void> setConfigTunEnabled({
+Future<void> controllerSetConfigTunEnabled({
   required BackendTarget target,
   required bool enabled,
-}) => RustLib.instance.api.crateBackendApiControlSetConfigTunEnabled(
+}) => RustLib.instance.api.crateBackendApiControlControllerSetConfigTunEnabled(
   target: target,
   enabled: enabled,
 );
 
-Future<void> setConfigBool({
+Future<void> controllerSetConfigBool({
   required BackendTarget target,
   required String key,
   required bool value,
-}) => RustLib.instance.api.crateBackendApiControlSetConfigBool(
+}) => RustLib.instance.api.crateBackendApiControlControllerSetConfigBool(
   target: target,
   key: key,
   value: value,
 );
 
-Future<void> setConfigPort({
+Future<void> controllerSetConfigPort({
   required BackendTarget target,
   required String key,
   required int value,
-}) => RustLib.instance.api.crateBackendApiControlSetConfigPort(
+}) => RustLib.instance.api.crateBackendApiControlControllerSetConfigPort(
   target: target,
   key: key,
   value: value,
 );
 
-Future<void> reloadConfigs({
+Future<void> controllerReloadConfigs({
   required BackendTarget target,
   String? path,
   String? payload,
   required bool force,
-}) => RustLib.instance.api.crateBackendApiControlReloadConfigs(
+}) => RustLib.instance.api.crateBackendApiControlControllerReloadConfigs(
   target: target,
   path: path,
   payload: payload,
   force: force,
 );
 
-Future<void> updateGeo({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlUpdateGeo(target: target);
+Future<void> controllerUpdateGeo({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerUpdateGeo(target: target);
 
-Future<void> flushFakeip({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlFlushFakeip(target: target);
+Future<void> controllerFlushFakeip({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerFlushFakeip(target: target);
 
-Future<void> flushDns({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlFlushDns(target: target);
+Future<void> controllerFlushDns({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerFlushDns(target: target);
 
-Future<String> dnsQuery({
+Future<String> controllerDnsQuery({
   required BackendTarget target,
   required String name,
   String? qtype,
-}) => RustLib.instance.api.crateBackendApiControlDnsQuery(
+}) => RustLib.instance.api.crateBackendApiControlControllerDnsQuery(
   target: target,
   name: name,
   qtype: qtype,
 );
 
-Future<void> upgradeCore({
+Future<void> controllerUpgradeCore({
   required BackendTarget target,
   required bool force,
-}) => RustLib.instance.api.crateBackendApiControlUpgradeCore(
+}) => RustLib.instance.api.crateBackendApiControlControllerUpgradeCore(
   target: target,
   force: force,
 );
 
-Future<void> upgradeUi({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlUpgradeUi(target: target);
+Future<void> controllerUpgradeUi({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerUpgradeUi(target: target);
 
-Future<void> upgradeGeo({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlUpgradeGeo(target: target);
+Future<void> controllerUpgradeGeo({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerUpgradeGeo(target: target);
 
-Future<void> restartCore({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlRestartCore(target: target);
+Future<void> controllerRestartCore({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerRestartCore(target: target);
 
-Future<String> version({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlVersion(target: target);
+Future<String> controllerVersion({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiControlControllerVersion(target: target);
 
-Future<VersionInfo> versionInfo({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiControlVersionInfo(target: target);
+Future<VersionInfo> controllerVersionInfo({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiControlControllerVersionInfo(
+      target: target,
+    );

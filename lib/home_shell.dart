@@ -321,7 +321,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         prefs: widget.prefs,
         session: widget.session,
       ),
-      '核心配置' => CoreConfigScreen(store: widget.store, prefs: widget.prefs),
+      '核心配置' => RemoteCoreConfigScreen(
+        store: widget.store,
+        prefs: widget.prefs,
+      ),
       '外部资源' => ResourcesScreen(store: widget.store, prefs: widget.prefs),
       '日志' => LogsScreen(
         store: widget.store,
@@ -502,7 +505,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final Widget mainArea = switch (effectiveIndex) {
       -1 => _focusablePage(
         '核心配置',
-        CoreConfigScreen(store: widget.store, prefs: widget.prefs),
+        RemoteCoreConfigScreen(store: widget.store, prefs: widget.prefs),
       ),
       -2 => _focusablePage(
         '连接',
@@ -663,8 +666,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ),
           onKernelTap: () => Navigator.of(context).push(
             AppPageRoute<void>(
-              builder: (_) =>
-                  CoreConfigScreen(store: widget.store, prefs: widget.prefs),
+              builder: (_) => RemoteCoreConfigScreen(
+                store: widget.store,
+                prefs: widget.prefs,
+              ),
             ),
           ),
           kernelSelected: false,

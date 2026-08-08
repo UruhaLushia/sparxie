@@ -129,7 +129,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionsTotals dco_decode_connections_totals(dynamic raw);
 
   @protected
-  CoreConfig dco_decode_core_config(dynamic raw);
+  ControllerConfig dco_decode_controller_config(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -417,7 +417,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionsTotals sse_decode_connections_totals(SseDeserializer deserializer);
 
   @protected
-  CoreConfig sse_decode_core_config(SseDeserializer deserializer);
+  ControllerConfig sse_decode_controller_config(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -776,7 +776,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_core_config(CoreConfig self, SseSerializer serializer);
+  void sse_encode_controller_config(
+    ControllerConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);

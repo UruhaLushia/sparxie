@@ -8,7 +8,7 @@ use crate::frb_generated::StreamSink;
 
 use super::{BackendTarget, BackendType, LogWindow, LogsFrame, MemorySample, TrafficSample};
 
-pub async fn traffic_stream(
+pub async fn controller_traffic_stream(
     target: BackendTarget,
     sink: StreamSink<TrafficSample>,
 ) -> Result<(), MihomoError> {
@@ -45,7 +45,7 @@ pub async fn traffic_stream(
     }
 }
 
-pub async fn memory_stream(
+pub async fn controller_memory_stream(
     target: BackendTarget,
     sink: StreamSink<MemorySample>,
 ) -> Result<(), MihomoError> {
@@ -79,7 +79,7 @@ pub async fn memory_stream(
     }
 }
 
-pub async fn logs_stream(
+pub async fn controller_logs_stream(
     target: BackendTarget,
     info_capacity: u32,
     sink: StreamSink<LogsFrame>,
@@ -134,7 +134,7 @@ pub async fn logs_stream(
     }
 }
 
-pub async fn fetch_logs_window(
+pub async fn controller_fetch_logs_window(
     target: BackendTarget,
     level: String,
     query: String,
@@ -185,7 +185,7 @@ pub async fn fetch_logs_window(
     }
 }
 
-pub async fn clear_logs(target: BackendTarget) {
+pub async fn controller_clear_logs(target: BackendTarget) {
     match target.backend_type {
         BackendType::Clash => crate::clash::state::logs::clear(target.clash()).await,
         BackendType::Surge => crate::surge::state::logs::clear(target.surge()).await,

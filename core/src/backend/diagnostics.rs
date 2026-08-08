@@ -38,7 +38,7 @@ pub struct StunTestProgress {
     pub nat_type_supported: bool,
 }
 
-pub async fn diagnostics_outbounds(
+pub async fn controller_diagnostics_outbounds(
     target: BackendTarget,
 ) -> Result<Vec<OutboundEntry>, MihomoError> {
     match target.backend_type {
@@ -47,7 +47,7 @@ pub async fn diagnostics_outbounds(
     }
 }
 
-pub async fn network_quality_test_stream(
+pub async fn controller_network_quality_test_stream(
     target: BackendTarget,
     config_url: String,
     outbound_tag: String,
@@ -73,7 +73,7 @@ pub async fn network_quality_test_stream(
     }
 }
 
-pub async fn stun_test_stream(
+pub async fn controller_stun_test_stream(
     target: BackendTarget,
     server: String,
     outbound_tag: String,

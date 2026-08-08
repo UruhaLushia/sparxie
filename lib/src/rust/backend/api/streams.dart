@@ -9,21 +9,26 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Stream<TrafficSample> trafficStream({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiStreamsTrafficStream(target: target);
+Stream<TrafficSample> controllerTrafficStream({
+  required BackendTarget target,
+}) => RustLib.instance.api.crateBackendApiStreamsControllerTrafficStream(
+  target: target,
+);
 
-Stream<MemorySample> memoryStream({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiStreamsMemoryStream(target: target);
+Stream<MemorySample> controllerMemoryStream({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiStreamsControllerMemoryStream(
+      target: target,
+    );
 
-Stream<LogsFrame> logsStream({
+Stream<LogsFrame> controllerLogsStream({
   required BackendTarget target,
   required int infoCapacity,
-}) => RustLib.instance.api.crateBackendApiStreamsLogsStream(
+}) => RustLib.instance.api.crateBackendApiStreamsControllerLogsStream(
   target: target,
   infoCapacity: infoCapacity,
 );
 
-Future<LogWindow> fetchLogsWindow({
+Future<LogWindow> controllerFetchLogsWindow({
   required BackendTarget target,
   required String level,
   required String query,
@@ -31,7 +36,7 @@ Future<LogWindow> fetchLogsWindow({
   required int limit,
   required bool fromEnd,
   required BigInt anchorId,
-}) => RustLib.instance.api.crateBackendApiStreamsFetchLogsWindow(
+}) => RustLib.instance.api.crateBackendApiStreamsControllerFetchLogsWindow(
   target: target,
   level: level,
   query: query,
@@ -41,5 +46,7 @@ Future<LogWindow> fetchLogsWindow({
   anchorId: anchorId,
 );
 
-Future<void> clearLogs({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiStreamsClearLogs(target: target);
+Future<void> controllerClearLogs({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiStreamsControllerClearLogs(target: target);

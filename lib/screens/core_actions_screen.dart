@@ -137,8 +137,10 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                 subtitle: '重新加载当前配置文件',
                                 id: 'reload',
                                 success: '已重载配置',
-                                run: (t) =>
-                                    rust.reloadConfigs(target: t, force: false),
+                                run: (t) => rust.controllerReloadConfigs(
+                                  target: t,
+                                  force: false,
+                                ),
                               ),
                               _action(
                                 icon: Icons.travel_explore,
@@ -146,7 +148,7 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                 subtitle: '刷新 GeoIP / GeoSite 数据库',
                                 id: 'geo',
                                 success: 'GeoData 已更新',
-                                run: (t) => rust.updateGeo(target: t),
+                                run: (t) => rust.controllerUpdateGeo(target: t),
                               ),
                               _action(
                                 icon: Icons.restart_alt,
@@ -154,7 +156,8 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                 subtitle: '重新启动后端核心',
                                 id: 'restart',
                                 success: '核心已重启',
-                                run: (t) => rust.restartCore(target: t),
+                                run: (t) =>
+                                    rust.controllerRestartCore(target: t),
                                 confirm: '确定重启核心？',
                               ),
                               _action(
@@ -163,8 +166,10 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                 subtitle: '下载并替换核心二进制',
                                 id: 'upgrade',
                                 success: '核心升级已触发',
-                                run: (t) =>
-                                    rust.upgradeCore(target: t, force: false),
+                                run: (t) => rust.controllerUpgradeCore(
+                                  target: t,
+                                  force: false,
+                                ),
                                 confirm: '确定升级核心？这会下载并替换核心二进制。',
                               ),
                             ],
@@ -185,7 +190,8 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                   subtitle: '清除核心的 DNS 解析缓存',
                                   id: 'dns',
                                   success: '已清空 DNS 缓存',
-                                  run: (t) => rust.flushDns(target: t),
+                                  run: (t) =>
+                                      rust.controllerFlushDns(target: t),
                                 ),
                               if (showFakeip)
                                 _action(
@@ -194,7 +200,8 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                   subtitle: '清除 FakeIP 映射池',
                                   id: 'fakeip',
                                   success: '已清空 FakeIP',
-                                  run: (t) => rust.flushFakeip(target: t),
+                                  run: (t) =>
+                                      rust.controllerFlushFakeip(target: t),
                                 ),
                             ],
                           ),

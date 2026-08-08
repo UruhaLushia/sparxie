@@ -66,7 +66,7 @@ class _OutboundModeCardState extends State<_OutboundModeCardBody> {
     final target = _target();
     if (target == null) return;
     try {
-      final configs = await rust.configs(target: target);
+      final configs = await rust.controllerConfigs(target: target);
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
       setState(() {
         _mode = configs.mode;
@@ -95,7 +95,7 @@ class _OutboundModeCardState extends State<_OutboundModeCardBody> {
       _saving = true;
     });
     try {
-      await rust.setConfigMode(target: target, mode: mode);
+      await rust.controllerSetConfigMode(target: target, mode: mode);
     } catch (e) {
       if (!mounted) return;
       setState(() => _mode = previous);
@@ -162,7 +162,7 @@ class _OutboundModeCardState extends State<_OutboundModeCardBody> {
 }
 
 List<String> _modeChoices(
-  rust.CoreConfig configs, {
+  rust.ControllerConfig configs, {
   required bool useDefaultModes,
 }) {
   const defaultModes = ['rule', 'global', 'direct'];

@@ -11,33 +11,33 @@ import 'target.dart';
 // These functions are ignored because they are not marked as `pub`: `unsupported`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
-Future<List<OutboundEntry>> diagnosticsOutbounds({
+Future<List<OutboundEntry>> controllerDiagnosticsOutbounds({
   required BackendTarget target,
-}) => RustLib.instance.api.crateBackendApiDiagnosticsDiagnosticsOutbounds(
-  target: target,
-);
+}) => RustLib.instance.api
+    .crateBackendApiDiagnosticsControllerDiagnosticsOutbounds(target: target);
 
-Stream<NetworkQualityProgress> networkQualityTestStream({
+Stream<NetworkQualityProgress> controllerNetworkQualityTestStream({
   required BackendTarget target,
   required String configUrl,
   required String outboundTag,
   required bool serial,
   required int maxRuntimeSeconds,
   required bool http3,
-}) => RustLib.instance.api.crateBackendApiDiagnosticsNetworkQualityTestStream(
-  target: target,
-  configUrl: configUrl,
-  outboundTag: outboundTag,
-  serial: serial,
-  maxRuntimeSeconds: maxRuntimeSeconds,
-  http3: http3,
-);
+}) => RustLib.instance.api
+    .crateBackendApiDiagnosticsControllerNetworkQualityTestStream(
+      target: target,
+      configUrl: configUrl,
+      outboundTag: outboundTag,
+      serial: serial,
+      maxRuntimeSeconds: maxRuntimeSeconds,
+      http3: http3,
+    );
 
-Stream<StunTestProgress> stunTestStream({
+Stream<StunTestProgress> controllerStunTestStream({
   required BackendTarget target,
   required String server,
   required String outboundTag,
-}) => RustLib.instance.api.crateBackendApiDiagnosticsStunTestStream(
+}) => RustLib.instance.api.crateBackendApiDiagnosticsControllerStunTestStream(
   target: target,
   server: server,
   outboundTag: outboundTag,

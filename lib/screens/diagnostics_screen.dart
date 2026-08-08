@@ -75,7 +75,7 @@ class _DiagnosticsScreenState extends State<_DiagnosticsView> {
 
   Future<void> _loadOutbounds(rust.BackendTarget target, String? key) async {
     try {
-      final list = await rust.diagnosticsOutbounds(target: target);
+      final list = await rust.controllerDiagnosticsOutbounds(target: target);
       if (!mounted || _targetKey != key) return;
       setState(() => _outbounds = list);
     } catch (_) {
@@ -197,7 +197,7 @@ class _QualityPanelState extends State<_QualityPanel> {
       _error = null;
     });
     _sub = rust
-        .networkQualityTestStream(
+        .controllerNetworkQualityTestStream(
           target: widget.target,
           configUrl: _configCtl.text.trim(),
           outboundTag: _outbound,
@@ -423,7 +423,7 @@ class _StunPanelState extends State<_StunPanel> {
       _error = null;
     });
     _sub = rust
-        .stunTestStream(
+        .controllerStunTestStream(
           target: widget.target,
           server: _serverCtl.text.trim(),
           outboundTag: _outbound,

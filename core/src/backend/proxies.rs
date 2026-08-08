@@ -2,7 +2,7 @@ use crate::MihomoError;
 
 use super::{BackendTarget, BackendType, ProxyCatalog, ProxyMemberEntry, ProxyMemberSort};
 
-pub async fn groups(target: BackendTarget) -> Result<String, MihomoError> {
+pub async fn controller_groups(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::groups(target.clash()).await,
         BackendType::Surge => {
@@ -30,7 +30,7 @@ pub async fn groups(target: BackendTarget) -> Result<String, MihomoError> {
     }
 }
 
-pub async fn proxies(
+pub async fn controller_proxies(
     target: BackendTarget,
     name_pattern: Option<String>,
     type_pattern: Option<String>,
@@ -60,7 +60,10 @@ pub async fn proxies(
     }
 }
 
-pub async fn proxy_detail(target: BackendTarget, name: String) -> Result<String, MihomoError> {
+pub async fn controller_proxy_detail(
+    target: BackendTarget,
+    name: String,
+) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::proxy_detail(target.clash(), name).await,
         BackendType::Surge => Ok(serde_json::json!({ "name": name }).to_string()),
@@ -68,7 +71,7 @@ pub async fn proxy_detail(target: BackendTarget, name: String) -> Result<String,
     }
 }
 
-pub async fn select_proxy(
+pub async fn controller_select_proxy(
     target: BackendTarget,
     group: String,
     name: String,
@@ -82,7 +85,10 @@ pub async fn select_proxy(
     }
 }
 
-pub async fn unfix_proxy(target: BackendTarget, name: String) -> Result<(), MihomoError> {
+pub async fn controller_unfix_proxy(
+    target: BackendTarget,
+    name: String,
+) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::unfix_proxy(target.clash(), name).await,
         BackendType::Surge => crate::surge::api::unfix_proxy(target.surge(), name).await,
@@ -90,7 +96,7 @@ pub async fn unfix_proxy(target: BackendTarget, name: String) -> Result<(), Miho
     }
 }
 
-pub async fn proxy_catalog(
+pub async fn controller_proxy_catalog(
     target: BackendTarget,
     include_hidden: bool,
     resolve_provider_current_delay: bool,
@@ -114,7 +120,7 @@ pub async fn proxy_catalog(
     }
 }
 
-pub async fn proxy_group_members(
+pub async fn controller_proxy_group_members(
     target: BackendTarget,
     group: String,
     offset: u32,

@@ -9,40 +9,42 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<int> rulesCount({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiRulesRulesCount(target: target);
+Future<int> controllerRulesCount({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiRulesControllerRulesCount(target: target);
 
-Future<RulesSummary> rulesLoad({
+Future<RulesSummary> controllerRulesLoad({
   required BackendTarget target,
   required String filter,
-}) => RustLib.instance.api.crateBackendApiRulesRulesLoad(
+}) => RustLib.instance.api.crateBackendApiRulesControllerRulesLoad(
   target: target,
   filter: filter,
 );
 
-Future<RulesSummary> rulesSetFilter({
+Future<RulesSummary> controllerRulesSetFilter({
   required BackendTarget target,
   required String filter,
-}) => RustLib.instance.api.crateBackendApiRulesRulesSetFilter(
+}) => RustLib.instance.api.crateBackendApiRulesControllerRulesSetFilter(
   target: target,
   filter: filter,
 );
 
-Future<List<RuleEntry>> rulesWindow({
+Future<List<RuleEntry>> controllerRulesWindow({
   required BackendTarget target,
   required int offset,
   required int limit,
-}) => RustLib.instance.api.crateBackendApiRulesRulesWindow(
+}) => RustLib.instance.api.crateBackendApiRulesControllerRulesWindow(
   target: target,
   offset: offset,
   limit: limit,
 );
 
-Future<void> rulesDisable({
+Future<void> controllerRulesDisable({
   required BackendTarget target,
   required int index,
   required bool disabled,
-}) => RustLib.instance.api.crateBackendApiRulesRulesDisable(
+}) => RustLib.instance.api.crateBackendApiRulesControllerRulesDisable(
   target: target,
   index: index,
   disabled: disabled,

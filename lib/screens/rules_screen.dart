@@ -146,7 +146,10 @@ class _RulesScreenState extends State<_RulesView> {
       _error = null;
     });
     try {
-      final summary = await rust.rulesLoad(target: target, filter: _filter);
+      final summary = await rust.controllerRulesLoad(
+        target: target,
+        filter: _filter,
+      );
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
       _total = summary.total;
       _filtered = summary.filtered;
@@ -177,7 +180,7 @@ class _RulesScreenState extends State<_RulesView> {
     final target = _target();
     if (target == null) return;
     try {
-      final summary = await rust.rulesSetFilter(
+      final summary = await rust.controllerRulesSetFilter(
         target: target,
         filter: _filter,
       );
@@ -260,7 +263,7 @@ class _RulesScreenState extends State<_RulesView> {
       return;
     }
     try {
-      final rows = await rust.rulesWindow(
+      final rows = await rust.controllerRulesWindow(
         target: target,
         offset: offset,
         limit: limit,
@@ -297,7 +300,7 @@ class _RulesScreenState extends State<_RulesView> {
       setState(() => _window[local] = _withDisabled(rule, !enabled));
     }
     try {
-      await rust.rulesDisable(
+      await rust.controllerRulesDisable(
         target: target,
         index: rule.index,
         disabled: !enabled,

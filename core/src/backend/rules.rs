@@ -2,7 +2,7 @@ use crate::MihomoError;
 
 use super::{BackendTarget, BackendType, RuleEntry, RulesSummary};
 
-pub async fn rules_count(target: BackendTarget) -> u32 {
+pub async fn controller_rules_count(target: BackendTarget) -> u32 {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rules_count(target.clash()).await,
         BackendType::Surge => crate::surge::api::rules_count(target.surge()).await,
@@ -10,7 +10,7 @@ pub async fn rules_count(target: BackendTarget) -> u32 {
     }
 }
 
-pub async fn rules_load(
+pub async fn controller_rules_load(
     target: BackendTarget,
     filter: String,
 ) -> Result<RulesSummary, MihomoError> {
@@ -23,7 +23,7 @@ pub async fn rules_load(
     }
 }
 
-pub async fn rules_set_filter(target: BackendTarget, filter: String) -> RulesSummary {
+pub async fn controller_rules_set_filter(target: BackendTarget, filter: String) -> RulesSummary {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rules_set_filter(target.clash(), filter)
             .await
@@ -33,7 +33,11 @@ pub async fn rules_set_filter(target: BackendTarget, filter: String) -> RulesSum
     }
 }
 
-pub async fn rules_window(target: BackendTarget, offset: u32, limit: u32) -> Vec<RuleEntry> {
+pub async fn controller_rules_window(
+    target: BackendTarget,
+    offset: u32,
+    limit: u32,
+) -> Vec<RuleEntry> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::rules_window(target.clash(), offset, limit)
             .await
@@ -45,7 +49,7 @@ pub async fn rules_window(target: BackendTarget, offset: u32, limit: u32) -> Vec
     }
 }
 
-pub async fn rules_disable(
+pub async fn controller_rules_disable(
     target: BackendTarget,
     index: u32,
     disabled: bool,

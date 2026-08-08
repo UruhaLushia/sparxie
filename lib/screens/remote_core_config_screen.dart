@@ -8,8 +8,8 @@ import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
-class CoreConfigScreen extends StatelessWidget {
-  const CoreConfigScreen({super.key, required this.store, this.prefs});
+class RemoteCoreConfigScreen extends StatelessWidget {
+  const RemoteCoreConfigScreen({super.key, required this.store, this.prefs});
 
   final ctl.ControllerStore store;
 

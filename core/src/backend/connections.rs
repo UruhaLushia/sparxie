@@ -10,7 +10,7 @@ use super::{
 };
 use super::{clash_conn_sort, clash_group_sort, clash_list_kind};
 
-pub async fn connections(target: BackendTarget) -> Result<String, MihomoError> {
+pub async fn controller_connections(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::connections(target.clash()).await,
         BackendType::Surge => crate::surge::api::connections(target.surge()).await,
@@ -18,7 +18,10 @@ pub async fn connections(target: BackendTarget) -> Result<String, MihomoError> {
     }
 }
 
-pub async fn close_connection(target: BackendTarget, id: String) -> Result<(), MihomoError> {
+pub async fn controller_close_connection(
+    target: BackendTarget,
+    id: String,
+) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::close_connection(target.clash(), id).await,
         BackendType::Surge => crate::surge::api::close_connection(target.surge(), id).await,
@@ -26,7 +29,7 @@ pub async fn close_connection(target: BackendTarget, id: String) -> Result<(), M
     }
 }
 
-pub async fn close_all_connections(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_close_all_connections(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::close_all_connections(target.clash()).await,
         BackendType::Surge => crate::surge::api::close_all_connections(target.surge()).await,
@@ -36,7 +39,7 @@ pub async fn close_all_connections(target: BackendTarget) -> Result<(), MihomoEr
     }
 }
 
-pub async fn close_connections_by_chain(
+pub async fn controller_close_connections_by_chain(
     target: BackendTarget,
     chain: String,
 ) -> Result<(), MihomoError> {
@@ -53,7 +56,7 @@ pub async fn close_connections_by_chain(
     }
 }
 
-pub async fn close_connections_by_group(
+pub async fn controller_close_connections_by_group(
     target: BackendTarget,
     group: String,
 ) -> Result<(), MihomoError> {
@@ -70,7 +73,7 @@ pub async fn close_connections_by_group(
     }
 }
 
-pub async fn connections_stream(
+pub async fn controller_connections_stream(
     target: BackendTarget,
     interval_ms: u32,
     closed_capacity: u32,
@@ -129,7 +132,7 @@ pub async fn connections_stream(
     }
 }
 
-pub async fn fetch_connection_window(
+pub async fn controller_fetch_connection_window(
     target: BackendTarget,
     interval_ms: u32,
     kind: ConnectionsListKind,
@@ -180,7 +183,7 @@ pub async fn fetch_connection_window(
     }
 }
 
-pub async fn fetch_connection_stats_by_id(
+pub async fn controller_fetch_connection_stats_by_id(
     target: BackendTarget,
     interval_ms: u32,
     id: String,
@@ -219,7 +222,7 @@ pub async fn fetch_connection_stats_by_id(
     })
 }
 
-pub async fn fetch_connection_groups(
+pub async fn controller_fetch_connection_groups(
     target: BackendTarget,
     interval_ms: u32,
     kind: ConnectionsListKind,
@@ -265,7 +268,7 @@ pub async fn fetch_connection_groups(
     }
 }
 
-pub async fn fetch_connection_group_members(
+pub async fn controller_fetch_connection_group_members(
     target: BackendTarget,
     interval_ms: u32,
     kind: ConnectionsListKind,
@@ -311,7 +314,7 @@ pub async fn fetch_connection_group_members(
     }
 }
 
-pub async fn set_connections_sort(
+pub async fn controller_set_connections_sort(
     target: BackendTarget,
     interval_ms: u32,
     sort: ConnectionsSort,
@@ -337,7 +340,7 @@ pub async fn set_connections_sort(
     }
 }
 
-pub async fn clear_closed_connections(target: BackendTarget, interval_ms: u32) {
+pub async fn controller_clear_closed_connections(target: BackendTarget, interval_ms: u32) {
     match target.backend_type {
         BackendType::Clash => {
             crate::clash::state::connections::clear_closed(target.clash(), interval_ms).await
@@ -351,7 +354,7 @@ pub async fn clear_closed_connections(target: BackendTarget, interval_ms: u32) {
     }
 }
 
-pub async fn clear_closed_connections_by_group(
+pub async fn controller_clear_closed_connections_by_group(
     target: BackendTarget,
     interval_ms: u32,
     group: String,
@@ -384,7 +387,7 @@ pub async fn clear_closed_connections_by_group(
     }
 }
 
-pub fn stop_target_streams(target: BackendTarget) {
+pub fn controller_stop_target_streams(target: BackendTarget) {
     if target.backend_type == BackendType::Clash {
         crate::clash::state::stop::stop(&target.clash());
     }

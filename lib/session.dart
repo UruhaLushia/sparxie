@@ -104,7 +104,7 @@ class MihomoSession {
   ) async {
     final t = _target;
     if (t == null) return const rust.ConnectionWindow(total: 0, rows: []);
-    return rust.fetchConnectionWindow(
+    return rust.controllerFetchConnectionWindow(
       target: t,
       intervalMs: _connectionsIntervalMs,
       kind: tab == ConnectionsTab.active
@@ -119,7 +119,7 @@ class MihomoSession {
   Future<rust.ConnectionStats?> fetchConnectionStats(String id) async {
     final t = _target;
     if (t == null) return null;
-    return rust.fetchConnectionStatsById(
+    return rust.controllerFetchConnectionStatsById(
       target: t,
       intervalMs: _connectionsIntervalMs,
       id: id,
@@ -138,7 +138,7 @@ class MihomoSession {
     if (t == null) {
       return const rust.LogWindow(total: 0, offset: 0, rows: []);
     }
-    return rust.fetchLogsWindow(
+    return rust.controllerFetchLogsWindow(
       target: t,
       level: level,
       query: query,
@@ -157,7 +157,7 @@ class MihomoSession {
   ) async {
     final t = _target;
     if (t == null) return const [];
-    return rust.fetchConnectionGroups(
+    return rust.controllerFetchConnectionGroups(
       target: t,
       intervalMs: _connectionsIntervalMs,
       kind: tab == ConnectionsTab.active
@@ -177,7 +177,7 @@ class MihomoSession {
   ) async {
     final t = _target;
     if (t == null) return const [];
-    return rust.fetchConnectionGroupMembers(
+    return rust.controllerFetchConnectionGroupMembers(
       target: t,
       intervalMs: _connectionsIntervalMs,
       kind: tab == ConnectionsTab.active
@@ -361,7 +361,7 @@ class MihomoSession {
   ) async {
     if (!_proxyMemberLoads.add(loadKey)) return;
     try {
-      final entries = await rust.proxyGroupMembers(
+      final entries = await rust.controllerProxyGroupMembers(
         target: target,
         group: group,
         offset: request.offset,
@@ -434,7 +434,9 @@ class MihomoSession {
     _activeKey = next;
     _target = next == null ? null : rust.backendTargetForController(next);
     if (previous != null) {
-      unawaited(rust.stopTargetStreams(target: previous).catchError((_) {}));
+      unawaited(
+        rust.controllerStopTargetStreams(target: previous).catchError((_) {}),
+      );
     }
     _resubscribeAll();
   }
@@ -585,7 +587,7 @@ class MihomoSession {
     final controller = _activeKey;
     if (t == null) return;
     try {
-      final info = await rust.versionInfo(target: t);
+      final info = await rust.controllerVersionInfo(target: t);
       if (!identical(_activeKey, controller)) return;
       versionString.value = info.version;
       isCmfa.value = info.isCmfa;
@@ -613,7 +615,7 @@ class MihomoSession {
     final controller = _activeKey;
     if (t == null || !supportsRules.value) return;
     try {
-      final n = await rust.rulesCount(target: t);
+      final n = await rust.controllerRulesCount(target: t);
       if (identical(_activeKey, controller)) ruleCount.value = n;
     } catch (_) {
       // Non-critical; the badge just stays hidden at 0.
@@ -629,7 +631,7 @@ class MihomoSession {
     try {
       final includeHidden = _includeHiddenProxyGroups;
       final filter = _proxyCatalogFilter;
-      final catalog = await rust.proxyCatalog(
+      final catalog = await rust.controllerProxyCatalog(
         target: t,
         includeHidden: includeHidden,
         resolveProviderCurrentDelay: false,
@@ -691,7 +693,7 @@ class MihomoSession {
     final controller = _activeKey;
     final epoch = _nextStreamEpoch(_RetryKind.traffic);
     _trafficSub = rust
-        .trafficStream(target: t)
+        .controllerTrafficStream(target: t)
         .listen(
           (sample) {
             if (!_isCurrentStream(_RetryKind.traffic, controller, epoch)) {
@@ -713,7 +715,7 @@ class MihomoSession {
     final controller = _activeKey;
     final epoch = _nextStreamEpoch(_RetryKind.memory);
     _memorySub = rust
-        .memoryStream(target: t)
+        .controllerMemoryStream(target: t)
         .listen(
           (sample) {
             if (!_isCurrentStream(_RetryKind.memory, controller, epoch)) {
@@ -738,7 +740,7 @@ class MihomoSession {
     var receivedFrame = false;
     var previousSub = previous;
     _connSub = rust
-        .connectionsStream(
+        .controllerConnectionsStream(
           target: t,
           intervalMs: _connectionsIntervalMs,
           closedCapacity: _closedConnectionsCapacity,
@@ -786,7 +788,7 @@ class MihomoSession {
     var receivedFrame = false;
     var previousSub = previous;
     _logsSub = rust
-        .logsStream(target: t, infoCapacity: _logInfoCapacity)
+        .controllerLogsStream(target: t, infoCapacity: _logInfoCapacity)
         .listen(
           (frame) {
             if (!_isCurrentStream(_RetryKind.logs, controller, epoch)) return;
@@ -812,7 +814,7 @@ class MihomoSession {
     final t = _target;
     logs.clearLocal();
     if (t == null) return;
-    await rust.clearLogs(target: t);
+    await rust.controllerClearLogs(target: t);
   }
 
   void _scheduleRetry(

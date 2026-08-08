@@ -1,9 +1,9 @@
 use crate::MihomoError;
 use serde_json::{Value, json};
 
-use super::{BackendTarget, BackendType, CoreConfig, VersionInfo};
+use super::{BackendTarget, BackendType, ControllerConfig, VersionInfo};
 
-pub async fn configs(target: BackendTarget) -> Result<CoreConfig, MihomoError> {
+pub async fn controller_configs(target: BackendTarget) -> Result<ControllerConfig, MihomoError> {
     let raw = match target.backend_type {
         BackendType::Clash => crate::clash::api::configs(target.clash()).await,
         BackendType::Surge => crate::surge::api::configs(target.surge()).await,
@@ -12,7 +12,7 @@ pub async fn configs(target: BackendTarget) -> Result<CoreConfig, MihomoError> {
     Ok(core_config_from_value(&raw))
 }
 
-pub async fn config_mode(target: BackendTarget) -> Result<String, MihomoError> {
+pub async fn controller_config_mode(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::config_mode(target.clash()).await,
         BackendType::Surge => crate::surge::api::config_mode(target.surge()).await,
@@ -20,7 +20,10 @@ pub async fn config_mode(target: BackendTarget) -> Result<String, MihomoError> {
     }
 }
 
-pub async fn set_config_mode(target: BackendTarget, mode: String) -> Result<(), MihomoError> {
+pub async fn controller_set_config_mode(
+    target: BackendTarget,
+    mode: String,
+) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => patch_config_value(target, json!({ "mode": mode })).await,
         BackendType::Surge => crate::surge::api::set_config_mode(target.surge(), mode).await,
@@ -30,18 +33,21 @@ pub async fn set_config_mode(target: BackendTarget, mode: String) -> Result<(), 
     }
 }
 
-pub async fn set_config_log_level(target: BackendTarget, level: String) -> Result<(), MihomoError> {
+pub async fn controller_set_config_log_level(
+    target: BackendTarget,
+    level: String,
+) -> Result<(), MihomoError> {
     patch_config_value(target, json!({ "log-level": level })).await
 }
 
-pub async fn set_config_tun_enabled(
+pub async fn controller_set_config_tun_enabled(
     target: BackendTarget,
     enabled: bool,
 ) -> Result<(), MihomoError> {
     patch_config_value(target, json!({ "tun": { "enable": enabled } })).await
 }
 
-pub async fn set_config_bool(
+pub async fn controller_set_config_bool(
     target: BackendTarget,
     key: String,
     value: bool,
@@ -54,7 +60,7 @@ pub async fn set_config_bool(
     }
 }
 
-pub async fn set_config_port(
+pub async fn controller_set_config_port(
     target: BackendTarget,
     key: String,
     value: u32,
@@ -81,7 +87,7 @@ async fn patch_config_value(target: BackendTarget, body: Value) -> Result<(), Mi
     }
 }
 
-pub async fn reload_configs(
+pub async fn controller_reload_configs(
     target: BackendTarget,
     path: Option<String>,
     payload: Option<String>,
@@ -101,7 +107,7 @@ pub async fn reload_configs(
     }
 }
 
-pub async fn update_geo(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_update_geo(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::update_geo(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("更新 GeoData").await,
@@ -109,7 +115,7 @@ pub async fn update_geo(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-pub async fn flush_fakeip(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_flush_fakeip(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::flush_fakeip(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("清空 FakeIP").await,
@@ -117,7 +123,7 @@ pub async fn flush_fakeip(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-pub async fn flush_dns(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_flush_dns(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::flush_dns(target.clash()).await,
         BackendType::Surge => crate::surge::api::flush_dns(target.surge()).await,
@@ -125,7 +131,7 @@ pub async fn flush_dns(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-pub async fn dns_query(
+pub async fn controller_dns_query(
     target: BackendTarget,
     name: String,
     qtype: Option<String>,
@@ -137,7 +143,10 @@ pub async fn dns_query(
     }
 }
 
-pub async fn upgrade_core(target: BackendTarget, force: bool) -> Result<(), MihomoError> {
+pub async fn controller_upgrade_core(
+    target: BackendTarget,
+    force: bool,
+) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_core(target.clash(), None, force).await,
         BackendType::Surge => crate::surge::api::unsupported("升级核心").await,
@@ -145,7 +154,7 @@ pub async fn upgrade_core(target: BackendTarget, force: bool) -> Result<(), Miho
     }
 }
 
-pub async fn upgrade_ui(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_upgrade_ui(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_ui(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("升级 UI").await,
@@ -153,7 +162,7 @@ pub async fn upgrade_ui(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-pub async fn upgrade_geo(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_upgrade_geo(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_geo(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("升级 GeoData").await,
@@ -161,7 +170,7 @@ pub async fn upgrade_geo(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-pub async fn restart_core(target: BackendTarget) -> Result<(), MihomoError> {
+pub async fn controller_restart_core(target: BackendTarget) -> Result<(), MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::restart_core(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("重启核心").await,
@@ -169,9 +178,9 @@ pub async fn restart_core(target: BackendTarget) -> Result<(), MihomoError> {
     }
 }
 
-fn core_config_from_value(raw: &Value) -> CoreConfig {
+fn core_config_from_value(raw: &Value) -> ControllerConfig {
     let tun = raw.get("tun");
-    CoreConfig {
+    ControllerConfig {
         mode: string_value(raw.get("mode")),
         mode_options: string_list_value(raw.get("mode-options")),
         log_level: string_value(raw.get("log-level")).map(|s| s.to_ascii_lowercase()),
@@ -224,7 +233,7 @@ fn u32_value(value: &Value) -> Option<u32> {
     }
 }
 
-pub async fn version(target: BackendTarget) -> Result<String, MihomoError> {
+pub async fn controller_version(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
         BackendType::Clash => crate::clash::api::version(target.clash()).await,
         BackendType::Surge => crate::surge::api::version(target.surge()).await,
@@ -232,7 +241,7 @@ pub async fn version(target: BackendTarget) -> Result<String, MihomoError> {
     }
 }
 
-pub async fn version_info(target: BackendTarget) -> Result<VersionInfo, MihomoError> {
+pub async fn controller_version_info(target: BackendTarget) -> Result<VersionInfo, MihomoError> {
     match target.backend_type {
         BackendType::Clash => Ok(crate::clash::api::version_info(target.clash())
             .await?

@@ -143,7 +143,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   void _pushSortToBackend() {
     final target = _target();
     if (target == null) return;
-    rust.setConnectionsSort(
+    rust.controllerSetConnectionsSort(
       target: target,
       intervalMs: widget.prefs.connectionsRefreshMs,
       sort: _toRustSort(widget.prefs.connectionsSort),
@@ -202,7 +202,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     if (target == null) return;
     widget.session.connections.optimisticRemove(id);
     try {
-      await rust.closeConnection(target: target, id: id);
+      await rust.controllerCloseConnection(target: target, id: id);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -234,7 +234,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     );
     if (ok != true) return;
     try {
-      await rust.closeAllConnections(target: target);
+      await rust.controllerCloseAllConnections(target: target);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -251,7 +251,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     // the list both update without waiting on a round-trip.
     widget.session.connections.clearClosedOptimistic();
     try {
-      await rust.clearClosedConnections(
+      await rust.controllerClearClosedConnections(
         target: target,
         intervalMs: widget.prefs.connectionsRefreshMs,
       );
@@ -1069,7 +1069,10 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     );
     if (ok != true) return;
     try {
-      await rust.closeConnectionsByGroup(target: target, group: g.key);
+      await rust.controllerCloseConnectionsByGroup(
+        target: target,
+        group: g.key,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1084,7 +1087,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
     if (target == null) return;
     widget.session.connections.clearClosedGroupOptimistic(g.key);
     try {
-      await rust.clearClosedConnectionsByGroup(
+      await rust.controllerClearClosedConnectionsByGroup(
         target: target,
         intervalMs: widget.prefs.connectionsRefreshMs,
         group: g.key,

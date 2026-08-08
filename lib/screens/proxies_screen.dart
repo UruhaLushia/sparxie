@@ -152,7 +152,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
   Future<String> _loadNodeDetails(String name) async {
     final target = _target();
     if (target == null) throw StateError('当前没有可用的控制器');
-    return rust.proxyDetail(target: target, name: name);
+    return rust.controllerProxyDetail(target: target, name: name);
   }
 
   /// Resolve the URL used for a group's delay test, honoring scope:
@@ -192,15 +192,22 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       widget.session.proxies.setFixedOptimistic(group.name, name);
     }
     try {
-      await rust.selectProxy(target: target, group: group.name, name: name);
+      await rust.controllerSelectProxy(
+        target: target,
+        group: group.name,
+        name: name,
+      );
       if (widget.prefs.autoCloseOnSwitch) {
         // Fire-and-forget; mihomo emits the close itself, no need to block UI.
         switch (widget.prefs.closeMode) {
           case CloseMode.all:
-            unawaited(rust.closeAllConnections(target: target));
+            unawaited(rust.controllerCloseAllConnections(target: target));
           case CloseMode.group:
             unawaited(
-              rust.closeConnectionsByChain(target: target, chain: group.name),
+              rust.controllerCloseConnectionsByChain(
+                target: target,
+                chain: group.name,
+              ),
             );
         }
       }
@@ -224,7 +231,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     final previous = group.fixed.value;
     widget.session.proxies.setFixedOptimistic(group.name, '');
     try {
-      await rust.unfixProxy(target: target, name: group.name);
+      await rust.controllerUnfixProxy(target: target, name: group.name);
       unawaited(widget.session.refreshProxies());
     } catch (e) {
       widget.session.proxies.setFixedOptimistic(group.name, previous);
@@ -246,7 +253,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     setState(() => _testingGroup.add(group.name));
     try {
       if (widget.prefs.delayTestUseGroupApi && !widget.session.isStash.value) {
-        final delays = await rust.groupDelay(
+        final delays = await rust.controllerGroupDelay(
           target: target,
           group: group.name,
           testUrl: testUrl,
@@ -256,7 +263,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         widget.session.proxies.applyGroupDelay(delays);
         await _reloadDelayWindow(target, group, window);
       } else {
-        await for (final event in rust.proxyGroupDelayStream(
+        await for (final event in rust.controllerProxyGroupDelayStream(
           target: target,
           group: group.name,
           testUrl: testUrl,
@@ -288,7 +295,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       group.name,
     );
     try {
-      final event = await rust.proxyDelayWindow(
+      final event = await rust.controllerProxyDelayWindow(
         target: target,
         group: group.name,
         name: name,
@@ -312,7 +319,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     ProxyMemberWindowRequest? window,
   ) async {
     if (window == null || widget.prefs.proxiesSort != ProxiesSort.delay) return;
-    final entries = await rust.proxyGroupMembers(
+    final entries = await rust.controllerProxyGroupMembers(
       target: target,
       group: group.name,
       offset: window.offset,

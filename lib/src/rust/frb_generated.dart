@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1671270766;
+  int get rustContentHash => 1983679119;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -99,47 +99,7 @@ abstract class RustLibApi extends BaseApi {
     required String key,
   });
 
-  Future<void> crateBackendApiConnectionsClearClosedConnections({
-    required BackendTarget target,
-    required int intervalMs,
-  });
-
-  Future<void> crateBackendApiConnectionsClearClosedConnectionsByGroup({
-    required BackendTarget target,
-    required int intervalMs,
-    required String group,
-  });
-
   Future<void> crateBackendApiResourcesClearIconCache();
-
-  Future<void> crateBackendApiStreamsClearLogs({required BackendTarget target});
-
-  Future<void> crateBackendApiConnectionsCloseAllConnections({
-    required BackendTarget target,
-  });
-
-  Future<void> crateBackendApiConnectionsCloseConnection({
-    required BackendTarget target,
-    required String id,
-  });
-
-  Future<void> crateBackendApiConnectionsCloseConnectionsByChain({
-    required BackendTarget target,
-    required String chain,
-  });
-
-  Future<void> crateBackendApiConnectionsCloseConnectionsByGroup({
-    required BackendTarget target,
-    required String group,
-  });
-
-  Future<String> crateBackendApiControlConfigMode({
-    required BackendTarget target,
-  });
-
-  Future<CoreConfig> crateBackendApiControlConfigs({
-    required BackendTarget target,
-  });
 
   Future<Connection> crateBackendApiTypesConnectionDefault();
 
@@ -151,36 +111,81 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ConnectionWindow> crateBackendApiTypesConnectionWindowDefault();
 
-  Future<String> crateBackendApiConnectionsConnections({
-    required BackendTarget target,
-  });
-
   Future<ConnectionsFrame> crateBackendApiTypesConnectionsFrameDefault();
 
   Future<ConnectionsSort> crateBackendApiTypesConnectionsSortDefault();
 
-  Stream<ConnectionsFrame> crateBackendApiConnectionsConnectionsStream({
+  Future<ConnectionsTotals> crateBackendApiTypesConnectionsTotalsDefault();
+
+  Future<void> crateBackendApiConnectionsControllerClearClosedConnections({
+    required BackendTarget target,
+    required int intervalMs,
+  });
+
+  Future<void>
+  crateBackendApiConnectionsControllerClearClosedConnectionsByGroup({
+    required BackendTarget target,
+    required int intervalMs,
+    required String group,
+  });
+
+  Future<void> crateBackendApiStreamsControllerClearLogs({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerCloseAllConnections({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerCloseConnection({
+    required BackendTarget target,
+    required String id,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerCloseConnectionsByChain({
+    required BackendTarget target,
+    required String chain,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerCloseConnectionsByGroup({
+    required BackendTarget target,
+    required String group,
+  });
+
+  Future<ControllerConfig> crateBackendApiTypesControllerConfigDefault();
+
+  Future<String> crateBackendApiControlControllerConfigMode({
+    required BackendTarget target,
+  });
+
+  Future<ControllerConfig> crateBackendApiControlControllerConfigs({
+    required BackendTarget target,
+  });
+
+  Future<String> crateBackendApiConnectionsControllerConnections({
+    required BackendTarget target,
+  });
+
+  Stream<ConnectionsFrame>
+  crateBackendApiConnectionsControllerConnectionsStream({
     required BackendTarget target,
     required int intervalMs,
     required int closedCapacity,
   });
 
-  Future<ConnectionsTotals> crateBackendApiTypesConnectionsTotalsDefault();
-
-  Future<CoreConfig> crateBackendApiTypesCoreConfigDefault();
-
-  Future<List<OutboundEntry>> crateBackendApiDiagnosticsDiagnosticsOutbounds({
+  Future<List<OutboundEntry>>
+  crateBackendApiDiagnosticsControllerDiagnosticsOutbounds({
     required BackendTarget target,
   });
 
-  Future<String> crateBackendApiControlDnsQuery({
+  Future<String> crateBackendApiControlControllerDnsQuery({
     required BackendTarget target,
     required String name,
     String? qtype,
   });
 
   Future<List<Connection>>
-  crateBackendApiConnectionsFetchConnectionGroupMembers({
+  crateBackendApiConnectionsControllerFetchConnectionGroupMembers({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -190,7 +195,7 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<List<ConnectionGroup>>
-  crateBackendApiConnectionsFetchConnectionGroups({
+  crateBackendApiConnectionsControllerFetchConnectionGroups({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -199,13 +204,15 @@ abstract class RustLibApi extends BaseApi {
     required String query,
   });
 
-  Future<ConnectionStats?> crateBackendApiConnectionsFetchConnectionStatsById({
+  Future<ConnectionStats?>
+  crateBackendApiConnectionsControllerFetchConnectionStatsById({
     required BackendTarget target,
     required int intervalMs,
     required String id,
   });
 
-  Future<ConnectionWindow> crateBackendApiConnectionsFetchConnectionWindow({
+  Future<ConnectionWindow>
+  crateBackendApiConnectionsControllerFetchConnectionWindow({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -214,9 +221,7 @@ abstract class RustLibApi extends BaseApi {
     required String query,
   });
 
-  Future<Uint8List> crateBackendApiResourcesFetchIcon({required String url});
-
-  Future<LogWindow> crateBackendApiStreamsFetchLogsWindow({
+  Future<LogWindow> crateBackendApiStreamsControllerFetchLogsWindow({
     required BackendTarget target,
     required String level,
     required String query,
@@ -225,6 +230,301 @@ abstract class RustLibApi extends BaseApi {
     required bool fromEnd,
     required BigInt anchorId,
   });
+
+  Future<void> crateBackendApiControlControllerFlushDns({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiControlControllerFlushFakeip({
+    required BackendTarget target,
+  });
+
+  Future<List<GroupDelayEntry>> crateBackendApiProxyDelayControllerGroupDelay({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    int? concurrency,
+  });
+
+  Future<String> crateBackendApiProxiesControllerGroups({
+    required BackendTarget target,
+  });
+
+  Stream<LogsFrame> crateBackendApiStreamsControllerLogsStream({
+    required BackendTarget target,
+    required int infoCapacity,
+  });
+
+  Stream<MemorySample> crateBackendApiStreamsControllerMemoryStream({
+    required BackendTarget target,
+  });
+
+  Stream<NetworkQualityProgress>
+  crateBackendApiDiagnosticsControllerNetworkQualityTestStream({
+    required BackendTarget target,
+    required String configUrl,
+    required String outboundTag,
+    required bool serial,
+    required int maxRuntimeSeconds,
+    required bool http3,
+  });
+
+  Future<String> crateBackendApiProxiesControllerProxies({
+    required BackendTarget target,
+    String? namePattern,
+    String? typePattern,
+    required bool groupsOnly,
+  });
+
+  Future<List<ProxyDelayEntry>>
+  crateBackendApiProxyDelayControllerProxyBatchDelay({
+    required BackendTarget target,
+    required List<String> names,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+  });
+
+  Future<ProxyCatalog> crateBackendApiProxiesControllerProxyCatalog({
+    required BackendTarget target,
+    required bool includeHidden,
+    required bool resolveProviderCurrentDelay,
+    required String filter,
+  });
+
+  Future<PlatformInt64> crateBackendApiProxyDelayControllerProxyDelay({
+    required BackendTarget target,
+    required String name,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+  });
+
+  Future<ProxyDelayEvent> crateBackendApiProxyDelayControllerProxyDelayWindow({
+    required BackendTarget target,
+    required String group,
+    required String name,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required ProxyMemberSort memberSort,
+    required int windowOffset,
+    required int windowLimit,
+    required int windowMembersHash,
+  });
+
+  Future<String> crateBackendApiProxiesControllerProxyDetail({
+    required BackendTarget target,
+    required String name,
+  });
+
+  Future<List<ProxyDelayEntry>>
+  crateBackendApiProxyDelayControllerProxyGroupBatchDelay({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+  });
+
+  Stream<ProxyDelayEvent>
+  crateBackendApiProxyDelayControllerProxyGroupDelayStream({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+    required ProxyMemberSort memberSort,
+    required int windowOffset,
+    required int windowLimit,
+    required int windowMembersHash,
+  });
+
+  Future<List<ProxyMemberEntry>>
+  crateBackendApiProxiesControllerProxyGroupMembers({
+    required BackendTarget target,
+    required String group,
+    required int offset,
+    required int limit,
+    required ProxyMemberSort memberSort,
+  });
+
+  Future<List<ProxyProviderEntry>>
+  crateBackendApiProvidersControllerProxyProviderCatalog({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiProvidersControllerProxyProviderHealthcheck({
+    required BackendTarget target,
+    required String name,
+  });
+
+  Future<void> crateBackendApiProvidersControllerProxyProviderUpdate({
+    required BackendTarget target,
+    required String name,
+  });
+
+  Future<String> crateBackendApiProvidersControllerProxyProviders({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiControlControllerReloadConfigs({
+    required BackendTarget target,
+    String? path,
+    String? payload,
+    required bool force,
+  });
+
+  Future<void> crateBackendApiControlControllerRestartCore({
+    required BackendTarget target,
+  });
+
+  Future<List<RuleProviderEntry>>
+  crateBackendApiProvidersControllerRuleProviderCatalog({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiProvidersControllerRuleProviderUpdate({
+    required BackendTarget target,
+    required String name,
+  });
+
+  Future<String> crateBackendApiProvidersControllerRuleProviders({
+    required BackendTarget target,
+  });
+
+  Future<int> crateBackendApiRulesControllerRulesCount({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiRulesControllerRulesDisable({
+    required BackendTarget target,
+    required int index,
+    required bool disabled,
+  });
+
+  Future<RulesSummary> crateBackendApiRulesControllerRulesLoad({
+    required BackendTarget target,
+    required String filter,
+  });
+
+  Future<RulesSummary> crateBackendApiRulesControllerRulesSetFilter({
+    required BackendTarget target,
+    required String filter,
+  });
+
+  Future<List<RuleEntry>> crateBackendApiRulesControllerRulesWindow({
+    required BackendTarget target,
+    required int offset,
+    required int limit,
+  });
+
+  Future<void> crateBackendApiProxiesControllerSelectProxy({
+    required BackendTarget target,
+    required String group,
+    required String name,
+  });
+
+  Future<void> crateBackendApiControlControllerSetConfigBool({
+    required BackendTarget target,
+    required String key,
+    required bool value,
+  });
+
+  Future<void> crateBackendApiControlControllerSetConfigLogLevel({
+    required BackendTarget target,
+    required String level,
+  });
+
+  Future<void> crateBackendApiControlControllerSetConfigMode({
+    required BackendTarget target,
+    required String mode,
+  });
+
+  Future<void> crateBackendApiControlControllerSetConfigPort({
+    required BackendTarget target,
+    required String key,
+    required int value,
+  });
+
+  Future<void> crateBackendApiControlControllerSetConfigTunEnabled({
+    required BackendTarget target,
+    required bool enabled,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerSetConnectionsSort({
+    required BackendTarget target,
+    required int intervalMs,
+    required ConnectionsSort sort,
+    required bool asc,
+  });
+
+  Future<void> crateBackendApiConnectionsControllerStopTargetStreams({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiProvidersControllerStorageDelete({
+    required BackendTarget target,
+    required String key,
+  });
+
+  Future<String> crateBackendApiProvidersControllerStorageGet({
+    required BackendTarget target,
+    required String key,
+  });
+
+  Future<void> crateBackendApiProvidersControllerStorageSet({
+    required BackendTarget target,
+    required String key,
+    required String value,
+  });
+
+  Stream<StunTestProgress> crateBackendApiDiagnosticsControllerStunTestStream({
+    required BackendTarget target,
+    required String server,
+    required String outboundTag,
+  });
+
+  Stream<TrafficSample> crateBackendApiStreamsControllerTrafficStream({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiProxiesControllerUnfixProxy({
+    required BackendTarget target,
+    required String name,
+  });
+
+  Future<void> crateBackendApiControlControllerUpdateGeo({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiControlControllerUpgradeCore({
+    required BackendTarget target,
+    required bool force,
+  });
+
+  Future<void> crateBackendApiControlControllerUpgradeGeo({
+    required BackendTarget target,
+  });
+
+  Future<void> crateBackendApiControlControllerUpgradeUi({
+    required BackendTarget target,
+  });
+
+  Future<String> crateBackendApiControlControllerVersion({
+    required BackendTarget target,
+  });
+
+  Future<VersionInfo> crateBackendApiControlControllerVersionInfo({
+    required BackendTarget target,
+  });
+
+  Future<Uint8List> crateBackendApiResourcesFetchIcon({required String url});
 
   Future<Uint8List?> crateBackendApiResourcesFetchProcessIcon({
     required String path,
@@ -235,24 +535,7 @@ abstract class RustLibApi extends BaseApi {
     required String path,
   });
 
-  Future<void> crateBackendApiControlFlushDns({required BackendTarget target});
-
-  Future<void> crateBackendApiControlFlushFakeip({
-    required BackendTarget target,
-  });
-
-  Future<List<GroupDelayEntry>> crateBackendApiProxyDelayGroupDelay({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    int? concurrency,
-  });
-
   Future<GroupDelayEntry> crateBackendApiTypesGroupDelayEntryDefault();
-
-  Future<String> crateBackendApiProxiesGroups({required BackendTarget target});
 
   Future<BigInt> crateBackendApiResourcesIconCacheSize();
 
@@ -269,260 +552,37 @@ abstract class RustLibApi extends BaseApi {
 
   Future<LogsFrame> crateBackendApiTypesLogsFrameDefault();
 
-  Stream<LogsFrame> crateBackendApiStreamsLogsStream({
-    required BackendTarget target,
-    required int infoCapacity,
-  });
-
   Future<MemorySample> crateBackendApiTypesMemorySampleDefault();
-
-  Stream<MemorySample> crateBackendApiStreamsMemoryStream({
-    required BackendTarget target,
-  });
 
   Future<NetworkQualityProgress>
   crateBackendApiDiagnosticsNetworkQualityProgressDefault();
 
-  Stream<NetworkQualityProgress>
-  crateBackendApiDiagnosticsNetworkQualityTestStream({
-    required BackendTarget target,
-    required String configUrl,
-    required String outboundTag,
-    required bool serial,
-    required int maxRuntimeSeconds,
-    required bool http3,
-  });
-
   Future<OutboundEntry> crateBackendApiDiagnosticsOutboundEntryDefault();
 
-  Future<String> crateBackendApiProxiesProxies({
-    required BackendTarget target,
-    String? namePattern,
-    String? typePattern,
-    required bool groupsOnly,
-  });
-
-  Future<List<ProxyDelayEntry>> crateBackendApiProxyDelayProxyBatchDelay({
-    required BackendTarget target,
-    required List<String> names,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-  });
-
-  Future<ProxyCatalog> crateBackendApiProxiesProxyCatalog({
-    required BackendTarget target,
-    required bool includeHidden,
-    required bool resolveProviderCurrentDelay,
-    required String filter,
-  });
-
   Future<ProxyCatalog> crateBackendApiTypesProxyCatalogDefault();
-
-  Future<PlatformInt64> crateBackendApiProxyDelayProxyDelay({
-    required BackendTarget target,
-    required String name,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-  });
 
   Future<ProxyDelayEntry> crateBackendApiTypesProxyDelayEntryDefault();
 
   Future<ProxyDelayEvent> crateBackendApiTypesProxyDelayEventDefault();
 
-  Future<ProxyDelayEvent> crateBackendApiProxyDelayProxyDelayWindow({
-    required BackendTarget target,
-    required String group,
-    required String name,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required ProxyMemberSort memberSort,
-    required int windowOffset,
-    required int windowLimit,
-    required int windowMembersHash,
-  });
-
-  Future<String> crateBackendApiProxiesProxyDetail({
-    required BackendTarget target,
-    required String name,
-  });
-
-  Future<List<ProxyDelayEntry>> crateBackendApiProxyDelayProxyGroupBatchDelay({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-  });
-
-  Stream<ProxyDelayEvent> crateBackendApiProxyDelayProxyGroupDelayStream({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-    required ProxyMemberSort memberSort,
-    required int windowOffset,
-    required int windowLimit,
-    required int windowMembersHash,
-  });
-
   Future<ProxyGroupEntry> crateBackendApiTypesProxyGroupEntryDefault();
-
-  Future<List<ProxyMemberEntry>> crateBackendApiProxiesProxyGroupMembers({
-    required BackendTarget target,
-    required String group,
-    required int offset,
-    required int limit,
-    required ProxyMemberSort memberSort,
-  });
 
   Future<ProxyMemberEntry> crateBackendApiTypesProxyMemberEntryDefault();
 
   Future<ProxyMemberSort> crateBackendApiTypesProxyMemberSortDefault();
 
-  Future<List<ProxyProviderEntry>>
-  crateBackendApiProvidersProxyProviderCatalog({required BackendTarget target});
-
   Future<ProxyProviderEntry> crateBackendApiTypesProxyProviderEntryDefault();
-
-  Future<void> crateBackendApiProvidersProxyProviderHealthcheck({
-    required BackendTarget target,
-    required String name,
-  });
-
-  Future<void> crateBackendApiProvidersProxyProviderUpdate({
-    required BackendTarget target,
-    required String name,
-  });
-
-  Future<String> crateBackendApiProvidersProxyProviders({
-    required BackendTarget target,
-  });
-
-  Future<void> crateBackendApiControlReloadConfigs({
-    required BackendTarget target,
-    String? path,
-    String? payload,
-    required bool force,
-  });
 
   Future<void> crateBackendApiResourcesResetProcessIconMisses();
 
-  Future<void> crateBackendApiControlRestartCore({
-    required BackendTarget target,
-  });
-
   Future<RuleEntry> crateBackendApiTypesRuleEntryDefault();
-
-  Future<List<RuleProviderEntry>> crateBackendApiProvidersRuleProviderCatalog({
-    required BackendTarget target,
-  });
 
   Future<RuleProviderEntry> crateBackendApiTypesRuleProviderEntryDefault();
 
-  Future<void> crateBackendApiProvidersRuleProviderUpdate({
-    required BackendTarget target,
-    required String name,
-  });
-
-  Future<String> crateBackendApiProvidersRuleProviders({
-    required BackendTarget target,
-  });
-
-  Future<int> crateBackendApiRulesRulesCount({required BackendTarget target});
-
-  Future<void> crateBackendApiRulesRulesDisable({
-    required BackendTarget target,
-    required int index,
-    required bool disabled,
-  });
-
-  Future<RulesSummary> crateBackendApiRulesRulesLoad({
-    required BackendTarget target,
-    required String filter,
-  });
-
-  Future<RulesSummary> crateBackendApiRulesRulesSetFilter({
-    required BackendTarget target,
-    required String filter,
-  });
-
   Future<RulesSummary> crateBackendApiTypesRulesSummaryDefault();
-
-  Future<List<RuleEntry>> crateBackendApiRulesRulesWindow({
-    required BackendTarget target,
-    required int offset,
-    required int limit,
-  });
-
-  Future<void> crateBackendApiProxiesSelectProxy({
-    required BackendTarget target,
-    required String group,
-    required String name,
-  });
-
-  Future<void> crateBackendApiControlSetConfigBool({
-    required BackendTarget target,
-    required String key,
-    required bool value,
-  });
-
-  Future<void> crateBackendApiControlSetConfigLogLevel({
-    required BackendTarget target,
-    required String level,
-  });
-
-  Future<void> crateBackendApiControlSetConfigMode({
-    required BackendTarget target,
-    required String mode,
-  });
-
-  Future<void> crateBackendApiControlSetConfigPort({
-    required BackendTarget target,
-    required String key,
-    required int value,
-  });
-
-  Future<void> crateBackendApiControlSetConfigTunEnabled({
-    required BackendTarget target,
-    required bool enabled,
-  });
-
-  Future<void> crateBackendApiConnectionsSetConnectionsSort({
-    required BackendTarget target,
-    required int intervalMs,
-    required ConnectionsSort sort,
-    required bool asc,
-  });
 
   Future<void> crateBackendApiResourcesSetOnlineResourceAllowInsecure({
     required bool allowInsecure,
-  });
-
-  Future<void> crateBackendApiConnectionsStopTargetStreams({
-    required BackendTarget target,
-  });
-
-  Future<void> crateBackendApiProvidersStorageDelete({
-    required BackendTarget target,
-    required String key,
-  });
-
-  Future<String> crateBackendApiProvidersStorageGet({
-    required BackendTarget target,
-    required String key,
-  });
-
-  Future<void> crateBackendApiProvidersStorageSet({
-    required BackendTarget target,
-    required String key,
-    required String value,
   });
 
   Future<void> crateBackendApiResourcesStoreProcessIcon({
@@ -536,12 +596,6 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<StunTestProgress> crateBackendApiDiagnosticsStunTestProgressDefault();
-
-  Stream<StunTestProgress> crateBackendApiDiagnosticsStunTestStream({
-    required BackendTarget target,
-    required String server,
-    required String outboundTag,
-  });
 
   Future<List<String>> crateBackendApiResourcesSystemFontFamilies();
 
@@ -580,34 +634,6 @@ abstract class RustLibApi extends BaseApi {
   crateBackendApiTailscaleTailscaleUserGroupDefault();
 
   Future<TrafficSample> crateBackendApiTypesTrafficSampleDefault();
-
-  Stream<TrafficSample> crateBackendApiStreamsTrafficStream({
-    required BackendTarget target,
-  });
-
-  Future<void> crateBackendApiProxiesUnfixProxy({
-    required BackendTarget target,
-    required String name,
-  });
-
-  Future<void> crateBackendApiControlUpdateGeo({required BackendTarget target});
-
-  Future<void> crateBackendApiControlUpgradeCore({
-    required BackendTarget target,
-    required bool force,
-  });
-
-  Future<void> crateBackendApiControlUpgradeGeo({
-    required BackendTarget target,
-  });
-
-  Future<void> crateBackendApiControlUpgradeUi({required BackendTarget target});
-
-  Future<String> crateBackendApiControlVersion({required BackendTarget target});
-
-  Future<VersionInfo> crateBackendApiControlVersionInfo({
-    required BackendTarget target,
-  });
 
   Future<VersionInfo> crateBackendApiTypesVersionInfoDefault();
 }
@@ -686,81 +712,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "cached_process_name", argNames: ["key"]);
 
   @override
-  Future<void> crateBackendApiConnectionsClearClosedConnections({
-    required BackendTarget target,
-    required int intervalMs,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_u_32(intervalMs, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 3,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiConnectionsClearClosedConnectionsConstMeta,
-        argValues: [target, intervalMs],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiConnectionsClearClosedConnectionsConstMeta =>
-      const TaskConstMeta(
-        debugName: "clear_closed_connections",
-        argNames: ["target", "intervalMs"],
-      );
-
-  @override
-  Future<void> crateBackendApiConnectionsClearClosedConnectionsByGroup({
-    required BackendTarget target,
-    required int intervalMs,
-    required String group,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_u_32(intervalMs, serializer);
-          sse_encode_String(group, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 4,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta:
-            kCrateBackendApiConnectionsClearClosedConnectionsByGroupConstMeta,
-        argValues: [target, intervalMs, group],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiConnectionsClearClosedConnectionsByGroupConstMeta =>
-      const TaskConstMeta(
-        debugName: "clear_closed_connections_by_group",
-        argNames: ["target", "intervalMs", "group"],
-      );
-
-  @override
   Future<void> crateBackendApiResourcesClearIconCache() {
     return handler.executeNormal(
       NormalTask(
@@ -769,7 +720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 3,
             port: port_,
           );
         },
@@ -788,236 +739,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "clear_icon_cache", argNames: []);
 
   @override
-  Future<void> crateBackendApiStreamsClearLogs({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 6,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiStreamsClearLogsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiStreamsClearLogsConstMeta =>
-      const TaskConstMeta(debugName: "clear_logs", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiConnectionsCloseAllConnections({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 7,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiConnectionsCloseAllConnectionsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsCloseAllConnectionsConstMeta =>
-      const TaskConstMeta(
-        debugName: "close_all_connections",
-        argNames: ["target"],
-      );
-
-  @override
-  Future<void> crateBackendApiConnectionsCloseConnection({
-    required BackendTarget target,
-    required String id,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(id, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 8,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiConnectionsCloseConnectionConstMeta,
-        argValues: [target, id],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsCloseConnectionConstMeta =>
-      const TaskConstMeta(
-        debugName: "close_connection",
-        argNames: ["target", "id"],
-      );
-
-  @override
-  Future<void> crateBackendApiConnectionsCloseConnectionsByChain({
-    required BackendTarget target,
-    required String chain,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(chain, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 9,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiConnectionsCloseConnectionsByChainConstMeta,
-        argValues: [target, chain],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiConnectionsCloseConnectionsByChainConstMeta =>
-      const TaskConstMeta(
-        debugName: "close_connections_by_chain",
-        argNames: ["target", "chain"],
-      );
-
-  @override
-  Future<void> crateBackendApiConnectionsCloseConnectionsByGroup({
-    required BackendTarget target,
-    required String group,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 10,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiConnectionsCloseConnectionsByGroupConstMeta,
-        argValues: [target, group],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiConnectionsCloseConnectionsByGroupConstMeta =>
-      const TaskConstMeta(
-        debugName: "close_connections_by_group",
-        argNames: ["target", "group"],
-      );
-
-  @override
-  Future<String> crateBackendApiControlConfigMode({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 11,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlConfigModeConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlConfigModeConstMeta =>
-      const TaskConstMeta(debugName: "config_mode", argNames: ["target"]);
-
-  @override
-  Future<CoreConfig> crateBackendApiControlConfigs({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 12,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_core_config,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlConfigsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlConfigsConstMeta =>
-      const TaskConstMeta(debugName: "configs", argNames: ["target"]);
-
-  @override
   Future<Connection> crateBackendApiTypesConnectionDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -1026,7 +747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 4,
             port: port_,
           );
         },
@@ -1053,7 +774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 5,
             port: port_,
           );
         },
@@ -1080,7 +801,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 6,
             port: port_,
           );
         },
@@ -1110,7 +831,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 7,
             port: port_,
           );
         },
@@ -1137,7 +858,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 8,
             port: port_,
           );
         },
@@ -1156,36 +877,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "connection_window_default", argNames: []);
 
   @override
-  Future<String> crateBackendApiConnectionsConnections({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 18,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiConnectionsConnectionsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsConnectionsConstMeta =>
-      const TaskConstMeta(debugName: "connections", argNames: ["target"]);
-
-  @override
   Future<ConnectionsFrame> crateBackendApiTypesConnectionsFrameDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -1194,7 +885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 9,
             port: port_,
           );
         },
@@ -1221,7 +912,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 10,
             port: port_,
           );
         },
@@ -1240,48 +931,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "connections_sort_default", argNames: []);
 
   @override
-  Stream<ConnectionsFrame> crateBackendApiConnectionsConnectionsStream({
-    required BackendTarget target,
-    required int intervalMs,
-    required int closedCapacity,
-  }) {
-    final sink = RustStreamSink<ConnectionsFrame>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_u_32(intervalMs, serializer);
-            sse_encode_u_32(closedCapacity, serializer);
-            sse_encode_StreamSink_connections_frame_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 21,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiConnectionsConnectionsStreamConstMeta,
-          argValues: [target, intervalMs, closedCapacity, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsConnectionsStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "connections_stream",
-        argNames: ["target", "intervalMs", "closedCapacity", "sink"],
-      );
-
-  @override
   Future<ConnectionsTotals> crateBackendApiTypesConnectionsTotalsDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -1290,7 +939,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 11,
             port: port_,
           );
         },
@@ -1312,7 +961,263 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<CoreConfig> crateBackendApiTypesCoreConfigDefault() {
+  Future<void> crateBackendApiConnectionsControllerClearClosedConnections({
+    required BackendTarget target,
+    required int intervalMs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_u_32(intervalMs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerClearClosedConnectionsConstMeta,
+        argValues: [target, intervalMs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerClearClosedConnectionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_clear_closed_connections",
+        argNames: ["target", "intervalMs"],
+      );
+
+  @override
+  Future<void>
+  crateBackendApiConnectionsControllerClearClosedConnectionsByGroup({
+    required BackendTarget target,
+    required int intervalMs,
+    required String group,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_u_32(intervalMs, serializer);
+          sse_encode_String(group, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerClearClosedConnectionsByGroupConstMeta,
+        argValues: [target, intervalMs, group],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerClearClosedConnectionsByGroupConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_clear_closed_connections_by_group",
+        argNames: ["target", "intervalMs", "group"],
+      );
+
+  @override
+  Future<void> crateBackendApiStreamsControllerClearLogs({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiStreamsControllerClearLogsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiStreamsControllerClearLogsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_clear_logs",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerCloseAllConnections({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerCloseAllConnectionsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerCloseAllConnectionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_close_all_connections",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerCloseConnection({
+    required BackendTarget target,
+    required String id,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerCloseConnectionConstMeta,
+        argValues: [target, id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerCloseConnectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_close_connection",
+        argNames: ["target", "id"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerCloseConnectionsByChain({
+    required BackendTarget target,
+    required String chain,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(chain, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerCloseConnectionsByChainConstMeta,
+        argValues: [target, chain],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerCloseConnectionsByChainConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_close_connections_by_chain",
+        argNames: ["target", "chain"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerCloseConnectionsByGroup({
+    required BackendTarget target,
+    required String group,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerCloseConnectionsByGroupConstMeta,
+        argValues: [target, group],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerCloseConnectionsByGroupConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_close_connections_by_group",
+        argNames: ["target", "group"],
+      );
+
+  @override
+  Future<ControllerConfig> crateBackendApiTypesControllerConfigDefault() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1320,26 +1225,171 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 19,
             port: port_,
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_core_config,
+          decodeSuccessData: sse_decode_controller_config,
           decodeErrorData: null,
         ),
-        constMeta: kCrateBackendApiTypesCoreConfigDefaultConstMeta,
+        constMeta: kCrateBackendApiTypesControllerConfigDefaultConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiTypesCoreConfigDefaultConstMeta =>
-      const TaskConstMeta(debugName: "core_config_default", argNames: []);
+  TaskConstMeta get kCrateBackendApiTypesControllerConfigDefaultConstMeta =>
+      const TaskConstMeta(debugName: "controller_config_default", argNames: []);
 
   @override
-  Future<List<OutboundEntry>> crateBackendApiDiagnosticsDiagnosticsOutbounds({
+  Future<String> crateBackendApiControlControllerConfigMode({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerConfigModeConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerConfigModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_config_mode",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<ControllerConfig> crateBackendApiControlControllerConfigs({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_controller_config,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerConfigsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerConfigsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_configs",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<String> crateBackendApiConnectionsControllerConnections({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 22,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiConnectionsControllerConnectionsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiConnectionsControllerConnectionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_connections",
+        argNames: ["target"],
+      );
+
+  @override
+  Stream<ConnectionsFrame>
+  crateBackendApiConnectionsControllerConnectionsStream({
+    required BackendTarget target,
+    required int intervalMs,
+    required int closedCapacity,
+  }) {
+    final sink = RustStreamSink<ConnectionsFrame>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_u_32(intervalMs, serializer);
+            sse_encode_u_32(closedCapacity, serializer);
+            sse_encode_StreamSink_connections_frame_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 23,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta:
+              kCrateBackendApiConnectionsControllerConnectionsStreamConstMeta,
+          argValues: [target, intervalMs, closedCapacity, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerConnectionsStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_connections_stream",
+        argNames: ["target", "intervalMs", "closedCapacity", "sink"],
+      );
+
+  @override
+  Future<List<OutboundEntry>>
+  crateBackendApiDiagnosticsControllerDiagnosticsOutbounds({
     required BackendTarget target,
   }) {
     return handler.executeNormal(
@@ -1358,21 +1408,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_outbound_entry,
           decodeErrorData: sse_decode_mihomo_error,
         ),
-        constMeta: kCrateBackendApiDiagnosticsDiagnosticsOutboundsConstMeta,
+        constMeta:
+            kCrateBackendApiDiagnosticsControllerDiagnosticsOutboundsConstMeta,
         argValues: [target],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiDiagnosticsDiagnosticsOutboundsConstMeta =>
+  TaskConstMeta
+  get kCrateBackendApiDiagnosticsControllerDiagnosticsOutboundsConstMeta =>
       const TaskConstMeta(
-        debugName: "diagnostics_outbounds",
+        debugName: "controller_diagnostics_outbounds",
         argNames: ["target"],
       );
 
   @override
-  Future<String> crateBackendApiControlDnsQuery({
+  Future<String> crateBackendApiControlControllerDnsQuery({
     required BackendTarget target,
     required String name,
     String? qtype,
@@ -1395,22 +1447,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_mihomo_error,
         ),
-        constMeta: kCrateBackendApiControlDnsQueryConstMeta,
+        constMeta: kCrateBackendApiControlControllerDnsQueryConstMeta,
         argValues: [target, name, qtype],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiControlDnsQueryConstMeta =>
+  TaskConstMeta get kCrateBackendApiControlControllerDnsQueryConstMeta =>
       const TaskConstMeta(
-        debugName: "dns_query",
+        debugName: "controller_dns_query",
         argNames: ["target", "name", "qtype"],
       );
 
   @override
   Future<List<Connection>>
-  crateBackendApiConnectionsFetchConnectionGroupMembers({
+  crateBackendApiConnectionsControllerFetchConnectionGroupMembers({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -1440,7 +1492,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta:
-            kCrateBackendApiConnectionsFetchConnectionGroupMembersConstMeta,
+            kCrateBackendApiConnectionsControllerFetchConnectionGroupMembersConstMeta,
         argValues: [target, intervalMs, kind, group, limit, query],
         apiImpl: this,
       ),
@@ -1448,15 +1500,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   TaskConstMeta
-  get kCrateBackendApiConnectionsFetchConnectionGroupMembersConstMeta =>
+  get kCrateBackendApiConnectionsControllerFetchConnectionGroupMembersConstMeta =>
       const TaskConstMeta(
-        debugName: "fetch_connection_group_members",
+        debugName: "controller_fetch_connection_group_members",
         argNames: ["target", "intervalMs", "kind", "group", "limit", "query"],
       );
 
   @override
   Future<List<ConnectionGroup>>
-  crateBackendApiConnectionsFetchConnectionGroups({
+  crateBackendApiConnectionsControllerFetchConnectionGroups({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -1485,21 +1537,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_connection_group,
           decodeErrorData: null,
         ),
-        constMeta: kCrateBackendApiConnectionsFetchConnectionGroupsConstMeta,
+        constMeta:
+            kCrateBackendApiConnectionsControllerFetchConnectionGroupsConstMeta,
         argValues: [target, intervalMs, kind, sort, asc, query],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiConnectionsFetchConnectionGroupsConstMeta =>
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerFetchConnectionGroupsConstMeta =>
       const TaskConstMeta(
-        debugName: "fetch_connection_groups",
+        debugName: "controller_fetch_connection_groups",
         argNames: ["target", "intervalMs", "kind", "sort", "asc", "query"],
       );
 
   @override
-  Future<ConnectionStats?> crateBackendApiConnectionsFetchConnectionStatsById({
+  Future<ConnectionStats?>
+  crateBackendApiConnectionsControllerFetchConnectionStatsById({
     required BackendTarget target,
     required int intervalMs,
     required String id,
@@ -1522,7 +1577,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_opt_box_autoadd_connection_stats,
           decodeErrorData: null,
         ),
-        constMeta: kCrateBackendApiConnectionsFetchConnectionStatsByIdConstMeta,
+        constMeta:
+            kCrateBackendApiConnectionsControllerFetchConnectionStatsByIdConstMeta,
         argValues: [target, intervalMs, id],
         apiImpl: this,
       ),
@@ -1530,14 +1586,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   TaskConstMeta
-  get kCrateBackendApiConnectionsFetchConnectionStatsByIdConstMeta =>
+  get kCrateBackendApiConnectionsControllerFetchConnectionStatsByIdConstMeta =>
       const TaskConstMeta(
-        debugName: "fetch_connection_stats_by_id",
+        debugName: "controller_fetch_connection_stats_by_id",
         argNames: ["target", "intervalMs", "id"],
       );
 
   @override
-  Future<ConnectionWindow> crateBackendApiConnectionsFetchConnectionWindow({
+  Future<ConnectionWindow>
+  crateBackendApiConnectionsControllerFetchConnectionWindow({
     required BackendTarget target,
     required int intervalMs,
     required ConnectionsListKind kind,
@@ -1566,49 +1623,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_connection_window,
           decodeErrorData: null,
         ),
-        constMeta: kCrateBackendApiConnectionsFetchConnectionWindowConstMeta,
+        constMeta:
+            kCrateBackendApiConnectionsControllerFetchConnectionWindowConstMeta,
         argValues: [target, intervalMs, kind, offset, limit, query],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiConnectionsFetchConnectionWindowConstMeta =>
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerFetchConnectionWindowConstMeta =>
       const TaskConstMeta(
-        debugName: "fetch_connection_window",
+        debugName: "controller_fetch_connection_window",
         argNames: ["target", "intervalMs", "kind", "offset", "limit", "query"],
       );
 
   @override
-  Future<Uint8List> crateBackendApiResourcesFetchIcon({required String url}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(url, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 30,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_8_strict,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiResourcesFetchIconConstMeta,
-        argValues: [url],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiResourcesFetchIconConstMeta =>
-      const TaskConstMeta(debugName: "fetch_icon", argNames: ["url"]);
-
-  @override
-  Future<LogWindow> crateBackendApiStreamsFetchLogsWindow({
+  Future<LogWindow> crateBackendApiStreamsControllerFetchLogsWindow({
     required BackendTarget target,
     required String level,
     required String query,
@@ -1631,7 +1662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1639,16 +1670,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_log_window,
           decodeErrorData: null,
         ),
-        constMeta: kCrateBackendApiStreamsFetchLogsWindowConstMeta,
+        constMeta: kCrateBackendApiStreamsControllerFetchLogsWindowConstMeta,
         argValues: [target, level, query, offset, limit, fromEnd, anchorId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateBackendApiStreamsFetchLogsWindowConstMeta =>
+  TaskConstMeta get kCrateBackendApiStreamsControllerFetchLogsWindowConstMeta =>
       const TaskConstMeta(
-        debugName: "fetch_logs_window",
+        debugName: "controller_fetch_logs_window",
         argNames: [
           "target",
           "level",
@@ -1659,6 +1690,2032 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "anchorId",
         ],
       );
+
+  @override
+  Future<void> crateBackendApiControlControllerFlushDns({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerFlushDnsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerFlushDnsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_flush_dns",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerFlushFakeip({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 32,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerFlushFakeipConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerFlushFakeipConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_flush_fakeip",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<List<GroupDelayEntry>> crateBackendApiProxyDelayControllerGroupDelay({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    int? concurrency,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          sse_encode_String(testUrl, serializer);
+          sse_encode_u_32(timeoutMs, serializer);
+          sse_encode_opt_String(expectedStatus, serializer);
+          sse_encode_opt_box_autoadd_u_32(concurrency, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 33,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_group_delay_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxyDelayControllerGroupDelayConstMeta,
+        argValues: [
+          target,
+          group,
+          testUrl,
+          timeoutMs,
+          expectedStatus,
+          concurrency,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxyDelayControllerGroupDelayConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_group_delay",
+        argNames: [
+          "target",
+          "group",
+          "testUrl",
+          "timeoutMs",
+          "expectedStatus",
+          "concurrency",
+        ],
+      );
+
+  @override
+  Future<String> crateBackendApiProxiesControllerGroups({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerGroupsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerGroupsConstMeta =>
+      const TaskConstMeta(debugName: "controller_groups", argNames: ["target"]);
+
+  @override
+  Stream<LogsFrame> crateBackendApiStreamsControllerLogsStream({
+    required BackendTarget target,
+    required int infoCapacity,
+  }) {
+    final sink = RustStreamSink<LogsFrame>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_u_32(infoCapacity, serializer);
+            sse_encode_StreamSink_logs_frame_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 35,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta: kCrateBackendApiStreamsControllerLogsStreamConstMeta,
+          argValues: [target, infoCapacity, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateBackendApiStreamsControllerLogsStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_logs_stream",
+        argNames: ["target", "infoCapacity", "sink"],
+      );
+
+  @override
+  Stream<MemorySample> crateBackendApiStreamsControllerMemoryStream({
+    required BackendTarget target,
+  }) {
+    final sink = RustStreamSink<MemorySample>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_StreamSink_memory_sample_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 36,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta: kCrateBackendApiStreamsControllerMemoryStreamConstMeta,
+          argValues: [target, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateBackendApiStreamsControllerMemoryStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_memory_stream",
+        argNames: ["target", "sink"],
+      );
+
+  @override
+  Stream<NetworkQualityProgress>
+  crateBackendApiDiagnosticsControllerNetworkQualityTestStream({
+    required BackendTarget target,
+    required String configUrl,
+    required String outboundTag,
+    required bool serial,
+    required int maxRuntimeSeconds,
+    required bool http3,
+  }) {
+    final sink = RustStreamSink<NetworkQualityProgress>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_String(configUrl, serializer);
+            sse_encode_String(outboundTag, serializer);
+            sse_encode_bool(serial, serializer);
+            sse_encode_i_32(maxRuntimeSeconds, serializer);
+            sse_encode_bool(http3, serializer);
+            sse_encode_StreamSink_network_quality_progress_Sse(
+              sink,
+              serializer,
+            );
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 37,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta:
+              kCrateBackendApiDiagnosticsControllerNetworkQualityTestStreamConstMeta,
+          argValues: [
+            target,
+            configUrl,
+            outboundTag,
+            serial,
+            maxRuntimeSeconds,
+            http3,
+            sink,
+          ],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiDiagnosticsControllerNetworkQualityTestStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_network_quality_test_stream",
+        argNames: [
+          "target",
+          "configUrl",
+          "outboundTag",
+          "serial",
+          "maxRuntimeSeconds",
+          "http3",
+          "sink",
+        ],
+      );
+
+  @override
+  Future<String> crateBackendApiProxiesControllerProxies({
+    required BackendTarget target,
+    String? namePattern,
+    String? typePattern,
+    required bool groupsOnly,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_opt_String(namePattern, serializer);
+          sse_encode_opt_String(typePattern, serializer);
+          sse_encode_bool(groupsOnly, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 38,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerProxiesConstMeta,
+        argValues: [target, namePattern, typePattern, groupsOnly],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerProxiesConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxies",
+        argNames: ["target", "namePattern", "typePattern", "groupsOnly"],
+      );
+
+  @override
+  Future<List<ProxyDelayEntry>>
+  crateBackendApiProxyDelayControllerProxyBatchDelay({
+    required BackendTarget target,
+    required List<String> names,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_list_String(names, serializer);
+          sse_encode_String(testUrl, serializer);
+          sse_encode_u_32(timeoutMs, serializer);
+          sse_encode_opt_String(expectedStatus, serializer);
+          sse_encode_u_32(concurrency, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 39,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_proxy_delay_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxyDelayControllerProxyBatchDelayConstMeta,
+        argValues: [
+          target,
+          names,
+          testUrl,
+          timeoutMs,
+          expectedStatus,
+          concurrency,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProxyDelayControllerProxyBatchDelayConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_batch_delay",
+        argNames: [
+          "target",
+          "names",
+          "testUrl",
+          "timeoutMs",
+          "expectedStatus",
+          "concurrency",
+        ],
+      );
+
+  @override
+  Future<ProxyCatalog> crateBackendApiProxiesControllerProxyCatalog({
+    required BackendTarget target,
+    required bool includeHidden,
+    required bool resolveProviderCurrentDelay,
+    required String filter,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_bool(includeHidden, serializer);
+          sse_encode_bool(resolveProviderCurrentDelay, serializer);
+          sse_encode_String(filter, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_proxy_catalog,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerProxyCatalogConstMeta,
+        argValues: [target, includeHidden, resolveProviderCurrentDelay, filter],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerProxyCatalogConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_catalog",
+        argNames: [
+          "target",
+          "includeHidden",
+          "resolveProviderCurrentDelay",
+          "filter",
+        ],
+      );
+
+  @override
+  Future<PlatformInt64> crateBackendApiProxyDelayControllerProxyDelay({
+    required BackendTarget target,
+    required String name,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_String(testUrl, serializer);
+          sse_encode_u_32(timeoutMs, serializer);
+          sse_encode_opt_String(expectedStatus, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxyDelayControllerProxyDelayConstMeta,
+        argValues: [target, name, testUrl, timeoutMs, expectedStatus],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxyDelayControllerProxyDelayConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_delay",
+        argNames: ["target", "name", "testUrl", "timeoutMs", "expectedStatus"],
+      );
+
+  @override
+  Future<ProxyDelayEvent> crateBackendApiProxyDelayControllerProxyDelayWindow({
+    required BackendTarget target,
+    required String group,
+    required String name,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required ProxyMemberSort memberSort,
+    required int windowOffset,
+    required int windowLimit,
+    required int windowMembersHash,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_String(testUrl, serializer);
+          sse_encode_u_32(timeoutMs, serializer);
+          sse_encode_opt_String(expectedStatus, serializer);
+          sse_encode_proxy_member_sort(memberSort, serializer);
+          sse_encode_u_32(windowOffset, serializer);
+          sse_encode_u_32(windowLimit, serializer);
+          sse_encode_u_32(windowMembersHash, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 42,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_proxy_delay_event,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProxyDelayControllerProxyDelayWindowConstMeta,
+        argValues: [
+          target,
+          group,
+          name,
+          testUrl,
+          timeoutMs,
+          expectedStatus,
+          memberSort,
+          windowOffset,
+          windowLimit,
+          windowMembersHash,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProxyDelayControllerProxyDelayWindowConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_delay_window",
+        argNames: [
+          "target",
+          "group",
+          "name",
+          "testUrl",
+          "timeoutMs",
+          "expectedStatus",
+          "memberSort",
+          "windowOffset",
+          "windowLimit",
+          "windowMembersHash",
+        ],
+      );
+
+  @override
+  Future<String> crateBackendApiProxiesControllerProxyDetail({
+    required BackendTarget target,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 43,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerProxyDetailConstMeta,
+        argValues: [target, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerProxyDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_detail",
+        argNames: ["target", "name"],
+      );
+
+  @override
+  Future<List<ProxyDelayEntry>>
+  crateBackendApiProxyDelayControllerProxyGroupBatchDelay({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          sse_encode_String(testUrl, serializer);
+          sse_encode_u_32(timeoutMs, serializer);
+          sse_encode_opt_String(expectedStatus, serializer);
+          sse_encode_u_32(concurrency, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_proxy_delay_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProxyDelayControllerProxyGroupBatchDelayConstMeta,
+        argValues: [
+          target,
+          group,
+          testUrl,
+          timeoutMs,
+          expectedStatus,
+          concurrency,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProxyDelayControllerProxyGroupBatchDelayConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_group_batch_delay",
+        argNames: [
+          "target",
+          "group",
+          "testUrl",
+          "timeoutMs",
+          "expectedStatus",
+          "concurrency",
+        ],
+      );
+
+  @override
+  Stream<ProxyDelayEvent>
+  crateBackendApiProxyDelayControllerProxyGroupDelayStream({
+    required BackendTarget target,
+    required String group,
+    required String testUrl,
+    required int timeoutMs,
+    String? expectedStatus,
+    required int concurrency,
+    required ProxyMemberSort memberSort,
+    required int windowOffset,
+    required int windowLimit,
+    required int windowMembersHash,
+  }) {
+    final sink = RustStreamSink<ProxyDelayEvent>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_String(group, serializer);
+            sse_encode_String(testUrl, serializer);
+            sse_encode_u_32(timeoutMs, serializer);
+            sse_encode_opt_String(expectedStatus, serializer);
+            sse_encode_u_32(concurrency, serializer);
+            sse_encode_proxy_member_sort(memberSort, serializer);
+            sse_encode_u_32(windowOffset, serializer);
+            sse_encode_u_32(windowLimit, serializer);
+            sse_encode_u_32(windowMembersHash, serializer);
+            sse_encode_StreamSink_proxy_delay_event_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 45,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta:
+              kCrateBackendApiProxyDelayControllerProxyGroupDelayStreamConstMeta,
+          argValues: [
+            target,
+            group,
+            testUrl,
+            timeoutMs,
+            expectedStatus,
+            concurrency,
+            memberSort,
+            windowOffset,
+            windowLimit,
+            windowMembersHash,
+            sink,
+          ],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProxyDelayControllerProxyGroupDelayStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_group_delay_stream",
+        argNames: [
+          "target",
+          "group",
+          "testUrl",
+          "timeoutMs",
+          "expectedStatus",
+          "concurrency",
+          "memberSort",
+          "windowOffset",
+          "windowLimit",
+          "windowMembersHash",
+          "sink",
+        ],
+      );
+
+  @override
+  Future<List<ProxyMemberEntry>>
+  crateBackendApiProxiesControllerProxyGroupMembers({
+    required BackendTarget target,
+    required String group,
+    required int offset,
+    required int limit,
+    required ProxyMemberSort memberSort,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          sse_encode_u_32(offset, serializer);
+          sse_encode_u_32(limit, serializer);
+          sse_encode_proxy_member_sort(memberSort, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 46,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_proxy_member_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerProxyGroupMembersConstMeta,
+        argValues: [target, group, offset, limit, memberSort],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProxiesControllerProxyGroupMembersConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_group_members",
+        argNames: ["target", "group", "offset", "limit", "memberSort"],
+      );
+
+  @override
+  Future<List<ProxyProviderEntry>>
+  crateBackendApiProvidersControllerProxyProviderCatalog({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_proxy_provider_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProvidersControllerProxyProviderCatalogConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerProxyProviderCatalogConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_provider_catalog",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiProvidersControllerProxyProviderHealthcheck({
+    required BackendTarget target,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 48,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProvidersControllerProxyProviderHealthcheckConstMeta,
+        argValues: [target, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerProxyProviderHealthcheckConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_provider_healthcheck",
+        argNames: ["target", "name"],
+      );
+
+  @override
+  Future<void> crateBackendApiProvidersControllerProxyProviderUpdate({
+    required BackendTarget target,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 49,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProvidersControllerProxyProviderUpdateConstMeta,
+        argValues: [target, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerProxyProviderUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_provider_update",
+        argNames: ["target", "name"],
+      );
+
+  @override
+  Future<String> crateBackendApiProvidersControllerProxyProviders({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 50,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProvidersControllerProxyProvidersConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerProxyProvidersConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_proxy_providers",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerReloadConfigs({
+    required BackendTarget target,
+    String? path,
+    String? payload,
+    required bool force,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_opt_String(path, serializer);
+          sse_encode_opt_String(payload, serializer);
+          sse_encode_bool(force, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 51,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerReloadConfigsConstMeta,
+        argValues: [target, path, payload, force],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerReloadConfigsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_reload_configs",
+        argNames: ["target", "path", "payload", "force"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerRestartCore({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 52,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerRestartCoreConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerRestartCoreConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_restart_core",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<List<RuleProviderEntry>>
+  crateBackendApiProvidersControllerRuleProviderCatalog({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 53,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_rule_provider_entry,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProvidersControllerRuleProviderCatalogConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerRuleProviderCatalogConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rule_provider_catalog",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiProvidersControllerRuleProviderUpdate({
+    required BackendTarget target,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 54,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiProvidersControllerRuleProviderUpdateConstMeta,
+        argValues: [target, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiProvidersControllerRuleProviderUpdateConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rule_provider_update",
+        argNames: ["target", "name"],
+      );
+
+  @override
+  Future<String> crateBackendApiProvidersControllerRuleProviders({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 55,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProvidersControllerRuleProvidersConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProvidersControllerRuleProvidersConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rule_providers",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<int> crateBackendApiRulesControllerRulesCount({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 56,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiRulesControllerRulesCountConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiRulesControllerRulesCountConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rules_count",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiRulesControllerRulesDisable({
+    required BackendTarget target,
+    required int index,
+    required bool disabled,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_u_32(index, serializer);
+          sse_encode_bool(disabled, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 57,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiRulesControllerRulesDisableConstMeta,
+        argValues: [target, index, disabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiRulesControllerRulesDisableConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rules_disable",
+        argNames: ["target", "index", "disabled"],
+      );
+
+  @override
+  Future<RulesSummary> crateBackendApiRulesControllerRulesLoad({
+    required BackendTarget target,
+    required String filter,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(filter, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 58,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rules_summary,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiRulesControllerRulesLoadConstMeta,
+        argValues: [target, filter],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiRulesControllerRulesLoadConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rules_load",
+        argNames: ["target", "filter"],
+      );
+
+  @override
+  Future<RulesSummary> crateBackendApiRulesControllerRulesSetFilter({
+    required BackendTarget target,
+    required String filter,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(filter, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 59,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rules_summary,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiRulesControllerRulesSetFilterConstMeta,
+        argValues: [target, filter],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiRulesControllerRulesSetFilterConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rules_set_filter",
+        argNames: ["target", "filter"],
+      );
+
+  @override
+  Future<List<RuleEntry>> crateBackendApiRulesControllerRulesWindow({
+    required BackendTarget target,
+    required int offset,
+    required int limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_u_32(offset, serializer);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 60,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_rule_entry,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiRulesControllerRulesWindowConstMeta,
+        argValues: [target, offset, limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiRulesControllerRulesWindowConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_rules_window",
+        argNames: ["target", "offset", "limit"],
+      );
+
+  @override
+  Future<void> crateBackendApiProxiesControllerSelectProxy({
+    required BackendTarget target,
+    required String group,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(group, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 61,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerSelectProxyConstMeta,
+        argValues: [target, group, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerSelectProxyConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_select_proxy",
+        argNames: ["target", "group", "name"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerSetConfigBool({
+    required BackendTarget target,
+    required String key,
+    required bool value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(key, serializer);
+          sse_encode_bool(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 62,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerSetConfigBoolConstMeta,
+        argValues: [target, key, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerSetConfigBoolConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_config_bool",
+        argNames: ["target", "key", "value"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerSetConfigLogLevel({
+    required BackendTarget target,
+    required String level,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(level, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 63,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerSetConfigLogLevelConstMeta,
+        argValues: [target, level],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiControlControllerSetConfigLogLevelConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_config_log_level",
+        argNames: ["target", "level"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerSetConfigMode({
+    required BackendTarget target,
+    required String mode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 64,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerSetConfigModeConstMeta,
+        argValues: [target, mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerSetConfigModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_config_mode",
+        argNames: ["target", "mode"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerSetConfigPort({
+    required BackendTarget target,
+    required String key,
+    required int value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(key, serializer);
+          sse_encode_u_32(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 65,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerSetConfigPortConstMeta,
+        argValues: [target, key, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerSetConfigPortConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_config_port",
+        argNames: ["target", "key", "value"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerSetConfigTunEnabled({
+    required BackendTarget target,
+    required bool enabled,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_bool(enabled, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 66,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta:
+            kCrateBackendApiControlControllerSetConfigTunEnabledConstMeta,
+        argValues: [target, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiControlControllerSetConfigTunEnabledConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_config_tun_enabled",
+        argNames: ["target", "enabled"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerSetConnectionsSort({
+    required BackendTarget target,
+    required int intervalMs,
+    required ConnectionsSort sort,
+    required bool asc,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_u_32(intervalMs, serializer);
+          sse_encode_connections_sort(sort, serializer);
+          sse_encode_bool(asc, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 67,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerSetConnectionsSortConstMeta,
+        argValues: [target, intervalMs, sort, asc],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerSetConnectionsSortConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_set_connections_sort",
+        argNames: ["target", "intervalMs", "sort", "asc"],
+      );
+
+  @override
+  Future<void> crateBackendApiConnectionsControllerStopTargetStreams({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 68,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateBackendApiConnectionsControllerStopTargetStreamsConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiConnectionsControllerStopTargetStreamsConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_stop_target_streams",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiProvidersControllerStorageDelete({
+    required BackendTarget target,
+    required String key,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(key, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 69,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProvidersControllerStorageDeleteConstMeta,
+        argValues: [target, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProvidersControllerStorageDeleteConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_storage_delete",
+        argNames: ["target", "key"],
+      );
+
+  @override
+  Future<String> crateBackendApiProvidersControllerStorageGet({
+    required BackendTarget target,
+    required String key,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(key, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 70,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProvidersControllerStorageGetConstMeta,
+        argValues: [target, key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProvidersControllerStorageGetConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_storage_get",
+        argNames: ["target", "key"],
+      );
+
+  @override
+  Future<void> crateBackendApiProvidersControllerStorageSet({
+    required BackendTarget target,
+    required String key,
+    required String value,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(key, serializer);
+          sse_encode_String(value, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 71,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProvidersControllerStorageSetConstMeta,
+        argValues: [target, key, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProvidersControllerStorageSetConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_storage_set",
+        argNames: ["target", "key", "value"],
+      );
+
+  @override
+  Stream<StunTestProgress> crateBackendApiDiagnosticsControllerStunTestStream({
+    required BackendTarget target,
+    required String server,
+    required String outboundTag,
+  }) {
+    final sink = RustStreamSink<StunTestProgress>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_String(server, serializer);
+            sse_encode_String(outboundTag, serializer);
+            sse_encode_StreamSink_stun_test_progress_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 72,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta:
+              kCrateBackendApiDiagnosticsControllerStunTestStreamConstMeta,
+          argValues: [target, server, outboundTag, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta
+  get kCrateBackendApiDiagnosticsControllerStunTestStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_stun_test_stream",
+        argNames: ["target", "server", "outboundTag", "sink"],
+      );
+
+  @override
+  Stream<TrafficSample> crateBackendApiStreamsControllerTrafficStream({
+    required BackendTarget target,
+  }) {
+    final sink = RustStreamSink<TrafficSample>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_box_autoadd_backend_target(target, serializer);
+            sse_encode_StreamSink_traffic_sample_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 73,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_mihomo_error,
+          ),
+          constMeta: kCrateBackendApiStreamsControllerTrafficStreamConstMeta,
+          argValues: [target, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateBackendApiStreamsControllerTrafficStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_traffic_stream",
+        argNames: ["target", "sink"],
+      );
+
+  @override
+  Future<void> crateBackendApiProxiesControllerUnfixProxy({
+    required BackendTarget target,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 74,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiProxiesControllerUnfixProxyConstMeta,
+        argValues: [target, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiProxiesControllerUnfixProxyConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_unfix_proxy",
+        argNames: ["target", "name"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerUpdateGeo({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 75,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerUpdateGeoConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerUpdateGeoConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_update_geo",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerUpgradeCore({
+    required BackendTarget target,
+    required bool force,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          sse_encode_bool(force, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 76,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerUpgradeCoreConstMeta,
+        argValues: [target, force],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerUpgradeCoreConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_upgrade_core",
+        argNames: ["target", "force"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerUpgradeGeo({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 77,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerUpgradeGeoConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerUpgradeGeoConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_upgrade_geo",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<void> crateBackendApiControlControllerUpgradeUi({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 78,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerUpgradeUiConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerUpgradeUiConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_upgrade_ui",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<String> crateBackendApiControlControllerVersion({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 79,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerVersionConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerVersionConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_version",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<VersionInfo> crateBackendApiControlControllerVersionInfo({
+    required BackendTarget target,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_backend_target(target, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 80,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_version_info,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiControlControllerVersionInfoConstMeta,
+        argValues: [target],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiControlControllerVersionInfoConstMeta =>
+      const TaskConstMeta(
+        debugName: "controller_version_info",
+        argNames: ["target"],
+      );
+
+  @override
+  Future<Uint8List> crateBackendApiResourcesFetchIcon({required String url}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(url, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 81,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_mihomo_error,
+        ),
+        constMeta: kCrateBackendApiResourcesFetchIconConstMeta,
+        argValues: [url],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiResourcesFetchIconConstMeta =>
+      const TaskConstMeta(debugName: "fetch_icon", argNames: ["url"]);
 
   @override
   Future<Uint8List?> crateBackendApiResourcesFetchProcessIcon({
@@ -1674,7 +3731,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 82,
             port: port_,
           );
         },
@@ -1707,7 +3764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 83,
             port: port_,
           );
         },
@@ -1726,121 +3783,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "fetch_process_name", argNames: ["path"]);
 
   @override
-  Future<void> crateBackendApiControlFlushDns({required BackendTarget target}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 34,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlFlushDnsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlFlushDnsConstMeta =>
-      const TaskConstMeta(debugName: "flush_dns", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiControlFlushFakeip({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 35,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlFlushFakeipConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlFlushFakeipConstMeta =>
-      const TaskConstMeta(debugName: "flush_fakeip", argNames: ["target"]);
-
-  @override
-  Future<List<GroupDelayEntry>> crateBackendApiProxyDelayGroupDelay({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    int? concurrency,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          sse_encode_String(testUrl, serializer);
-          sse_encode_u_32(timeoutMs, serializer);
-          sse_encode_opt_String(expectedStatus, serializer);
-          sse_encode_opt_box_autoadd_u_32(concurrency, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 36,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_group_delay_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxyDelayGroupDelayConstMeta,
-        argValues: [
-          target,
-          group,
-          testUrl,
-          timeoutMs,
-          expectedStatus,
-          concurrency,
-        ],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayGroupDelayConstMeta =>
-      const TaskConstMeta(
-        debugName: "group_delay",
-        argNames: [
-          "target",
-          "group",
-          "testUrl",
-          "timeoutMs",
-          "expectedStatus",
-          "concurrency",
-        ],
-      );
-
-  @override
   Future<GroupDelayEntry> crateBackendApiTypesGroupDelayEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -1849,7 +3791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 84,
             port: port_,
           );
         },
@@ -1868,34 +3810,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "group_delay_entry_default", argNames: []);
 
   @override
-  Future<String> crateBackendApiProxiesGroups({required BackendTarget target}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 38,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesGroupsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesGroupsConstMeta =>
-      const TaskConstMeta(debugName: "groups", argNames: ["target"]);
-
-  @override
   Future<BigInt> crateBackendApiResourcesIconCacheSize() {
     return handler.executeNormal(
       NormalTask(
@@ -1904,7 +3818,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 85,
             port: port_,
           );
         },
@@ -1931,7 +3845,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 86,
             port: port_,
           );
         },
@@ -1963,7 +3877,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 87,
             port: port_,
           );
         },
@@ -1993,7 +3907,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 88,
             port: port_,
           );
         },
@@ -2020,7 +3934,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 89,
             port: port_,
           );
         },
@@ -2047,7 +3961,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 90,
             port: port_,
           );
         },
@@ -2066,46 +3980,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "logs_frame_default", argNames: []);
 
   @override
-  Stream<LogsFrame> crateBackendApiStreamsLogsStream({
-    required BackendTarget target,
-    required int infoCapacity,
-  }) {
-    final sink = RustStreamSink<LogsFrame>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_u_32(infoCapacity, serializer);
-            sse_encode_StreamSink_logs_frame_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 45,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiStreamsLogsStreamConstMeta,
-          argValues: [target, infoCapacity, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiStreamsLogsStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "logs_stream",
-        argNames: ["target", "infoCapacity", "sink"],
-      );
-
-  @override
   Future<MemorySample> crateBackendApiTypesMemorySampleDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2114,7 +3988,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 91,
             port: port_,
           );
         },
@@ -2133,44 +4007,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "memory_sample_default", argNames: []);
 
   @override
-  Stream<MemorySample> crateBackendApiStreamsMemoryStream({
-    required BackendTarget target,
-  }) {
-    final sink = RustStreamSink<MemorySample>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_StreamSink_memory_sample_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 47,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiStreamsMemoryStreamConstMeta,
-          argValues: [target, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiStreamsMemoryStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "memory_stream",
-        argNames: ["target", "sink"],
-      );
-
-  @override
   Future<NetworkQualityProgress>
   crateBackendApiDiagnosticsNetworkQualityProgressDefault() {
     return handler.executeNormal(
@@ -2180,7 +4016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 92,
             port: port_,
           );
         },
@@ -2204,76 +4040,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Stream<NetworkQualityProgress>
-  crateBackendApiDiagnosticsNetworkQualityTestStream({
-    required BackendTarget target,
-    required String configUrl,
-    required String outboundTag,
-    required bool serial,
-    required int maxRuntimeSeconds,
-    required bool http3,
-  }) {
-    final sink = RustStreamSink<NetworkQualityProgress>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_String(configUrl, serializer);
-            sse_encode_String(outboundTag, serializer);
-            sse_encode_bool(serial, serializer);
-            sse_encode_i_32(maxRuntimeSeconds, serializer);
-            sse_encode_bool(http3, serializer);
-            sse_encode_StreamSink_network_quality_progress_Sse(
-              sink,
-              serializer,
-            );
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 49,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta:
-              kCrateBackendApiDiagnosticsNetworkQualityTestStreamConstMeta,
-          argValues: [
-            target,
-            configUrl,
-            outboundTag,
-            serial,
-            maxRuntimeSeconds,
-            http3,
-            sink,
-          ],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiDiagnosticsNetworkQualityTestStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "network_quality_test_stream",
-        argNames: [
-          "target",
-          "configUrl",
-          "outboundTag",
-          "serial",
-          "maxRuntimeSeconds",
-          "http3",
-          "sink",
-        ],
-      );
-
-  @override
   Future<OutboundEntry> crateBackendApiDiagnosticsOutboundEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2282,7 +4048,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 93,
             port: port_,
           );
         },
@@ -2301,146 +4067,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "outbound_entry_default", argNames: []);
 
   @override
-  Future<String> crateBackendApiProxiesProxies({
-    required BackendTarget target,
-    String? namePattern,
-    String? typePattern,
-    required bool groupsOnly,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_opt_String(namePattern, serializer);
-          sse_encode_opt_String(typePattern, serializer);
-          sse_encode_bool(groupsOnly, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 51,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesProxiesConstMeta,
-        argValues: [target, namePattern, typePattern, groupsOnly],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesProxiesConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxies",
-        argNames: ["target", "namePattern", "typePattern", "groupsOnly"],
-      );
-
-  @override
-  Future<List<ProxyDelayEntry>> crateBackendApiProxyDelayProxyBatchDelay({
-    required BackendTarget target,
-    required List<String> names,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_list_String(names, serializer);
-          sse_encode_String(testUrl, serializer);
-          sse_encode_u_32(timeoutMs, serializer);
-          sse_encode_opt_String(expectedStatus, serializer);
-          sse_encode_u_32(concurrency, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 52,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_proxy_delay_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxyDelayProxyBatchDelayConstMeta,
-        argValues: [
-          target,
-          names,
-          testUrl,
-          timeoutMs,
-          expectedStatus,
-          concurrency,
-        ],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayProxyBatchDelayConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_batch_delay",
-        argNames: [
-          "target",
-          "names",
-          "testUrl",
-          "timeoutMs",
-          "expectedStatus",
-          "concurrency",
-        ],
-      );
-
-  @override
-  Future<ProxyCatalog> crateBackendApiProxiesProxyCatalog({
-    required BackendTarget target,
-    required bool includeHidden,
-    required bool resolveProviderCurrentDelay,
-    required String filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_bool(includeHidden, serializer);
-          sse_encode_bool(resolveProviderCurrentDelay, serializer);
-          sse_encode_String(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 53,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_proxy_catalog,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesProxyCatalogConstMeta,
-        argValues: [target, includeHidden, resolveProviderCurrentDelay, filter],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesProxyCatalogConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_catalog",
-        argNames: [
-          "target",
-          "includeHidden",
-          "resolveProviderCurrentDelay",
-          "filter",
-        ],
-      );
-
-  @override
   Future<ProxyCatalog> crateBackendApiTypesProxyCatalogDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2449,7 +4075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 94,
             port: port_,
           );
         },
@@ -2468,47 +4094,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "proxy_catalog_default", argNames: []);
 
   @override
-  Future<PlatformInt64> crateBackendApiProxyDelayProxyDelay({
-    required BackendTarget target,
-    required String name,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          sse_encode_String(testUrl, serializer);
-          sse_encode_u_32(timeoutMs, serializer);
-          sse_encode_opt_String(expectedStatus, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 55,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_i_64,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxyDelayProxyDelayConstMeta,
-        argValues: [target, name, testUrl, timeoutMs, expectedStatus],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayProxyDelayConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_delay",
-        argNames: ["target", "name", "testUrl", "timeoutMs", "expectedStatus"],
-      );
-
-  @override
   Future<ProxyDelayEntry> crateBackendApiTypesProxyDelayEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2517,7 +4102,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 95,
             port: port_,
           );
         },
@@ -2544,7 +4129,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 96,
             port: port_,
           );
         },
@@ -2563,251 +4148,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "proxy_delay_event_default", argNames: []);
 
   @override
-  Future<ProxyDelayEvent> crateBackendApiProxyDelayProxyDelayWindow({
-    required BackendTarget target,
-    required String group,
-    required String name,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required ProxyMemberSort memberSort,
-    required int windowOffset,
-    required int windowLimit,
-    required int windowMembersHash,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          sse_encode_String(name, serializer);
-          sse_encode_String(testUrl, serializer);
-          sse_encode_u_32(timeoutMs, serializer);
-          sse_encode_opt_String(expectedStatus, serializer);
-          sse_encode_proxy_member_sort(memberSort, serializer);
-          sse_encode_u_32(windowOffset, serializer);
-          sse_encode_u_32(windowLimit, serializer);
-          sse_encode_u_32(windowMembersHash, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 58,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_proxy_delay_event,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxyDelayProxyDelayWindowConstMeta,
-        argValues: [
-          target,
-          group,
-          name,
-          testUrl,
-          timeoutMs,
-          expectedStatus,
-          memberSort,
-          windowOffset,
-          windowLimit,
-          windowMembersHash,
-        ],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayProxyDelayWindowConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_delay_window",
-        argNames: [
-          "target",
-          "group",
-          "name",
-          "testUrl",
-          "timeoutMs",
-          "expectedStatus",
-          "memberSort",
-          "windowOffset",
-          "windowLimit",
-          "windowMembersHash",
-        ],
-      );
-
-  @override
-  Future<String> crateBackendApiProxiesProxyDetail({
-    required BackendTarget target,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 59,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesProxyDetailConstMeta,
-        argValues: [target, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesProxyDetailConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_detail",
-        argNames: ["target", "name"],
-      );
-
-  @override
-  Future<List<ProxyDelayEntry>> crateBackendApiProxyDelayProxyGroupBatchDelay({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          sse_encode_String(testUrl, serializer);
-          sse_encode_u_32(timeoutMs, serializer);
-          sse_encode_opt_String(expectedStatus, serializer);
-          sse_encode_u_32(concurrency, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 60,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_proxy_delay_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxyDelayProxyGroupBatchDelayConstMeta,
-        argValues: [
-          target,
-          group,
-          testUrl,
-          timeoutMs,
-          expectedStatus,
-          concurrency,
-        ],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayProxyGroupBatchDelayConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_group_batch_delay",
-        argNames: [
-          "target",
-          "group",
-          "testUrl",
-          "timeoutMs",
-          "expectedStatus",
-          "concurrency",
-        ],
-      );
-
-  @override
-  Stream<ProxyDelayEvent> crateBackendApiProxyDelayProxyGroupDelayStream({
-    required BackendTarget target,
-    required String group,
-    required String testUrl,
-    required int timeoutMs,
-    String? expectedStatus,
-    required int concurrency,
-    required ProxyMemberSort memberSort,
-    required int windowOffset,
-    required int windowLimit,
-    required int windowMembersHash,
-  }) {
-    final sink = RustStreamSink<ProxyDelayEvent>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_String(group, serializer);
-            sse_encode_String(testUrl, serializer);
-            sse_encode_u_32(timeoutMs, serializer);
-            sse_encode_opt_String(expectedStatus, serializer);
-            sse_encode_u_32(concurrency, serializer);
-            sse_encode_proxy_member_sort(memberSort, serializer);
-            sse_encode_u_32(windowOffset, serializer);
-            sse_encode_u_32(windowLimit, serializer);
-            sse_encode_u_32(windowMembersHash, serializer);
-            sse_encode_StreamSink_proxy_delay_event_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 61,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiProxyDelayProxyGroupDelayStreamConstMeta,
-          argValues: [
-            target,
-            group,
-            testUrl,
-            timeoutMs,
-            expectedStatus,
-            concurrency,
-            memberSort,
-            windowOffset,
-            windowLimit,
-            windowMembersHash,
-            sink,
-          ],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiProxyDelayProxyGroupDelayStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_group_delay_stream",
-        argNames: [
-          "target",
-          "group",
-          "testUrl",
-          "timeoutMs",
-          "expectedStatus",
-          "concurrency",
-          "memberSort",
-          "windowOffset",
-          "windowLimit",
-          "windowMembersHash",
-          "sink",
-        ],
-      );
-
-  @override
   Future<ProxyGroupEntry> crateBackendApiTypesProxyGroupEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2816,7 +4156,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 97,
             port: port_,
           );
         },
@@ -2835,47 +4175,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "proxy_group_entry_default", argNames: []);
 
   @override
-  Future<List<ProxyMemberEntry>> crateBackendApiProxiesProxyGroupMembers({
-    required BackendTarget target,
-    required String group,
-    required int offset,
-    required int limit,
-    required ProxyMemberSort memberSort,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          sse_encode_u_32(offset, serializer);
-          sse_encode_u_32(limit, serializer);
-          sse_encode_proxy_member_sort(memberSort, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 63,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_proxy_member_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesProxyGroupMembersConstMeta,
-        argValues: [target, group, offset, limit, memberSort],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesProxyGroupMembersConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_group_members",
-        argNames: ["target", "group", "offset", "limit", "memberSort"],
-      );
-
-  @override
   Future<ProxyMemberEntry> crateBackendApiTypesProxyMemberEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2884,7 +4183,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 98,
             port: port_,
           );
         },
@@ -2914,7 +4213,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 99,
             port: port_,
           );
         },
@@ -2933,40 +4232,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "proxy_member_sort_default", argNames: []);
 
   @override
-  Future<List<ProxyProviderEntry>>
-  crateBackendApiProvidersProxyProviderCatalog({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 66,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_proxy_provider_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersProxyProviderCatalogConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersProxyProviderCatalogConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_provider_catalog",
-        argNames: ["target"],
-      );
-
-  @override
   Future<ProxyProviderEntry> crateBackendApiTypesProxyProviderEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2975,7 +4240,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 100,
             port: port_,
           );
         },
@@ -2997,146 +4262,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateBackendApiProvidersProxyProviderHealthcheck({
-    required BackendTarget target,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 68,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersProxyProviderHealthcheckConstMeta,
-        argValues: [target, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateBackendApiProvidersProxyProviderHealthcheckConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_provider_healthcheck",
-        argNames: ["target", "name"],
-      );
-
-  @override
-  Future<void> crateBackendApiProvidersProxyProviderUpdate({
-    required BackendTarget target,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 69,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersProxyProviderUpdateConstMeta,
-        argValues: [target, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersProxyProviderUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "proxy_provider_update",
-        argNames: ["target", "name"],
-      );
-
-  @override
-  Future<String> crateBackendApiProvidersProxyProviders({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 70,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersProxyProvidersConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersProxyProvidersConstMeta =>
-      const TaskConstMeta(debugName: "proxy_providers", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiControlReloadConfigs({
-    required BackendTarget target,
-    String? path,
-    String? payload,
-    required bool force,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_opt_String(path, serializer);
-          sse_encode_opt_String(payload, serializer);
-          sse_encode_bool(force, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 71,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlReloadConfigsConstMeta,
-        argValues: [target, path, payload, force],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlReloadConfigsConstMeta =>
-      const TaskConstMeta(
-        debugName: "reload_configs",
-        argNames: ["target", "path", "payload", "force"],
-      );
-
-  @override
   Future<void> crateBackendApiResourcesResetProcessIconMisses() {
     return handler.executeNormal(
       NormalTask(
@@ -3145,7 +4270,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 101,
             port: port_,
           );
         },
@@ -3164,36 +4289,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "reset_process_icon_misses", argNames: []);
 
   @override
-  Future<void> crateBackendApiControlRestartCore({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 73,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlRestartCoreConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlRestartCoreConstMeta =>
-      const TaskConstMeta(debugName: "restart_core", argNames: ["target"]);
-
-  @override
   Future<RuleEntry> crateBackendApiTypesRuleEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -3202,7 +4297,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 102,
             port: port_,
           );
         },
@@ -3221,39 +4316,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "rule_entry_default", argNames: []);
 
   @override
-  Future<List<RuleProviderEntry>> crateBackendApiProvidersRuleProviderCatalog({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 75,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_rule_provider_entry,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersRuleProviderCatalogConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersRuleProviderCatalogConstMeta =>
-      const TaskConstMeta(
-        debugName: "rule_provider_catalog",
-        argNames: ["target"],
-      );
-
-  @override
   Future<RuleProviderEntry> crateBackendApiTypesRuleProviderEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -3262,7 +4324,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 103,
             port: port_,
           );
         },
@@ -3284,206 +4346,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateBackendApiProvidersRuleProviderUpdate({
-    required BackendTarget target,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 77,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersRuleProviderUpdateConstMeta,
-        argValues: [target, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersRuleProviderUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "rule_provider_update",
-        argNames: ["target", "name"],
-      );
-
-  @override
-  Future<String> crateBackendApiProvidersRuleProviders({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 78,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersRuleProvidersConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersRuleProvidersConstMeta =>
-      const TaskConstMeta(debugName: "rule_providers", argNames: ["target"]);
-
-  @override
-  Future<int> crateBackendApiRulesRulesCount({required BackendTarget target}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 79,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_u_32,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiRulesRulesCountConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiRulesRulesCountConstMeta =>
-      const TaskConstMeta(debugName: "rules_count", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiRulesRulesDisable({
-    required BackendTarget target,
-    required int index,
-    required bool disabled,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_u_32(index, serializer);
-          sse_encode_bool(disabled, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 80,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiRulesRulesDisableConstMeta,
-        argValues: [target, index, disabled],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiRulesRulesDisableConstMeta =>
-      const TaskConstMeta(
-        debugName: "rules_disable",
-        argNames: ["target", "index", "disabled"],
-      );
-
-  @override
-  Future<RulesSummary> crateBackendApiRulesRulesLoad({
-    required BackendTarget target,
-    required String filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 81,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_rules_summary,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiRulesRulesLoadConstMeta,
-        argValues: [target, filter],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiRulesRulesLoadConstMeta =>
-      const TaskConstMeta(
-        debugName: "rules_load",
-        argNames: ["target", "filter"],
-      );
-
-  @override
-  Future<RulesSummary> crateBackendApiRulesRulesSetFilter({
-    required BackendTarget target,
-    required String filter,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(filter, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 82,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_rules_summary,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiRulesRulesSetFilterConstMeta,
-        argValues: [target, filter],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiRulesRulesSetFilterConstMeta =>
-      const TaskConstMeta(
-        debugName: "rules_set_filter",
-        argNames: ["target", "filter"],
-      );
-
-  @override
   Future<RulesSummary> crateBackendApiTypesRulesSummaryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -3492,7 +4354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 104,
             port: port_,
           );
         },
@@ -3511,298 +4373,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "rules_summary_default", argNames: []);
 
   @override
-  Future<List<RuleEntry>> crateBackendApiRulesRulesWindow({
-    required BackendTarget target,
-    required int offset,
-    required int limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_u_32(offset, serializer);
-          sse_encode_u_32(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 84,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_rule_entry,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiRulesRulesWindowConstMeta,
-        argValues: [target, offset, limit],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiRulesRulesWindowConstMeta =>
-      const TaskConstMeta(
-        debugName: "rules_window",
-        argNames: ["target", "offset", "limit"],
-      );
-
-  @override
-  Future<void> crateBackendApiProxiesSelectProxy({
-    required BackendTarget target,
-    required String group,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(group, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 85,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesSelectProxyConstMeta,
-        argValues: [target, group, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesSelectProxyConstMeta =>
-      const TaskConstMeta(
-        debugName: "select_proxy",
-        argNames: ["target", "group", "name"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlSetConfigBool({
-    required BackendTarget target,
-    required String key,
-    required bool value,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(key, serializer);
-          sse_encode_bool(value, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 86,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlSetConfigBoolConstMeta,
-        argValues: [target, key, value],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlSetConfigBoolConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_config_bool",
-        argNames: ["target", "key", "value"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlSetConfigLogLevel({
-    required BackendTarget target,
-    required String level,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(level, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 87,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlSetConfigLogLevelConstMeta,
-        argValues: [target, level],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlSetConfigLogLevelConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_config_log_level",
-        argNames: ["target", "level"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlSetConfigMode({
-    required BackendTarget target,
-    required String mode,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(mode, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 88,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlSetConfigModeConstMeta,
-        argValues: [target, mode],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlSetConfigModeConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_config_mode",
-        argNames: ["target", "mode"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlSetConfigPort({
-    required BackendTarget target,
-    required String key,
-    required int value,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(key, serializer);
-          sse_encode_u_32(value, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 89,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlSetConfigPortConstMeta,
-        argValues: [target, key, value],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlSetConfigPortConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_config_port",
-        argNames: ["target", "key", "value"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlSetConfigTunEnabled({
-    required BackendTarget target,
-    required bool enabled,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_bool(enabled, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 90,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlSetConfigTunEnabledConstMeta,
-        argValues: [target, enabled],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlSetConfigTunEnabledConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_config_tun_enabled",
-        argNames: ["target", "enabled"],
-      );
-
-  @override
-  Future<void> crateBackendApiConnectionsSetConnectionsSort({
-    required BackendTarget target,
-    required int intervalMs,
-    required ConnectionsSort sort,
-    required bool asc,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_u_32(intervalMs, serializer);
-          sse_encode_connections_sort(sort, serializer);
-          sse_encode_bool(asc, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 91,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiConnectionsSetConnectionsSortConstMeta,
-        argValues: [target, intervalMs, sort, asc],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsSetConnectionsSortConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_connections_sort",
-        argNames: ["target", "intervalMs", "sort", "asc"],
-      );
-
-  @override
   Future<void> crateBackendApiResourcesSetOnlineResourceAllowInsecure({
     required bool allowInsecure,
   }) {
@@ -3814,7 +4384,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 105,
             port: port_,
           );
         },
@@ -3838,146 +4408,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateBackendApiConnectionsStopTargetStreams({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 93,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateBackendApiConnectionsStopTargetStreamsConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiConnectionsStopTargetStreamsConstMeta =>
-      const TaskConstMeta(
-        debugName: "stop_target_streams",
-        argNames: ["target"],
-      );
-
-  @override
-  Future<void> crateBackendApiProvidersStorageDelete({
-    required BackendTarget target,
-    required String key,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(key, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 94,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersStorageDeleteConstMeta,
-        argValues: [target, key],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersStorageDeleteConstMeta =>
-      const TaskConstMeta(
-        debugName: "storage_delete",
-        argNames: ["target", "key"],
-      );
-
-  @override
-  Future<String> crateBackendApiProvidersStorageGet({
-    required BackendTarget target,
-    required String key,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(key, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 95,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersStorageGetConstMeta,
-        argValues: [target, key],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersStorageGetConstMeta =>
-      const TaskConstMeta(
-        debugName: "storage_get",
-        argNames: ["target", "key"],
-      );
-
-  @override
-  Future<void> crateBackendApiProvidersStorageSet({
-    required BackendTarget target,
-    required String key,
-    required String value,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(key, serializer);
-          sse_encode_String(value, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 96,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProvidersStorageSetConstMeta,
-        argValues: [target, key, value],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProvidersStorageSetConstMeta =>
-      const TaskConstMeta(
-        debugName: "storage_set",
-        argNames: ["target", "key", "value"],
-      );
-
-  @override
   Future<void> crateBackendApiResourcesStoreProcessIcon({
     required String key,
     required List<int> bytes,
@@ -3991,7 +4421,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 106,
             port: port_,
           );
         },
@@ -4026,7 +4456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 107,
             port: port_,
           );
         },
@@ -4056,7 +4486,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 108,
             port: port_,
           );
         },
@@ -4079,48 +4509,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Stream<StunTestProgress> crateBackendApiDiagnosticsStunTestStream({
-    required BackendTarget target,
-    required String server,
-    required String outboundTag,
-  }) {
-    final sink = RustStreamSink<StunTestProgress>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_String(server, serializer);
-            sse_encode_String(outboundTag, serializer);
-            sse_encode_StreamSink_stun_test_progress_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 100,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiDiagnosticsStunTestStreamConstMeta,
-          argValues: [target, server, outboundTag, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiDiagnosticsStunTestStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "stun_test_stream",
-        argNames: ["target", "server", "outboundTag", "sink"],
-      );
-
-  @override
   Future<List<String>> crateBackendApiResourcesSystemFontFamilies() {
     return handler.executeNormal(
       NormalTask(
@@ -4129,7 +4517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 109,
             port: port_,
           );
         },
@@ -4157,7 +4545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 110,
             port: port_,
           );
         },
@@ -4194,7 +4582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 111,
             port: port_,
           );
         },
@@ -4224,7 +4612,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 112,
             port: port_,
           );
         },
@@ -4261,7 +4649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 105,
+              funcId: 113,
               port: port_,
             );
           },
@@ -4294,7 +4682,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 114,
             port: port_,
           );
         },
@@ -4332,7 +4720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 115,
             port: port_,
           );
         },
@@ -4362,7 +4750,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 116,
             port: port_,
           );
         },
@@ -4395,7 +4783,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 109,
+              funcId: 117,
               port: port_,
             );
           },
@@ -4428,7 +4816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 118,
             port: port_,
           );
         },
@@ -4459,7 +4847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 119,
             port: port_,
           );
         },
@@ -4476,264 +4864,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateBackendApiTypesTrafficSampleDefaultConstMeta =>
       const TaskConstMeta(debugName: "traffic_sample_default", argNames: []);
-
-  @override
-  Stream<TrafficSample> crateBackendApiStreamsTrafficStream({
-    required BackendTarget target,
-  }) {
-    final sink = RustStreamSink<TrafficSample>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_box_autoadd_backend_target(target, serializer);
-            sse_encode_StreamSink_traffic_sample_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 112,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_mihomo_error,
-          ),
-          constMeta: kCrateBackendApiStreamsTrafficStreamConstMeta,
-          argValues: [target, sink],
-          apiImpl: this,
-        ),
-      ),
-    );
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateBackendApiStreamsTrafficStreamConstMeta =>
-      const TaskConstMeta(
-        debugName: "traffic_stream",
-        argNames: ["target", "sink"],
-      );
-
-  @override
-  Future<void> crateBackendApiProxiesUnfixProxy({
-    required BackendTarget target,
-    required String name,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_String(name, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 113,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiProxiesUnfixProxyConstMeta,
-        argValues: [target, name],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiProxiesUnfixProxyConstMeta =>
-      const TaskConstMeta(
-        debugName: "unfix_proxy",
-        argNames: ["target", "name"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlUpdateGeo({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 114,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlUpdateGeoConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlUpdateGeoConstMeta =>
-      const TaskConstMeta(debugName: "update_geo", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiControlUpgradeCore({
-    required BackendTarget target,
-    required bool force,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          sse_encode_bool(force, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 115,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlUpgradeCoreConstMeta,
-        argValues: [target, force],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlUpgradeCoreConstMeta =>
-      const TaskConstMeta(
-        debugName: "upgrade_core",
-        argNames: ["target", "force"],
-      );
-
-  @override
-  Future<void> crateBackendApiControlUpgradeGeo({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 116,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlUpgradeGeoConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlUpgradeGeoConstMeta =>
-      const TaskConstMeta(debugName: "upgrade_geo", argNames: ["target"]);
-
-  @override
-  Future<void> crateBackendApiControlUpgradeUi({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 117,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlUpgradeUiConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlUpgradeUiConstMeta =>
-      const TaskConstMeta(debugName: "upgrade_ui", argNames: ["target"]);
-
-  @override
-  Future<String> crateBackendApiControlVersion({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 118,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlVersionConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlVersionConstMeta =>
-      const TaskConstMeta(debugName: "version", argNames: ["target"]);
-
-  @override
-  Future<VersionInfo> crateBackendApiControlVersionInfo({
-    required BackendTarget target,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_backend_target(target, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 119,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_version_info,
-          decodeErrorData: sse_decode_mihomo_error,
-        ),
-        constMeta: kCrateBackendApiControlVersionInfoConstMeta,
-        argValues: [target],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateBackendApiControlVersionInfoConstMeta =>
-      const TaskConstMeta(debugName: "version_info", argNames: ["target"]);
 
   @override
   Future<VersionInfo> crateBackendApiTypesVersionInfoDefault() {
@@ -5031,12 +5161,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CoreConfig dco_decode_core_config(dynamic raw) {
+  ControllerConfig dco_decode_controller_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 10)
       throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return CoreConfig(
+    return ControllerConfig(
       mode: dco_decode_opt_String(arr[0]),
       modeOptions: dco_decode_list_String(arr[1]),
       logLevel: dco_decode_opt_String(arr[2]),
@@ -5981,7 +6111,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CoreConfig sse_decode_core_config(SseDeserializer deserializer) {
+  ControllerConfig sse_decode_controller_config(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_mode = sse_decode_opt_String(deserializer);
     var var_modeOptions = sse_decode_list_String(deserializer);
@@ -5993,7 +6123,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_port = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_socksPort = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_mixedPort = sse_decode_opt_box_autoadd_u_32(deserializer);
-    return CoreConfig(
+    return ControllerConfig(
       mode: var_mode,
       modeOptions: var_modeOptions,
       logLevel: var_logLevel,
@@ -7177,7 +7307,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_core_config(CoreConfig self, SseSerializer serializer) {
+  void sse_encode_controller_config(
+    ControllerConfig self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_String(self.mode, serializer);
     sse_encode_list_String(self.modeOptions, serializer);

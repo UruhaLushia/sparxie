@@ -234,7 +234,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       _error = null;
     });
     try {
-      final entries = await rust.proxyProviderCatalog(target: target);
+      final entries = await rust.controllerProxyProviderCatalog(target: target);
       final list = entries.map(_ProxyProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
@@ -251,7 +251,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
-      await rust.proxyProviderUpdate(target: target, name: p.name);
+      await rust.controllerProxyProviderUpdate(target: target, name: p.name);
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -272,7 +272,10 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     try {
       for (final provider in providers) {
         try {
-          await rust.proxyProviderUpdate(target: target, name: provider.name);
+          await rust.controllerProxyProviderUpdate(
+            target: target,
+            name: provider.name,
+          );
         } catch (error) {
           failures.add('${provider.name}: ${_formatError(error)}');
         }
@@ -388,7 +391,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       _error = null;
     });
     try {
-      final entries = await rust.ruleProviderCatalog(target: target);
+      final entries = await rust.controllerRuleProviderCatalog(target: target);
       final list = entries.map(_RuleProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
@@ -405,7 +408,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
-      await rust.ruleProviderUpdate(target: target, name: p.name);
+      await rust.controllerRuleProviderUpdate(target: target, name: p.name);
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -426,7 +429,10 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     try {
       for (final provider in providers) {
         try {
-          await rust.ruleProviderUpdate(target: target, name: provider.name);
+          await rust.controllerRuleProviderUpdate(
+            target: target,
+            name: provider.name,
+          );
         } catch (error) {
           failures.add('${provider.name}: ${_formatError(error)}');
         }

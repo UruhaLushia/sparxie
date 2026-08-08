@@ -9,14 +9,14 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<List<GroupDelayEntry>> groupDelay({
+Future<List<GroupDelayEntry>> controllerGroupDelay({
   required BackendTarget target,
   required String group,
   required String testUrl,
   required int timeoutMs,
   String? expectedStatus,
   int? concurrency,
-}) => RustLib.instance.api.crateBackendApiProxyDelayGroupDelay(
+}) => RustLib.instance.api.crateBackendApiProxyDelayControllerGroupDelay(
   target: target,
   group: group,
   testUrl: testUrl,
@@ -25,13 +25,13 @@ Future<List<GroupDelayEntry>> groupDelay({
   concurrency: concurrency,
 );
 
-Future<PlatformInt64> proxyDelay({
+Future<PlatformInt64> controllerProxyDelay({
   required BackendTarget target,
   required String name,
   required String testUrl,
   required int timeoutMs,
   String? expectedStatus,
-}) => RustLib.instance.api.crateBackendApiProxyDelayProxyDelay(
+}) => RustLib.instance.api.crateBackendApiProxyDelayControllerProxyDelay(
   target: target,
   name: name,
   testUrl: testUrl,
@@ -39,14 +39,14 @@ Future<PlatformInt64> proxyDelay({
   expectedStatus: expectedStatus,
 );
 
-Future<List<ProxyDelayEntry>> proxyBatchDelay({
+Future<List<ProxyDelayEntry>> controllerProxyBatchDelay({
   required BackendTarget target,
   required List<String> names,
   required String testUrl,
   required int timeoutMs,
   String? expectedStatus,
   required int concurrency,
-}) => RustLib.instance.api.crateBackendApiProxyDelayProxyBatchDelay(
+}) => RustLib.instance.api.crateBackendApiProxyDelayControllerProxyBatchDelay(
   target: target,
   names: names,
   testUrl: testUrl,
@@ -55,23 +55,24 @@ Future<List<ProxyDelayEntry>> proxyBatchDelay({
   concurrency: concurrency,
 );
 
-Future<List<ProxyDelayEntry>> proxyGroupBatchDelay({
+Future<List<ProxyDelayEntry>> controllerProxyGroupBatchDelay({
   required BackendTarget target,
   required String group,
   required String testUrl,
   required int timeoutMs,
   String? expectedStatus,
   required int concurrency,
-}) => RustLib.instance.api.crateBackendApiProxyDelayProxyGroupBatchDelay(
-  target: target,
-  group: group,
-  testUrl: testUrl,
-  timeoutMs: timeoutMs,
-  expectedStatus: expectedStatus,
-  concurrency: concurrency,
-);
+}) => RustLib.instance.api
+    .crateBackendApiProxyDelayControllerProxyGroupBatchDelay(
+      target: target,
+      group: group,
+      testUrl: testUrl,
+      timeoutMs: timeoutMs,
+      expectedStatus: expectedStatus,
+      concurrency: concurrency,
+    );
 
-Stream<ProxyDelayEvent> proxyGroupDelayStream({
+Stream<ProxyDelayEvent> controllerProxyGroupDelayStream({
   required BackendTarget target,
   required String group,
   required String testUrl,
@@ -82,20 +83,21 @@ Stream<ProxyDelayEvent> proxyGroupDelayStream({
   required int windowOffset,
   required int windowLimit,
   required int windowMembersHash,
-}) => RustLib.instance.api.crateBackendApiProxyDelayProxyGroupDelayStream(
-  target: target,
-  group: group,
-  testUrl: testUrl,
-  timeoutMs: timeoutMs,
-  expectedStatus: expectedStatus,
-  concurrency: concurrency,
-  memberSort: memberSort,
-  windowOffset: windowOffset,
-  windowLimit: windowLimit,
-  windowMembersHash: windowMembersHash,
-);
+}) => RustLib.instance.api
+    .crateBackendApiProxyDelayControllerProxyGroupDelayStream(
+      target: target,
+      group: group,
+      testUrl: testUrl,
+      timeoutMs: timeoutMs,
+      expectedStatus: expectedStatus,
+      concurrency: concurrency,
+      memberSort: memberSort,
+      windowOffset: windowOffset,
+      windowLimit: windowLimit,
+      windowMembersHash: windowMembersHash,
+    );
 
-Future<ProxyDelayEvent> proxyDelayWindow({
+Future<ProxyDelayEvent> controllerProxyDelayWindow({
   required BackendTarget target,
   required String group,
   required String name,
@@ -106,7 +108,7 @@ Future<ProxyDelayEvent> proxyDelayWindow({
   required int windowOffset,
   required int windowLimit,
   required int windowMembersHash,
-}) => RustLib.instance.api.crateBackendApiProxyDelayProxyDelayWindow(
+}) => RustLib.instance.api.crateBackendApiProxyDelayControllerProxyDelayWindow(
   target: target,
   group: group,
   name: name,

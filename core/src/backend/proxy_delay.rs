@@ -8,7 +8,7 @@ use super::{
     clash_member_sort,
 };
 
-pub async fn group_delay(
+pub async fn controller_group_delay(
     target: BackendTarget,
     group: String,
     test_url: String,
@@ -34,7 +34,7 @@ pub async fn group_delay(
     }
 }
 
-pub async fn proxy_delay(
+pub async fn controller_proxy_delay(
     target: BackendTarget,
     name: String,
     test_url: String,
@@ -74,7 +74,7 @@ pub async fn proxy_delay(
     }
 }
 
-pub async fn proxy_batch_delay(
+pub async fn controller_proxy_batch_delay(
     target: BackendTarget,
     names: Vec<String>,
     test_url: String,
@@ -104,7 +104,7 @@ pub async fn proxy_batch_delay(
     }
 }
 
-pub async fn proxy_group_batch_delay(
+pub async fn controller_proxy_group_batch_delay(
     target: BackendTarget,
     group: String,
     test_url: String,
@@ -135,7 +135,7 @@ pub async fn proxy_group_batch_delay(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn proxy_group_delay_stream(
+pub async fn controller_proxy_group_delay_stream(
     target: BackendTarget,
     group: String,
     test_url: String,
@@ -249,7 +249,7 @@ pub async fn proxy_group_delay_stream(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn proxy_delay_window(
+pub async fn controller_proxy_delay_window(
     target: BackendTarget,
     group: String,
     name: String,

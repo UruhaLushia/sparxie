@@ -9,99 +9,108 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<String> connections({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiConnectionsConnections(target: target);
+Future<String> controllerConnections({required BackendTarget target}) => RustLib
+    .instance
+    .api
+    .crateBackendApiConnectionsControllerConnections(target: target);
 
-Future<void> closeConnection({
+Future<void> controllerCloseConnection({
   required BackendTarget target,
   required String id,
-}) => RustLib.instance.api.crateBackendApiConnectionsCloseConnection(
+}) => RustLib.instance.api.crateBackendApiConnectionsControllerCloseConnection(
   target: target,
   id: id,
 );
 
-Future<void> closeAllConnections({required BackendTarget target}) => RustLib
-    .instance
-    .api
-    .crateBackendApiConnectionsCloseAllConnections(target: target);
+Future<void> controllerCloseAllConnections({required BackendTarget target}) =>
+    RustLib.instance.api
+        .crateBackendApiConnectionsControllerCloseAllConnections(
+          target: target,
+        );
 
-Future<void> closeConnectionsByChain({
+Future<void> controllerCloseConnectionsByChain({
   required BackendTarget target,
   required String chain,
-}) => RustLib.instance.api.crateBackendApiConnectionsCloseConnectionsByChain(
-  target: target,
-  chain: chain,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerCloseConnectionsByChain(
+      target: target,
+      chain: chain,
+    );
 
-Future<void> closeConnectionsByGroup({
+Future<void> controllerCloseConnectionsByGroup({
   required BackendTarget target,
   required String group,
-}) => RustLib.instance.api.crateBackendApiConnectionsCloseConnectionsByGroup(
-  target: target,
-  group: group,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerCloseConnectionsByGroup(
+      target: target,
+      group: group,
+    );
 
-Stream<ConnectionsFrame> connectionsStream({
+Stream<ConnectionsFrame> controllerConnectionsStream({
   required BackendTarget target,
   required int intervalMs,
   required int closedCapacity,
-}) => RustLib.instance.api.crateBackendApiConnectionsConnectionsStream(
-  target: target,
-  intervalMs: intervalMs,
-  closedCapacity: closedCapacity,
-);
+}) =>
+    RustLib.instance.api.crateBackendApiConnectionsControllerConnectionsStream(
+      target: target,
+      intervalMs: intervalMs,
+      closedCapacity: closedCapacity,
+    );
 
-Future<ConnectionWindow> fetchConnectionWindow({
+Future<ConnectionWindow> controllerFetchConnectionWindow({
   required BackendTarget target,
   required int intervalMs,
   required ConnectionsListKind kind,
   required int offset,
   required int limit,
   required String query,
-}) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionWindow(
-  target: target,
-  intervalMs: intervalMs,
-  kind: kind,
-  offset: offset,
-  limit: limit,
-  query: query,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerFetchConnectionWindow(
+      target: target,
+      intervalMs: intervalMs,
+      kind: kind,
+      offset: offset,
+      limit: limit,
+      query: query,
+    );
 
-Future<ConnectionStats?> fetchConnectionStatsById({
+Future<ConnectionStats?> controllerFetchConnectionStatsById({
   required BackendTarget target,
   required int intervalMs,
   required String id,
-}) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionStatsById(
-  target: target,
-  intervalMs: intervalMs,
-  id: id,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerFetchConnectionStatsById(
+      target: target,
+      intervalMs: intervalMs,
+      id: id,
+    );
 
-Future<List<ConnectionGroup>> fetchConnectionGroups({
+Future<List<ConnectionGroup>> controllerFetchConnectionGroups({
   required BackendTarget target,
   required int intervalMs,
   required ConnectionsListKind kind,
   required ConnectionGroupSort sort,
   required bool asc,
   required String query,
-}) => RustLib.instance.api.crateBackendApiConnectionsFetchConnectionGroups(
-  target: target,
-  intervalMs: intervalMs,
-  kind: kind,
-  sort: sort,
-  asc: asc,
-  query: query,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerFetchConnectionGroups(
+      target: target,
+      intervalMs: intervalMs,
+      kind: kind,
+      sort: sort,
+      asc: asc,
+      query: query,
+    );
 
-Future<List<Connection>> fetchConnectionGroupMembers({
+Future<List<Connection>> controllerFetchConnectionGroupMembers({
   required BackendTarget target,
   required int intervalMs,
   required ConnectionsListKind kind,
   required String group,
   required int limit,
   required String query,
-}) =>
-    RustLib.instance.api.crateBackendApiConnectionsFetchConnectionGroupMembers(
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerFetchConnectionGroupMembers(
       target: target,
       intervalMs: intervalMs,
       kind: kind,
@@ -110,38 +119,40 @@ Future<List<Connection>> fetchConnectionGroupMembers({
       query: query,
     );
 
-Future<void> setConnectionsSort({
+Future<void> controllerSetConnectionsSort({
   required BackendTarget target,
   required int intervalMs,
   required ConnectionsSort sort,
   required bool asc,
-}) => RustLib.instance.api.crateBackendApiConnectionsSetConnectionsSort(
-  target: target,
-  intervalMs: intervalMs,
-  sort: sort,
-  asc: asc,
-);
+}) =>
+    RustLib.instance.api.crateBackendApiConnectionsControllerSetConnectionsSort(
+      target: target,
+      intervalMs: intervalMs,
+      sort: sort,
+      asc: asc,
+    );
 
-Future<void> clearClosedConnections({
+Future<void> controllerClearClosedConnections({
   required BackendTarget target,
   required int intervalMs,
-}) => RustLib.instance.api.crateBackendApiConnectionsClearClosedConnections(
-  target: target,
-  intervalMs: intervalMs,
-);
+}) => RustLib.instance.api
+    .crateBackendApiConnectionsControllerClearClosedConnections(
+      target: target,
+      intervalMs: intervalMs,
+    );
 
-Future<void> clearClosedConnectionsByGroup({
+Future<void> controllerClearClosedConnectionsByGroup({
   required BackendTarget target,
   required int intervalMs,
   required String group,
 }) => RustLib.instance.api
-    .crateBackendApiConnectionsClearClosedConnectionsByGroup(
+    .crateBackendApiConnectionsControllerClearClosedConnectionsByGroup(
       target: target,
       intervalMs: intervalMs,
       group: group,
     );
 
-Future<void> stopTargetStreams({required BackendTarget target}) => RustLib
-    .instance
-    .api
-    .crateBackendApiConnectionsStopTargetStreams(target: target);
+Future<void> controllerStopTargetStreams({required BackendTarget target}) =>
+    RustLib.instance.api.crateBackendApiConnectionsControllerStopTargetStreams(
+      target: target,
+    );

@@ -354,7 +354,7 @@ class ConnectionsTotals {
           connectionsOut == other.connectionsOut;
 }
 
-class CoreConfig {
+class ControllerConfig {
   final String? mode;
   final List<String> modeOptions;
   final String? logLevel;
@@ -366,7 +366,7 @@ class CoreConfig {
   final int? socksPort;
   final int? mixedPort;
 
-  const CoreConfig({
+  const ControllerConfig({
     this.mode,
     required this.modeOptions,
     this.logLevel,
@@ -379,8 +379,8 @@ class CoreConfig {
     this.mixedPort,
   });
 
-  static Future<CoreConfig> default_() =>
-      RustLib.instance.api.crateBackendApiTypesCoreConfigDefault();
+  static Future<ControllerConfig> default_() =>
+      RustLib.instance.api.crateBackendApiTypesControllerConfigDefault();
 
   @override
   int get hashCode =>
@@ -398,7 +398,7 @@ class CoreConfig {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CoreConfig &&
+      other is ControllerConfig &&
           runtimeType == other.runtimeType &&
           mode == other.mode &&
           modeOptions == other.modeOptions &&

@@ -23,7 +23,7 @@ import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 import 'about_screen.dart';
 import 'core_actions_screen.dart';
-import 'core_config_screen.dart';
+import 'remote_core_config_screen.dart';
 import 'diagnostics_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
@@ -99,8 +99,10 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.memory_outlined,
               title: '核心配置',
               subtitle: '出站模式、日志级别、端口等',
-              onTap: () =>
-                  _push(context, CoreConfigScreen(store: store, prefs: prefs)),
+              onTap: () => _push(
+                context,
+                RemoteCoreConfigScreen(store: store, prefs: prefs),
+              ),
             ),
           if (showCoreActions)
             _Tile(

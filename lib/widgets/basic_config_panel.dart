@@ -32,7 +32,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
   bool _loading = false;
   String? _error;
   String? _saving;
-  rust.CoreConfig? _configs;
+  rust.ControllerConfig? _configs;
 
   @override
   void initState() {
@@ -66,7 +66,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
       _error = null;
     });
     try {
-      final configs = await rust.configs(target: target);
+      final configs = await rust.controllerConfigs(target: target);
       if (!mounted || !identical(widget.store.active, _activeKey)) return;
       setState(() => _configs = configs);
     } catch (e) {
@@ -106,7 +106,7 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
       _error = null;
     });
     try {
-      await rust.setConfigMode(target: target, mode: mode);
+      await rust.controllerSetConfigMode(target: target, mode: mode);
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -182,18 +182,25 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
               readOnly: readOnly,
               onLogLevel: (level) => _save(
                 'log-level',
-                (target) =>
-                    rust.setConfigLogLevel(target: target, level: level),
+                (target) => rust.controllerSetConfigLogLevel(
+                  target: target,
+                  level: level,
+                ),
               ),
               onTun: (enabled) => _save(
                 'tun',
-                (target) =>
-                    rust.setConfigTunEnabled(target: target, enabled: enabled),
+                (target) => rust.controllerSetConfigTunEnabled(
+                  target: target,
+                  enabled: enabled,
+                ),
               ),
               onBool: (key, value) => _save(
                 key,
-                (target) =>
-                    rust.setConfigBool(target: target, key: key, value: value),
+                (target) => rust.controllerSetConfigBool(
+                  target: target,
+                  key: key,
+                  value: value,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -205,8 +212,11 @@ class _BasicConfigPanelState extends State<BasicConfigPanel> {
               readOnly: readOnly,
               onPort: (key, value) => _save(
                 key,
-                (target) =>
-                    rust.setConfigPort(target: target, key: key, value: value),
+                (target) => rust.controllerSetConfigPort(
+                  target: target,
+                  key: key,
+                  value: value,
+                ),
               ),
             ),
         ],
@@ -282,7 +292,7 @@ class _SwitchSection extends StatelessWidget {
     required this.onTun,
     required this.onBool,
   });
-  final rust.CoreConfig configs;
+  final rust.ControllerConfig configs;
   final String? saving;
   final bool readOnly;
   final ValueChanged<String> onLogLevel;
@@ -358,7 +368,7 @@ class _PortsSection extends StatefulWidget {
     required this.readOnly,
     required this.onPort,
   });
-  final rust.CoreConfig configs;
+  final rust.ControllerConfig configs;
   final String? saving;
   final bool readOnly;
   final void Function(String key, int value) onPort;
@@ -519,7 +529,7 @@ class _LogLevelRow extends StatelessWidget {
   }
 }
 
-extension _CoreConfigView on rust.CoreConfig {
+extension _CoreConfigView on rust.ControllerConfig {
   static const _defaultModes = ['rule', 'global', 'direct'];
 
   List<String> modeChoices({required bool useDefaultModes}) {
