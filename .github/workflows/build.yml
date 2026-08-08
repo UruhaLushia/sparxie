@@ -70,6 +70,8 @@ jobs:
   cleanup-cache:
     name: Cache GC
     if: always()
+    permissions:
+      actions: write
     needs:
       - verify-generated-bindings
       - android

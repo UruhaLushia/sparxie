@@ -30,6 +30,8 @@ jobs:
   cleanup-cache:
     name: Cache GC
     if: always()
+    permissions:
+      actions: write
     needs: build-ios
     uses: ./.github/workflows/cleanup-cache.yml
     with:
