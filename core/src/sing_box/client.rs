@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use tokio::sync::Mutex as AsyncMutex;
+use tonic::codec::CompressionEncoding;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::service::interceptor::InterceptedService;
@@ -44,7 +45,10 @@ impl SingBoxTarget {
         Ok(StartedServiceClient::with_interceptor(
             channel,
             AuthInterceptor::new(self.secret.as_deref())?,
-        ))
+        )
+        .accept_compressed(CompressionEncoding::Gzip)
+        .accept_compressed(CompressionEncoding::Deflate)
+        .accept_compressed(CompressionEncoding::Zstd))
     }
 }
 

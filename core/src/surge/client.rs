@@ -34,6 +34,10 @@ impl SurgeClient {
         let http = Client::builder()
             .timeout(Duration::from_secs(15))
             .danger_accept_invalid_certs(allow_insecure)
+            .gzip(true)
+            .brotli(true)
+            .deflate(true)
+            .zstd(true)
             .build()
             .map_err(|e| MihomoError::Other(format!("client build: {e}")))?;
         Ok(Self { base, key, http })
