@@ -15,11 +15,14 @@ PROJECT_ROOT="$(pwd)"
 
 : "${OUTPUT_DIR:=build/ios/ipa}"
 : "${IOS_RUST_TARGET:=aarch64-apple-ios}"
+: "${IPHONEOS_DEPLOYMENT_TARGET:=15.0}"
 : "${IPA_NAME:=sparxie-ios.ipa}"
 : "${IOS_BUILD_NUMBER:=$(awk -F+ '/^version:/ { print $2; exit }' pubspec.yaml)}"
 : "${SPARXIE_BUILD_NUMBER:=$(./scripts/git-build-number.sh)}"
 : "${IOS_XCARCHIVE_OUTPUT:=}"
 : "${SPARXIE_UPDATE_CHANNEL:=stable}"
+
+export IPHONEOS_DEPLOYMENT_TARGET
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then

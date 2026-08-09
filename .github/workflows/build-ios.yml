@@ -31,6 +31,7 @@ permissions:
 
 env:
   RUST_TOOLCHAIN: stable
+  IPHONEOS_DEPLOYMENT_TARGET: '15.0'
 
 jobs:
   build:

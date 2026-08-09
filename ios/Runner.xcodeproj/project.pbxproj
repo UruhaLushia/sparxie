@@ -253,7 +253,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\nIOS_RUST_TARGET=\"${IOS_RUST_TARGET:-aarch64-apple-ios}\"\nRUST_CORE_PROFILE_DIR=\"${RUST_CORE_PROFILE_DIR:-release}\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"cargo not found; install Rust before building iOS\" >&2\n  exit 1\nfi\nif command -v rustup >/dev/null 2>&1; then\n  rustup target add \"$IOS_RUST_TARGET\"\nfi\nCARGO_FLAGS=\"\"\nif [ \"$RUST_CORE_PROFILE_DIR\" != \"debug\" ]; then\n  CARGO_FLAGS=\"--release\"\nfi\ncd \"$SRCROOT/../core\"\ncargo build $CARGO_FLAGS --target \"$IOS_RUST_TARGET\"\n";
+			shellScript = "set -eu\nIOS_RUST_TARGET=\"${IOS_RUST_TARGET:-aarch64-apple-ios}\"\nRUST_CORE_PROFILE_DIR=\"${RUST_CORE_PROFILE_DIR:-release}\"\nIPHONEOS_DEPLOYMENT_TARGET=\"${IPHONEOS_DEPLOYMENT_TARGET:-15.0}\"\nexport IPHONEOS_DEPLOYMENT_TARGET\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"cargo not found; install Rust before building iOS\" >&2\n  exit 1\nfi\nif command -v rustup >/dev/null 2>&1; then\n  rustup target add \"$IOS_RUST_TARGET\"\nfi\nCARGO_FLAGS=\"\"\nif [ \"$RUST_CORE_PROFILE_DIR\" != \"debug\" ]; then\n  CARGO_FLAGS=\"--release\"\nfi\ncd \"$SRCROOT/../core\"\ncargo build $CARGO_FLAGS --target \"$IOS_RUST_TARGET\"\n";
 		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
