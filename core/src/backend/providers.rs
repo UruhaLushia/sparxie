@@ -1,6 +1,6 @@
 use crate::MihomoError;
 
-use super::{BackendTarget, BackendType, ProxyProviderEntry, RuleProviderEntry};
+use super::{BackendTarget, BackendType, ProxyMemberEntry, ProxyProviderEntry, RuleProviderEntry};
 
 pub async fn controller_proxy_providers(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
@@ -21,6 +21,22 @@ pub async fn controller_proxy_provider_catalog(
             .collect()),
         BackendType::Surge => crate::surge::api::proxy_provider_catalog(target.surge()).await,
         BackendType::SingBox => Ok(Vec::new()),
+    }
+}
+
+pub async fn controller_proxy_provider_nodes(
+    target: BackendTarget,
+    name: String,
+) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
+    match target.backend_type {
+        BackendType::Clash => Ok(
+            crate::clash::api::proxy_provider_nodes(target.clash(), name)
+                .await?
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        ),
+        BackendType::Surge | BackendType::SingBox => Ok(Vec::new()),
     }
 }
 

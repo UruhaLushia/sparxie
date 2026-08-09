@@ -3,7 +3,8 @@ use serde_json::Value;
 
 use crate::MihomoError;
 
-use super::{MihomoTarget, urlencode};
+use super::proxies::value::proxy_delay;
+use super::{MihomoTarget, ProxyMemberEntry, urlencode};
 
 // ---------- proxy providers ----------------------------------------------
 
@@ -79,6 +80,33 @@ pub async fn proxy_provider_catalog(
     }
     list.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(list)
+}
+
+pub async fn proxy_provider_nodes(
+    target: MihomoTarget,
+    name: String,
+) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
+    let raw = target.client()?.get_json("providers/proxies").await?;
+    let nodes = raw
+        .get("providers")
+        .and_then(Value::as_object)
+        .and_then(|providers| providers.get(&name))
+        .and_then(|provider| provider.get("proxies"))
+        .and_then(Value::as_array);
+    let Some(nodes) = nodes else {
+        return Ok(Vec::new());
+    };
+    Ok(nodes
+        .iter()
+        .filter_map(|node| {
+            let name = field_or(node, "name", "");
+            (!name.is_empty()).then(|| ProxyMemberEntry {
+                name,
+                proxy_type: field_or(node, "type", "Proxy"),
+                delay: proxy_delay(node),
+            })
+        })
+        .collect())
 }
 
 pub async fn proxy_provider_update(target: MihomoTarget, name: String) -> Result<(), MihomoError> {

@@ -30,6 +30,17 @@ pub(super) fn value_to_i32(value: &Value) -> i32 {
     0
 }
 
+pub(crate) fn proxy_delay(value: &Value) -> i32 {
+    value
+        .get("history")
+        .and_then(Value::as_array)
+        .and_then(|history| history.last())
+        .and_then(|sample| sample.get("delay"))
+        .or_else(|| value.get("delay"))
+        .map(value_to_i32)
+        .unwrap_or(-1)
+}
+
 pub(super) fn value_to_string(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),

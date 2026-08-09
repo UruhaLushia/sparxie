@@ -19,6 +19,14 @@ Future<List<ProxyProviderEntry>> controllerProxyProviderCatalog({
 }) => RustLib.instance.api
     .crateBackendApiProvidersControllerProxyProviderCatalog(target: target);
 
+Future<List<ProxyMemberEntry>> controllerProxyProviderNodes({
+  required BackendTarget target,
+  required String name,
+}) => RustLib.instance.api.crateBackendApiProvidersControllerProxyProviderNodes(
+  target: target,
+  name: name,
+);
+
 Future<void> controllerProxyProviderUpdate({
   required BackendTarget target,
   required String name,

@@ -1,6 +1,6 @@
 pub(crate) mod catalog;
 pub(crate) mod delay;
-mod value;
+pub(crate) mod value;
 
 pub use catalog::*;
 pub use delay::*;

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
 
-use super::super::value::{value_to_i32, value_to_string};
+use super::super::value::value_to_string;
 
 pub(super) fn intern_member_list(
     value: Option<&Value>,
@@ -35,16 +35,6 @@ pub(super) fn push_icon(icon_urls: &mut Vec<String>, seen: &mut HashSet<String>,
     if !icon.is_empty() && seen.insert(icon.to_string()) {
         icon_urls.push(icon.to_string());
     }
-}
-
-pub(super) fn history_delay(value: Option<&Value>) -> i32 {
-    let Some(items) = value.and_then(Value::as_array) else {
-        return -1;
-    };
-    let Some(last) = items.last() else {
-        return -1;
-    };
-    last.get("delay").map(value_to_i32).unwrap_or_default()
 }
 
 fn intern_str_name(name: &str, name_ids: &mut HashMap<String, usize>) -> usize {

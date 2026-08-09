@@ -443,7 +443,7 @@ class ProxyGroup {
     for (final entry in entries) {
       final reused = oldByName.remove(entry.name);
       if (reused == null) {
-        next.add(ProxyMember._fromRust(entry));
+        next.add(ProxyMember.fromEntry(entry));
       } else {
         reused._setType(entry.proxyType);
         reused._setDelay(entry.delay);
@@ -508,7 +508,7 @@ class ProxyGroup {
   }
 }
 
-/// One selectable node. Subscribers repaint when [delay] changes.
+/// One proxy node. Subscribers repaint when [delay] changes.
 class ProxyMember {
   ProxyMember._({
     required this.name,
@@ -517,7 +517,7 @@ class ProxyMember {
   }) : _type = type, // ignore: prefer_initializing_formals
        delay = ValueNotifier<int>(initialDelay);
 
-  factory ProxyMember._fromRust(rust.ProxyMemberEntry entry) => ProxyMember._(
+  factory ProxyMember.fromEntry(rust.ProxyMemberEntry entry) => ProxyMember._(
     name: entry.name,
     type: entry.proxyType,
     initialDelay: entry.delay,
@@ -540,6 +540,10 @@ class ProxyMember {
   void _setDelay(int value) {
     if (delay.value != value) delay.value = value;
   }
+
+  void updateDelay(int value) => _setDelay(value);
+
+  void dispose() => _dispose();
 
   void _dispose() {
     if (_disposed) return;

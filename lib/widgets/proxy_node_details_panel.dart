@@ -14,14 +14,14 @@ typedef ProxyNodeDetailsLoader = Future<String> Function();
 class ProxyNodeDetailsPanel extends StatefulWidget {
   const ProxyNodeDetailsPanel({
     super.key,
-    required this.group,
+    this.group,
     required this.member,
     this.loadDetails,
     this.onTestDelay,
     this.onToggleFixed,
-  });
+  }) : assert(onToggleFixed == null || group != null);
 
-  final ProxyGroup group;
+  final ProxyGroup? group;
   final ProxyMember member;
   final ProxyNodeDetailsLoader? loadDetails;
   final Future<void> Function()? onTestDelay;
@@ -108,6 +108,7 @@ class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
     final attributes = details?.attributes ?? const [];
     final capabilities = details?.capabilities ?? const [];
     final awaitingDetails = _awaitingDetails;
+    final group = widget.group;
     return AnchoredDetailsPanelSurface(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -149,10 +150,10 @@ class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
                   ),
                 if (widget.onTestDelay != null && widget.onToggleFixed != null)
                   const SizedBox(width: 8),
-                if (widget.onToggleFixed != null)
+                if (widget.onToggleFixed != null && group != null)
                   Expanded(
                     child: _NodeFixedAction(
-                      group: widget.group,
+                      group: group,
                       member: widget.member,
                       onPressed: widget.onToggleFixed!,
                     ),

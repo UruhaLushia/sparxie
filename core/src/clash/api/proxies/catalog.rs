@@ -8,10 +8,9 @@ use serde_json::Value;
 use crate::MihomoError;
 use crate::clash::api::{MihomoTarget, urlencode};
 
-use super::value::{field_or, first_field};
-
+use super::value::{field_or, first_field, proxy_delay};
 use cache::{CachedCatalog, CachedGroup, CachedNode};
-use parse::{contains_filter, history_delay, intern_member_list, push_icon};
+use parse::{contains_filter, intern_member_list, push_icon};
 pub use types::{
     ProxyCatalog, ProxyGroupEntry, ProxyMemberEntry, ProxyMemberSection, ProxyMemberSort,
     ProxyMemberWindow,
@@ -301,17 +300,6 @@ fn provider_node_detail(data: &Value, provider: &str) -> String {
 fn node_provider_name(data: &Value) -> Option<String> {
     let provider = field_or(data, "provider-name", "");
     (!provider.is_empty()).then_some(provider)
-}
-
-fn proxy_delay(data: &Value) -> i32 {
-    let history = history_delay(data.get("history"));
-    if history >= 0 {
-        history
-    } else {
-        data.get("delay")
-            .map(super::value::value_to_i32)
-            .unwrap_or(-1)
-    }
 }
 
 /// Windowed members for one proxy group. The full member list stays in Rust so

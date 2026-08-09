@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_prefs.dart';
@@ -6,9 +8,11 @@ import '../error_format.dart';
 import '../rust_api.dart' as rust;
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
+import '../widgets/app_page_route.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
+import 'proxy_provider_nodes_screen.dart';
 
 class ResourcesScreen extends StatelessWidget {
   const ResourcesScreen({
@@ -263,6 +267,22 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
     }
   }
 
+  void _openNodes(_ProxyProvider provider) {
+    final target = _target();
+    if (target == null) return;
+    unawaited(
+      Navigator.of(context).push(
+        AppPageRoute<void>(
+          builder: (_) => ProxyProviderNodesScreen(
+            target: target,
+            providerName: provider.name,
+            prefs: widget.prefs,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _updateAll() async {
     final target = _target();
     final providers = _items.where((p) => p.updatable).toList(growable: false);
@@ -340,6 +360,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
                 updatesEnabled: !_updatingAll,
                 liquid: style == ProxyProviderStyle.liquid,
                 onUpdate: _update,
+                onView: _openNodes,
               ),
             ],
           ),
@@ -589,6 +610,7 @@ class _ProxyProviderList extends StatelessWidget {
     required this.updatesEnabled,
     required this.liquid,
     required this.onUpdate,
+    required this.onView,
   });
 
   final List<_ProxyProvider> providers;
@@ -596,6 +618,7 @@ class _ProxyProviderList extends StatelessWidget {
   final bool updatesEnabled;
   final bool liquid;
   final ValueChanged<_ProxyProvider> onUpdate;
+  final ValueChanged<_ProxyProvider> onView;
 
   @override
   Widget build(BuildContext context) {
@@ -610,6 +633,7 @@ class _ProxyProviderList extends StatelessWidget {
               busy: busy.contains(providers[i].name),
               enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
+              onView: () => onView(providers[i]),
             )
           else
             _PlainProxyProviderTile(
@@ -617,6 +641,7 @@ class _ProxyProviderList extends StatelessWidget {
               busy: busy.contains(providers[i].name),
               enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
+              onView: () => onView(providers[i]),
             ),
         ],
       ],
@@ -630,12 +655,14 @@ class _LiquidProxyProviderTile extends StatelessWidget {
     required this.busy,
     required this.enabled,
     required this.onUpdate,
+    required this.onView,
   });
 
   final _ProxyProvider provider;
   final bool busy;
   final bool enabled;
   final VoidCallback onUpdate;
+  final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
@@ -690,6 +717,7 @@ class _LiquidProxyProviderTile extends StatelessWidget {
                     enabled: enabled,
                     compact: true,
                     onUpdate: onUpdate,
+                    onView: onView,
                   ),
                   if (subscription != null) ...[
                     const SizedBox(height: 4),
@@ -727,12 +755,14 @@ class _PlainProxyProviderTile extends StatelessWidget {
     required this.busy,
     required this.enabled,
     required this.onUpdate,
+    required this.onView,
   });
 
   final _ProxyProvider provider;
   final bool busy;
   final bool enabled;
   final VoidCallback onUpdate;
+  final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
@@ -745,6 +775,7 @@ class _PlainProxyProviderTile extends StatelessWidget {
           busy: busy,
           enabled: enabled,
           onUpdate: onUpdate,
+          onView: onView,
         ),
         if (subscription != null) ...[
           const SizedBox(height: 8),
@@ -762,6 +793,7 @@ class _ProxyProviderHeader extends StatelessWidget {
     required this.enabled,
     this.compact = false,
     required this.onUpdate,
+    required this.onView,
   });
 
   final _ProxyProvider provider;
@@ -769,6 +801,7 @@ class _ProxyProviderHeader extends StatelessWidget {
   final bool enabled;
   final bool compact;
   final VoidCallback onUpdate;
+  final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
@@ -803,6 +836,16 @@ class _ProxyProviderHeader extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          tooltip: '查看节点',
+          onPressed: provider.proxies == 0 ? null : onView,
+          padding: compact ? EdgeInsets.zero : null,
+          constraints: compact
+              ? const BoxConstraints.tightFor(width: 36, height: 36)
+              : null,
+          visualDensity: compact ? VisualDensity.compact : null,
+          icon: const Icon(Icons.format_list_bulleted_rounded, size: 20),
         ),
         if (provider.updatable)
           IconButton(

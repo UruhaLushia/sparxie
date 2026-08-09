@@ -7,7 +7,7 @@ import 'proxy_node_details_panel.dart';
 class ProxyNodeContextMenu extends StatelessWidget {
   const ProxyNodeContextMenu({
     super.key,
-    required this.group,
+    this.group,
     required this.member,
     this.loadDetails,
     this.onTestDelay,
@@ -17,7 +17,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
     required this.child,
   });
 
-  final ProxyGroup group;
+  final ProxyGroup? group;
   final ProxyMember member;
   final ProxyNodeDetailsLoader? loadDetails;
   final Future<void> Function()? onTestDelay;
@@ -28,7 +28,7 @@ class ProxyNodeContextMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canFix = group.canFixMembers && onToggleFixed != null;
+    final canFix = (group?.canFixMembers ?? false) && onToggleFixed != null;
     return AnchoredDetailsTrigger(
       barrierLabel: '关闭节点详情',
       semanticsHint: '长按打开节点菜单',
