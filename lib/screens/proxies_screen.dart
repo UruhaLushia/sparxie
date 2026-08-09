@@ -46,6 +46,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     ProxiesSort sort,
     int columns,
     bool cardColored,
+    bool cardShowDelay,
   })?
   _prefsSnapshot;
   var _active = true;
@@ -84,6 +85,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       sort: widget.prefs.proxiesSort,
       columns: widget.prefs.proxiesColumns,
       cardColored: widget.prefs.proxiesCardColored,
+      cardShowDelay: widget.prefs.proxiesCardShowDelay,
     );
     final previous = _prefsSnapshot;
     if (previous == next) return;
@@ -852,7 +854,10 @@ class _ProxyCardsBody extends StatelessWidget {
               maxCrossAxisExtent: 190,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              mainAxisExtent: prefs.proxiesShowGroupIcons ? 96 : 90,
+              mainAxisExtent:
+                  prefs.proxiesShowGroupIcons && !prefs.proxiesCardShowDelay
+                  ? 96
+                  : 90,
             ),
             itemCount: groups.length,
             itemBuilder: (context, index) {
@@ -862,6 +867,7 @@ class _ProxyCardsBody extends StatelessWidget {
                 group: group,
                 showIcon: prefs.proxiesShowGroupIcons,
                 colored: prefs.proxiesCardColored,
+                showDelay: prefs.proxiesCardShowDelay,
                 onTap: (sourceFocusNode) {
                   if (group.memberCount > 0) {
                     unawaited(
@@ -874,6 +880,7 @@ class _ProxyCardsBody extends StatelessWidget {
                     group: group,
                     showIcon: prefs.proxiesShowGroupIcons,
                     colored: prefs.proxiesCardColored,
+                    showDelay: prefs.proxiesCardShowDelay,
                     onTestGroup: () => onTestGroup(group),
                     onSelect: (name) => onSelect(group, name),
                     onToggleFixed: (name) => onToggleFixed(group, name),

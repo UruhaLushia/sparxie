@@ -66,6 +66,15 @@ class _ProxiesSettingsSheet extends StatelessWidget {
             onChanged: prefs.setProxiesShowGroupIcons,
           ),
         ),
+        if (prefs.proxiesLayout == ProxiesLayout.cards &&
+            prefs.proxiesShowGroupIcons)
+          _SettingsRow(
+            label: '在外部显示延迟',
+            trailing: CompactSwitch(
+              value: prefs.proxiesCardShowDelay,
+              onChanged: prefs.setProxiesCardShowDelay,
+            ),
+          ),
         _SettingsRow(
           label: '显示隐藏代理组',
           trailing: CompactSwitch(

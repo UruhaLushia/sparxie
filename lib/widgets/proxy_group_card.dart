@@ -231,12 +231,14 @@ class ProxyGroupCard extends StatefulWidget {
     required this.group,
     required this.showIcon,
     required this.colored,
+    required this.showDelay,
     required this.onTap,
   });
 
   final ProxyGroup group;
   final bool showIcon;
   final bool colored;
+  final bool showDelay;
   final Future<void> Function(FocusNode sourceFocusNode) onTap;
 
   @override
@@ -324,7 +326,12 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
               child: InkWell(
                 canRequestFocus: false,
                 onTap: () => unawaited(_activate()),
-                child: _collapsedContent(widget.group, widget.showIcon, style),
+                child: _collapsedContent(
+                  widget.group,
+                  widget.showIcon,
+                  widget.showDelay,
+                  style,
+                ),
               ),
             ),
           ),
@@ -339,8 +346,18 @@ String _subtitle(ProxyGroup group, String now) {
   return displayNow.isEmpty ? group.type : '${group.type} · $displayNow';
 }
 
-Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
+Widget _collapsedContent(
+  ProxyGroup group,
+  bool showIcon,
+  bool showDelay,
+  _CardStyle style,
+) {
   if (!showIcon) return _compactCollapsedContent(group, style);
+  if (!showDelay) return _iconCollapsedContent(group, style);
+  return _compactCollapsedContent(group, style, showIcon: true);
+}
+
+Widget _iconCollapsedContent(ProxyGroup group, _CardStyle style) {
   return Padding(
     padding: const EdgeInsets.all(10),
     child: Column(
@@ -378,7 +395,11 @@ Widget _collapsedContent(ProxyGroup group, bool showIcon, _CardStyle style) {
   );
 }
 
-Widget _compactCollapsedContent(ProxyGroup group, _CardStyle style) {
+Widget _compactCollapsedContent(
+  ProxyGroup group,
+  _CardStyle style, {
+  bool showIcon = false,
+}) {
   return ActiveValueListenableBuilder<String>(
     valueListenable: group.now,
     builder: (_, now, _) {
@@ -424,18 +445,26 @@ Widget _compactCollapsedContent(ProxyGroup group, _CardStyle style) {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '${group.memberCount}',
-                        style: TextStyle(
-                          color: style.title,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                      if (showIcon)
+                        ProxyAvatar(
+                          name: group.name,
+                          icon: group.icon,
+                          size: 28,
+                        )
+                      else ...[
+                        Text(
+                          '${group.memberCount}',
+                          style: TextStyle(
+                            color: style.title,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '节点',
-                        style: TextStyle(color: style.subtitle, fontSize: 8),
-                      ),
+                        Text(
+                          '节点',
+                          style: TextStyle(color: style.subtitle, fontSize: 8),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -701,6 +730,7 @@ Future<void> showProxyGroupCardDetail(
   required ProxyGroup group,
   required bool showIcon,
   required bool colored,
+  required bool showDelay,
   required Future<void> Function() onTestGroup,
   required ValueChanged<String> onSelect,
   required ValueChanged<String> onToggleFixed,
@@ -716,6 +746,7 @@ Future<void> showProxyGroupCardDetail(
       group: group,
       showIcon: showIcon,
       colored: colored,
+      showDelay: showDelay,
       onTestGroup: onTestGroup,
       onSelect: onSelect,
       onToggleFixed: onToggleFixed,
@@ -741,6 +772,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
     required this.group,
     required this.showIcon,
     required this.colored,
+    required this.showDelay,
     required this.onTestGroup,
     required this.onSelect,
     required this.onToggleFixed,
@@ -752,6 +784,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
   final ProxyGroup group;
   final bool showIcon;
   final bool colored;
+  final bool showDelay;
   final Future<void> Function() onTestGroup;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onToggleFixed;
@@ -814,7 +847,12 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
           Positioned.fill(
             child: FadeTransition(
               opacity: ReverseAnimation(animation),
-              child: _collapsedContent(group, widget.showIcon, style),
+              child: _collapsedContent(
+                group,
+                widget.showIcon,
+                widget.showDelay,
+                style,
+              ),
             ),
           ),
           Positioned.fill(

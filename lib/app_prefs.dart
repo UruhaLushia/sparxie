@@ -155,6 +155,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kProxiesLayout = 'proxiesLayout';
   static const _kProxyProviderStyle = 'proxyProviderStyle';
   static const _kProxiesCardColored = 'proxiesCardColored';
+  static const _kProxiesCardShowDelay = 'proxiesCardShowDelay';
   static const _kNavLayout = 'navLayout';
   static const _kNavBarStyle = 'navBarStyle';
   static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
@@ -208,6 +209,7 @@ class AppPrefs extends ChangeNotifier {
   static const defaultProxiesLayout = ProxiesLayout.list;
   static const defaultProxyProviderStyle = ProxyProviderStyle.liquid;
   static const defaultProxiesCardColored = false;
+  static const defaultProxiesCardShowDelay = false;
 
   static const defaultNavLayout = NavLayout.cards;
   static const defaultNavBarStyle = NavBarStyle.capsule;
@@ -420,6 +422,14 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setProxiesCardColored(bool value) async {
     if (value == proxiesCardColored) return;
     _put(_kProxiesCardColored, value);
+  }
+
+  bool get proxiesCardShowDelay =>
+      _bool(_kProxiesCardShowDelay, defaultProxiesCardShowDelay);
+
+  Future<void> setProxiesCardShowDelay(bool value) async {
+    if (value == proxiesCardShowDelay) return;
+    _put(_kProxiesCardShowDelay, value);
   }
 
   NavLayout get navLayout =>
