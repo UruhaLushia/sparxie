@@ -6,8 +6,8 @@ import '../rust_api.dart' as rust;
 /// Proxy group + node catalog. Polls Rust's structured `/proxies` catalog.
 ///
 /// Each [ProxyGroup] is created once per name and reused across polls. Group
-/// members are windowed: Rust keeps the full list, Dart only holds the current
-/// visible slice for expanded groups.
+/// members are windowed: Rust keeps the full list, while Dart retains bounded
+/// slices only for expanded groups and visible cards being warmed.
 class ProxiesNotifier extends ChangeNotifier {
   final Map<String, ProxyGroup> _groupsById = <String, ProxyGroup>{};
   List<ProxyGroup> _orderedGroups = const <ProxyGroup>[];
@@ -250,7 +250,7 @@ class ProxyGroup {
        fixed = ValueNotifier<String>(fixed),
        _membersVersion = ValueNotifier<int>(0);
 
-  static const int _memberWindowMin = 96;
+  static const int _memberWindowMin = 64;
   static const int _memberWindowOverscan = 32;
   static const int _memberRefetchMargin = 16;
   final String name;

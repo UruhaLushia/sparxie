@@ -40,7 +40,7 @@ class _LogsScreenState extends State<LogsScreen> {
   static const _fallbackLogExtent = 72.0;
   static const _maxIncrementalExtentChanges = 512;
 
-  final ScrollController _scroll = ScrollController();
+  late final ScrollController _scroll;
   final ListController _listController = ListController();
   final Set<BigInt> _enteringIds = <BigInt>{};
   Timer? _flushTimer;
@@ -66,8 +66,13 @@ class _LogsScreenState extends State<LogsScreen> {
   @override
   void initState() {
     super.initState();
-    _logsAppendRevision = widget.session.logs.appendRevision;
-    _renderedLogCount = widget.session.logs.length;
+    final logs = widget.session.logs;
+    _logsAppendRevision = logs.appendRevision;
+    _renderedLogCount = logs.length;
+    _bottomRestorePending = _follow;
+    _scroll = ScrollController(
+      initialScrollOffset: logs.length * _fallbackLogExtent,
+    );
     _listController.addListener(_onListLayout);
     widget.session.logs.addListener(_onLogs);
   }
@@ -149,7 +154,12 @@ class _LogsScreenState extends State<LogsScreen> {
       _enteringIds.clear();
       return;
     }
+    final hadRows = _renderedLogCount > 0;
     _syncListItems();
+    if (_follow && !hadRows && logs.length > 0) {
+      _bottomRestorePending = true;
+      _bottomRestoreWindowRevision = null;
+    }
     final latestAppendId = logs.latestAppendId;
     if (appendChanged &&
         _follow &&

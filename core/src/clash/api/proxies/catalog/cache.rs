@@ -283,20 +283,6 @@ pub(super) fn member_position(
     .flatten()
 }
 
-pub(super) fn group_needs_provider_nodes(target: &MihomoTarget, group_name: &str) -> bool {
-    with_catalog(target, |catalog| {
-        let CachedCatalog { nodes, groups, .. } = catalog;
-        let Some(group) = groups.get(group_name) else {
-            return false;
-        };
-        group
-            .members
-            .iter()
-            .any(|id| needs_provider_node(nodes.get(*id).and_then(Option::as_ref), groups))
-    })
-    .unwrap_or(false)
-}
-
 pub(super) fn merge_provider_nodes(
     target: &MihomoTarget,
     incoming: HashMap<String, CachedNode>,

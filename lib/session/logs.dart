@@ -22,10 +22,10 @@ class LogWindowNotifier extends ChangeNotifier {
     paused.addListener(_onPausedChanged);
   }
 
-  static const int _initialWindowSize = 30;
-  static const int _windowOverscan = 20;
-  static const int _windowRefetchMargin = 10;
-  static const Duration _refetchDebounce = Duration(milliseconds: 50);
+  static const int _initialWindowSize = 64;
+  static const int _windowOverscan = 48;
+  static const int _windowRefetchMargin = 24;
+  static const Duration _refetchDebounce = Duration(milliseconds: 16);
 
   LogWindowFetcher? windowFetcher;
   final ValueNotifier<bool> paused = ValueNotifier(false);
@@ -56,6 +56,7 @@ class LogWindowNotifier extends ChangeNotifier {
   bool _refetchAgain = false;
   bool _pendingImmediate = false;
   bool _pendingFromEnd = false;
+  bool _warmingTail = false;
 
   int get length => _total;
   bool get isEmpty => _rawTotal == 0;
@@ -106,7 +107,12 @@ class LogWindowNotifier extends ChangeNotifier {
       return;
     }
 
-    if (!_active || paused.value) return;
+    if (!_active || paused.value) {
+      if (!_active && !paused.value && _rows.isEmpty) {
+        unawaited(_warmTail());
+      }
+      return;
+    }
     if (appended) {
       _appendRevision++;
       _latestAppendId = _following ? frame.latestId : null;
@@ -242,6 +248,52 @@ class LogWindowNotifier extends ChangeNotifier {
   void _completeWindowRefresh(int frameRevision) {
     _windowFrameRevision = frameRevision;
     _windowRevision++;
+  }
+
+  Future<void> _warmTail() async {
+    final fetcher = windowFetcher;
+    if (_warmingTail ||
+        _active ||
+        paused.value ||
+        _rawTotal == 0 ||
+        _rows.isNotEmpty ||
+        fetcher == null) {
+      return;
+    }
+    _warmingTail = true;
+    final filterRevision = _filterRevision;
+    final frameRevision = _frameRevision;
+    final level = _level;
+    final query = _query;
+    try {
+      final window = await fetcher(
+        0,
+        _initialWindowSize,
+        level,
+        query,
+        true,
+        null,
+      );
+      if (_active ||
+          paused.value ||
+          filterRevision != _filterRevision ||
+          level != _level ||
+          query != _query ||
+          _rows.isNotEmpty) {
+        return;
+      }
+      _total = window.total;
+      _offset = window.offset;
+      _requestedOffset = window.offset;
+      _requestedLimit = math.max(_initialWindowSize, window.rows.length);
+      _rows = window.rows;
+      _completeWindowRefresh(frameRevision);
+      notifyListeners();
+    } catch (_) {
+      // The next frame retries; first-page rendering must not depend on warmup.
+    } finally {
+      _warmingTail = false;
+    }
   }
 
   void _onPausedChanged() {

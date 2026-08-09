@@ -821,7 +821,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 }
 
-class _ProxyCardsBody extends StatelessWidget {
+class _ProxyCardsBody extends StatefulWidget {
   const _ProxyCardsBody({
     required this.session,
     required this.prefs,
@@ -840,39 +840,108 @@ class _ProxyCardsBody extends StatelessWidget {
   final Future<void> Function(ProxyGroup) onTestGroup;
   final Future<void> Function(ProxyGroup, String) onTestNode;
 
+  @override
+  State<_ProxyCardsBody> createState() => _ProxyCardsBodyState();
+}
+
+class _ProxyCardsBodyState extends State<_ProxyCardsBody> {
+  final List<ProxyGroup> _warmQueue = <ProxyGroup>[];
+  final Set<ProxyGroup> _queuedGroups = <ProxyGroup>{};
+  bool _warmScheduled = false;
+  bool _warming = false;
+  bool _active = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = isUiActive(context);
+    if (_active == active) return;
+    _active = active;
+    if (active && _warmQueue.isNotEmpty) _scheduleWarmDrain();
+  }
+
+  bool _initialMembersReady(ProxyGroup group, bool locateCurrent) {
+    if (!locateCurrent) return group.memberAt(0) != null;
+    final index = group.locatedMemberIndex;
+    return index != null && (index < 0 || group.memberAt(index) != null);
+  }
+
   Future<void> _ensureInitialMembers(ProxyGroup group) async {
     if (group.memberCount == 0) return;
     final locateCurrent =
-        prefs.proxiesCardAutoLocate &&
+        widget.prefs.proxiesCardAutoLocate &&
         !group.hidesExactNow &&
         group.now.value.isNotEmpty;
-    final last = prefs.proxiesGroupByProvider ? group.memberCount - 1 : 0;
     final deadline = DateTime.now().add(const Duration(seconds: 3));
-    while (true) {
-      await session.ensureProxyGroupMembers(
+    while (mounted &&
+        widget.session.proxies.groups.contains(group) &&
+        !_initialMembersReady(group, locateCurrent)) {
+      await widget.session.ensureProxyGroupMembers(
         group.name,
         0,
-        last,
+        0,
         locateCurrent: locateCurrent,
       );
-      final locatedIndex = group.locatedMemberIndex;
-      final loaded = locateCurrent
-          ? locatedIndex != null &&
-                (locatedIndex < 0 || group.memberAt(locatedIndex) != null)
-          : group.hasMemberRange(0, last);
-      if (loaded || DateTime.now().isAfter(deadline)) {
+      if (_initialMembersReady(group, locateCurrent) ||
+          DateTime.now().isAfter(deadline))
         return;
-      }
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
+  }
+
+  void _queueWarm(ProxyGroup group) {
+    final locateCurrent =
+        widget.prefs.proxiesCardAutoLocate &&
+        !group.hidesExactNow &&
+        group.now.value.isNotEmpty;
+    if (group.memberCount == 0 ||
+        _initialMembersReady(group, locateCurrent) ||
+        !_queuedGroups.add(group)) {
+      return;
+    }
+    _warmQueue.add(group);
+    _scheduleWarmDrain();
+  }
+
+  void _scheduleWarmDrain() {
+    if (!_active || _warmScheduled || _warming) return;
+    _warmScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _warmScheduled = false;
+      if (mounted) unawaited(_drainWarmQueue());
+    });
+  }
+
+  Future<void> _drainWarmQueue() async {
+    if (_warming) return;
+    _warming = true;
+    try {
+      while (mounted && _active && _warmQueue.isNotEmpty) {
+        final group = _warmQueue.removeAt(0);
+        _queuedGroups.remove(group);
+        await _ensureInitialMembers(group);
+        // Spread bridge decoding across frames instead of warming every card
+        // in one burst on the first proxy-page frame.
+        await Future<void>.delayed(const Duration(milliseconds: 8));
+      }
+    } finally {
+      _warming = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _warmQueue.clear();
+    _queuedGroups.clear();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ActiveListenableBuilder(
-      listenable: session.proxies,
+      listenable: widget.session.proxies,
       builder: (context, _) {
-        final groups = session.proxies.groups;
+        final groups = widget.session.proxies.groups;
         if (groups.isEmpty) {
           return Center(
             child: Text('暂无代理组', style: Theme.of(context).textTheme.bodyMedium),
@@ -895,37 +964,40 @@ class _ProxyCardsBody extends StatelessWidget {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               mainAxisExtent:
-                  prefs.proxiesShowGroupIcons && !prefs.proxiesCardShowDelay
+                  widget.prefs.proxiesShowGroupIcons &&
+                      !widget.prefs.proxiesCardShowDelay
                   ? 96
                   : 90,
             ),
             itemCount: groups.length,
             itemBuilder: (context, index) {
               final group = groups[index];
+              _queueWarm(group);
               return ProxyGroupCard(
                 key: ValueKey(group.name),
                 group: group,
-                showIcon: prefs.proxiesShowGroupIcons,
-                colored: prefs.proxiesCardColored,
-                showDelay: prefs.proxiesCardShowDelay,
+                showIcon: widget.prefs.proxiesShowGroupIcons,
+                colored: widget.prefs.proxiesCardColored,
+                showDelay: widget.prefs.proxiesCardShowDelay,
                 onTap: (sourceFocusNode) async {
                   await _ensureInitialMembers(group);
                   if (!context.mounted) return;
                   await showProxyGroupCardDetail(
                     context,
-                    session: session,
+                    session: widget.session,
                     group: group,
-                    showIcon: prefs.proxiesShowGroupIcons,
-                    colored: prefs.proxiesCardColored,
-                    showDelay: prefs.proxiesCardShowDelay,
-                    autoLocate: prefs.proxiesCardAutoLocate,
-                    onTestGroup: () => onTestGroup(group),
-                    onSelect: (name) => onSelect(group, name),
-                    onToggleFixed: (name) => onToggleFixed(group, name),
-                    onTestNode: (name) => onTestNode(group, name),
-                    loadNodeDetails: loadNodeDetails,
+                    showIcon: widget.prefs.proxiesShowGroupIcons,
+                    colored: widget.prefs.proxiesCardColored,
+                    showDelay: widget.prefs.proxiesCardShowDelay,
+                    autoLocate: widget.prefs.proxiesCardAutoLocate,
+                    onTestGroup: () => widget.onTestGroup(group),
+                    onSelect: (name) => widget.onSelect(group, name),
+                    onToggleFixed: (name) => widget.onToggleFixed(group, name),
+                    onTestNode: (name) => widget.onTestNode(group, name),
+                    loadNodeDetails: widget.loadNodeDetails,
                     sourceFocusNode: sourceFocusNode,
                   );
+                  if (context.mounted) _queueWarm(group);
                 },
               );
             },

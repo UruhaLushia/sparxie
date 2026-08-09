@@ -1008,6 +1008,12 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
     final group = widget.group;
     final style = _styleFor(flightContext, group.name, widget.colored);
     final detailSize = _detailSize;
+    final memberScroll = _memberScroll;
+    final memberOffset = memberScroll == null
+        ? 0.0
+        : memberScroll.hasClients
+        ? memberScroll.offset
+        : memberScroll.initialScrollOffset;
     Widget detailLayer = const SizedBox.shrink();
     if (detailSize.width > 0) {
       // FittedBox scales at paint time so the grid lays out once at its final
@@ -1020,7 +1026,8 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
         child: SizedBox.fromSize(
           size: detailSize,
           child: _FlightSnapshot(
-            child: _detailBody(
+            initialScrollOffset: memberOffset,
+            builder: (scrollController) => _detailBody(
               group,
               widget.showIcon,
               style,
@@ -1028,6 +1035,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                 padding: const EdgeInsets.all(12),
                 child: Icon(Icons.speed_rounded, color: style.icon),
               ),
+              scrollController: scrollController,
               scrollable: false,
             ),
           ),
@@ -1207,9 +1215,13 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
 }
 
 class _FlightSnapshot extends StatefulWidget {
-  const _FlightSnapshot({required this.child});
+  const _FlightSnapshot({
+    required this.initialScrollOffset,
+    required this.builder,
+  });
 
-  final Widget child;
+  final double initialScrollOffset;
+  final Widget Function(ScrollController) builder;
 
   @override
   State<_FlightSnapshot> createState() => _FlightSnapshotState();
@@ -1218,6 +1230,7 @@ class _FlightSnapshot extends StatefulWidget {
 class _FlightSnapshotState extends State<_FlightSnapshot>
     with WidgetsBindingObserver {
   late final SnapshotController _controller;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
@@ -1226,6 +1239,9 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
     _controller = SnapshotController(
       allowSnapshotting:
           lifecycleState == null || lifecycleState == AppLifecycleState.resumed,
+    );
+    _scrollController = ScrollController(
+      initialScrollOffset: widget.initialScrollOffset,
     );
     WidgetsBinding.instance.addObserver(this);
   }
@@ -1239,6 +1255,7 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1247,7 +1264,7 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
     return SnapshotWidget(
       controller: _controller,
       mode: SnapshotMode.permissive,
-      child: widget.child,
+      child: widget.builder(_scrollController),
     );
   }
 }

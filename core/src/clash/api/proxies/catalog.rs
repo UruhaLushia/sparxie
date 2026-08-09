@@ -112,7 +112,7 @@ pub async fn proxy_catalog(
         ));
     }
 
-    let provider_nodes_checked_at = if refresh_provider_nodes {
+    let provider_nodes_checked_at = if fresh_provider_nodes.is_some() {
         Some(Instant::now())
     } else {
         previous_provider_nodes_checked_at
@@ -232,9 +232,9 @@ async fn provider_nodes(
 pub(crate) async fn refresh_cached_provider_nodes(
     target: &MihomoTarget,
 ) -> Result<(), MihomoError> {
-    cache::mark_provider_nodes_checked(target, Instant::now());
     let client = target.client()?;
     if let Ok(nodes) = provider_nodes(&client).await {
+        cache::mark_provider_nodes_checked(target, Instant::now());
         cache::merge_provider_nodes(target, nodes.summaries, nodes.details);
     }
     Ok(())
@@ -381,9 +381,6 @@ pub async fn proxy_group_member_window(
 async fn ensure_cached_group(target: &MihomoTarget, group: &str) -> Result<(), MihomoError> {
     if !cache::has_catalog(target) || !cache::has_group(target, group) {
         refresh_cached_catalog(target).await?;
-    }
-    if cache::group_needs_provider_nodes(target, group) {
-        refresh_cached_provider_nodes(target).await?;
     }
     Ok(())
 }
