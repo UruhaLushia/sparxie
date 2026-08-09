@@ -1,6 +1,6 @@
 use crate::MihomoError;
 
-use super::{BackendTarget, BackendType, ProxyCatalog, ProxyMemberEntry, ProxyMemberSort};
+use super::{BackendTarget, BackendType, ProxyCatalog, ProxyMemberSort, ProxyMemberWindow};
 
 pub async fn controller_groups(target: BackendTarget) -> Result<String, MihomoError> {
     match target.backend_type {
@@ -126,38 +126,40 @@ pub async fn controller_proxy_group_members(
     offset: u32,
     limit: u32,
     member_sort: ProxyMemberSort,
-) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
+    group_by_provider: bool,
+) -> Result<ProxyMemberWindow, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(crate::clash::api::proxy_group_members(
+        BackendType::Clash => Ok(crate::clash::api::proxy_group_member_window(
             target.clash(),
             group,
             offset,
             limit,
             super::clash_member_sort(member_sort),
+            group_by_provider,
         )
         .await?
-        .into_iter()
-        .map(Into::into)
-        .collect()),
-        BackendType::Surge => {
-            crate::surge::api::proxy_group_members(
+        .into()),
+        BackendType::Surge => Ok(ProxyMemberWindow {
+            entries: crate::surge::api::proxy_group_members(
                 target.surge(),
                 group,
                 offset,
                 limit,
                 member_sort,
             )
-            .await
-        }
-        BackendType::SingBox => {
-            crate::sing_box::api::proxy_group_members(
+            .await?,
+            sections: Vec::new(),
+        }),
+        BackendType::SingBox => Ok(ProxyMemberWindow {
+            entries: crate::sing_box::api::proxy_group_members(
                 target.sing_box(),
                 group,
                 offset,
                 limit,
                 member_sort,
             )
-            .await
-        }
+            .await?,
+            sections: Vec::new(),
+        }),
     }
 }

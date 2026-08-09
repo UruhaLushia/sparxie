@@ -114,8 +114,12 @@ class ProxiesNotifier extends ChangeNotifier {
     _applyVisibleDelays(delayByName);
   }
 
-  void applyProxyDelayEvent(String groupName, rust.ProxyDelayEvent event) {
-    if (event.windowEntries.isNotEmpty) {
+  void applyProxyDelayEvent(
+    String groupName,
+    rust.ProxyDelayEvent event, {
+    bool applyWindow = true,
+  }) {
+    if (applyWindow && event.windowEntries.isNotEmpty) {
       applyGroupMembers(
         groupName,
         event.windowMembersHash,
@@ -158,12 +162,15 @@ class ProxiesNotifier extends ChangeNotifier {
     String groupName,
     int membersHash,
     int offset,
-    List<rust.ProxyMemberEntry> entries,
-  ) {
+    List<rust.ProxyMemberEntry> entries, {
+    List<rust.ProxyMemberSection>? sections,
+  }) {
     final group = _groupsById[groupName];
     if (group == null) return;
     if (group._membersHash != membersHash) return;
-    if (group._setMemberWindow(offset, entries)) group._notifyMembers();
+    if (group._setMemberWindow(offset, entries, sections: sections)) {
+      group._notifyMembers();
+    }
   }
 
   void _setVisibleDelay(String name, int delay) {
@@ -241,6 +248,8 @@ class ProxyGroup {
   int _membersHash;
   int _memberOffset = 0;
   List<ProxyMember> _members = const <ProxyMember>[];
+  List<rust.ProxyMemberSection> _memberSections =
+      const <rust.ProxyMemberSection>[];
   final ValueNotifier<int> _membersVersion;
 
   String get type => _type;
@@ -256,6 +265,7 @@ class ProxyGroup {
   /// Per-group `tester`/`testUrl` configured by the backend (empty when absent).
   String get testUrl => _testUrl;
   int get memberCount => _memberCount;
+  List<rust.ProxyMemberSection> get memberSections => _memberSections;
 
   final ValueNotifier<String> now;
   final ValueNotifier<int> nowDelay;
@@ -269,6 +279,15 @@ class ProxyGroup {
     final local = index - _memberOffset;
     if (local < 0 || local >= _members.length) return null;
     return _members[local];
+  }
+
+  bool hasMemberRange(int first, int last) {
+    if (first < 0 || last >= _memberCount) return false;
+    if (last < first) return true;
+    for (var index = first; index <= last; index++) {
+      if (memberAt(index) == null) return false;
+    }
+    return true;
   }
 
   bool _setMemberShape(int count, int hash) {
@@ -356,7 +375,16 @@ class ProxyGroup {
     );
   }
 
-  bool _setMemberWindow(int offset, List<rust.ProxyMemberEntry> entries) {
+  bool _setMemberWindow(
+    int offset,
+    List<rust.ProxyMemberEntry> entries, {
+    List<rust.ProxyMemberSection>? sections,
+  }) {
+    var sectionsChanged = false;
+    if (sections != null && !listEquals(_memberSections, sections)) {
+      _memberSections = List<rust.ProxyMemberSection>.unmodifiable(sections);
+      sectionsChanged = true;
+    }
     if (!hidesExactNow) {
       for (final entry in entries) {
         if (entry.name == now.value) {
@@ -376,7 +404,7 @@ class ProxyGroup {
         if (_members[i]._setType(entry.proxyType)) typeChanged = true;
         _members[i]._setDelay(entry.delay);
       }
-      return typeChanged;
+      return typeChanged || sectionsChanged;
     }
 
     final oldByName = <String, ProxyMember>{};
@@ -430,10 +458,11 @@ class ProxyGroup {
 
   bool _clearMembers() {
     _memberOffset = 0;
-    if (_members.isEmpty) return false;
-    _retireMembers(_members);
+    final changed = _members.isNotEmpty || _memberSections.isNotEmpty;
+    if (_members.isNotEmpty) _retireMembers(_members);
     _members = const <ProxyMember>[];
-    return true;
+    _memberSections = const <rust.ProxyMemberSection>[];
+    return changed;
   }
 
   void _notifyMembers() {

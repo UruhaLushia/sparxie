@@ -140,6 +140,25 @@ impl From<crate::clash::api::ProxyMemberEntry> for ProxyMemberEntry {
     }
 }
 
+impl From<crate::clash::api::ProxyMemberSection> for ProxyMemberSection {
+    fn from(value: crate::clash::api::ProxyMemberSection) -> Self {
+        Self {
+            provider: value.provider,
+            offset: value.offset,
+            count: value.count,
+        }
+    }
+}
+
+impl From<crate::clash::api::ProxyMemberWindow> for ProxyMemberWindow {
+    fn from(value: crate::clash::api::ProxyMemberWindow) -> Self {
+        Self {
+            entries: value.entries.into_iter().map(Into::into).collect(),
+            sections: value.sections.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 impl From<crate::clash::api::ProxyDelayEntry> for ProxyDelayEntry {
     fn from(value: crate::clash::api::ProxyDelayEntry) -> Self {
         Self {

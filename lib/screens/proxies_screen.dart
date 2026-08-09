@@ -47,6 +47,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     int columns,
     bool cardColored,
     bool cardShowDelay,
+    bool groupByProvider,
   })?
   _prefsSnapshot;
   var _active = true;
@@ -86,13 +87,15 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       columns: widget.prefs.proxiesColumns,
       cardColored: widget.prefs.proxiesCardColored,
       cardShowDelay: widget.prefs.proxiesCardShowDelay,
+      groupByProvider: widget.prefs.proxiesGroupByProvider,
     );
     final previous = _prefsSnapshot;
     if (previous == next) return;
     _prefsSnapshot = next;
     if (previous == null ||
         previous.includeHidden != next.includeHidden ||
-        previous.sort != next.sort) {
+        previous.sort != next.sort ||
+        previous.groupByProvider != next.groupByProvider) {
       _syncProxyCatalogOptions();
     }
     if (previous != null && mounted && _active) setState(() {});
@@ -102,6 +105,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     widget.session.setProxyCatalogOptions(
       includeHidden: widget.prefs.proxiesShowHiddenGroups,
       memberSort: _memberSort(widget.prefs.proxiesSort),
+      groupByProvider: widget.prefs.proxiesGroupByProvider,
     );
   }
 
@@ -276,7 +280,14 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
           windowLimit: window?.limit ?? 0,
           windowMembersHash: window?.membersHash ?? 0,
         )) {
-          widget.session.proxies.applyProxyDelayEvent(group.name, event);
+          widget.session.proxies.applyProxyDelayEvent(
+            group.name,
+            event,
+            applyWindow: !widget.prefs.proxiesGroupByProvider,
+          );
+        }
+        if (widget.prefs.proxiesGroupByProvider) {
+          await _reloadDelayWindow(target, group, window);
         }
       }
     } catch (e) {
@@ -308,7 +319,14 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
         windowLimit: window?.limit ?? 0,
         windowMembersHash: window?.membersHash ?? 0,
       );
-      widget.session.proxies.applyProxyDelayEvent(group.name, event);
+      widget.session.proxies.applyProxyDelayEvent(
+        group.name,
+        event,
+        applyWindow: !widget.prefs.proxiesGroupByProvider,
+      );
+      if (widget.prefs.proxiesGroupByProvider) {
+        await _reloadDelayWindow(target, group, window);
+      }
     } catch (e) {
       if (kDebugMode) debugPrint('proxy delay failed for $name: $e');
       widget.session.proxies.applyNodeDelay(name, 0);
@@ -321,18 +339,20 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     ProxyMemberWindowRequest? window,
   ) async {
     if (window == null || widget.prefs.proxiesSort != ProxiesSort.delay) return;
-    final entries = await rust.controllerProxyGroupMembers(
+    final loaded = await rust.controllerProxyGroupMembers(
       target: target,
       group: group.name,
       offset: window.offset,
       limit: window.limit,
       memberSort: rust.ProxyMemberSort.delay,
+      groupByProvider: widget.prefs.proxiesGroupByProvider,
     );
     widget.session.proxies.applyGroupMembers(
       group.name,
       window.membersHash,
       window.offset,
-      entries,
+      loaded.entries,
+      sections: loaded.sections,
     );
   }
 
@@ -583,26 +603,19 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   Future<void> _waitForFullMembers(ProxyGroup group) async {
-    bool loaded() {
-      for (var i = 0; i < group.memberCount; i++) {
-        if (group.memberAt(i) == null) return false;
-      }
-      return true;
-    }
-
     // ensureProxyGroupMembers only queues (returns early) while another load
     // for the group is in flight, so a single await isn't enough.
     final deadline = DateTime.now().add(const Duration(seconds: 3));
     while (mounted &&
         _active &&
-        !loaded() &&
+        !group.hasMemberRange(0, group.memberCount - 1) &&
         DateTime.now().isBefore(deadline)) {
       await widget.session.ensureProxyGroupMembers(
         group.name,
         0,
         group.memberCount - 1,
       );
-      if (loaded()) return;
+      if (group.hasMemberRange(0, group.memberCount - 1)) return;
       await Future<void>.delayed(const Duration(milliseconds: 60));
     }
   }
@@ -827,6 +840,19 @@ class _ProxyCardsBody extends StatelessWidget {
   final Future<void> Function(ProxyGroup) onTestGroup;
   final Future<void> Function(ProxyGroup, String) onTestNode;
 
+  Future<void> _ensureInitialMembers(ProxyGroup group) async {
+    if (group.memberCount == 0) return;
+    final last = prefs.proxiesGroupByProvider ? group.memberCount - 1 : 0;
+    final deadline = DateTime.now().add(const Duration(seconds: 3));
+    while (true) {
+      await session.ensureProxyGroupMembers(group.name, 0, last);
+      if (group.hasMemberRange(0, last) || DateTime.now().isAfter(deadline)) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ActiveListenableBuilder(
@@ -868,13 +894,10 @@ class _ProxyCardsBody extends StatelessWidget {
                 showIcon: prefs.proxiesShowGroupIcons,
                 colored: prefs.proxiesCardColored,
                 showDelay: prefs.proxiesCardShowDelay,
-                onTap: (sourceFocusNode) {
-                  if (group.memberCount > 0) {
-                    unawaited(
-                      session.ensureProxyGroupMembers(group.name, 0, 0),
-                    );
-                  }
-                  return showProxyGroupCardDetail(
+                onTap: (sourceFocusNode) async {
+                  await _ensureInitialMembers(group);
+                  if (!context.mounted) return;
+                  await showProxyGroupCardDetail(
                     context,
                     session: session,
                     group: group,

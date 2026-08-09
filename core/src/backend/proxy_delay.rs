@@ -157,6 +157,7 @@ pub async fn controller_proxy_group_delay_stream(
                 0,
                 u32::MAX,
                 crate::clash::api::ProxyMemberSort::Original,
+                false,
             )
             .await?;
             let names = members

@@ -15,7 +15,11 @@ export 'session/logs.dart';
 export 'session/process_icons.dart';
 export 'session/proxies.dart';
 
-typedef _ProxyMemberLoadKey = (String, rust.ProxyMemberSort);
+typedef _ProxyMemberLoadKey = ({
+  String group,
+  rust.ProxyMemberSort sort,
+  bool groupByProvider,
+});
 
 const _retryDelays = <Duration>[
   Duration(seconds: 5),
@@ -74,6 +78,7 @@ class MihomoSession {
   bool _includeHiddenProxyGroups = false;
   String _proxyCatalogFilter = '';
   rust.ProxyMemberSort _proxyMemberSort = rust.ProxyMemberSort.original;
+  bool _groupProxyMembersByProvider = false;
   String _logsLevel = 'info';
   int _logInfoCapacity;
 
@@ -280,9 +285,10 @@ class MihomoSession {
     bool? includeHidden,
     String? filter,
     rust.ProxyMemberSort? memberSort,
+    bool? groupByProvider,
   }) {
     var catalogChanged = false;
-    var sortChanged = false;
+    var memberOrderChanged = false;
     if (includeHidden != null && includeHidden != _includeHiddenProxyGroups) {
       _includeHiddenProxyGroups = includeHidden;
       catalogChanged = true;
@@ -296,9 +302,14 @@ class MihomoSession {
     }
     if (memberSort != null && memberSort != _proxyMemberSort) {
       _proxyMemberSort = memberSort;
-      sortChanged = true;
+      memberOrderChanged = true;
     }
-    if (!catalogChanged && !sortChanged) return;
+    if (groupByProvider != null &&
+        groupByProvider != _groupProxyMembersByProvider) {
+      _groupProxyMembersByProvider = groupByProvider;
+      memberOrderChanged = true;
+    }
+    if (!catalogChanged && !memberOrderChanged) return;
     _proxyMemberLoads.clear();
     _queuedProxyMemberLoads.clear();
     if (catalogChanged) {
@@ -338,7 +349,12 @@ class MihomoSession {
     if (t == null) return;
     final request = proxies.memberWindowRequest(group, firstIndex, lastIndex);
     if (request == null) return;
-    final loadKey = (group, _proxyMemberSort);
+    final groupByProvider = _groupProxyMembersByProvider;
+    final loadKey = (
+      group: group,
+      sort: _proxyMemberSort,
+      groupByProvider: groupByProvider,
+    );
     if (_proxyMemberLoads.contains(loadKey)) {
       _queuedProxyMemberLoads[loadKey] = _QueuedProxyMemberLoad(
         target: t,
@@ -346,10 +362,18 @@ class MihomoSession {
         firstIndex: firstIndex,
         lastIndex: lastIndex,
         sort: _proxyMemberSort,
+        groupByProvider: groupByProvider,
       );
       return;
     }
-    await _loadProxyMemberWindow(loadKey, t, group, request, _proxyMemberSort);
+    await _loadProxyMemberWindow(
+      loadKey,
+      t,
+      group,
+      request,
+      _proxyMemberSort,
+      groupByProvider,
+    );
   }
 
   Future<void> _loadProxyMemberWindow(
@@ -358,22 +382,27 @@ class MihomoSession {
     String group,
     ProxyMemberWindowRequest request,
     rust.ProxyMemberSort sort,
+    bool groupByProvider,
   ) async {
     if (!_proxyMemberLoads.add(loadKey)) return;
     try {
-      final entries = await rust.controllerProxyGroupMembers(
+      final window = await rust.controllerProxyGroupMembers(
         target: target,
         group: group,
         offset: request.offset,
         limit: request.limit,
         memberSort: sort,
+        groupByProvider: groupByProvider,
       );
-      if (_target == target && sort == _proxyMemberSort) {
+      if (_target == target &&
+          sort == _proxyMemberSort &&
+          groupByProvider == _groupProxyMembersByProvider) {
         proxies.applyGroupMembers(
           group,
           request.membersHash,
           request.offset,
-          entries,
+          window.entries,
+          sections: window.sections,
         );
         _clearError(_SessionErrorSource.proxyMember);
       }
@@ -395,6 +424,9 @@ class MihomoSession {
         queued.sort != _proxyMemberSort) {
       return;
     }
+    if (queued.groupByProvider != _groupProxyMembersByProvider) {
+      return;
+    }
     final nextRequest = proxies.memberWindowRequest(
       queued.group,
       queued.firstIndex,
@@ -408,6 +440,7 @@ class MihomoSession {
         queued.group,
         nextRequest,
         queued.sort,
+        queued.groupByProvider,
       ),
     );
   }
@@ -984,6 +1017,7 @@ class _QueuedProxyMemberLoad {
     required this.firstIndex,
     required this.lastIndex,
     required this.sort,
+    required this.groupByProvider,
   });
 
   final rust.BackendTarget target;
@@ -991,4 +1025,5 @@ class _QueuedProxyMemberLoad {
   final int firstIndex;
   final int lastIndex;
   final rust.ProxyMemberSort sort;
+  final bool groupByProvider;
 }

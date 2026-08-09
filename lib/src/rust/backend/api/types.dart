@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `matches_query`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 class Connection {
   final String id;
@@ -710,6 +710,33 @@ class ProxyMemberEntry {
           delay == other.delay;
 }
 
+class ProxyMemberSection {
+  final String provider;
+  final int offset;
+  final int count;
+
+  const ProxyMemberSection({
+    required this.provider,
+    required this.offset,
+    required this.count,
+  });
+
+  static Future<ProxyMemberSection> default_() =>
+      RustLib.instance.api.crateBackendApiTypesProxyMemberSectionDefault();
+
+  @override
+  int get hashCode => provider.hashCode ^ offset.hashCode ^ count.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyMemberSection &&
+          runtimeType == other.runtimeType &&
+          provider == other.provider &&
+          offset == other.offset &&
+          count == other.count;
+}
+
 enum ProxyMemberSort {
   original,
   name,
@@ -717,6 +744,27 @@ enum ProxyMemberSort {
 
   static Future<ProxyMemberSort> default_() =>
       RustLib.instance.api.crateBackendApiTypesProxyMemberSortDefault();
+}
+
+class ProxyMemberWindow {
+  final List<ProxyMemberEntry> entries;
+  final List<ProxyMemberSection> sections;
+
+  const ProxyMemberWindow({required this.entries, required this.sections});
+
+  static Future<ProxyMemberWindow> default_() =>
+      RustLib.instance.api.crateBackendApiTypesProxyMemberWindowDefault();
+
+  @override
+  int get hashCode => entries.hashCode ^ sections.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyMemberWindow &&
+          runtimeType == other.runtimeType &&
+          entries == other.entries &&
+          sections == other.sections;
 }
 
 class ProxyProviderEntry {

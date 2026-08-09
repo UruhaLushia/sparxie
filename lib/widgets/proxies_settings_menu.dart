@@ -60,6 +60,13 @@ class _ProxiesSettingsSheet extends StatelessWidget {
           trailing: _SortSegmented(prefs: prefs),
         ),
         _SettingsRow(
+          label: '按代理提供者分组',
+          trailing: CompactSwitch(
+            value: prefs.proxiesGroupByProvider,
+            onChanged: prefs.setProxiesGroupByProvider,
+          ),
+        ),
+        _SettingsRow(
           label: '显示代理组图标',
           trailing: CompactSwitch(
             value: prefs.proxiesShowGroupIcons,

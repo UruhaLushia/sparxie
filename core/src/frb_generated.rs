@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1983679119;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -777567091;
 
 // Section: executor
 
@@ -1838,6 +1838,7 @@ fn wire__crate__backend__api__proxies__controller_proxy_group_members_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             let api_member_sort =
                 <crate::backend::api::types::ProxyMemberSort>::sse_decode(&mut deserializer);
+            let api_group_by_provider = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::utils::error::MihomoError>(
@@ -1849,6 +1850,7 @@ fn wire__crate__backend__api__proxies__controller_proxy_group_members_impl(
                                 api_offset,
                                 api_limit,
                                 api_member_sort,
+                                api_group_by_provider,
                             )
                             .await?;
                         Ok(output_ok)
@@ -3893,6 +3895,40 @@ fn wire__crate__backend__api__types__proxy_member_entry_default_impl(
         },
     )
 }
+fn wire__crate__backend__api__types__proxy_member_section_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "proxy_member_section_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::types::ProxyMemberSection::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__backend__api__types__proxy_member_sort_default_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3920,6 +3956,40 @@ fn wire__crate__backend__api__types__proxy_member_sort_default_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(
                         crate::backend::api::types::ProxyMemberSort::default(),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__backend__api__types__proxy_member_window_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "proxy_member_window_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::backend::api::types::ProxyMemberWindow::default(),
                     )?;
                     Ok(output_ok)
                 })())
@@ -5264,6 +5334,18 @@ impl SseDecode for Vec<crate::backend::api::types::ProxyMemberEntry> {
     }
 }
 
+impl SseDecode for Vec<crate::backend::api::types::ProxyMemberSection> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::backend::api::types::ProxyMemberSection>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::backend::api::types::ProxyProviderEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5650,6 +5732,20 @@ impl SseDecode for crate::backend::api::types::ProxyMemberEntry {
     }
 }
 
+impl SseDecode for crate::backend::api::types::ProxyMemberSection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_provider = <String>::sse_decode(deserializer);
+        let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_count = <u32>::sse_decode(deserializer);
+        return crate::backend::api::types::ProxyMemberSection {
+            provider: var_provider,
+            offset: var_offset,
+            count: var_count,
+        };
+    }
+}
+
 impl SseDecode for crate::backend::api::types::ProxyMemberSort {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5659,6 +5755,20 @@ impl SseDecode for crate::backend::api::types::ProxyMemberSort {
             1 => crate::backend::api::types::ProxyMemberSort::Name,
             2 => crate::backend::api::types::ProxyMemberSort::Delay,
             _ => unreachable!("Invalid variant for ProxyMemberSort: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::backend::api::types::ProxyMemberWindow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_entries =
+            <Vec<crate::backend::api::types::ProxyMemberEntry>>::sse_decode(deserializer);
+        let mut var_sections =
+            <Vec<crate::backend::api::types::ProxyMemberSection>>::sse_decode(deserializer);
+        return crate::backend::api::types::ProxyMemberWindow {
+            entries: var_entries,
+            sections: var_sections,
         };
     }
 }
@@ -6084,28 +6194,30 @@ fn pde_ffi_dispatcher_primary_impl(
 96 => wire__crate__backend__api__types__proxy_delay_event_default_impl(port, ptr, rust_vec_len, data_len),
 97 => wire__crate__backend__api__types__proxy_group_entry_default_impl(port, ptr, rust_vec_len, data_len),
 98 => wire__crate__backend__api__types__proxy_member_entry_default_impl(port, ptr, rust_vec_len, data_len),
-99 => wire__crate__backend__api__types__proxy_member_sort_default_impl(port, ptr, rust_vec_len, data_len),
-100 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(port, ptr, rust_vec_len, data_len),
-101 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(port, ptr, rust_vec_len, data_len),
-102 => wire__crate__backend__api__types__rule_entry_default_impl(port, ptr, rust_vec_len, data_len),
-103 => wire__crate__backend__api__types__rule_provider_entry_default_impl(port, ptr, rust_vec_len, data_len),
-104 => wire__crate__backend__api__types__rules_summary_default_impl(port, ptr, rust_vec_len, data_len),
-105 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(port, ptr, rust_vec_len, data_len),
-106 => wire__crate__backend__api__resources__store_process_icon_impl(port, ptr, rust_vec_len, data_len),
-107 => wire__crate__backend__api__resources__store_process_name_impl(port, ptr, rust_vec_len, data_len),
-108 => wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(port, ptr, rust_vec_len, data_len),
-109 => wire__crate__backend__api__resources__system_font_families_impl(port, ptr, rust_vec_len, data_len),
-110 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(port, ptr, rust_vec_len, data_len),
-111 => wire__crate__backend__api__tailscale__tailscale_logout_impl(port, ptr, rust_vec_len, data_len),
-112 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(port, ptr, rust_vec_len, data_len),
-113 => wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(port, ptr, rust_vec_len, data_len),
-114 => wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(port, ptr, rust_vec_len, data_len),
-115 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(port, ptr, rust_vec_len, data_len),
-116 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(port, ptr, rust_vec_len, data_len),
-117 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(port, ptr, rust_vec_len, data_len),
-118 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(port, ptr, rust_vec_len, data_len),
-119 => wire__crate__backend__api__types__traffic_sample_default_impl(port, ptr, rust_vec_len, data_len),
-120 => wire__crate__backend__api__types__version_info_default_impl(port, ptr, rust_vec_len, data_len),
+99 => wire__crate__backend__api__types__proxy_member_section_default_impl(port, ptr, rust_vec_len, data_len),
+100 => wire__crate__backend__api__types__proxy_member_sort_default_impl(port, ptr, rust_vec_len, data_len),
+101 => wire__crate__backend__api__types__proxy_member_window_default_impl(port, ptr, rust_vec_len, data_len),
+102 => wire__crate__backend__api__types__proxy_provider_entry_default_impl(port, ptr, rust_vec_len, data_len),
+103 => wire__crate__backend__api__resources__reset_process_icon_misses_impl(port, ptr, rust_vec_len, data_len),
+104 => wire__crate__backend__api__types__rule_entry_default_impl(port, ptr, rust_vec_len, data_len),
+105 => wire__crate__backend__api__types__rule_provider_entry_default_impl(port, ptr, rust_vec_len, data_len),
+106 => wire__crate__backend__api__types__rules_summary_default_impl(port, ptr, rust_vec_len, data_len),
+107 => wire__crate__backend__api__resources__set_online_resource_allow_insecure_impl(port, ptr, rust_vec_len, data_len),
+108 => wire__crate__backend__api__resources__store_process_icon_impl(port, ptr, rust_vec_len, data_len),
+109 => wire__crate__backend__api__resources__store_process_name_impl(port, ptr, rust_vec_len, data_len),
+110 => wire__crate__backend__api__diagnostics__stun_test_progress_default_impl(port, ptr, rust_vec_len, data_len),
+111 => wire__crate__backend__api__resources__system_font_families_impl(port, ptr, rust_vec_len, data_len),
+112 => wire__crate__backend__api__tailscale__tailscale_endpoint_status_default_impl(port, ptr, rust_vec_len, data_len),
+113 => wire__crate__backend__api__tailscale__tailscale_logout_impl(port, ptr, rust_vec_len, data_len),
+114 => wire__crate__backend__api__tailscale__tailscale_peer_default_impl(port, ptr, rust_vec_len, data_len),
+115 => wire__crate__backend__api__tailscale__tailscale_ping_stream_impl(port, ptr, rust_vec_len, data_len),
+116 => wire__crate__backend__api__tailscale__tailscale_ping_update_default_impl(port, ptr, rust_vec_len, data_len),
+117 => wire__crate__backend__api__tailscale__tailscale_set_exit_node_impl(port, ptr, rust_vec_len, data_len),
+118 => wire__crate__backend__api__tailscale__tailscale_status_default_impl(port, ptr, rust_vec_len, data_len),
+119 => wire__crate__backend__api__tailscale__tailscale_status_stream_impl(port, ptr, rust_vec_len, data_len),
+120 => wire__crate__backend__api__tailscale__tailscale_user_group_default_impl(port, ptr, rust_vec_len, data_len),
+121 => wire__crate__backend__api__types__traffic_sample_default_impl(port, ptr, rust_vec_len, data_len),
+122 => wire__crate__backend__api__types__version_info_default_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -6763,6 +6875,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberEn
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyMemberSection {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.provider.into_into_dart().into_dart(),
+            self.offset.into_into_dart().into_dart(),
+            self.count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::types::ProxyMemberSection
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberSection>
+    for crate::backend::api::types::ProxyMemberSection
+{
+    fn into_into_dart(self) -> crate::backend::api::types::ProxyMemberSection {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyMemberSort {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -6781,6 +6915,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberSo
     for crate::backend::api::types::ProxyMemberSort
 {
     fn into_into_dart(self) -> crate::backend::api::types::ProxyMemberSort {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyMemberWindow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.entries.into_into_dart().into_dart(),
+            self.sections.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::backend::api::types::ProxyMemberWindow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberWindow>
+    for crate::backend::api::types::ProxyMemberWindow
+{
+    fn into_into_dart(self) -> crate::backend::api::types::ProxyMemberWindow {
         self
     }
 }
@@ -7546,6 +7701,16 @@ impl SseEncode for Vec<crate::backend::api::types::ProxyMemberEntry> {
     }
 }
 
+impl SseEncode for Vec<crate::backend::api::types::ProxyMemberSection> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::backend::api::types::ProxyMemberSection>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::backend::api::types::ProxyProviderEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7822,6 +7987,15 @@ impl SseEncode for crate::backend::api::types::ProxyMemberEntry {
     }
 }
 
+impl SseEncode for crate::backend::api::types::ProxyMemberSection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.provider, serializer);
+        <u32>::sse_encode(self.offset, serializer);
+        <u32>::sse_encode(self.count, serializer);
+    }
+}
+
 impl SseEncode for crate::backend::api::types::ProxyMemberSort {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7834,6 +8008,17 @@ impl SseEncode for crate::backend::api::types::ProxyMemberSort {
                     unimplemented!("");
                 }
             },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::backend::api::types::ProxyMemberWindow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::backend::api::types::ProxyMemberEntry>>::sse_encode(self.entries, serializer);
+        <Vec<crate::backend::api::types::ProxyMemberSection>>::sse_encode(
+            self.sections,
             serializer,
         );
     }

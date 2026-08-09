@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1983679119;
+  int get rustContentHash => -777567091;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -345,13 +345,13 @@ abstract class RustLibApi extends BaseApi {
     required int windowMembersHash,
   });
 
-  Future<List<ProxyMemberEntry>>
-  crateBackendApiProxiesControllerProxyGroupMembers({
+  Future<ProxyMemberWindow> crateBackendApiProxiesControllerProxyGroupMembers({
     required BackendTarget target,
     required String group,
     required int offset,
     required int limit,
     required ProxyMemberSort memberSort,
+    required bool groupByProvider,
   });
 
   Future<List<ProxyProviderEntry>>
@@ -569,7 +569,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ProxyMemberEntry> crateBackendApiTypesProxyMemberEntryDefault();
 
+  Future<ProxyMemberSection> crateBackendApiTypesProxyMemberSectionDefault();
+
   Future<ProxyMemberSort> crateBackendApiTypesProxyMemberSortDefault();
+
+  Future<ProxyMemberWindow> crateBackendApiTypesProxyMemberWindowDefault();
 
   Future<ProxyProviderEntry> crateBackendApiTypesProxyProviderEntryDefault();
 
@@ -2429,13 +2433,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<ProxyMemberEntry>>
-  crateBackendApiProxiesControllerProxyGroupMembers({
+  Future<ProxyMemberWindow> crateBackendApiProxiesControllerProxyGroupMembers({
     required BackendTarget target,
     required String group,
     required int offset,
     required int limit,
     required ProxyMemberSort memberSort,
+    required bool groupByProvider,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2446,6 +2450,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(offset, serializer);
           sse_encode_u_32(limit, serializer);
           sse_encode_proxy_member_sort(memberSort, serializer);
+          sse_encode_bool(groupByProvider, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2454,11 +2459,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_proxy_member_entry,
+          decodeSuccessData: sse_decode_proxy_member_window,
           decodeErrorData: sse_decode_mihomo_error,
         ),
         constMeta: kCrateBackendApiProxiesControllerProxyGroupMembersConstMeta,
-        argValues: [target, group, offset, limit, memberSort],
+        argValues: [target, group, offset, limit, memberSort, groupByProvider],
         apiImpl: this,
       ),
     );
@@ -2468,7 +2473,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get kCrateBackendApiProxiesControllerProxyGroupMembersConstMeta =>
       const TaskConstMeta(
         debugName: "controller_proxy_group_members",
-        argNames: ["target", "group", "offset", "limit", "memberSort"],
+        argNames: [
+          "target",
+          "group",
+          "offset",
+          "limit",
+          "memberSort",
+          "groupByProvider",
+        ],
       );
 
   @override
@@ -4205,7 +4217,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<ProxyMemberSort> crateBackendApiTypesProxyMemberSortDefault() {
+  Future<ProxyMemberSection> crateBackendApiTypesProxyMemberSectionDefault() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4214,6 +4226,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 99,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_proxy_member_section,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiTypesProxyMemberSectionDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTypesProxyMemberSectionDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "proxy_member_section_default",
+        argNames: [],
+      );
+
+  @override
+  Future<ProxyMemberSort> crateBackendApiTypesProxyMemberSortDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 100,
             port: port_,
           );
         },
@@ -4232,6 +4274,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "proxy_member_sort_default", argNames: []);
 
   @override
+  Future<ProxyMemberWindow> crateBackendApiTypesProxyMemberWindowDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 101,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_proxy_member_window,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateBackendApiTypesProxyMemberWindowDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateBackendApiTypesProxyMemberWindowDefaultConstMeta =>
+      const TaskConstMeta(
+        debugName: "proxy_member_window_default",
+        argNames: [],
+      );
+
+  @override
   Future<ProxyProviderEntry> crateBackendApiTypesProxyProviderEntryDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -4240,7 +4312,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 102,
             port: port_,
           );
         },
@@ -4270,7 +4342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 103,
             port: port_,
           );
         },
@@ -4297,7 +4369,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 104,
             port: port_,
           );
         },
@@ -4324,7 +4396,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 105,
             port: port_,
           );
         },
@@ -4354,7 +4426,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 106,
             port: port_,
           );
         },
@@ -4384,7 +4456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 105,
+            funcId: 107,
             port: port_,
           );
         },
@@ -4421,7 +4493,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 108,
             port: port_,
           );
         },
@@ -4456,7 +4528,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 109,
             port: port_,
           );
         },
@@ -4486,7 +4558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 110,
             port: port_,
           );
         },
@@ -4517,7 +4589,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 109,
+            funcId: 111,
             port: port_,
           );
         },
@@ -4545,7 +4617,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 112,
             port: port_,
           );
         },
@@ -4582,7 +4654,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 113,
             port: port_,
           );
         },
@@ -4612,7 +4684,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 112,
+            funcId: 114,
             port: port_,
           );
         },
@@ -4649,7 +4721,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 113,
+              funcId: 115,
               port: port_,
             );
           },
@@ -4682,7 +4754,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 114,
+            funcId: 116,
             port: port_,
           );
         },
@@ -4720,7 +4792,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 115,
+            funcId: 117,
             port: port_,
           );
         },
@@ -4750,7 +4822,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 116,
+            funcId: 118,
             port: port_,
           );
         },
@@ -4783,7 +4855,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 117,
+              funcId: 119,
               port: port_,
             );
           },
@@ -4816,7 +4888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 118,
+            funcId: 120,
             port: port_,
           );
         },
@@ -4847,7 +4919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 119,
+            funcId: 121,
             port: port_,
           );
         },
@@ -4874,7 +4946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 120,
+            funcId: 122,
             port: port_,
           );
         },
@@ -5277,6 +5349,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ProxyMemberSection> dco_decode_list_proxy_member_section(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_proxy_member_section).toList();
+  }
+
+  @protected
   List<ProxyProviderEntry> dco_decode_list_proxy_provider_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_proxy_provider_entry).toList();
@@ -5540,9 +5618,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProxyMemberSection dco_decode_proxy_member_section(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ProxyMemberSection(
+      provider: dco_decode_String(arr[0]),
+      offset: dco_decode_u_32(arr[1]),
+      count: dco_decode_u_32(arr[2]),
+    );
+  }
+
+  @protected
   ProxyMemberSort dco_decode_proxy_member_sort(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ProxyMemberSort.values[raw as int];
+  }
+
+  @protected
+  ProxyMemberWindow dco_decode_proxy_member_window(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ProxyMemberWindow(
+      entries: dco_decode_list_proxy_member_entry(arr[0]),
+      sections: dco_decode_list_proxy_member_section(arr[1]),
+    );
   }
 
   @protected
@@ -6298,6 +6401,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ProxyMemberSection> sse_decode_list_proxy_member_section(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ProxyMemberSection>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_proxy_member_section(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<ProxyProviderEntry> sse_decode_list_proxy_provider_entry(
     SseDeserializer deserializer,
   ) {
@@ -6650,10 +6767,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProxyMemberSection sse_decode_proxy_member_section(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_provider = sse_decode_String(deserializer);
+    var var_offset = sse_decode_u_32(deserializer);
+    var var_count = sse_decode_u_32(deserializer);
+    return ProxyMemberSection(
+      provider: var_provider,
+      offset: var_offset,
+      count: var_count,
+    );
+  }
+
+  @protected
   ProxyMemberSort sse_decode_proxy_member_sort(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return ProxyMemberSort.values[inner];
+  }
+
+  @protected
+  ProxyMemberWindow sse_decode_proxy_member_window(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_entries = sse_decode_list_proxy_member_entry(deserializer);
+    var var_sections = sse_decode_list_proxy_member_section(deserializer);
+    return ProxyMemberWindow(entries: var_entries, sections: var_sections);
   }
 
   @protected
@@ -7480,6 +7622,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_proxy_member_section(
+    List<ProxyMemberSection> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_proxy_member_section(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_proxy_provider_entry(
     List<ProxyProviderEntry> self,
     SseSerializer serializer,
@@ -7771,12 +7925,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_proxy_member_section(
+    ProxyMemberSection self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.provider, serializer);
+    sse_encode_u_32(self.offset, serializer);
+    sse_encode_u_32(self.count, serializer);
+  }
+
+  @protected
   void sse_encode_proxy_member_sort(
     ProxyMemberSort self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_proxy_member_window(
+    ProxyMemberWindow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_proxy_member_entry(self.entries, serializer);
+    sse_encode_list_proxy_member_section(self.sections, serializer);
   }
 
   @protected

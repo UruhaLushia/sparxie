@@ -62,16 +62,18 @@ Future<ProxyCatalog> controllerProxyCatalog({
   filter: filter,
 );
 
-Future<List<ProxyMemberEntry>> controllerProxyGroupMembers({
+Future<ProxyMemberWindow> controllerProxyGroupMembers({
   required BackendTarget target,
   required String group,
   required int offset,
   required int limit,
   required ProxyMemberSort memberSort,
+  required bool groupByProvider,
 }) => RustLib.instance.api.crateBackendApiProxiesControllerProxyGroupMembers(
   target: target,
   group: group,
   offset: offset,
   limit: limit,
   memberSort: memberSort,
+  groupByProvider: groupByProvider,
 );

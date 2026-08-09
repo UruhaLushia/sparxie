@@ -12,7 +12,10 @@ use super::value::{field_or, first_field};
 
 use cache::{CachedCatalog, CachedGroup, CachedNode};
 use parse::{contains_filter, history_delay, intern_member_list, push_icon};
-pub use types::{ProxyCatalog, ProxyGroupEntry, ProxyMemberEntry, ProxyMemberSort};
+pub use types::{
+    ProxyCatalog, ProxyGroupEntry, ProxyMemberEntry, ProxyMemberSection, ProxyMemberSort,
+    ProxyMemberWindow,
+};
 
 mod cache;
 mod parse;
@@ -319,6 +322,7 @@ pub async fn proxy_group_members(
     offset: u32,
     limit: u32,
     member_sort: ProxyMemberSort,
+    group_by_provider: bool,
 ) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
     if !cache::has_catalog(&target) {
         refresh_cached_catalog(&target).await?;
@@ -326,14 +330,50 @@ pub async fn proxy_group_members(
     if cache::group_needs_provider_nodes(&target, &group) {
         refresh_cached_provider_nodes(&target).await?;
     }
-    if let Some(entries) = cache::member_entries(&target, &group, offset, limit, member_sort) {
+    if let Some(entries) = cache::member_entries(
+        &target,
+        &group,
+        offset,
+        limit,
+        member_sort,
+        group_by_provider,
+    ) {
         return Ok(entries);
     }
     refresh_cached_catalog(&target).await?;
     if cache::group_needs_provider_nodes(&target, &group) {
         refresh_cached_provider_nodes(&target).await?;
     }
-    Ok(cache::member_entries(&target, &group, offset, limit, member_sort).unwrap_or_default())
+    Ok(cache::member_entries(
+        &target,
+        &group,
+        offset,
+        limit,
+        member_sort,
+        group_by_provider,
+    )
+    .unwrap_or_default())
+}
+
+pub async fn proxy_group_member_window(
+    target: MihomoTarget,
+    group: String,
+    offset: u32,
+    limit: u32,
+    member_sort: ProxyMemberSort,
+    group_by_provider: bool,
+) -> Result<ProxyMemberWindow, MihomoError> {
+    let entries = proxy_group_members(
+        target.clone(),
+        group.clone(),
+        offset,
+        limit,
+        member_sort,
+        group_by_provider,
+    )
+    .await?;
+    let sections = cache::member_sections(&target, &group, member_sort, group_by_provider);
+    Ok(ProxyMemberWindow { entries, sections })
 }
 
 pub(crate) async fn cached_group_member_names(
@@ -388,8 +428,15 @@ pub(crate) fn update_cached_node_delay_window(
         update_cached_node_delay(target, name, delay);
         return None;
     }
-    let before = cache::member_entries(target, group, window_offset, window_limit, member_sort)
-        .unwrap_or_default();
+    let before = cache::member_entries(
+        target,
+        group,
+        window_offset,
+        window_limit,
+        member_sort,
+        false,
+    )
+    .unwrap_or_default();
     let visible_delay_changed = before
         .iter()
         .find(|entry| entry.name == name)
@@ -401,8 +448,15 @@ pub(crate) fn update_cached_node_delay_window(
     }
 
     update_cached_node_delay(target, name, delay);
-    let after = cache::member_entries(target, group, window_offset, window_limit, member_sort)
-        .unwrap_or_default();
+    let after = cache::member_entries(
+        target,
+        group,
+        window_offset,
+        window_limit,
+        member_sort,
+        false,
+    )
+    .unwrap_or_default();
     if same_member_order(&before, &after) {
         visible_delay_changed.then(|| (true, Vec::new()))
     } else {

@@ -6,7 +6,7 @@ use flutter_rust_bridge::frb;
 
 use crate::clash::api::MihomoTarget;
 
-use super::{ProxyMemberEntry, ProxyMemberSort};
+use super::{ProxyMemberEntry, ProxyMemberSection, ProxyMemberSort};
 
 mod sort;
 
@@ -23,7 +23,7 @@ pub(super) struct CachedNode {
 #[frb(ignore)]
 pub(super) struct CachedGroup {
     pub(super) members: Vec<usize>,
-    sorted_members: Option<(ProxyMemberSort, Vec<usize>)>,
+    ordered_members: Option<(ProxyMemberSort, bool, Vec<usize>)>,
 }
 
 #[frb(ignore)]
@@ -50,38 +50,60 @@ impl CachedGroup {
     pub(super) fn new(members: Vec<usize>) -> Self {
         Self {
             members,
-            sorted_members: None,
+            ordered_members: None,
         }
     }
 
     fn member_ids(
         &mut self,
         sort: ProxyMemberSort,
+        group_by_provider: bool,
         lower_names: &[String],
         nodes: &[Option<CachedNode>],
     ) -> &[usize] {
-        match sort {
-            ProxyMemberSort::Original => &self.members,
-            ProxyMemberSort::Name | ProxyMemberSort::Delay => {
-                let stale = self
-                    .sorted_members
-                    .as_ref()
-                    .is_none_or(|(cached_sort, _)| *cached_sort != sort);
-                if stale {
-                    let mut ids = self.members.clone();
-                    sort_members(&mut ids, sort, lower_names, nodes);
-                    self.sorted_members = Some((sort, ids));
+        let stale =
+            self.ordered_members
+                .as_ref()
+                .is_none_or(|(cached_sort, cached_grouping, _)| {
+                    *cached_sort != sort || *cached_grouping != group_by_provider
+                });
+        if stale {
+            let mut ids = self.members.clone();
+            if group_by_provider {
+                let mut provider_positions = HashMap::<String, usize>::from([(String::new(), 0)]);
+                let mut provider_members = vec![Vec::<usize>::new()];
+                for id in ids {
+                    let provider = provider_of(nodes, id).to_string();
+                    let position = match provider_positions.get(&provider) {
+                        Some(position) => *position,
+                        None => {
+                            let position = provider_members.len();
+                            provider_positions.insert(provider, position);
+                            provider_members.push(Vec::new());
+                            position
+                        }
+                    };
+                    provider_members[position].push(id);
                 }
-                self.sorted_members
-                    .as_ref()
-                    .map(|(_, ids)| ids.as_slice())
-                    .unwrap_or(&self.members)
+
+                ids = Vec::with_capacity(self.members.len());
+                for mut members in provider_members {
+                    sort_members(&mut members, sort, lower_names, nodes);
+                    ids.extend(members);
+                }
+            } else {
+                sort_members(&mut ids, sort, lower_names, nodes);
             }
+            self.ordered_members = Some((sort, group_by_provider, ids));
         }
+        self.ordered_members
+            .as_ref()
+            .map(|(_, _, ids)| ids.as_slice())
+            .unwrap_or(&self.members)
     }
 
-    fn clear_sorted_members(&mut self) {
-        self.sorted_members = None;
+    fn clear_ordered_members(&mut self) {
+        self.ordered_members = None;
     }
 }
 
@@ -142,6 +164,7 @@ pub(super) fn member_entries(
     offset: u32,
     limit: u32,
     member_sort: ProxyMemberSort,
+    group_by_provider: bool,
 ) -> Option<Vec<ProxyMemberEntry>> {
     with_catalog(target, |catalog| {
         if needs_lower_names(member_sort) {
@@ -155,7 +178,12 @@ pub(super) fn member_entries(
             ..
         } = catalog;
         let group = groups.get_mut(group_name)?;
-        let ids = group.member_ids(member_sort, lower_names.as_deref().unwrap_or(&[]), nodes);
+        let ids = group.member_ids(
+            member_sort,
+            group_by_provider,
+            lower_names.as_deref().unwrap_or(&[]),
+            nodes,
+        );
         let start = (offset as usize).min(ids.len());
         let end = start.saturating_add(limit as usize).min(ids.len());
         Some(
@@ -166,6 +194,56 @@ pub(super) fn member_entries(
         )
     })
     .flatten()
+}
+
+pub(super) fn member_sections(
+    target: &MihomoTarget,
+    group_name: &str,
+    member_sort: ProxyMemberSort,
+    group_by_provider: bool,
+) -> Vec<ProxyMemberSection> {
+    if !group_by_provider {
+        return Vec::new();
+    }
+    with_catalog(target, |catalog| {
+        if needs_lower_names(member_sort) {
+            catalog.ensure_lower_names();
+        }
+        let CachedCatalog {
+            lower_names,
+            nodes,
+            groups,
+            ..
+        } = catalog;
+        let Some(group) = groups.get_mut(group_name) else {
+            return Vec::new();
+        };
+        let ids = group.member_ids(
+            member_sort,
+            true,
+            lower_names.as_deref().unwrap_or(&[]),
+            nodes,
+        );
+        let mut has_provider = false;
+        let mut sections = Vec::<ProxyMemberSection>::new();
+        for (index, id) in ids.iter().enumerate() {
+            let provider = provider_of(nodes, *id);
+            has_provider |= !provider.is_empty();
+            if let Some(section) = sections.last_mut()
+                && section.provider == provider
+            {
+                section.count = section.count.saturating_add(1);
+                continue;
+            }
+            sections.push(ProxyMemberSection {
+                provider: provider.to_string(),
+                offset: index.min(u32::MAX as usize) as u32,
+                count: 1,
+            });
+        }
+        if has_provider { sections } else { Vec::new() }
+    })
+    .unwrap_or_default()
 }
 
 pub(super) fn group_needs_provider_nodes(target: &MihomoTarget, group_name: &str) -> bool {
@@ -222,7 +300,7 @@ pub(super) fn merge_provider_nodes(
         }
         if changed {
             for group in catalog.groups.values_mut() {
-                group.clear_sorted_members();
+                group.clear_ordered_members();
             }
         }
         changed
@@ -270,7 +348,7 @@ pub(super) fn update_node_delays<'a>(
         }
         for group in catalog.groups.values_mut() {
             if group.members.iter().any(|id| changed_ids.contains(id)) {
-                group.clear_sorted_members();
+                group.clear_ordered_members();
             }
         }
     });
@@ -300,7 +378,7 @@ pub(super) fn member_names(target: &MihomoTarget, group_name: &str) -> Vec<Strin
             return Vec::new();
         };
         group
-            .member_ids(ProxyMemberSort::Original, &[], nodes)
+            .member_ids(ProxyMemberSort::Original, false, &[], nodes)
             .iter()
             .filter_map(|id| names.get(*id).cloned())
             .collect()
@@ -397,6 +475,14 @@ fn member_entry(id: usize, names: &[String], nodes: &[Option<CachedNode>]) -> Pr
             .unwrap_or_else(|| "Proxy".to_string()),
         delay: node.map(|node| node.delay).unwrap_or(-1),
     }
+}
+
+fn provider_of(nodes: &[Option<CachedNode>], id: usize) -> &str {
+    nodes
+        .get(id)
+        .and_then(Option::as_ref)
+        .and_then(|node| node.provider.as_deref())
+        .unwrap_or_default()
 }
 
 fn needs_lower_names(sort: ProxyMemberSort) -> bool {

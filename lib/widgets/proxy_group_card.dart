@@ -598,42 +598,128 @@ Widget _memberGrid(
       child: Text('暂无节点', style: TextStyle(color: style.subtitle)),
     );
   }
+  final sections = group.memberSections;
+  if (sections.isNotEmpty) {
+    final slivers = <Widget>[];
+    for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+      final section = sections[sectionIndex];
+      final offset = section.offset.clamp(0, group.memberCount).toInt();
+      final count = section.count.clamp(0, group.memberCount - offset).toInt();
+      if (count == 0) continue;
+      if (section.provider.isEmpty) {
+        slivers.add(
+          SliverToBoxAdapter(
+            child: SizedBox(height: sectionIndex == 0 ? 4 : 14),
+          ),
+        );
+      } else {
+        slivers.add(
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                sectionIndex == 0 ? 4 : 14,
+                12,
+                8,
+              ),
+              child: Text(
+                section.provider,
+                style: TextStyle(
+                  color: style.title,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        );
+      }
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          sliver: SliverGrid(
+            gridDelegate: _cardMemberGridDelegate,
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _memberTile(
+                context,
+                group,
+                offset + index,
+                style,
+                onSelect: onSelect,
+                onToggleFixed: onToggleFixed,
+                onTestNode: onTestNode,
+                loadNodeDetails: loadNodeDetails,
+                onMissingMember: onMissingMember,
+              ),
+              childCount: count,
+            ),
+          ),
+        ),
+      );
+    }
+    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
+    return CustomScrollView(
+      physics: scrollable ? null : const NeverScrollableScrollPhysics(),
+      slivers: slivers,
+    );
+  }
   return GridView.builder(
     padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
     physics: scrollable ? null : const NeverScrollableScrollPhysics(),
-    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: 260,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      mainAxisExtent: 64,
-    ),
+    gridDelegate: _cardMemberGridDelegate,
     itemCount: group.memberCount,
-    itemBuilder: (context, index) {
-      final member = group.memberAt(index);
-      if (member == null) {
-        if (!isUiFastScrolling(context)) onMissingMember?.call(index);
-        return _CardNodePlaceholder(style: style);
-      }
-      return ScrollDeferredContent(
-        key: ValueKey('${group.name}::${member.name}'),
-        placeholder: _CardNodePlaceholder(style: style),
-        child: _CardNodeTile(
-          group: group,
-          member: member,
-          style: style,
-          loadDetails: loadNodeDetails == null
-              ? null
-              : () => loadNodeDetails(member.name),
-          onSelect: onSelect == null ? null : () => onSelect(member.name),
-          onToggleFixed: onToggleFixed == null
-              ? null
-              : () => onToggleFixed(member.name),
-          onTestDelay: onTestNode == null
-              ? null
-              : () => onTestNode(member.name),
-        ),
-      );
-    },
+    itemBuilder: (context, index) => _memberTile(
+      context,
+      group,
+      index,
+      style,
+      onSelect: onSelect,
+      onToggleFixed: onToggleFixed,
+      onTestNode: onTestNode,
+      loadNodeDetails: loadNodeDetails,
+      onMissingMember: onMissingMember,
+    ),
+  );
+}
+
+const _cardMemberGridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+  maxCrossAxisExtent: 260,
+  mainAxisSpacing: 8,
+  crossAxisSpacing: 8,
+  mainAxisExtent: 64,
+);
+
+Widget _memberTile(
+  BuildContext context,
+  ProxyGroup group,
+  int index,
+  _CardStyle style, {
+  ValueChanged<String>? onSelect,
+  ValueChanged<String>? onToggleFixed,
+  Future<void> Function(String)? onTestNode,
+  Future<String> Function(String)? loadNodeDetails,
+  ValueChanged<int>? onMissingMember,
+}) {
+  final member = group.memberAt(index);
+  if (member == null) {
+    if (!isUiFastScrolling(context)) onMissingMember?.call(index);
+    return _CardNodePlaceholder(style: style);
+  }
+  return _CardNodeTile(
+    key: ValueKey('${group.name}::${member.name}'),
+    group: group,
+    member: member,
+    style: style,
+    loadDetails: loadNodeDetails == null
+        ? null
+        : () => loadNodeDetails(member.name),
+    onSelect: onSelect == null ? null : () => onSelect(member.name),
+    onToggleFixed: onToggleFixed == null
+        ? null
+        : () => onToggleFixed(member.name),
+    onTestDelay: onTestNode == null ? null : () => onTestNode(member.name),
   );
 }
 
@@ -1029,6 +1115,7 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
 
 class _CardNodeTile extends StatelessWidget {
   const _CardNodeTile({
+    super.key,
     required this.group,
     required this.member,
     required this.style,

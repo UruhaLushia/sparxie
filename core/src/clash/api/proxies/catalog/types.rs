@@ -31,3 +31,16 @@ pub struct ProxyMemberEntry {
     pub proxy_type: String,
     pub delay: i32,
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct ProxyMemberSection {
+    pub provider: String,
+    pub offset: u32,
+    pub count: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ProxyMemberWindow {
+    pub entries: Vec<ProxyMemberEntry>,
+    pub sections: Vec<ProxyMemberSection>,
+}
