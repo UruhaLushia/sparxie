@@ -9,17 +9,18 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<int> controllerRulesCount({required BackendTarget target}) => RustLib
-    .instance
-    .api
-    .crateBackendApiRulesControllerRulesCount(target: target);
+// These functions are ignored because they are not marked as `pub`: `apply_runtime`, `apply`, `boxed_non_empty`, `cache`, `entry`, `filtered_len`, `intern`, `new`, `new`, `release_target`, `rule_matches`, `same_shape`, `set_filter`, `string_at`, `summary`, `to_entry`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachedRuleEntry`, `RuleStringInterner`, `RulesCache`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`
 
 Future<RulesSummary> controllerRulesLoad({
   required BackendTarget target,
   required String filter,
+  required bool force,
 }) => RustLib.instance.api.crateBackendApiRulesControllerRulesLoad(
   target: target,
   filter: filter,
+  force: force,
 );
 
 Future<RulesSummary> controllerRulesSetFilter({

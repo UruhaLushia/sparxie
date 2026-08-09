@@ -41,10 +41,14 @@ pub struct StunTestProgress {
 pub async fn controller_diagnostics_outbounds(
     target: BackendTarget,
 ) -> Result<Vec<OutboundEntry>, MihomoError> {
-    match target.backend_type {
-        BackendType::SingBox => crate::sing_box::api::outbounds(target.sing_box()).await,
-        _ => Err(unsupported()),
-    }
+    let load_target = target.clone();
+    super::session::diagnostics_outbounds(&target, move || async move {
+        match load_target.backend_type {
+            BackendType::SingBox => crate::sing_box::api::outbounds(load_target.sing_box()).await,
+            _ => Err(unsupported()),
+        }
+    })
+    .await
 }
 
 pub async fn controller_network_quality_test_stream(

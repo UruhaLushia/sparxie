@@ -45,6 +45,15 @@ impl MihomoTarget {
     pub(crate) fn client(&self) -> Result<MihomoClient, MihomoError> {
         MihomoClient::new(&self.base_url, self.secret.clone(), self.allow_insecure)
     }
+
+    pub(crate) fn identity_key(&self) -> String {
+        format!(
+            "{}|{}|{}",
+            self.base_url.trim_end_matches('/'),
+            self.secret.as_deref().unwrap_or(""),
+            self.allow_insecure,
+        )
+    }
 }
 
 pub(crate) fn urlencode(s: &str) -> String {

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../layout_breakpoints.dart';
-import '../session.dart';
+import '../controller_view_state.dart';
 import 'anchored_details_overlay.dart';
 import 'connection_detail_sheet.dart';
 
@@ -14,7 +14,7 @@ typedef ConnectionPreviewBuilder =
 Future<void> showConnectionDetailsOverlay({
   required BuildContext context,
   required BuildContext sourceContext,
-  required MihomoSession session,
+  required ControllerViewState session,
   required ConnectionRow row,
   required ConnectionPreviewBuilder previewBuilder,
   required bool showConnectionLog,
@@ -70,7 +70,7 @@ Future<void> showConnectionDetailsOverlay({
 class _LiveConnectionUpdater with WidgetsBindingObserver {
   _LiveConnectionUpdater({required this.session, required this.row});
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final ConnectionRow row;
   final ValueNotifier<int> _timeTicks = ValueNotifier(0);
 

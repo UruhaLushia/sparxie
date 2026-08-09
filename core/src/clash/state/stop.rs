@@ -42,11 +42,7 @@ fn registry() -> &'static Registry {
 /// Stable key for a target across all stream kinds (traffic/memory/connections
 /// /logs), ignoring per-stream suffixes like interval or log level.
 pub fn base_key(target: &MihomoTarget) -> String {
-    format!(
-        "{}|{}",
-        target.base_url.trim_end_matches('/'),
-        target.secret.as_deref().unwrap_or(""),
-    )
+    target.identity_key()
 }
 
 /// Current stop generation for `base` (0 if never stopped).

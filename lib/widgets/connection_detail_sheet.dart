@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../layout_breakpoints.dart';
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';

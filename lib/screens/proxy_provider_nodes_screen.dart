@@ -5,12 +5,20 @@ import 'package:flutter/material.dart';
 import '../app_prefs.dart';
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/compact_controls.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/proxy_node_tile.dart';
 import '../widgets/route_app_bar.dart';
+
+typedef _WindowRequest = ({
+  int offset,
+  int limit,
+  String query,
+  bool showLoading,
+  int generation,
+});
 
 class ProxyProviderNodesScreen extends StatefulWidget {
   const ProxyProviderNodesScreen({
@@ -30,66 +38,192 @@ class ProxyProviderNodesScreen extends StatefulWidget {
 }
 
 class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
+  static const _filterDebounce = Duration(milliseconds: 200);
+  static const _itemExtent = 72.0;
+  // Covers a typical wide-screen viewport before layout metrics are known;
+  // later requests shrink back to the visible window plus overscan.
+  static const _initialLimit = 128;
+  static const _overscanRows = 3;
+
+  final _scrollController = ScrollController();
   List<ProxyMember> _nodes = const [];
+  Timer? _filterTimer;
   String _query = '';
   String? _error;
   bool _loading = false;
+  bool _drainingWindowRequests = false;
+  bool _windowScheduled = false;
+  _WindowRequest? _pendingWindow;
+  int _windowGeneration = 0;
+  int _columns = 1;
+  int _total = 0;
+  int _filtered = 0;
+  int _offset = 0;
+  ({int offset, int limit})? _requestedWindow;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_refresh());
+    _scrollController.addListener(_scheduleWindow);
+    _requestWindow(0, _initialLimit, showLoading: true);
   }
 
-  Future<void> _refresh() async {
-    if (_loading) return;
-    setState(() {
-      _loading = true;
-      _error = null;
+  void _onFilterChanged(String value) {
+    _query = value.trim();
+    _filterTimer?.cancel();
+    _filterTimer = Timer(_filterDebounce, () {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      _requestWindow(0, _initialLimit, showLoading: true);
     });
-    try {
-      final entries = await rust.controllerProxyProviderNodes(
-        target: widget.target,
-        name: widget.providerName,
-      );
-      if (!mounted) return;
-      final nodes = entries.map(ProxyMember.fromEntry).toList(growable: false);
-      final previous = _nodes;
-      setState(() => _nodes = nodes);
-      if (previous.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _disposeNodes(previous),
-        );
-      }
-    } catch (error) {
-      if (!mounted) return;
-      final message = formatError(error);
-      setState(() => _error = message);
-      if (_nodes.isNotEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('刷新节点失败：$message')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  }
+
+  void _requestWindow(int offset, int limit, {bool showLoading = false}) {
+    if (!mounted) return;
+    final generation = ++_windowGeneration;
+    _requestedWindow = (offset: offset, limit: limit);
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    _pendingWindow = (
+      offset: offset,
+      limit: limit,
+      query: _query,
+      showLoading: showLoading || (_pendingWindow?.showLoading ?? false),
+      generation: generation,
+    );
+    if (!_drainingWindowRequests) {
+      unawaited(_drainWindowRequests());
     }
   }
 
-  List<ProxyMember> get _visibleNodes {
-    final query = _query.trim().toLowerCase();
-    if (query.isEmpty) return _nodes;
-    return _nodes
-        .where(
-          (node) =>
-              node.name.toLowerCase().contains(query) ||
-              node.type.toLowerCase().contains(query),
-        )
+  Future<void> _drainWindowRequests() async {
+    _drainingWindowRequests = true;
+    while (mounted && _pendingWindow != null) {
+      final request = _pendingWindow!;
+      _pendingWindow = null;
+      try {
+        final window = await rust.controllerProxyProviderNodes(
+          target: widget.target,
+          name: widget.providerName,
+          filter: request.query,
+          offset: request.offset,
+          limit: request.limit,
+        );
+        if (!_isCurrent(request)) continue;
+        _applyWindow(window);
+      } catch (error) {
+        if (!_isCurrent(request)) continue;
+        _handleWindowError(error);
+      } finally {
+        if (_isCurrent(request) &&
+            request.showLoading &&
+            _pendingWindow == null) {
+          setState(() => _loading = false);
+        }
+      }
+    }
+    _drainingWindowRequests = false;
+  }
+
+  bool _isCurrent(_WindowRequest request) =>
+      mounted &&
+      request.generation == _windowGeneration &&
+      request.query == _query;
+
+  void _applyWindow(rust.ProxyProviderNodeWindow window) {
+    final nodes = window.entries
+        .map(ProxyMember.fromEntry)
         .toList(growable: false);
+    final previous = _nodes;
+    setState(() {
+      _nodes = nodes;
+      _total = window.total;
+      _filtered = window.filtered;
+      _offset = window.offset;
+      _error = null;
+    });
+    if (previous.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _disposeNodes(previous),
+      );
+    }
+    _scheduleWindow();
+  }
+
+  void _handleWindowError(Object error) {
+    _requestedWindow = null;
+    final message = formatError(error);
+    setState(() => _error = message);
+    if (_nodes.isNotEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('刷新节点失败：$message')));
+    }
+  }
+
+  void _scheduleWindow() {
+    if (_windowScheduled) return;
+    _windowScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _windowScheduled = false;
+      if (mounted) _ensureWindow();
+    });
+  }
+
+  void _ensureWindow() {
+    if (!_scrollController.hasClients || _filtered == 0) return;
+    final (offset, limit) = _visibleWindow();
+    final desiredWindow = (offset: offset, limit: limit);
+    final loadedEnd = _offset + _nodes.length;
+    final desiredEnd = offset + limit;
+    final covered =
+        _nodes.isNotEmpty && offset >= _offset && desiredEnd <= loadedEnd;
+    final oversized = _nodes.length > limit * 2;
+    if (covered && !oversized) {
+      if (_drainingWindowRequests && desiredWindow != _requestedWindow) {
+        _windowGeneration++;
+        _pendingWindow = null;
+        _requestedWindow = desiredWindow;
+        if (_loading) setState(() => _loading = false);
+      }
+      return;
+    }
+    if (desiredWindow == _requestedWindow) return;
+    _requestWindow(offset, limit);
+  }
+
+  (int, int) _visibleWindow() {
+    if (!_scrollController.hasClients) return (0, _initialLimit);
+    final position = _scrollController.position;
+    final firstRow = (position.pixels / _itemExtent).floor();
+    final visibleRows = (position.viewportDimension / _itemExtent).ceil();
+    final startRow = (firstRow - _overscanRows).clamp(0, _filtered).toInt();
+    final endRow = firstRow + visibleRows + _overscanRows;
+    final offset = (startRow * _columns).clamp(0, _filtered).toInt();
+    final end = (endRow * _columns).clamp(offset, _filtered).toInt();
+    return (offset, (end - offset).clamp(1, 512).toInt());
+  }
+
+  void _updateColumns(double width) {
+    final contentWidth = (width - 32).clamp(0.0, double.infinity);
+    final columns = ((contentWidth + 8) / 368).ceil().clamp(1, 512).toInt();
+    if (columns == _columns) return;
+    _columns = columns;
+    _scheduleWindow();
+  }
+
+  ProxyMember? _nodeAt(int index) {
+    final local = index - _offset;
+    if (local < 0 || local >= _nodes.length) return null;
+    return _nodes[local];
   }
 
   @override
   Widget build(BuildContext context) {
-    final nodes = _visibleNodes;
+    final countText = _query.isEmpty ? '$_total 个节点' : '$_filtered / $_total';
     return Scaffold(
       appBar: AppRouteAppBar(
         child: AppBar(
@@ -97,18 +231,6 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
           automaticallyImplyLeading: false,
           title: Text(widget.providerName),
           flexibleSpace: const DesktopAppBarDragArea(),
-          actions: [
-            IconButton(
-              tooltip: '刷新节点',
-              onPressed: _loading ? null : _refresh,
-              icon: _loading && _nodes.isNotEmpty
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-            ),
-          ],
         ),
       ),
       body: SafeArea(
@@ -122,14 +244,12 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
                   Expanded(
                     child: CompactSearchField(
                       hintText: '搜索节点名称或类型',
-                      onChanged: (value) => setState(() => _query = value),
+                      onChanged: _onFilterChanged,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    _query.trim().isEmpty
-                        ? '${_nodes.length} 个节点'
-                        : '${nodes.length} / ${_nodes.length}',
+                    countText,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -137,14 +257,14 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
                 ],
               ),
             ),
-            Expanded(child: _buildBody(context, nodes)),
+            Expanded(child: _buildBody(context)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, List<ProxyMember> nodes) {
+  Widget _buildBody(BuildContext context) {
     if (_loading && _nodes.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -159,7 +279,8 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
               Text(error, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: _refresh,
+                onPressed: () =>
+                    _requestWindow(0, _initialLimit, showLoading: true),
                 icon: const Icon(Icons.refresh),
                 label: const Text('重试'),
               ),
@@ -168,41 +289,50 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
         ),
       );
     }
-    if (nodes.isEmpty) {
+    if (_filtered == 0) {
       return Center(
         child: Text(
-          _nodes.isEmpty ? '暂无节点' : '没有匹配的节点',
+          _total == 0 ? '暂无节点' : '没有匹配的节点',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
     }
-    return GridView.builder(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        4,
-        16,
-        16 + MediaQuery.paddingOf(context).bottom,
-      ),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 360,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        mainAxisExtent: 64,
-      ),
-      itemCount: nodes.length,
-      itemBuilder: (context, index) {
-        final member = nodes[index];
-        return ScrollDeferredContent(
-          key: ValueKey('${widget.providerName}::${member.name}::$index'),
-          placeholder: const _ProviderNodePlaceholder(),
-          child: StandaloneProxyNodeTile(
-            member: member,
-            loadDetails: () => rust.controllerProxyDetail(
-              target: widget.target,
-              name: member.name,
-            ),
-            onTestDelay: () => _testNode(member),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => mounted ? _updateColumns(constraints.maxWidth) : null,
+        );
+        return GridView.builder(
+          controller: _scrollController,
+          padding: EdgeInsets.fromLTRB(
+            16,
+            4,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
           ),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 360,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            mainAxisExtent: 64,
+          ),
+          itemCount: _filtered,
+          itemBuilder: (context, index) {
+            final member = _nodeAt(index);
+            if (member == null) return const _ProviderNodePlaceholder();
+            return ScrollDeferredContent(
+              key: ValueKey('${widget.providerName}::${member.name}::$index'),
+              placeholder: const _ProviderNodePlaceholder(),
+              child: StandaloneProxyNodeTile(
+                member: member,
+                loadDetails: () => rust.controllerProxyDetail(
+                  target: widget.target,
+                  name: member.name,
+                ),
+                onTestDelay: () => _testNode(member),
+              ),
+            );
+          },
         );
       },
     );
@@ -226,6 +356,12 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
 
   @override
   void dispose() {
+    _windowGeneration++;
+    _pendingWindow = null;
+    _filterTimer?.cancel();
+    _scrollController
+      ..removeListener(_scheduleWindow)
+      ..dispose();
     _disposeNodes(_nodes);
     super.dispose();
   }

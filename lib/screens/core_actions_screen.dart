@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
@@ -21,7 +21,7 @@ class CoreActionsScreen extends StatefulWidget {
   });
 
   final ctl.ControllerStore store;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<CoreActionsScreen> createState() => _CoreActionsScreenState();

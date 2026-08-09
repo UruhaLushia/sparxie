@@ -29,18 +29,12 @@ class ProcessIconCache extends ChangeNotifier {
       LinkedHashMap<String, ui.Image>();
   final Set<String> _missing = {};
   final Set<String> _requested = {};
-  final Queue<({int generation, Future<void> Function() run})>
-  _imageRequestQueue = Queue();
-  int _activeImageRequests = 0;
-  int _imageGeneration = 0;
+  final _imageRequests = _AsyncRequestPool(_maxConcurrentImageRequests);
 
   final LinkedHashMap<String, String> _names = LinkedHashMap<String, String>();
   final Set<String> _nameMissing = {};
   final Set<String> _nameRequested = {};
-  final Queue<({int generation, Future<void> Function() run})>
-  _nameRequestQueue = Queue();
-  int _activeNameRequests = 0;
-  int _nameGeneration = 0;
+  final _nameRequests = _AsyncRequestPool(_maxConcurrentNameRequests);
   int? _notifyFrameCallback;
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
@@ -71,8 +65,7 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _requested.add(imageKey);
-    final generation = _imageGeneration;
-    _enqueueImageRequest(generation, () async {
+    _imageRequests.add((generation) async {
       try {
         final bytes = await (_isAndroid
             ? _resolveAndroid(key)
@@ -84,31 +77,13 @@ class ProcessIconCache extends ChangeNotifier {
           generation: generation,
         );
       } catch (_) {
-        if (generation == _imageGeneration) {
+        if (_imageRequests.isCurrent(generation)) {
           _requested.remove(imageKey);
           _remember(_missing, imageKey, _maxMisses);
           _scheduleNotify();
         }
       }
     });
-  }
-
-  void _enqueueImageRequest(int generation, Future<void> Function() run) {
-    _imageRequestQueue.add((generation: generation, run: run));
-    _drainImageRequests();
-  }
-
-  void _drainImageRequests() {
-    while (_activeImageRequests < _maxConcurrentImageRequests &&
-        _imageRequestQueue.isNotEmpty) {
-      final request = _imageRequestQueue.removeFirst();
-      if (request.generation != _imageGeneration) continue;
-      _activeImageRequests++;
-      request.run().whenComplete(() {
-        _activeImageRequests--;
-        _drainImageRequests();
-      });
-    }
   }
 
   String _imageKey(String key, int? size, int? decodeSize) {
@@ -125,38 +100,19 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _nameRequested.add(key);
-    final generation = _nameGeneration;
-    _enqueueNameRequest(generation, () async {
+    _nameRequests.add((generation) async {
       try {
         final name = await (_isAndroid
             ? _resolveNameAndroid(key)
             : rust.fetchProcessName(path: key));
         _completeName(key, name, generation);
       } catch (_) {
-        if (generation != _nameGeneration) return;
+        if (!_nameRequests.isCurrent(generation)) return;
         _nameRequested.remove(key);
         _remember(_nameMissing, key, _maxMisses);
         _scheduleNotify();
       }
     });
-  }
-
-  void _enqueueNameRequest(int generation, Future<void> Function() run) {
-    _nameRequestQueue.add((generation: generation, run: run));
-    _drainNameRequests();
-  }
-
-  void _drainNameRequests() {
-    while (_activeNameRequests < _maxConcurrentNameRequests &&
-        _nameRequestQueue.isNotEmpty) {
-      final request = _nameRequestQueue.removeFirst();
-      if (request.generation != _nameGeneration) continue;
-      _activeNameRequests++;
-      request.run().whenComplete(() {
-        _activeNameRequests--;
-        _drainNameRequests();
-      });
-    }
   }
 
   // Android: disk cache (persisted across launches) first, then PackageManager.
@@ -190,7 +146,7 @@ class ProcessIconCache extends ChangeNotifier {
     required int generation,
     int? decodeSize,
   }) async {
-    if (generation != _imageGeneration) return;
+    if (!_imageRequests.isCurrent(generation)) return;
     if (bytes == null || bytes.isEmpty) {
       _requested.remove(key);
       _remember(_missing, key, _maxMisses);
@@ -198,7 +154,7 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     final image = await _decode(bytes, targetSize: decodeSize);
-    if (generation != _imageGeneration) {
+    if (!_imageRequests.isCurrent(generation)) {
       image?.dispose();
       return;
     }
@@ -234,7 +190,7 @@ class ProcessIconCache extends ChangeNotifier {
   }
 
   void _completeName(String key, String? name, int generation) {
-    if (generation != _nameGeneration) return;
+    if (!_nameRequests.isCurrent(generation)) return;
     _nameRequested.remove(key);
     if (name != null && name.isNotEmpty) {
       _names.remove(key);
@@ -288,10 +244,8 @@ class ProcessIconCache extends ChangeNotifier {
       return;
     }
     _missing.clear();
-    _imageGeneration++;
-    _imageRequestQueue.clear();
-    _nameGeneration++;
-    _nameRequestQueue.clear();
+    _imageRequests.invalidate();
+    _nameRequests.invalidate();
     _requested.clear();
     _nameMissing.clear();
     _nameRequested.clear();
@@ -303,8 +257,7 @@ class ProcessIconCache extends ChangeNotifier {
   void clearImages({bool preserveLive = false}) {
     if (preserveLive && hasListeners) return;
     if (_images.isEmpty && _requested.isEmpty) return;
-    _imageGeneration++;
-    _imageRequestQueue.clear();
+    _imageRequests.invalidate();
     _requested.clear();
     for (final image in _images.values) {
       _retireImage(image);
@@ -316,10 +269,8 @@ class ProcessIconCache extends ChangeNotifier {
   /// Drop every resolved icon/name as well — used when the backing cache is
   /// wiped, so tiles re-resolve instead of showing now-stale entries.
   void clearAll() {
-    _imageGeneration++;
-    _nameGeneration++;
-    _imageRequestQueue.clear();
-    _nameRequestQueue.clear();
+    _imageRequests.invalidate();
+    _nameRequests.invalidate();
     for (final image in _images.values) {
       _retireImage(image);
     }
@@ -334,10 +285,8 @@ class ProcessIconCache extends ChangeNotifier {
 
   @override
   void dispose() {
-    _imageGeneration++;
-    _nameGeneration++;
-    _imageRequestQueue.clear();
-    _nameRequestQueue.clear();
+    _imageRequests.invalidate();
+    _nameRequests.invalidate();
     final notifyFrameCallback = _notifyFrameCallback;
     if (notifyFrameCallback != null) {
       SchedulerBinding.instance.cancelFrameCallbackWithId(notifyFrameCallback);
@@ -353,5 +302,40 @@ class ProcessIconCache extends ChangeNotifier {
     _nameMissing.clear();
     _nameRequested.clear();
     super.dispose();
+  }
+}
+
+class _AsyncRequestPool {
+  _AsyncRequestPool(this.maxConcurrent);
+
+  final int maxConcurrent;
+  final Queue<({int generation, Future<void> Function() run})> _pending =
+      Queue();
+  int _generation = 0;
+  int _active = 0;
+
+  bool isCurrent(int generation) => generation == _generation;
+
+  void add(Future<void> Function(int generation) run) {
+    final generation = _generation;
+    _pending.add((generation: generation, run: () => run(generation)));
+    _drain();
+  }
+
+  void invalidate() {
+    _generation++;
+    _pending.clear();
+  }
+
+  void _drain() {
+    while (_active < maxConcurrent && _pending.isNotEmpty) {
+      final request = _pending.removeFirst();
+      if (!isCurrent(request.generation)) continue;
+      _active++;
+      request.run().whenComplete(() {
+        _active--;
+        _drain();
+      });
+    }
   }
 }

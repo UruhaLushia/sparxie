@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../session.dart';
+import '../controller_view_state.dart';
 import 'active_listenable_builder.dart';
 
 /// Leading icon for a connection row. Requests resolution lazily and

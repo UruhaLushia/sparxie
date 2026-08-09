@@ -38,7 +38,7 @@ impl Connection {
         if query.is_empty() {
             return true;
         }
-        let contains = |value: &str| value.to_lowercase().contains(query);
+        let contains = |value: &str| crate::utils::text::contains_filter(value, query);
         contains(&self.host)
             || contains(&self.network)
             || contains(&self.conn_type)

@@ -5,15 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'controller.dart';
 import 'error_format.dart';
 import 'rust_api.dart' as rust;
-import 'session/connections.dart';
-import 'session/logs.dart';
-import 'session/process_icons.dart';
-import 'session/proxies.dart';
+import 'view_state/connections.dart';
+import 'view_state/logs.dart';
+import 'view_state/process_icons.dart';
+import 'view_state/proxies.dart';
 
-export 'session/connections.dart';
-export 'session/logs.dart';
-export 'session/process_icons.dart';
-export 'session/proxies.dart';
+export 'view_state/connections.dart';
+export 'view_state/logs.dart';
+export 'view_state/process_icons.dart';
+export 'view_state/proxies.dart';
 
 typedef _ProxyMemberLoadKey = ({
   String group,
@@ -28,8 +28,8 @@ const _retryDelays = <Duration>[
   Duration(seconds: 30),
 ];
 
-class MihomoSession {
-  MihomoSession(
+class ControllerViewState {
+  ControllerViewState(
     this.store, {
     int connectionsIntervalMs = 1000,
     int closedConnectionsCapacity = 500,
@@ -62,7 +62,7 @@ class MihomoSession {
   bool _proxiesRefreshing = false;
   bool _iconsWarmed = false;
   int _iconWarmGeneration = 0;
-  _SessionErrorSource? _errorSource;
+  _ViewErrorSource? _errorSource;
   final _retryAttempts = <_RetryKind, int>{};
   int _trafficEpoch = 0;
   int _memoryEpoch = 0;
@@ -420,11 +420,11 @@ class MihomoSession {
           sections: window.sections,
           currentIndex: locateCurrent ? window.currentIndex : null,
         );
-        _clearError(_SessionErrorSource.proxyMember);
+        _clearError(_ViewErrorSource.proxyMember);
       }
     } catch (e) {
       if (_target == target) {
-        _showError(_formatError(e), _SessionErrorSource.proxyMember);
+        _showError(_formatError(e), _ViewErrorSource.proxyMember);
       }
       // The next visible tile build will retry.
     } finally {
@@ -475,6 +475,13 @@ class MihomoSession {
     _startLiveUpdates(proxyDelay: const Duration(milliseconds: 120));
   }
 
+  void _stopTargetStreams(rust.BackendTarget? target) {
+    if (target == null) return;
+    unawaited(
+      rust.controllerStopTargetStreams(target: target).catchError((_) {}),
+    );
+  }
+
   void _onStoreChange() {
     final next = store.active;
     if (identical(next, _activeKey)) return;
@@ -484,11 +491,7 @@ class MihomoSession {
     final previous = _target;
     _activeKey = next;
     _target = next == null ? null : rust.backendTargetForController(next);
-    if (previous != null) {
-      unawaited(
-        rust.controllerStopTargetStreams(target: previous).catchError((_) {}),
-      );
-    }
+    _stopTargetStreams(previous);
     _resubscribeAll();
   }
 
@@ -539,14 +542,14 @@ class MihomoSession {
     _iconsWarmed = false;
     _iconWarmGeneration++;
     if (_target == null) {
-      _showError('请先在“后端”中添加一个后端', _SessionErrorSource.controller);
+      _showError('请先在“后端”中添加一个后端', _ViewErrorSource.controller);
       return;
     }
     _clearError();
     _startLiveUpdates();
+    unawaited(_prepareTarget());
     // Version is build-time fixed; one probe per controller switch is enough.
     unawaited(_probeVersion());
-    unawaited(_probeRuleCount());
   }
 
   void _startLiveUpdates({Duration proxyDelay = Duration.zero}) {
@@ -659,17 +662,17 @@ class MihomoSession {
     }
   }
 
-  // Rules only change on a config reload, so one probe per (re)connect is
-  // enough. Count-only so it never disturbs the rules screen's paging cache.
-  Future<void> _probeRuleCount() async {
-    final t = _target;
+  Future<void> _prepareTarget() async {
+    final target = _target;
     final controller = _activeKey;
-    if (t == null || !supportsRules.value) return;
+    if (target == null) return;
     try {
-      final n = await rust.controllerRulesCount(target: t);
-      if (identical(_activeKey, controller)) ruleCount.value = n;
+      final bootstrap = await rust.controllerPrepareTarget(target: target);
+      if (identical(_activeKey, controller)) {
+        ruleCount.value = bootstrap.ruleCount;
+      }
     } catch (_) {
-      // Non-critical; the badge just stays hidden at 0.
+      // Static page data loads again on demand if connection bootstrap fails.
     }
   }
 
@@ -695,7 +698,7 @@ class MihomoSession {
         return;
       }
       proxies.applyCatalog(catalog);
-      _clearError(_SessionErrorSource.proxyCatalog);
+      _clearError(_ViewErrorSource.proxyCatalog);
       if (!_iconsWarmed) {
         _iconsWarmed = true;
         final generation = ++_iconWarmGeneration;
@@ -703,7 +706,7 @@ class MihomoSession {
       }
     } catch (e) {
       if (identical(_activeKey, controller)) {
-        _showError(_formatError(e), _SessionErrorSource.proxyCatalog);
+        _showError(_formatError(e), _ViewErrorSource.proxyCatalog);
       }
     } finally {
       _proxiesRefreshing = false;
@@ -876,7 +879,7 @@ class MihomoSession {
   ) {
     if (!_isCurrentStream(kind, controller, epoch)) return;
     _clearSubscription(kind);
-    _showError(_formatError(cause), _SessionErrorSource.stream);
+    _showError(_formatError(cause), _ViewErrorSource.stream);
     final delay = _nextRetryDelay(kind);
     switch (kind) {
       case _RetryKind.traffic:
@@ -911,12 +914,12 @@ class MihomoSession {
     }
   }
 
-  void _showError(String message, _SessionErrorSource source) {
+  void _showError(String message, _ViewErrorSource source) {
     _errorSource = source;
     error.value = message;
   }
 
-  void _clearError([_SessionErrorSource? source]) {
+  void _clearError([_ViewErrorSource? source]) {
     if (source != null && _errorSource != source) return;
     _errorSource = null;
     if (error.value != null) error.value = null;
@@ -924,7 +927,7 @@ class MihomoSession {
 
   void _markStreamHealthy(_RetryKind kind) {
     _retryAttempts.remove(kind);
-    _clearError(_SessionErrorSource.stream);
+    _clearError(_ViewErrorSource.stream);
   }
 
   Duration _nextRetryDelay(_RetryKind kind) {
@@ -978,6 +981,7 @@ class MihomoSession {
   void dispose() {
     _iconWarmGeneration++;
     store.removeListener(_onStoreChange);
+    _stopTargetStreams(_target);
     _cancelAll();
     traffic.dispose();
     memory.dispose();
@@ -1010,7 +1014,7 @@ class MihomoSession {
 
 enum _RetryKind { traffic, memory, connections, logs }
 
-enum _SessionErrorSource { controller, proxyCatalog, proxyMember, stream }
+enum _ViewErrorSource { controller, proxyCatalog, proxyMember, stream }
 
 /// Streaming samples represent time even when their values are unchanged.
 /// ValueNotifier normally suppresses equal values, which would collapse flat

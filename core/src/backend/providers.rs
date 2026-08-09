@@ -1,24 +1,21 @@
 use crate::MihomoError;
 
-use super::{BackendTarget, BackendType, ProxyMemberEntry, ProxyProviderEntry, RuleProviderEntry};
-
-pub async fn controller_proxy_providers(target: BackendTarget) -> Result<String, MihomoError> {
-    match target.backend_type {
-        BackendType::Clash => crate::clash::api::proxy_providers(target.clash()).await,
-        BackendType::Surge => crate::surge::api::proxy_providers(target.surge()).await,
-        BackendType::SingBox => Ok(serde_json::json!({ "providers": {} }).to_string()),
-    }
-}
+use super::{
+    BackendTarget, BackendType, ProxyProviderEntry, ProxyProviderNodeWindow, RuleProviderEntry,
+};
 
 pub async fn controller_proxy_provider_catalog(
     target: BackendTarget,
+    force: bool,
 ) -> Result<Vec<ProxyProviderEntry>, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(crate::clash::api::proxy_provider_catalog(target.clash())
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect()),
+        BackendType::Clash => Ok(
+            crate::clash::api::proxy_provider_catalog(target.clash(), force)
+                .await?
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        ),
         BackendType::Surge => crate::surge::api::proxy_provider_catalog(target.surge()).await,
         BackendType::SingBox => Ok(Vec::new()),
     }
@@ -27,16 +24,21 @@ pub async fn controller_proxy_provider_catalog(
 pub async fn controller_proxy_provider_nodes(
     target: BackendTarget,
     name: String,
-) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
+    filter: String,
+    offset: u32,
+    limit: u32,
+) -> Result<ProxyProviderNodeWindow, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(
-            crate::clash::api::proxy_provider_nodes(target.clash(), name)
-                .await?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        ),
-        BackendType::Surge | BackendType::SingBox => Ok(Vec::new()),
+        BackendType::Clash => Ok(crate::clash::api::proxy_provider_nodes(
+            target.clash(),
+            name,
+            filter,
+            offset,
+            limit,
+        )
+        .await?
+        .into()),
+        BackendType::Surge | BackendType::SingBox => Ok(ProxyProviderNodeWindow::default()),
     }
 }
 
@@ -64,23 +66,18 @@ pub async fn controller_proxy_provider_healthcheck(
     }
 }
 
-pub async fn controller_rule_providers(target: BackendTarget) -> Result<String, MihomoError> {
-    match target.backend_type {
-        BackendType::Clash => crate::clash::api::rule_providers(target.clash()).await,
-        BackendType::Surge => crate::surge::api::rule_providers(target.surge()).await,
-        BackendType::SingBox => Ok(serde_json::json!({ "providers": {} }).to_string()),
-    }
-}
-
 pub async fn controller_rule_provider_catalog(
     target: BackendTarget,
+    force: bool,
 ) -> Result<Vec<RuleProviderEntry>, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(crate::clash::api::rule_provider_catalog(target.clash())
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect()),
+        BackendType::Clash => Ok(
+            crate::clash::api::rule_provider_catalog(target.clash(), force)
+                .await?
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        ),
         BackendType::Surge => crate::surge::api::rule_provider_catalog(target.surge()).await,
         BackendType::SingBox => Ok(Vec::new()),
     }

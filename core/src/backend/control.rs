@@ -4,47 +4,48 @@ use serde_json::{Value, json};
 use super::{BackendTarget, BackendType, ControllerConfig, VersionInfo};
 
 pub async fn controller_configs(target: BackendTarget) -> Result<ControllerConfig, MihomoError> {
-    let raw = match target.backend_type {
-        BackendType::Clash => crate::clash::api::configs(target.clash()).await,
-        BackendType::Surge => crate::surge::api::configs(target.surge()).await,
-        BackendType::SingBox => crate::sing_box::api::configs(target.sing_box()).await,
-    }?;
-    Ok(core_config_from_value(&raw))
-}
-
-pub async fn controller_config_mode(target: BackendTarget) -> Result<String, MihomoError> {
-    match target.backend_type {
-        BackendType::Clash => crate::clash::api::config_mode(target.clash()).await,
-        BackendType::Surge => crate::surge::api::config_mode(target.surge()).await,
-        BackendType::SingBox => crate::sing_box::api::config_mode(target.sing_box()).await,
-    }
+    let load_target = target.clone();
+    super::session::configs(&target, move || async move {
+        let raw = match load_target.backend_type {
+            BackendType::Clash => crate::clash::api::configs(load_target.clash()).await,
+            BackendType::Surge => crate::surge::api::configs(load_target.surge()).await,
+            BackendType::SingBox => crate::sing_box::api::configs(load_target.sing_box()).await,
+        }?;
+        Ok(core_config_from_value(&raw))
+    })
+    .await
 }
 
 pub async fn controller_set_config_mode(
     target: BackendTarget,
     mode: String,
 ) -> Result<(), MihomoError> {
-    match target.backend_type {
+    let cache_target = target.clone();
+    let result = match target.backend_type {
         BackendType::Clash => patch_config_value(target, json!({ "mode": mode })).await,
         BackendType::Surge => crate::surge::api::set_config_mode(target.surge(), mode).await,
         BackendType::SingBox => {
             crate::sing_box::api::set_config_mode(target.sing_box(), mode).await
         }
+    };
+    if result.is_ok() {
+        super::session::invalidate_configs(&cache_target);
     }
+    result
 }
 
 pub async fn controller_set_config_log_level(
     target: BackendTarget,
     level: String,
 ) -> Result<(), MihomoError> {
-    patch_config_value(target, json!({ "log-level": level })).await
+    update_config(target, json!({ "log-level": level })).await
 }
 
 pub async fn controller_set_config_tun_enabled(
     target: BackendTarget,
     enabled: bool,
 ) -> Result<(), MihomoError> {
-    patch_config_value(target, json!({ "tun": { "enable": enabled } })).await
+    update_config(target, json!({ "tun": { "enable": enabled } })).await
 }
 
 pub async fn controller_set_config_bool(
@@ -54,7 +55,7 @@ pub async fn controller_set_config_bool(
 ) -> Result<(), MihomoError> {
     match key.as_str() {
         "allow-lan" | "ipv6" | "tcp-concurrent" => {
-            patch_config_value(target, json!({ key: value })).await
+            update_config(target, json!({ key: value })).await
         }
         _ => Err(MihomoError::Other("不支持的布尔配置项".into())),
     }
@@ -66,11 +67,16 @@ pub async fn controller_set_config_port(
     value: u32,
 ) -> Result<(), MihomoError> {
     match key.as_str() {
-        "port" | "socks-port" | "mixed-port" => {
-            patch_config_value(target, json!({ key: value })).await
-        }
+        "port" | "socks-port" | "mixed-port" => update_config(target, json!({ key: value })).await,
         _ => Err(MihomoError::Other("不支持的端口配置项".into())),
     }
+}
+
+async fn update_config(target: BackendTarget, body: Value) -> Result<(), MihomoError> {
+    let cache_target = target.clone();
+    patch_config_value(target, body).await?;
+    super::session::invalidate_configs(&cache_target);
+    Ok(())
 }
 
 async fn patch_config_value(target: BackendTarget, body: Value) -> Result<(), MihomoError> {
@@ -93,7 +99,8 @@ pub async fn controller_reload_configs(
     payload: Option<String>,
     force: bool,
 ) -> Result<(), MihomoError> {
-    match target.backend_type {
+    let cache_target = target.clone();
+    let result = match target.backend_type {
         BackendType::Clash => {
             crate::clash::api::reload_configs(target.clash(), path, payload, force).await
         }
@@ -104,7 +111,11 @@ pub async fn controller_reload_configs(
             crate::surge::api::reload_configs(target.surge()).await
         }
         BackendType::SingBox => crate::sing_box::api::unsupported("重载配置").await,
+    };
+    if result.is_ok() {
+        super::session::release_target(&cache_target);
     }
+    result
 }
 
 pub async fn controller_update_geo(target: BackendTarget) -> Result<(), MihomoError> {
@@ -171,11 +182,16 @@ pub async fn controller_upgrade_geo(target: BackendTarget) -> Result<(), MihomoE
 }
 
 pub async fn controller_restart_core(target: BackendTarget) -> Result<(), MihomoError> {
-    match target.backend_type {
+    let cache_target = target.clone();
+    let result = match target.backend_type {
         BackendType::Clash => crate::clash::api::restart_core(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("重启核心").await,
         BackendType::SingBox => crate::sing_box::api::unsupported("重启核心").await,
+    };
+    if result.is_ok() {
+        super::session::release_target(&cache_target);
     }
+    result
 }
 
 fn core_config_from_value(raw: &Value) -> ControllerConfig {

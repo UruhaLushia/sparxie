@@ -81,11 +81,7 @@ fn registry_memory() -> &'static Registry<MemorySample> {
 }
 
 fn target_key(target: &MihomoTarget) -> String {
-    format!(
-        "{}|{}",
-        target.base_url.trim_end_matches('/'),
-        target.secret.as_deref().unwrap_or(""),
-    )
+    target.identity_key()
 }
 
 async fn subscribe<T: Sample>(

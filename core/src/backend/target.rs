@@ -14,6 +14,16 @@ pub struct BackendTarget {
 }
 
 impl BackendTarget {
+    pub(in crate::backend) fn cache_key(&self) -> String {
+        format!(
+            "{:?}|{}|{}|{}",
+            self.backend_type,
+            self.base_url.trim_end_matches('/'),
+            self.secret.as_deref().unwrap_or(""),
+            self.allow_insecure,
+        )
+    }
+
     pub(in crate::backend) fn clash(&self) -> crate::clash::api::MihomoTarget {
         crate::clash::api::MihomoTarget {
             base_url: self.base_url.clone(),

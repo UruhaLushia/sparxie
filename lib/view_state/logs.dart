@@ -34,8 +34,10 @@ class LogWindowNotifier extends ChangeNotifier {
   int _rawTotal = 0;
   int _total = 0;
   int _offset = 0;
-  int _requestedOffset = 0;
-  int _requestedLimit = _initialWindowSize;
+  ({int offset, int limit}) _requestedWindow = (
+    offset: 0,
+    limit: _initialWindowSize,
+  );
   String _level = 'info';
   String _query = '';
   bool _filterLoading = false;
@@ -190,8 +192,10 @@ class LogWindowNotifier extends ChangeNotifier {
             _rows.isNotEmpty)) {
       return;
     }
-    _requestedOffset = desiredOffset;
-    _requestedLimit = math.max(desiredLimit, 1);
+    _requestedWindow = (
+      offset: desiredOffset,
+      limit: math.max(desiredLimit, 1),
+    );
     // Scrolling freezes backend refreshes, but still records the latest target
     // range. Reactivation can then fetch the settled viewport directly instead
     // of first reloading the obsolete window from before the fling.
@@ -236,8 +240,10 @@ class LogWindowNotifier extends ChangeNotifier {
   void _clearWindow({bool resetRequestLimit = false}) {
     _total = 0;
     _offset = 0;
-    _requestedOffset = 0;
-    if (resetRequestLimit) _requestedLimit = _initialWindowSize;
+    _requestedWindow = (
+      offset: 0,
+      limit: resetRequestLimit ? _initialWindowSize : _requestedWindow.limit,
+    );
     _rows = const [];
     _filterLoading = false;
     _notifyOnNextWindow = false;
@@ -284,8 +290,10 @@ class LogWindowNotifier extends ChangeNotifier {
       }
       _total = window.total;
       _offset = window.offset;
-      _requestedOffset = window.offset;
-      _requestedLimit = math.max(_initialWindowSize, window.rows.length);
+      _requestedWindow = (
+        offset: window.offset,
+        limit: math.max(_initialWindowSize, window.rows.length),
+      );
       _rows = window.rows;
       _completeWindowRefresh(frameRevision);
       notifyListeners();
@@ -373,8 +381,10 @@ class LogWindowNotifier extends ChangeNotifier {
     final query = _query;
     final frameRevision = _frameRevision;
     final anchorId = fromEnd ? null : _anchorId;
-    final offset = _requestedOffset;
-    final limit = math.max(_requestedLimit, 1);
+    final request = (
+      offset: _requestedWindow.offset,
+      limit: math.max(_requestedWindow.limit, 1),
+    );
     bool requestIsCurrent() =>
         _active &&
         !paused.value &&
@@ -382,10 +392,17 @@ class LogWindowNotifier extends ChangeNotifier {
         level == _level &&
         query == _query &&
         (!fromEnd || _following) &&
-        (fromEnd || (offset == _requestedOffset && limit == _requestedLimit));
+        (fromEnd || request == _requestedWindow);
     final rust.LogWindow window;
     try {
-      window = await fetcher(offset, limit, level, query, fromEnd, anchorId);
+      window = await fetcher(
+        request.offset,
+        request.limit,
+        level,
+        query,
+        fromEnd,
+        anchorId,
+      );
     } catch (_) {
       if (!requestIsCurrent()) return;
       _windowRevision++;
@@ -402,8 +419,8 @@ class LogWindowNotifier extends ChangeNotifier {
         !listEquals(_rows, window.rows);
     _total = window.total;
     _offset = window.offset;
-    if (offset == _requestedOffset && limit == _requestedLimit) {
-      _requestedOffset = window.offset;
+    if (request == _requestedWindow) {
+      _requestedWindow = (offset: window.offset, limit: request.limit);
     }
     _rows = window.rows;
     _filterLoading = false;

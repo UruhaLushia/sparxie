@@ -1,26 +1,40 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
 use crate::MihomoError;
-use crate::clash::api::{MihomoTarget, urlencode};
+use crate::clash::api::MihomoTarget;
+use crate::utils::text::contains_filter;
 
 use super::value::{field_or, first_field, proxy_delay};
 use cache::{CachedCatalog, CachedGroup, CachedNode};
-use parse::{contains_filter, intern_member_list, push_icon};
+use parse::{intern_member_list, push_icon};
 pub use types::{
     ProxyCatalog, ProxyGroupEntry, ProxyMemberEntry, ProxyMemberSection, ProxyMemberSort,
     ProxyMemberWindow,
 };
 
 mod cache;
+mod member_window;
+mod node_state;
 mod parse;
 mod types;
 
+pub(crate) use member_window::cached_group_member_names;
+pub use member_window::{proxy_group_member_window, proxy_group_members};
+use node_state::cached_node;
+pub(crate) use node_state::{
+    cache_proxy_detail, cached_node_providers, cached_proxy_detail, refresh_cached_node_detail,
+    update_cached_node_delay, update_cached_node_delay_window, update_cached_node_delays,
+};
+
 const PROVIDER_NODES_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+pub(crate) fn clear_proxy_catalog_cache(target: &MihomoTarget) {
+    cache::clear_catalog(target);
+}
 
 /// Structured proxy + group catalog. Rust parses mihomo's `/proxies`, applies
 /// hidden-group filtering, preserves UI ordering (`GLOBAL.all`), caches full
@@ -32,23 +46,30 @@ pub async fn proxy_catalog(
     filter: String,
 ) -> Result<ProxyCatalog, MihomoError> {
     let client = target.client()?;
-    let previous_nodes = cache::node_details(&target);
+    let cache_token = cache::begin_catalog_load(&target);
     let previous_provider_nodes_checked_at = cache::provider_nodes_checked_at(&target);
-    let previous_provider_details = cache::provider_details(&target);
     let refresh_provider_nodes = provider_nodes_are_stale(previous_provider_nodes_checked_at);
+    let force_provider_refresh =
+        refresh_provider_nodes && previous_provider_nodes_checked_at.is_some();
     let provider_request = async {
         if refresh_provider_nodes {
-            provider_nodes(&client).await.ok()
+            provider_nodes(&target, force_provider_refresh).await.ok()
         } else {
             None
         }
     };
     let (raw, fresh_provider_nodes) = tokio::join!(client.get_json("proxies"), provider_request);
-    let raw = raw?;
+    let raw = match raw {
+        Ok(raw) => raw,
+        Err(error) => {
+            cache::finish_catalog_load(&target, cache_token);
+            return Err(error);
+        }
+    };
     let Some(proxies) = raw.get("proxies").and_then(Value::as_object) else {
+        cache::finish_catalog_load(&target, cache_token);
         return Ok(ProxyCatalog::default());
     };
-
     let mut groups = Vec::new();
     let mut cached_groups = HashMap::new();
     let mut name_ids = HashMap::new();
@@ -88,11 +109,7 @@ pub async fn proxy_catalog(
         let icon = field_or(data, "icon", "");
         let now = field_or(data, "now", "");
         let top_level_node = proxies.get(now.as_str());
-        let cached_node = previous_nodes.get(now.as_str());
-        let now_delay = top_level_node
-            .map(proxy_delay)
-            .or_else(|| cached_node.map(|node| node.delay))
-            .unwrap_or(-1);
+        let now_delay = top_level_node.map(proxy_delay).unwrap_or(-1);
         push_icon(&mut icon_urls, &mut seen_icons, &icon);
         cached_groups.insert(name.clone(), CachedGroup::new(members));
         groups.push((
@@ -126,6 +143,20 @@ pub async fn proxy_catalog(
             }
         }
     }
+    let missing_delays: HashSet<&str> = groups
+        .iter()
+        .filter(|(_, group)| group.now_delay < 0 && !group.now.is_empty())
+        .map(|(_, group)| group.now.as_str())
+        .collect();
+    let previous_delays = cache::node_delays(&target, &missing_delays);
+    drop(missing_delays);
+    for (_, group) in &mut groups {
+        if group.now_delay < 0
+            && let Some(delay) = previous_delays.get(group.now.as_str())
+        {
+            group.now_delay = *delay;
+        }
+    }
 
     let group_positions: HashMap<&str, usize> = global_all
         .map(|names| {
@@ -140,49 +171,26 @@ pub async fn proxy_catalog(
 
     let mut names = vec![String::new(); name_ids.len()];
     for (name, id) in name_ids {
-        names[id] = name;
+        names[id as usize] = name;
     }
     let mut nodes = Vec::with_capacity(names.len());
     for name in &names {
-        nodes.push(
-            proxies
-                .get(name)
-                .map(cached_node)
-                .or_else(|| {
-                    fresh_provider_nodes
-                        .as_ref()
-                        .and_then(|nodes| nodes.summaries.get(name))
-                        .cloned()
-                })
-                .or_else(|| previous_nodes.get(name).cloned()),
-        );
+        nodes.push(proxies.get(name).map(cached_node).or_else(|| {
+            fresh_provider_nodes
+                .as_ref()
+                .and_then(|nodes| nodes.summaries.get(name))
+                .cloned()
+        }));
     }
-    let mut direct_details = HashMap::new();
-    for data in proxies.values() {
-        let Some(members) = data.get("all").and_then(Value::as_array) else {
-            continue;
-        };
-        for name in members.iter().filter_map(Value::as_str) {
-            if direct_details.contains_key(name) {
-                continue;
-            }
-            if let Some(detail) = proxies.get(name) {
-                direct_details.insert(name.to_string(), detail.to_string());
-            }
-        }
-    }
-    let provider_details = fresh_provider_nodes
-        .map(|nodes| Arc::new(nodes.details))
-        .unwrap_or(previous_provider_details);
     cache::replace_catalog(
         &target,
+        cache_token,
         CachedCatalog {
             names,
             lower_names: None,
             nodes,
             groups: cached_groups,
-            direct_details,
-            provider_details,
+            direct_details: Default::default(),
             filter: filter.into_owned(),
             provider_nodes_checked_at,
         },
@@ -196,288 +204,28 @@ pub async fn proxy_catalog(
 
 struct ProviderNodes {
     summaries: HashMap<String, CachedNode>,
-    details: HashMap<String, String>,
 }
 
-async fn provider_nodes(
-    client: &crate::clash::client::MihomoClient,
-) -> Result<ProviderNodes, MihomoError> {
-    let raw = client.get_json("providers/proxies").await?;
+async fn provider_nodes(target: &MihomoTarget, force: bool) -> Result<ProviderNodes, MihomoError> {
+    let data = crate::clash::api::providers::proxy_provider_data(target.clone(), force).await?;
     let mut summaries = HashMap::new();
-    let mut details = HashMap::new();
-    let Some(providers) = raw.get("providers").and_then(Value::as_object) else {
-        return Ok(ProviderNodes { summaries, details });
-    };
-    for (provider_name, provider) in providers {
-        if field_or(provider, "vehicleType", "") == "Compatible" {
-            continue;
-        }
-        let Some(nodes) = provider.get("proxies").and_then(Value::as_array) else {
-            continue;
-        };
-        for node in nodes {
-            let name = field_or(node, "name", "");
-            if !name.is_empty() {
-                let provider_name =
-                    node_provider_name(node).unwrap_or_else(|| provider_name.clone());
-                details.insert(name.clone(), provider_node_detail(node, &provider_name));
-                summaries.insert(name, cached_node_with_provider(node, Some(provider_name)));
-            }
-        }
-    }
-    Ok(ProviderNodes { summaries, details })
-}
-
-pub(crate) async fn refresh_cached_provider_nodes(
-    target: &MihomoTarget,
-) -> Result<(), MihomoError> {
-    let client = target.client()?;
-    if let Ok(nodes) = provider_nodes(&client).await {
-        cache::mark_provider_nodes_checked(target, Instant::now());
-        cache::merge_provider_nodes(target, nodes.summaries, nodes.details);
-    }
-    Ok(())
-}
-
-pub(crate) async fn cached_proxy_detail(
-    target: &MihomoTarget,
-    name: &str,
-) -> Result<Option<String>, MihomoError> {
-    if !cache::has_catalog(target) {
-        refresh_cached_catalog(target).await?;
-    }
-    if let Some(detail) = cache::proxy_detail(target, name) {
-        return Ok(Some(detail));
-    }
-    refresh_cached_provider_nodes(target).await?;
-    Ok(cache::proxy_detail(target, name))
+    data.for_each_node(|provider, node| {
+        summaries.insert(
+            node.name.to_string(),
+            CachedNode {
+                proxy_type: node.proxy_type.clone(),
+                delay: node.delay.load(std::sync::atomic::Ordering::Relaxed),
+                provider: Some(Box::from(
+                    node.provider_override.as_deref().unwrap_or(provider),
+                )),
+            },
+        );
+    });
+    Ok(ProviderNodes { summaries })
 }
 
 fn provider_nodes_are_stale(checked_at: Option<Instant>) -> bool {
     checked_at.is_none_or(|checked_at| checked_at.elapsed() >= PROVIDER_NODES_REFRESH_INTERVAL)
-}
-
-pub(crate) async fn refresh_cached_node_detail(
-    target: &MihomoTarget,
-    name: &str,
-    provider_backed: bool,
-) -> Result<(), MihomoError> {
-    if provider_backed {
-        return refresh_cached_provider_nodes(target).await;
-    }
-    let path = format!("proxies/{}", urlencode(name));
-    let detail = target.client()?.get_json(&path).await?.to_string();
-    cache::set_direct_detail(target, name.to_string(), detail);
-    Ok(())
-}
-
-fn cached_node(data: &Value) -> CachedNode {
-    cached_node_with_provider(data, node_provider_name(data))
-}
-
-fn cached_node_with_provider(data: &Value, provider: Option<String>) -> CachedNode {
-    CachedNode {
-        proxy_type: field_or(data, "type", "Proxy"),
-        delay: proxy_delay(data),
-        provider,
-    }
-}
-
-fn provider_node_detail(data: &Value, provider: &str) -> String {
-    if !field_or(data, "provider-name", "").is_empty() {
-        return data.to_string();
-    }
-    let mut detail = data.clone();
-    if let Some(fields) = detail.as_object_mut() {
-        fields.insert(
-            "provider-name".to_string(),
-            Value::String(provider.to_string()),
-        );
-    }
-    detail.to_string()
-}
-
-fn node_provider_name(data: &Value) -> Option<String> {
-    let provider = field_or(data, "provider-name", "");
-    (!provider.is_empty()).then_some(provider)
-}
-
-/// Windowed members for one proxy group. The full member list stays in Rust so
-/// very large groups do not cross the bridge on every catalog refresh.
-pub async fn proxy_group_members(
-    target: MihomoTarget,
-    group: String,
-    offset: u32,
-    limit: u32,
-    member_sort: ProxyMemberSort,
-    group_by_provider: bool,
-) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
-    ensure_cached_group(&target, &group).await?;
-    Ok(cache::member_entries(
-        &target,
-        &group,
-        offset,
-        limit,
-        member_sort,
-        group_by_provider,
-    )
-    .unwrap_or_default())
-}
-
-pub async fn proxy_group_member_window(
-    target: MihomoTarget,
-    group: String,
-    offset: u32,
-    limit: u32,
-    member_sort: ProxyMemberSort,
-    group_by_provider: bool,
-    current_name: Option<String>,
-) -> Result<ProxyMemberWindow, MihomoError> {
-    ensure_cached_group(&target, &group).await?;
-    let mut window_offset = offset;
-    let mut current_index = -1;
-    if let Some(current_name) = current_name.as_deref().filter(|name| !name.is_empty()) {
-        if let Some((index, total)) = cache::member_position(
-            &target,
-            &group,
-            current_name,
-            member_sort,
-            group_by_provider,
-        ) {
-            current_index = index.min(i32::MAX as usize) as i32;
-            window_offset = centered_window_offset(index, total, limit);
-        }
-    }
-    let entries = cache::member_entries(
-        &target,
-        &group,
-        window_offset,
-        limit,
-        member_sort,
-        group_by_provider,
-    )
-    .unwrap_or_default();
-    let sections = cache::member_sections(&target, &group, member_sort, group_by_provider);
-    Ok(ProxyMemberWindow {
-        offset: window_offset,
-        current_index,
-        entries,
-        sections,
-    })
-}
-
-async fn ensure_cached_group(target: &MihomoTarget, group: &str) -> Result<(), MihomoError> {
-    if !cache::has_catalog(target) || !cache::has_group(target, group) {
-        refresh_cached_catalog(target).await?;
-    }
-    Ok(())
-}
-
-fn centered_window_offset(index: usize, total: usize, limit: u32) -> u32 {
-    let limit = (limit as usize).min(total);
-    index
-        .saturating_sub(limit / 2)
-        .min(total.saturating_sub(limit))
-        .min(u32::MAX as usize) as u32
-}
-
-pub(crate) async fn cached_group_member_names(
-    target: MihomoTarget,
-    group: &str,
-) -> Result<Vec<String>, MihomoError> {
-    if !cache::has_catalog(&target) {
-        refresh_cached_catalog(&target).await?;
-    }
-    Ok(cache::member_names(&target, group))
-}
-
-async fn refresh_cached_catalog(target: &MihomoTarget) -> Result<(), MihomoError> {
-    let filter = cache::cached_filter(target).unwrap_or_default();
-    let _ = proxy_catalog(target.clone(), true, false, filter).await?;
-    Ok(())
-}
-
-pub(crate) async fn cached_node_providers(
-    target: MihomoTarget,
-    names: &[String],
-) -> Result<HashMap<String, String>, MihomoError> {
-    let names: HashSet<String> = names.iter().cloned().collect();
-    if names.is_empty() {
-        return Ok(HashMap::new());
-    }
-    if !cache::has_catalog(&target) {
-        refresh_cached_catalog(&target).await?;
-    }
-    if cache::names_need_provider_nodes(&target, &names) {
-        refresh_cached_provider_nodes(&target).await?;
-    }
-    Ok(cache::node_providers(&target, &names))
-}
-
-pub(crate) fn update_cached_node_delay(target: &MihomoTarget, name: &str, delay: i32) {
-    cache::update_node_delays(target, [(name, delay)]);
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn update_cached_node_delay_window(
-    target: &MihomoTarget,
-    group: &str,
-    member_sort: ProxyMemberSort,
-    window_offset: u32,
-    window_limit: u32,
-    _window_members_hash: u32,
-    name: &str,
-    delay: i32,
-) -> Option<(bool, Vec<ProxyMemberEntry>)> {
-    if window_limit == 0 {
-        update_cached_node_delay(target, name, delay);
-        return None;
-    }
-    let before = cache::member_entries(
-        target,
-        group,
-        window_offset,
-        window_limit,
-        member_sort,
-        false,
-    )
-    .unwrap_or_default();
-    let visible_delay_changed = before
-        .iter()
-        .find(|entry| entry.name == name)
-        .is_some_and(|entry| entry.delay != delay);
-
-    if member_sort != ProxyMemberSort::Delay {
-        update_cached_node_delay(target, name, delay);
-        return visible_delay_changed.then(|| (true, Vec::new()));
-    }
-
-    update_cached_node_delay(target, name, delay);
-    let after = cache::member_entries(
-        target,
-        group,
-        window_offset,
-        window_limit,
-        member_sort,
-        false,
-    )
-    .unwrap_or_default();
-    if same_member_order(&before, &after) {
-        visible_delay_changed.then(|| (true, Vec::new()))
-    } else {
-        Some((false, after))
-    }
-}
-
-pub(crate) fn update_cached_node_delays<'a>(
-    target: &MihomoTarget,
-    delays: impl IntoIterator<Item = (&'a str, i32)>,
-) {
-    cache::update_node_delays(target, delays);
-}
-
-fn same_member_order(a: &[ProxyMemberEntry], b: &[ProxyMemberEntry]) -> bool {
-    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.name == b.name)
 }
 
 fn group_order(

@@ -36,7 +36,7 @@ import 'screens/resources_screen.dart';
 import 'screens/rules_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tailscale_screen.dart';
-import 'session.dart';
+import 'controller_view_state.dart';
 import 'src/rust/frb_generated.dart';
 import 'system_accent_color.dart';
 import 'utils.dart';
@@ -111,7 +111,7 @@ Future<void> main() async {
     if (kDebugMode) debugPrint('cache init failed: $e');
   }
   final store = await ControllerStore.load(config);
-  final session = MihomoSession(
+  final session = ControllerViewState(
     store,
     connectionsIntervalMs: prefs.connectionsRefreshMs,
     closedConnectionsCapacity: prefs.closedConnectionsCapacity,
@@ -217,7 +217,7 @@ class MihomoControllerApp extends StatefulWidget {
 
   final ControllerStore store;
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
   final SystemAccentColor systemAccentColor;
   final BackgroundAccentColor backgroundAccentColor;
   final AppLinks appLinks;
@@ -264,7 +264,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
 
   ControllerStore get store => widget.store;
   AppPrefs get prefs => widget.prefs;
-  MihomoSession get session => widget.session;
+  ControllerViewState get session => widget.session;
   SystemAccentColor get systemAccentColor => widget.systemAccentColor;
   BackgroundAccentColor get backgroundAccentColor =>
       widget.backgroundAccentColor;

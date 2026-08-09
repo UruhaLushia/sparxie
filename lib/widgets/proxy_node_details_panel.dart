@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
 import 'anchored_details_panel_surface.dart';

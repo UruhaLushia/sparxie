@@ -9,7 +9,7 @@ import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../error_format.dart';
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
@@ -48,7 +48,7 @@ class ConnectionsScreen extends StatefulWidget {
 
   final ctl.ControllerStore store;
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<ConnectionsScreen> createState() => _ConnectionsScreenState();
@@ -585,7 +585,7 @@ class _ConnectionsList extends StatefulWidget {
     required this.onClose,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final AppPrefs prefs;
   final ConnectionsTab tab;
   final String filter;
@@ -980,7 +980,7 @@ class _GroupedConnectionsList extends StatefulWidget {
     required this.onClose,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final AppPrefs prefs;
   final ConnectionsTab tab;
   final String filter;

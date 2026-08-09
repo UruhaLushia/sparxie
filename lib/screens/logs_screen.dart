@@ -7,7 +7,7 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/compact_controls.dart';
@@ -29,7 +29,7 @@ class LogsScreen extends StatefulWidget {
 
   final ctl.ControllerStore store;
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<LogsScreen> createState() => _LogsScreenState();

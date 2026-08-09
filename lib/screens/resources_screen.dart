@@ -87,26 +87,24 @@ class ResourcesScreen extends StatelessWidget {
   }
 }
 
-abstract class _ProviderSection<T> extends StatefulWidget {
-  const _ProviderSection({super.key, required this.store});
-  final ctl.ControllerStore store;
-}
-
-class _ProxyProviderSection extends _ProviderSection<_ProxyProvider> {
+class _ProxyProviderSection extends StatefulWidget {
   const _ProxyProviderSection({
     super.key,
-    required super.store,
+    required this.store,
     required this.prefs,
   });
 
+  final ctl.ControllerStore store;
   final AppPrefs prefs;
 
   @override
   State<_ProxyProviderSection> createState() => _ProxyProviderSectionState();
 }
 
-class _RuleProviderSection extends _ProviderSection<_RuleProvider> {
-  const _RuleProviderSection({super.key, required super.store});
+class _RuleProviderSection extends StatefulWidget {
+  const _RuleProviderSection({super.key, required this.store});
+
+  final ctl.ControllerStore store;
 
   @override
   State<_RuleProviderSection> createState() => _RuleProviderSectionState();
@@ -199,6 +197,13 @@ class _RuleProvider {
 DateTime? _parseDateTime(String value) =>
     value.isEmpty ? null : DateTime.tryParse(value);
 
+rust.BackendTarget? _targetFor(ctl.ControllerStore store) {
+  final controller = store.active;
+  return controller == null
+      ? null
+      : rust.backendTargetForController(controller);
+}
+
 class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   bool _loading = false;
   String? _error;
@@ -209,23 +214,11 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    unawaited(_refresh());
   }
 
-  @override
-  void didUpdateWidget(covariant _ProxyProviderSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.store != widget.store) _refresh();
-  }
-
-  rust.BackendTarget? _target() {
-    final c = widget.store.active;
-    if (c == null) return null;
-    return rust.backendTargetForController(c);
-  }
-
-  Future<void> _refresh() async {
-    final target = _target();
+  Future<void> _refresh({bool force = false}) async {
+    final target = _targetFor(widget.store);
     if (target == null) {
       setState(() {
         _items = const [];
@@ -238,7 +231,10 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       _error = null;
     });
     try {
-      final entries = await rust.controllerProxyProviderCatalog(target: target);
+      final entries = await rust.controllerProxyProviderCatalog(
+        target: target,
+        force: force,
+      );
       final list = entries.map(_ProxyProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
@@ -251,12 +247,12 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   }
 
   Future<void> _update(_ProxyProvider p) async {
-    final target = _target();
+    final target = _targetFor(widget.store);
     if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
       await rust.controllerProxyProviderUpdate(target: target, name: p.name);
-      await _refresh();
+      await _refresh(force: true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -268,7 +264,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   }
 
   void _openNodes(_ProxyProvider provider) {
-    final target = _target();
+    final target = _targetFor(widget.store);
     if (target == null) return;
     unawaited(
       Navigator.of(context).push(
@@ -284,7 +280,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   }
 
   Future<void> _updateAll() async {
-    final target = _target();
+    final target = _targetFor(widget.store);
     final providers = _items.where((p) => p.updatable).toList(growable: false);
     if (target == null || providers.isEmpty) return;
     final failures = <String>[];
@@ -300,7 +296,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
           failures.add('${provider.name}: ${_formatError(error)}');
         }
       }
-      if (mounted) await _refresh();
+      if (mounted) await _refresh(force: true);
     } finally {
       if (mounted) setState(() => _updatingAll = false);
     }
@@ -320,33 +316,13 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
         return SectionPanel(
           title: '代理订阅',
           icon: Icons.cloud_queue_outlined,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_items.any((p) => p.updatable))
-                IconButton(
-                  tooltip: '更新全部',
-                  onPressed: _updatingAll || _busy.isNotEmpty || _loading
-                      ? null
-                      : _updateAll,
-                  icon: _updatingAll
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.cloud_sync_outlined, size: 20),
-                ),
-              IconButton(
-                tooltip: '刷新',
-                onPressed: _loading || _updatingAll ? null : _refresh,
-                icon: _loading && !_updatingAll && _busy.isEmpty
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh, size: 20),
-              ),
-            ],
+          trailing: _ProviderActions(
+            hasUpdates: _items.any((provider) => provider.updatable),
+            busy: _busy.isNotEmpty,
+            loading: _loading,
+            updatingAll: _updatingAll,
+            onUpdateAll: _updateAll,
+            onRefresh: () => _refresh(force: true),
           ),
           child: _ProviderBody(
             loading: _loading && _items.isEmpty,
@@ -383,23 +359,11 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    unawaited(_refresh());
   }
 
-  @override
-  void didUpdateWidget(covariant _RuleProviderSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.store != widget.store) _refresh();
-  }
-
-  rust.BackendTarget? _target() {
-    final c = widget.store.active;
-    if (c == null) return null;
-    return rust.backendTargetForController(c);
-  }
-
-  Future<void> _refresh() async {
-    final target = _target();
+  Future<void> _refresh({bool force = false}) async {
+    final target = _targetFor(widget.store);
     if (target == null) {
       setState(() {
         _items = const [];
@@ -412,7 +376,10 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
       _error = null;
     });
     try {
-      final entries = await rust.controllerRuleProviderCatalog(target: target);
+      final entries = await rust.controllerRuleProviderCatalog(
+        target: target,
+        force: force,
+      );
       final list = entries.map(_RuleProvider.fromRust).toList(growable: false);
       if (!mounted) return;
       setState(() => _items = list);
@@ -425,12 +392,12 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   }
 
   Future<void> _update(_RuleProvider p) async {
-    final target = _target();
+    final target = _targetFor(widget.store);
     if (target == null || _updatingAll) return;
     setState(() => _busy.add(p.name));
     try {
       await rust.controllerRuleProviderUpdate(target: target, name: p.name);
-      await _refresh();
+      await _refresh(force: true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -442,7 +409,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   }
 
   Future<void> _updateAll() async {
-    final target = _target();
+    final target = _targetFor(widget.store);
     final providers = _items.where((p) => p.updatable).toList(growable: false);
     if (target == null || providers.isEmpty) return;
     final failures = <String>[];
@@ -458,7 +425,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
           failures.add('${provider.name}: ${_formatError(error)}');
         }
       }
-      if (mounted) await _refresh();
+      if (mounted) await _refresh(force: true);
     } finally {
       if (mounted) setState(() => _updatingAll = false);
     }
@@ -477,33 +444,13 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
     return SectionPanel(
       title: '规则集',
       icon: Icons.rule,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_items.any((p) => p.updatable))
-            IconButton(
-              tooltip: '更新全部',
-              onPressed: _updatingAll || _busy.isNotEmpty || _loading
-                  ? null
-                  : _updateAll,
-              icon: _updatingAll
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cloud_sync_outlined, size: 20),
-            ),
-          IconButton(
-            tooltip: '刷新',
-            onPressed: _loading || _updatingAll ? null : _refresh,
-            icon: _loading && !_updatingAll && _busy.isEmpty
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 20),
-          ),
-        ],
+      trailing: _ProviderActions(
+        hasUpdates: _items.any((provider) => provider.updatable),
+        busy: _busy.isNotEmpty,
+        loading: _loading,
+        updatingAll: _updatingAll,
+        onUpdateAll: _updateAll,
+        onRefresh: () => _refresh(force: true),
       ),
       child: _ProviderBody(
         loading: _loading && _items.isEmpty,
@@ -520,6 +467,54 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _ProviderActions extends StatelessWidget {
+  const _ProviderActions({
+    required this.hasUpdates,
+    required this.busy,
+    required this.loading,
+    required this.updatingAll,
+    required this.onUpdateAll,
+    required this.onRefresh,
+  });
+
+  final bool hasUpdates;
+  final bool busy;
+  final bool loading;
+  final bool updatingAll;
+  final VoidCallback onUpdateAll;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasUpdates)
+          IconButton(
+            tooltip: '更新全部',
+            onPressed: updatingAll || busy || loading ? null : onUpdateAll,
+            icon: updatingAll
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_sync_outlined, size: 20),
+          ),
+        IconButton(
+          tooltip: '刷新',
+          onPressed: loading || updatingAll ? null : onRefresh,
+          icon: loading && !updatingAll && !busy
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh, size: 20),
+        ),
+      ],
     );
   }
 }

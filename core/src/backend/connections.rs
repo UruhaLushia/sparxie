@@ -391,4 +391,5 @@ pub fn controller_stop_target_streams(target: BackendTarget) {
     if target.backend_type == BackendType::Clash {
         crate::clash::state::stop::stop(&target.clash());
     }
+    super::session::release_target(&target);
 }

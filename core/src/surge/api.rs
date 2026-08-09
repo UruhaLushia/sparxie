@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::MihomoError;
 use crate::backend::api::{
-    ProxyProviderEntry, RuleEntry, RuleProviderEntry, RulesSummary, TrafficSample, VersionInfo,
+    ProxyProviderEntry, RuleEntry, RuleProviderEntry, TrafficSample, VersionInfo,
 };
 use crate::surge::client::SurgeTarget;
 
@@ -120,38 +120,18 @@ pub async fn traffic_sample(target: SurgeTarget) -> Result<TrafficSample, Mihomo
     Ok(parse_traffic(&raw))
 }
 
-pub async fn proxy_providers(_: SurgeTarget) -> Result<String, MihomoError> {
-    Ok(json!({ "providers": {} }).to_string())
-}
-
 pub async fn proxy_provider_catalog(
     _: SurgeTarget,
 ) -> Result<Vec<ProxyProviderEntry>, MihomoError> {
     Ok(Vec::new())
 }
 
-pub async fn rule_providers(_: SurgeTarget) -> Result<String, MihomoError> {
-    Ok(json!({ "providers": {} }).to_string())
-}
-
 pub async fn rule_provider_catalog(_: SurgeTarget) -> Result<Vec<RuleProviderEntry>, MihomoError> {
     Ok(Vec::new())
 }
 
-pub async fn rules_count(target: SurgeTarget) -> u32 {
-    crate::surge::state::rules::count(target).await
-}
-
-pub async fn rules_load(target: SurgeTarget, filter: String) -> Result<RulesSummary, MihomoError> {
-    crate::surge::state::rules::load(target, filter).await
-}
-
-pub async fn rules_set_filter(target: SurgeTarget, filter: String) -> RulesSummary {
-    crate::surge::state::rules::set_filter(target, filter).await
-}
-
-pub async fn rules_window(target: SurgeTarget, offset: u32, limit: u32) -> Vec<RuleEntry> {
-    crate::surge::state::rules::window(target, offset, limit).await
+pub async fn fetch_rules(target: SurgeTarget) -> Result<Vec<RuleEntry>, MihomoError> {
+    crate::surge::state::rules::load(target).await
 }
 
 pub async fn unsupported<T>(message: &str) -> Result<T, MihomoError> {

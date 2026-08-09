@@ -82,8 +82,8 @@ impl LogStore {
         let matches = |stored: &&StoredLog| {
             level_allows_rank(filter_rank, &stored.entry.level)
                 && (query.is_empty()
-                    || stored.entry.message.to_lowercase().contains(&query)
-                    || stored.entry.level.to_lowercase().contains(&query))
+                    || crate::utils::text::contains_filter(&stored.entry.message, &query)
+                    || crate::utils::text::contains_filter(&stored.entry.level, &query))
         };
         let mut total = 0usize;
         let mut anchor_index = None;

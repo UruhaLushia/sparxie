@@ -18,6 +18,8 @@ pub mod proxy_delay;
 pub mod resources;
 #[path = "rules.rs"]
 pub mod rules;
+#[path = "session.rs"]
+pub mod session;
 #[path = "streams.rs"]
 pub mod streams;
 #[path = "tailscale.rs"]

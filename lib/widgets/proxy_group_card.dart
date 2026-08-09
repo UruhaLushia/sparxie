@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_color_utilities/hct/hct.dart';
 
 import '../gamepad_navigation.dart';
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';
@@ -603,84 +603,29 @@ Widget _memberGrid(
   }
   final sections = group.memberSections;
   if (sections.isNotEmpty) {
-    final slivers = <Widget>[];
-    for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
-      final section = sections[sectionIndex];
-      final (:offset, :count) = _memberSectionRange(
-        section.offset,
-        section.count,
-        group.memberCount,
-      );
-      if (count == 0) continue;
-      if (section.provider.isEmpty) {
-        slivers.add(
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: _memberSectionHeaderExtent(
-                sectionIndex,
-                section.provider,
-              ),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = _memberGridColumns(constraints.maxWidth);
+        final items = _groupedMemberItems(group, columns);
+        return ListView.builder(
+          controller: scrollController,
+          physics: scrollable ? null : const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          itemExtentBuilder: (index, _) => items[index].extent,
+          itemBuilder: (context, index) => _groupedMemberItem(
+            context,
+            group,
+            items[index],
+            columns,
+            style,
+            onSelect: onSelect,
+            onToggleFixed: onToggleFixed,
+            onTestNode: onTestNode,
+            loadNodeDetails: loadNodeDetails,
+            onMissingMember: onMissingMember,
           ),
         );
-      } else {
-        slivers.add(
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: _memberSectionHeaderExtent(
-                sectionIndex,
-                section.provider,
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  sectionIndex == 0 ? 4 : 14,
-                  12,
-                  8,
-                ),
-                child: Text(
-                  section.provider,
-                  style: TextStyle(
-                    color: style.title,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-      slivers.add(
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          sliver: SliverGrid(
-            gridDelegate: _cardMemberGridDelegate,
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _memberTile(
-                context,
-                group,
-                offset + index,
-                style,
-                onSelect: onSelect,
-                onToggleFixed: onToggleFixed,
-                onTestNode: onTestNode,
-                loadNodeDetails: loadNodeDetails,
-                onMissingMember: onMissingMember,
-              ),
-              childCount: count,
-            ),
-          ),
-        ),
-      );
-    }
-    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
-    return CustomScrollView(
-      controller: scrollController,
-      physics: scrollable ? null : const NeverScrollableScrollPhysics(),
-      slivers: slivers,
+      },
     );
   }
   return GridView.builder(
@@ -714,6 +659,116 @@ const _cardMemberMaxCrossAxisExtent = 260.0;
 const _cardMemberExtent = 64.0;
 const _cardMemberSpacing = 8.0;
 const _cardDetailHeaderExtent = 68.0;
+
+typedef _GroupedMemberItem = ({
+  String? header,
+  int offset,
+  int count,
+  double extent,
+});
+
+List<_GroupedMemberItem> _groupedMemberItems(ProxyGroup group, int columns) {
+  final items = <_GroupedMemberItem>[];
+  final sections = group.memberSections;
+  for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+    final section = sections[sectionIndex];
+    final range = _memberSectionRange(
+      section.offset,
+      section.count,
+      group.memberCount,
+    );
+    if (range.count == 0) continue;
+    items.add((
+      header: section.provider,
+      offset: 0,
+      count: 0,
+      extent: _memberSectionHeaderExtent(sectionIndex, section.provider),
+    ));
+    final rows = (range.count + columns - 1) ~/ columns;
+    for (var row = 0; row < rows; row++) {
+      final offset = range.offset + row * columns;
+      final count = (range.count - row * columns).clamp(0, columns).toInt();
+      items.add((
+        header: null,
+        offset: offset,
+        count: count,
+        extent: row + 1 == rows
+            ? _cardMemberExtent
+            : _cardMemberExtent + _cardMemberSpacing,
+      ));
+    }
+  }
+  items.add((header: '', offset: 0, count: 0, extent: 12));
+  return items;
+}
+
+Widget _groupedMemberItem(
+  BuildContext context,
+  ProxyGroup group,
+  _GroupedMemberItem item,
+  int columns,
+  _CardStyle style, {
+  ValueChanged<String>? onSelect,
+  ValueChanged<String>? onToggleFixed,
+  Future<void> Function(String)? onTestNode,
+  Future<String> Function(String)? loadNodeDetails,
+  ValueChanged<int>? onMissingMember,
+}) {
+  final header = item.header;
+  if (header != null) {
+    if (header.isEmpty) return SizedBox(height: item.extent);
+    return SizedBox(
+      height: item.extent,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(12, item.extent > 32 ? 14 : 4, 12, 8),
+        child: Text(
+          header,
+          style: TextStyle(
+            color: style.title,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+  return SizedBox(
+    height: item.extent,
+    child: Align(
+      alignment: Alignment.topCenter,
+      child: SizedBox(
+        height: _cardMemberExtent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              for (var column = 0; column < columns; column++) ...[
+                if (column > 0) const SizedBox(width: _cardMemberSpacing),
+                Expanded(
+                  child: column < item.count
+                      ? _memberTile(
+                          context,
+                          group,
+                          item.offset + column,
+                          style,
+                          onSelect: onSelect,
+                          onToggleFixed: onToggleFixed,
+                          onTestNode: onTestNode,
+                          loadNodeDetails: loadNodeDetails,
+                          onMissingMember: onMissingMember,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
 ({int offset, int count}) _memberSectionRange(
   int offset,
@@ -916,7 +971,7 @@ class _ProxyGroupCardDetailRoute extends PageRouteBuilder<void>
 
 Future<void> showProxyGroupCardDetail(
   BuildContext context, {
-  required MihomoSession session,
+  required ControllerViewState session,
   required ProxyGroup group,
   required bool showIcon,
   required bool colored,
@@ -973,7 +1028,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
     required this.loadNodeDetails,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final ProxyGroup group;
   final bool showIcon;
   final bool colored;

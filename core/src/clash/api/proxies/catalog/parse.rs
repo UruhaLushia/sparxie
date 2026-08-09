@@ -3,12 +3,13 @@ use std::collections::{HashMap, HashSet};
 use serde_json::Value;
 
 use super::super::value::value_to_string;
+use crate::utils::text::contains_filter;
 
 pub(super) fn intern_member_list(
     value: Option<&Value>,
-    name_ids: &mut HashMap<String, usize>,
+    name_ids: &mut HashMap<String, u32>,
     filter: &str,
-) -> (Vec<usize>, u32) {
+) -> (Vec<u32>, u32) {
     let Some(items) = value.and_then(Value::as_array) else {
         return (Vec::new(), FNV_OFFSET);
     };
@@ -37,20 +38,20 @@ pub(super) fn push_icon(icon_urls: &mut Vec<String>, seen: &mut HashSet<String>,
     }
 }
 
-fn intern_str_name(name: &str, name_ids: &mut HashMap<String, usize>) -> usize {
+fn intern_str_name(name: &str, name_ids: &mut HashMap<String, u32>) -> u32 {
     if let Some(id) = name_ids.get(name) {
         return *id;
     }
-    let id = name_ids.len();
+    let id = name_ids.len().min(u32::MAX as usize) as u32;
     name_ids.insert(name.to_string(), id);
     id
 }
 
-fn intern_owned_name(name: String, name_ids: &mut HashMap<String, usize>) -> usize {
+fn intern_owned_name(name: String, name_ids: &mut HashMap<String, u32>) -> u32 {
     if let Some(id) = name_ids.get(name.as_str()) {
         return *id;
     }
-    let id = name_ids.len();
+    let id = name_ids.len().min(u32::MAX as usize) as u32;
     name_ids.insert(name, id);
     id
 }
@@ -70,17 +71,4 @@ fn value_matches(value: &Value, filter: &str) -> bool {
         .as_str()
         .map(|s| contains_filter(s, filter))
         .unwrap_or_else(|| contains_filter(&value_to_string(value), filter))
-}
-
-pub(super) fn contains_filter(value: &str, filter: &str) -> bool {
-    if filter.is_empty() {
-        return true;
-    }
-    if value.is_ascii() && filter.is_ascii() {
-        return value
-            .as_bytes()
-            .windows(filter.len())
-            .any(|window| window.eq_ignore_ascii_case(filter.as_bytes()));
-    }
-    value.to_lowercase().contains(filter)
 }

@@ -10,7 +10,7 @@ import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
@@ -53,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
 
   final ctl.ControllerStore store;
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
   final List<SettingsExtra> extras;
   final bool railManagesPages;
 
@@ -411,7 +411,7 @@ class AppSettingsScreen extends StatelessWidget {
     required this.session,
   });
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   Widget build(BuildContext context) {
@@ -452,7 +452,7 @@ class AppSettingsPanel extends StatelessWidget {
     required this.session,
   });
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   Widget build(BuildContext context) {
@@ -951,7 +951,7 @@ class _OnlineResourcesRow extends StatelessWidget {
 /// button. Size is fetched from Rust and refreshed after a clear.
 class _CacheRow extends StatefulWidget {
   const _CacheRow({required this.session});
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<_CacheRow> createState() => _CacheRowState();

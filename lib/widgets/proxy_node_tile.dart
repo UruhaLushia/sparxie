@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../gamepad_navigation.dart';
-import '../session.dart';
+import '../controller_view_state.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';
 import 'delay_badge.dart';

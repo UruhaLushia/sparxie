@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `matches_query`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 class Connection {
   final String id;
@@ -838,6 +838,37 @@ class ProxyProviderEntry {
           subscriptionExpire == other.subscriptionExpire;
 }
 
+class ProxyProviderNodeWindow {
+  final int total;
+  final int filtered;
+  final int offset;
+  final List<ProxyMemberEntry> entries;
+
+  const ProxyProviderNodeWindow({
+    required this.total,
+    required this.filtered,
+    required this.offset,
+    required this.entries,
+  });
+
+  static Future<ProxyProviderNodeWindow> default_() =>
+      RustLib.instance.api.crateBackendApiTypesProxyProviderNodeWindowDefault();
+
+  @override
+  int get hashCode =>
+      total.hashCode ^ filtered.hashCode ^ offset.hashCode ^ entries.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProxyProviderNodeWindow &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          filtered == other.filtered &&
+          offset == other.offset &&
+          entries == other.entries;
+}
+
 class RuleEntry {
   final int index;
   final String ruleType;
@@ -965,6 +996,25 @@ class RulesSummary {
           runtimeType == other.runtimeType &&
           total == other.total &&
           filtered == other.filtered;
+}
+
+class SessionBootstrap {
+  final int ruleCount;
+
+  const SessionBootstrap({required this.ruleCount});
+
+  static Future<SessionBootstrap> default_() =>
+      RustLib.instance.api.crateBackendApiTypesSessionBootstrapDefault();
+
+  @override
+  int get hashCode => ruleCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SessionBootstrap &&
+          runtimeType == other.runtimeType &&
+          ruleCount == other.ruleCount;
 }
 
 class TrafficSample {

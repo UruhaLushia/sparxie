@@ -13,16 +13,6 @@ pub async fn configs(target: MihomoTarget) -> Result<Value, MihomoError> {
     target.client()?.get_json("configs").await
 }
 
-/// `GET /configs` — return only outbound mode, normalized for the launcher.
-pub async fn config_mode(target: MihomoTarget) -> Result<String, MihomoError> {
-    let raw = target.client()?.get_json("configs").await?;
-    Ok(raw
-        .get("mode")
-        .map(value_to_string)
-        .unwrap_or_else(|| "rule".to_string())
-        .to_lowercase())
-}
-
 /// `PATCH /configs` — pass-through. The full schema lives in mihomo's
 /// [`hub/route/configs.go`](https://github.com/MetaCubeX/mihomo/blob/Alpha/hub/route/configs.go);
 /// callers can send any subset of those keys (`mode`, `log-level`, `allow-lan`,
@@ -73,16 +63,6 @@ pub async fn update_geo(target: MihomoTarget) -> Result<(), MihomoError> {
         .forward(Method::POST, "configs/geo", None)
         .await?;
     Ok(())
-}
-
-fn value_to_string(value: &Value) -> String {
-    match value {
-        Value::String(s) => s.clone(),
-        Value::Number(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Null => String::new(),
-        other => other.to_string(),
-    }
 }
 
 fn stash_patch_body(body: Value) -> Result<Value, MihomoError> {

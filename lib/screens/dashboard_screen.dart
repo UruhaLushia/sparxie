@@ -4,7 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../controller.dart' as ctl;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
@@ -22,7 +22,7 @@ class DashboardScreen extends StatefulWidget {
   });
 
   final ctl.ControllerStore store;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();

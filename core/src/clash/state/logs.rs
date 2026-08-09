@@ -27,11 +27,7 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
 }
 
 fn slot_key(target: &MihomoTarget) -> String {
-    format!(
-        "{}|{}",
-        target.base_url.trim_end_matches('/'),
-        target.secret.as_deref().unwrap_or(""),
-    )
+    target.identity_key()
 }
 
 /// Snapshot + receiver are taken under one lock so the ingest task can't

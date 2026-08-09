@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../gamepad_navigation.dart';
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../utils.dart';
 import 'active_listenable_builder.dart';
 import 'app_background.dart';

@@ -208,6 +208,17 @@ impl From<crate::clash::api::ProxyProviderEntry> for ProxyProviderEntry {
     }
 }
 
+impl From<crate::clash::api::ProxyProviderNodeWindow> for ProxyProviderNodeWindow {
+    fn from(value: crate::clash::api::ProxyProviderNodeWindow) -> Self {
+        Self {
+            total: value.total,
+            filtered: value.filtered,
+            offset: value.offset,
+            entries: value.entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 impl From<crate::clash::api::RuleProviderEntry> for RuleProviderEntry {
     fn from(value: crate::clash::api::RuleProviderEntry) -> Self {
         Self {
@@ -236,15 +247,6 @@ impl From<crate::clash::api::RuleEntry> for RuleEntry {
             miss_count: value.miss_count,
             miss_at: value.miss_at,
             has_extra: value.has_extra,
-        }
-    }
-}
-
-impl From<crate::clash::api::RulesSummary> for RulesSummary {
-    fn from(value: crate::clash::api::RulesSummary) -> Self {
-        Self {
-            total: value.total,
-            filtered: value.filtered,
         }
     }
 }

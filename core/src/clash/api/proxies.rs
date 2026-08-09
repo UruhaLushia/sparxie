@@ -61,7 +61,9 @@ pub async fn proxy_detail(target: MihomoTarget, name: String) -> Result<String, 
         return Ok(detail);
     }
     let path = format!("proxies/{}", urlencode(&name));
-    Ok(target.client()?.get_json(&path).await?.to_string())
+    let detail = target.client()?.get_json(&path).await?.to_string();
+    catalog::cache_proxy_detail(&target, name, detail.clone());
+    Ok(detail)
 }
 
 pub async fn select_proxy(

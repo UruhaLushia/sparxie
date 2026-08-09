@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../session.dart';
+import '../controller_view_state.dart';
 import 'anchored_details_trigger.dart';
 import 'proxy_node_details_panel.dart';
 

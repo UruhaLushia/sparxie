@@ -6,7 +6,7 @@ import 'package:sliver_tools/sliver_tools.dart';
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
 import '../rust_api.dart' as rust;
-import '../session.dart';
+import '../controller_view_state.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
 import '../widgets/desktop_title_bar.dart';
@@ -26,7 +26,7 @@ class ProxiesScreen extends StatefulWidget {
   });
 
   final ctl.ControllerStore store;
-  final MihomoSession session;
+  final ControllerViewState session;
   final AppPrefs prefs;
 
   @override
@@ -466,7 +466,7 @@ class _ProxiesBody extends StatefulWidget {
     required this.onTestNode,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final AppPrefs prefs;
   final Set<String> testingGroups;
   final Set<String> expanded;
@@ -832,7 +832,7 @@ class _ProxyCardsBody extends StatefulWidget {
     required this.onTestNode,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final AppPrefs prefs;
   final void Function(ProxyGroup, String) onSelect;
   final void Function(ProxyGroup, String) onToggleFixed;
@@ -883,8 +883,9 @@ class _ProxyCardsBodyState extends State<_ProxyCardsBody> {
         locateCurrent: locateCurrent,
       );
       if (_initialMembersReady(group, locateCurrent) ||
-          DateTime.now().isAfter(deadline))
+          DateTime.now().isAfter(deadline)) {
         return;
+      }
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
   }

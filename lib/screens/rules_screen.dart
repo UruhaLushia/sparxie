@@ -15,10 +15,8 @@ import '../widgets/rule_details_panel.dart';
 
 /// Read-only view of the active backend's routing rules.
 ///
-/// Rulesets run to thousands of entries, so the full list stays in Rust:
-/// [rust.rulesLoad] fetches and caches it, [rust.rulesSetFilter] re-filters
-/// in place, and this screen only ever holds a sliding window of rows pulled
-/// via [rust.rulesWindow] as the user scrolls.
+/// Rulesets stay in the backend cache; this screen only holds the visible
+/// window and requests another window as the user scrolls.
 class RulesScreen extends StatelessWidget {
   const RulesScreen({super.key, required this.store});
 
@@ -47,6 +45,7 @@ class _RulesView extends StatefulWidget {
 class _RulesScreenState extends State<_RulesView> {
   static const int _windowOverscan = 5;
   static const int _windowRefetchMargin = 2;
+  static const int _initialWindowLimit = 48;
   static const double _rowHeight = _ruleCardHeight + _ruleItemSpacing;
   static const Duration _filterDebounce = Duration(milliseconds: 200);
 
@@ -63,7 +62,8 @@ class _RulesScreenState extends State<_RulesView> {
   int _filtered = 0;
 
   int _offset = 0;
-  int _limit = 0;
+  ({int offset, int limit})? _requestedWindow;
+  int _windowEpoch = 0;
   final List<rust.RuleEntry> _window = <rust.RuleEntry>[];
   bool _scheduled = false;
   var _active = true;
@@ -125,12 +125,13 @@ class _RulesScreenState extends State<_RulesView> {
       setState(() => _error = '请先在“后端”中添加一个后端');
       return;
     }
-    _load();
+    unawaited(_load());
   }
 
   void _resetWindow() {
+    _windowEpoch++;
     _offset = 0;
-    _limit = 0;
+    _requestedWindow = null;
     _window.clear();
     _total = 0;
     _filtered = 0;
@@ -138,9 +139,11 @@ class _RulesScreenState extends State<_RulesView> {
 
   /// (Re)fetch the full ruleset into the backend cache, then load the head
   /// window. Used on bind, controller switch, and manual refresh.
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     final target = _target();
     if (target == null) return;
+    final loadEpoch = ++_windowEpoch;
+    final requestedFilter = _filter;
     setState(() {
       _loading = true;
       _error = null;
@@ -148,20 +151,29 @@ class _RulesScreenState extends State<_RulesView> {
     try {
       final summary = await rust.controllerRulesLoad(
         target: target,
-        filter: _filter,
+        filter: requestedFilter,
+        force: force,
       );
-      if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      if (!_isCurrent(loadEpoch)) return;
+      if (requestedFilter != _filter) {
+        _filterPending = true;
+        return;
+      }
       _total = summary.total;
       _filtered = summary.filtered;
-      _offset = 0;
-      _limit = _initialLimit();
-      await _fetchWindow(_offset, _limit);
+      await _fetchWindow(0, _initialLimit(), epoch: loadEpoch);
     } catch (e) {
-      if (mounted) _updateState(() => _error = _formatError(e));
+      if (_isCurrent(loadEpoch)) {
+        _updateState(() => _error = _formatError(e));
+      }
     } finally {
-      if (mounted) {
+      if (_isCurrent(loadEpoch)) {
         _updateState(() => _loading = false);
-        _scheduleEnsureWindow();
+        if (_filterPending && _active) {
+          unawaited(_applyFilter());
+        } else {
+          _scheduleEnsureWindow();
+        }
       }
     }
   }
@@ -170,31 +182,39 @@ class _RulesScreenState extends State<_RulesView> {
     _filter = value.trim();
     _filterPending = true;
     _filterTimer?.cancel();
-    _filterTimer = Timer(_filterDebounce, _applyFilter);
+    _filterTimer = Timer(_filterDebounce, () => unawaited(_applyFilter()));
   }
 
   Future<void> _applyFilter() async {
     _filterTimer = null;
     if (!_active) return;
+    if (_loading) {
+      _filterPending = true;
+      return;
+    }
     _filterPending = false;
     final target = _target();
     if (target == null) return;
+    final filterEpoch = ++_windowEpoch;
+    final requestedFilter = _filter;
     try {
       final summary = await rust.controllerRulesSetFilter(
         target: target,
-        filter: _filter,
+        filter: requestedFilter,
       );
-      if (!mounted || !identical(widget.store.active, _activeKey)) return;
+      if (!_isCurrent(filterEpoch)) return;
+      if (requestedFilter != _filter) {
+        _filterPending = true;
+        return;
+      }
       if (!_active) {
         _filterPending = true;
         return;
       }
       _total = summary.total;
       _filtered = summary.filtered;
-      _offset = 0;
-      _limit = _initialLimit();
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
-      await _fetchWindow(_offset, _limit);
+      await _fetchWindow(0, _initialLimit(), epoch: filterEpoch);
       _scheduleEnsureWindow();
     } catch (_) {
       // Filter failures are non-fatal; the list just stays as-is.
@@ -206,7 +226,7 @@ class _RulesScreenState extends State<_RulesView> {
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      if (_active) _ensureWindow();
+      if (mounted && _active) _ensureWindow();
     });
   }
 
@@ -230,34 +250,35 @@ class _RulesScreenState extends State<_RulesView> {
         .toInt();
     final end = (safeLast + 1 + _windowOverscan).clamp(0, _filtered).toInt();
     final desiredLimit = end - desiredOffset;
-    final cachedEnd = _offset + _limit;
+    final cachedEnd = _offset + _window.length;
     final covered =
         _window.isNotEmpty &&
-        safeFirst >= _offset + _windowRefetchMargin &&
-        safeLast < cachedEnd - _windowRefetchMargin;
-    final unchanged =
-        desiredOffset == _offset &&
-        desiredLimit == _limit &&
-        _window.isNotEmpty;
-    if (covered || unchanged) {
+        (safeFirst >= _offset + _windowRefetchMargin || _offset == 0) &&
+        (safeLast < cachedEnd - _windowRefetchMargin || cachedEnd >= _filtered);
+    final oversized = _window.length > desiredLimit * 2;
+    final desiredWindow = (offset: desiredOffset, limit: desiredLimit);
+    if (covered && !oversized) {
+      _requestedWindow = desiredWindow;
       return;
     }
-    _offset = desiredOffset;
-    _limit = desiredLimit;
-    _fetchWindow(desiredOffset, desiredLimit);
+    if (desiredWindow == _requestedWindow) return;
+    unawaited(_fetchWindow(desiredOffset, desiredLimit));
   }
 
   int _initialLimit() {
     if (!_scrollController.hasClients) {
-      return (_windowOverscan + 1).clamp(0, _filtered).toInt();
+      return _initialWindowLimit.clamp(0, _filtered).toInt();
     }
     final visibleRows =
         (_scrollController.position.viewportDimension / _rowHeight).ceil();
     return (visibleRows + _windowOverscan * 2).clamp(0, _filtered).toInt();
   }
 
-  Future<void> _fetchWindow(int offset, int limit) async {
+  Future<void> _fetchWindow(int offset, int limit, {int? epoch}) async {
     final target = _target();
+    final requestEpoch = epoch ?? _windowEpoch;
+    final request = (offset: offset, limit: limit);
+    _requestedWindow = request;
     if (target == null || limit <= 0) {
       if (mounted) _updateState(() => _window.clear());
       return;
@@ -268,21 +289,25 @@ class _RulesScreenState extends State<_RulesView> {
         offset: offset,
         limit: limit,
       );
-      if (!mounted ||
-          !identical(widget.store.active, _activeKey) ||
-          offset != _offset ||
-          limit != _limit) {
-        return;
-      }
+      if (!_isCurrent(requestEpoch) || request != _requestedWindow) return;
       _updateState(() {
+        _offset = offset;
         _window
           ..clear()
           ..addAll(rows);
       });
     } catch (_) {
+      if (_isCurrent(requestEpoch) && request == _requestedWindow) {
+        _requestedWindow = null;
+      }
       // Silent — a later scroll or frame retriggers.
     }
   }
+
+  bool _isCurrent(int epoch) =>
+      mounted &&
+      identical(widget.store.active, _activeKey) &&
+      epoch == _windowEpoch;
 
   rust.RuleEntry? _ruleAt(int index) {
     final local = index - _offset;
@@ -347,7 +372,7 @@ class _RulesScreenState extends State<_RulesView> {
           actions: [
             IconButton(
               tooltip: '刷新',
-              onPressed: _loading ? null : _load,
+              onPressed: _loading ? null : () => _load(force: true),
               icon: const Icon(Icons.refresh),
             ),
           ],

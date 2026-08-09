@@ -11,6 +11,7 @@ import 'backend/api/proxies.dart';
 import 'backend/api/proxy_delay.dart';
 import 'backend/api/resources.dart';
 import 'backend/api/rules.dart';
+import 'backend/api/session.dart';
 import 'backend/api/streams.dart';
 import 'backend/api/tailscale.dart';
 import 'backend/api/target.dart';
@@ -266,6 +267,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProxyProviderEntry dco_decode_proxy_provider_entry(dynamic raw);
 
   @protected
+  ProxyProviderNodeWindow dco_decode_proxy_provider_node_window(dynamic raw);
+
+  @protected
   RuleEntry dco_decode_rule_entry(dynamic raw);
 
   @protected
@@ -273,6 +277,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RulesSummary dco_decode_rules_summary(dynamic raw);
+
+  @protected
+  SessionBootstrap dco_decode_session_bootstrap(dynamic raw);
 
   @protected
   StunTestProgress dco_decode_stun_test_progress(dynamic raw);
@@ -597,6 +604,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProxyProviderNodeWindow sse_decode_proxy_provider_node_window(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RuleEntry sse_decode_rule_entry(SseDeserializer deserializer);
 
   @protected
@@ -606,6 +618,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RulesSummary sse_decode_rules_summary(SseDeserializer deserializer);
+
+  @protected
+  SessionBootstrap sse_decode_session_bootstrap(SseDeserializer deserializer);
 
   @protected
   StunTestProgress sse_decode_stun_test_progress(SseDeserializer deserializer);
@@ -1022,6 +1037,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_proxy_provider_node_window(
+    ProxyProviderNodeWindow self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_rule_entry(RuleEntry self, SseSerializer serializer);
 
   @protected
@@ -1032,6 +1053,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_rules_summary(RulesSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_session_bootstrap(
+    SessionBootstrap self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_stun_test_progress(

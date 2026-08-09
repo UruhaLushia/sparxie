@@ -101,12 +101,7 @@ fn interval_or_default(interval_ms: u32) -> u32 {
 }
 
 fn target_key(target: &MihomoTarget, interval_ms: u32) -> String {
-    format!(
-        "{}|{}|{}",
-        target.base_url.trim_end_matches('/'),
-        target.secret.as_deref().unwrap_or(""),
-        interval_ms,
-    )
+    format!("{}|{interval_ms}", target.identity_key())
 }
 
 async fn slot_for(target: &MihomoTarget, interval_ms: u32) -> Option<Arc<TargetSlot>> {

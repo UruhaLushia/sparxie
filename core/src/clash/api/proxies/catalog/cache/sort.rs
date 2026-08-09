@@ -2,7 +2,7 @@ use super::CachedNode;
 use crate::clash::api::proxies::catalog::ProxyMemberSort;
 
 pub(super) fn sort_members(
-    member_ids: &mut [usize],
+    member_ids: &mut [u32],
     sort: ProxyMemberSort,
     lower_names: &[String],
     nodes: &[Option<CachedNode>],
@@ -22,13 +22,16 @@ pub(super) fn sort_members(
     }
 }
 
-fn lower_name(names: &[String], id: usize) -> &str {
-    names.get(id).map(String::as_str).unwrap_or_default()
+fn lower_name(names: &[String], id: u32) -> &str {
+    names
+        .get(id as usize)
+        .map(String::as_str)
+        .unwrap_or_default()
 }
 
-fn delay_of(nodes: &[Option<CachedNode>], id: usize) -> i32 {
+fn delay_of(nodes: &[Option<CachedNode>], id: u32) -> i32 {
     nodes
-        .get(id)
+        .get(id as usize)
         .and_then(Option::as_ref)
         .map(|node| node.delay)
         .unwrap_or(-1)

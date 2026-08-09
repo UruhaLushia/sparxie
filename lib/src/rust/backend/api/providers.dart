@@ -9,22 +9,27 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
-Future<String> controllerProxyProviders({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiProvidersControllerProxyProviders(
-      target: target,
-    );
-
 Future<List<ProxyProviderEntry>> controllerProxyProviderCatalog({
   required BackendTarget target,
-}) => RustLib.instance.api
-    .crateBackendApiProvidersControllerProxyProviderCatalog(target: target);
+  required bool force,
+}) =>
+    RustLib.instance.api.crateBackendApiProvidersControllerProxyProviderCatalog(
+      target: target,
+      force: force,
+    );
 
-Future<List<ProxyMemberEntry>> controllerProxyProviderNodes({
+Future<ProxyProviderNodeWindow> controllerProxyProviderNodes({
   required BackendTarget target,
   required String name,
+  required String filter,
+  required int offset,
+  required int limit,
 }) => RustLib.instance.api.crateBackendApiProvidersControllerProxyProviderNodes(
   target: target,
   name: name,
+  filter: filter,
+  offset: offset,
+  limit: limit,
 );
 
 Future<void> controllerProxyProviderUpdate({
@@ -45,15 +50,14 @@ Future<void> controllerProxyProviderHealthcheck({
       name: name,
     );
 
-Future<String> controllerRuleProviders({required BackendTarget target}) =>
-    RustLib.instance.api.crateBackendApiProvidersControllerRuleProviders(
-      target: target,
-    );
-
 Future<List<RuleProviderEntry>> controllerRuleProviderCatalog({
   required BackendTarget target,
-}) => RustLib.instance.api
-    .crateBackendApiProvidersControllerRuleProviderCatalog(target: target);
+  required bool force,
+}) =>
+    RustLib.instance.api.crateBackendApiProvidersControllerRuleProviderCatalog(
+      target: target,
+      force: force,
+    );
 
 Future<void> controllerRuleProviderUpdate({
   required BackendTarget target,

@@ -84,7 +84,7 @@ impl Connection {
         if query.is_empty() {
             return true;
         }
-        let contains = |value: &str| value.to_lowercase().contains(query);
+        let contains = |value: &str| crate::utils::text::contains_filter(value, query);
         contains(&self.host)
             || contains(&self.network)
             || contains(&self.conn_type)
@@ -238,6 +238,14 @@ pub struct ProxyMemberWindow {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct ProxyProviderNodeWindow {
+    pub total: u32,
+    pub filtered: u32,
+    pub offset: u32,
+    pub entries: Vec<ProxyMemberEntry>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct ProxyDelayEntry {
     pub name: String,
     pub delay: i32,
@@ -302,6 +310,11 @@ pub struct RuleEntry {
 pub struct RulesSummary {
     pub total: u32,
     pub filtered: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SessionBootstrap {
+    pub rule_count: u32,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -63,16 +63,6 @@ pub async fn configs(target: SingBoxTarget) -> Result<Value, MihomoError> {
     }))
 }
 
-pub async fn config_mode(target: SingBoxTarget) -> Result<String, MihomoError> {
-    Ok(target
-        .client()
-        .await?
-        .get_clash_mode_status(())
-        .await?
-        .into_inner()
-        .current_mode)
-}
-
 pub async fn set_config_mode(target: SingBoxTarget, mode: String) -> Result<(), MihomoError> {
     target
         .client()

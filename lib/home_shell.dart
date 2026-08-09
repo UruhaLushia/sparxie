@@ -10,7 +10,7 @@ class HomeShell extends StatefulWidget {
 
   final ControllerStore store;
   final AppPrefs prefs;
-  final MihomoSession session;
+  final ControllerViewState session;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -724,7 +724,7 @@ class _NavCardGrid extends StatelessWidget {
   });
 
   final ControllerStore store;
-  final MihomoSession session;
+  final ControllerViewState session;
   final List<AppNavDestination> destinations;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -886,7 +886,7 @@ class _StatusHeroCard extends StatelessWidget {
   });
 
   final ControllerStore store;
-  final MihomoSession session;
+  final ControllerViewState session;
   final bool selected;
   final VoidCallback? onTap;
   final FocusNode? focusNode;
@@ -1011,7 +1011,7 @@ class _TrafficHeroCard extends StatelessWidget {
     this.focusNode,
   });
 
-  final MihomoSession session;
+  final ControllerViewState session;
   final bool selected;
   final VoidCallback? onTap;
   final FocusNode? focusNode;
@@ -1115,7 +1115,7 @@ class _RuleNavCard extends StatelessWidget {
     required this.onTap,
     this.focusNode,
   });
-  final MihomoSession session;
+  final ControllerViewState session;
   final bool selected;
   final VoidCallback onTap;
   final FocusNode? focusNode;
@@ -1140,7 +1140,7 @@ class _RuleNavCard extends StatelessWidget {
 
 class _GroupCountBadge extends StatelessWidget {
   const _GroupCountBadge({required this.session, required this.selected});
-  final MihomoSession session;
+  final ControllerViewState session;
   final bool selected;
 
   @override
@@ -1158,7 +1158,7 @@ class _GroupCountBadge extends StatelessWidget {
 
 class _ConnectionCountBadge extends StatelessWidget {
   const _ConnectionCountBadge({required this.session, required this.selected});
-  final MihomoSession session;
+  final ControllerViewState session;
   final bool selected;
 
   @override
