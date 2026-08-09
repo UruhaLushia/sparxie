@@ -549,6 +549,23 @@ Widget _headerRow(
   );
 }
 
+Widget _groupDelayButton(
+  _CardStyle style, {
+  bool testing = false,
+  VoidCallback? onPressed,
+}) {
+  return IconButton(
+    tooltip: onPressed == null ? null : '组内延迟测试',
+    onPressed: testing ? null : onPressed,
+    icon: testing
+        ? SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: style.icon),
+          )
+        : Icon(Icons.speed_rounded, color: style.icon),
+  );
+}
+
 Widget _detailBody(
   ProxyGroup group,
   bool showIcon,
@@ -1086,10 +1103,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
               group,
               widget.showIcon,
               style,
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Icon(Icons.speed_rounded, color: style.icon),
-              ),
+              _groupDelayButton(style, testing: _testing),
               scrollController: scrollController,
               scrollable: false,
             ),
@@ -1238,18 +1252,10 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                       group,
                       widget.showIcon,
                       style,
-                      IconButton(
-                        tooltip: '组内延迟测试',
-                        onPressed: _testing ? null : _runTest,
-                        icon: _testing
-                            ? SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: style.icon,
-                                ),
-                              )
-                            : Icon(Icons.speed_rounded, color: style.icon),
+                      _groupDelayButton(
+                        style,
+                        testing: _testing,
+                        onPressed: _runTest,
                       ),
                       onSelect: widget.onSelect,
                       onToggleFixed: widget.onToggleFixed,
