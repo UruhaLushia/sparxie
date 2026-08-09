@@ -158,6 +158,10 @@ pub(super) fn has_catalog(target: &MihomoTarget) -> bool {
         .is_some_and(|(cached_key, _)| cached_key == &key)
 }
 
+pub(super) fn has_group(target: &MihomoTarget, group_name: &str) -> bool {
+    with_catalog(target, |catalog| catalog.groups.contains_key(group_name)).unwrap_or(false)
+}
+
 pub(super) fn member_entries(
     target: &MihomoTarget,
     group_name: &str,
@@ -244,6 +248,39 @@ pub(super) fn member_sections(
         if has_provider { sections } else { Vec::new() }
     })
     .unwrap_or_default()
+}
+
+pub(super) fn member_position(
+    target: &MihomoTarget,
+    group_name: &str,
+    name: &str,
+    member_sort: ProxyMemberSort,
+    group_by_provider: bool,
+) -> Option<(usize, usize)> {
+    with_catalog(target, |catalog| {
+        if needs_lower_names(member_sort) {
+            catalog.ensure_lower_names();
+        }
+        let CachedCatalog {
+            names,
+            lower_names,
+            nodes,
+            groups,
+            ..
+        } = catalog;
+        let group = groups.get_mut(group_name)?;
+        let ids = group.member_ids(
+            member_sort,
+            group_by_provider,
+            lower_names.as_deref().unwrap_or(&[]),
+            nodes,
+        );
+        let index = ids
+            .iter()
+            .position(|id| names.get(*id).is_some_and(|member| member == name))?;
+        Some((index, ids.len()))
+    })
+    .flatten()
 }
 
 pub(super) fn group_needs_provider_nodes(target: &MihomoTarget, group_name: &str) -> bool {

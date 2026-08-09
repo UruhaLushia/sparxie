@@ -343,11 +343,17 @@ class MihomoSession {
   Future<void> ensureProxyGroupMembers(
     String group,
     int firstIndex,
-    int lastIndex,
-  ) async {
+    int lastIndex, {
+    bool locateCurrent = false,
+  }) async {
     final t = _target;
     if (t == null) return;
-    final request = proxies.memberWindowRequest(group, firstIndex, lastIndex);
+    final request = proxies.memberWindowRequest(
+      group,
+      firstIndex,
+      lastIndex,
+      force: locateCurrent,
+    );
     if (request == null) return;
     final groupByProvider = _groupProxyMembersByProvider;
     final loadKey = (
@@ -356,13 +362,19 @@ class MihomoSession {
       groupByProvider: groupByProvider,
     );
     if (_proxyMemberLoads.contains(loadKey)) {
+      final previous = _queuedProxyMemberLoads[loadKey];
       _queuedProxyMemberLoads[loadKey] = _QueuedProxyMemberLoad(
         target: t,
         group: group,
-        firstIndex: firstIndex,
-        lastIndex: lastIndex,
+        firstIndex: previous == null
+            ? firstIndex
+            : math.min(previous.firstIndex, firstIndex),
+        lastIndex: previous == null
+            ? lastIndex
+            : math.max(previous.lastIndex, lastIndex),
         sort: _proxyMemberSort,
         groupByProvider: groupByProvider,
+        locateCurrent: locateCurrent || (previous?.locateCurrent ?? false),
       );
       return;
     }
@@ -373,6 +385,7 @@ class MihomoSession {
       request,
       _proxyMemberSort,
       groupByProvider,
+      locateCurrent,
     );
   }
 
@@ -383,6 +396,7 @@ class MihomoSession {
     ProxyMemberWindowRequest request,
     rust.ProxyMemberSort sort,
     bool groupByProvider,
+    bool locateCurrent,
   ) async {
     if (!_proxyMemberLoads.add(loadKey)) return;
     try {
@@ -393,6 +407,7 @@ class MihomoSession {
         limit: request.limit,
         memberSort: sort,
         groupByProvider: groupByProvider,
+        currentName: locateCurrent ? proxies.memberCurrentName(group) : null,
       );
       if (_target == target &&
           sort == _proxyMemberSort &&
@@ -400,9 +415,10 @@ class MihomoSession {
         proxies.applyGroupMembers(
           group,
           request.membersHash,
-          request.offset,
+          window.offset,
           window.entries,
           sections: window.sections,
+          currentIndex: locateCurrent ? window.currentIndex : null,
         );
         _clearError(_SessionErrorSource.proxyMember);
       }
@@ -431,6 +447,7 @@ class MihomoSession {
       queued.group,
       queued.firstIndex,
       queued.lastIndex,
+      force: queued.locateCurrent,
     );
     if (nextRequest == null) return;
     unawaited(
@@ -441,6 +458,7 @@ class MihomoSession {
         nextRequest,
         queued.sort,
         queued.groupByProvider,
+        queued.locateCurrent,
       ),
     );
   }
@@ -1018,6 +1036,7 @@ class _QueuedProxyMemberLoad {
     required this.lastIndex,
     required this.sort,
     required this.groupByProvider,
+    required this.locateCurrent,
   });
 
   final rust.BackendTarget target;
@@ -1026,4 +1045,5 @@ class _QueuedProxyMemberLoad {
   final int lastIndex;
   final rust.ProxyMemberSort sort;
   final bool groupByProvider;
+  final bool locateCurrent;
 }

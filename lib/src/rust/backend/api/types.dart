@@ -747,22 +747,35 @@ enum ProxyMemberSort {
 }
 
 class ProxyMemberWindow {
+  final int offset;
+  final int currentIndex;
   final List<ProxyMemberEntry> entries;
   final List<ProxyMemberSection> sections;
 
-  const ProxyMemberWindow({required this.entries, required this.sections});
+  const ProxyMemberWindow({
+    required this.offset,
+    required this.currentIndex,
+    required this.entries,
+    required this.sections,
+  });
 
   static Future<ProxyMemberWindow> default_() =>
       RustLib.instance.api.crateBackendApiTypesProxyMemberWindowDefault();
 
   @override
-  int get hashCode => entries.hashCode ^ sections.hashCode;
+  int get hashCode =>
+      offset.hashCode ^
+      currentIndex.hashCode ^
+      entries.hashCode ^
+      sections.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ProxyMemberWindow &&
           runtimeType == other.runtimeType &&
+          offset == other.offset &&
+          currentIndex == other.currentIndex &&
           entries == other.entries &&
           sections == other.sections;
 }

@@ -559,6 +559,7 @@ Widget _detailBody(
   Future<void> Function(String)? onTestNode,
   Future<String> Function(String)? loadNodeDetails,
   ValueChanged<int>? onMissingMember,
+  ScrollController? scrollController,
   bool scrollable = true,
 }) {
   return Column(
@@ -575,6 +576,7 @@ Widget _detailBody(
             onTestNode: onTestNode,
             loadNodeDetails: loadNodeDetails,
             onMissingMember: onMissingMember,
+            scrollController: scrollController,
             scrollable: scrollable,
           ),
         ),
@@ -591,6 +593,7 @@ Widget _memberGrid(
   Future<void> Function(String)? onTestNode,
   Future<String> Function(String)? loadNodeDetails,
   ValueChanged<int>? onMissingMember,
+  ScrollController? scrollController,
   bool scrollable = true,
 }) {
   if (group.memberCount == 0) {
@@ -603,34 +606,48 @@ Widget _memberGrid(
     final slivers = <Widget>[];
     for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
       final section = sections[sectionIndex];
-      final offset = section.offset.clamp(0, group.memberCount).toInt();
-      final count = section.count.clamp(0, group.memberCount - offset).toInt();
+      final (:offset, :count) = _memberSectionRange(
+        section.offset,
+        section.count,
+        group.memberCount,
+      );
       if (count == 0) continue;
       if (section.provider.isEmpty) {
         slivers.add(
           SliverToBoxAdapter(
-            child: SizedBox(height: sectionIndex == 0 ? 4 : 14),
+            child: SizedBox(
+              height: _memberSectionHeaderExtent(
+                sectionIndex,
+                section.provider,
+              ),
+            ),
           ),
         );
       } else {
         slivers.add(
           SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                12,
-                sectionIndex == 0 ? 4 : 14,
-                12,
-                8,
-              ),
-              child: Text(
+            child: SizedBox(
+              height: _memberSectionHeaderExtent(
+                sectionIndex,
                 section.provider,
-                style: TextStyle(
-                  color: style.title,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  sectionIndex == 0 ? 4 : 14,
+                  12,
+                  8,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  section.provider,
+                  style: TextStyle(
+                    color: style.title,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ),
@@ -661,11 +678,13 @@ Widget _memberGrid(
     }
     slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
     return CustomScrollView(
+      controller: scrollController,
       physics: scrollable ? null : const NeverScrollableScrollPhysics(),
       slivers: slivers,
     );
   }
   return GridView.builder(
+    controller: scrollController,
     padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
     physics: scrollable ? null : const NeverScrollableScrollPhysics(),
     gridDelegate: _cardMemberGridDelegate,
@@ -685,11 +704,96 @@ Widget _memberGrid(
 }
 
 const _cardMemberGridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-  maxCrossAxisExtent: 260,
-  mainAxisSpacing: 8,
-  crossAxisSpacing: 8,
-  mainAxisExtent: 64,
+  maxCrossAxisExtent: _cardMemberMaxCrossAxisExtent,
+  mainAxisSpacing: _cardMemberSpacing,
+  crossAxisSpacing: _cardMemberSpacing,
+  mainAxisExtent: _cardMemberExtent,
 );
+
+const _cardMemberMaxCrossAxisExtent = 260.0;
+const _cardMemberExtent = 64.0;
+const _cardMemberSpacing = 8.0;
+const _cardDetailHeaderExtent = 68.0;
+
+({int offset, int count}) _memberSectionRange(
+  int offset,
+  int count,
+  int memberCount,
+) {
+  final clampedOffset = offset.clamp(0, memberCount).toInt();
+  return (
+    offset: clampedOffset,
+    count: count.clamp(0, memberCount - clampedOffset).toInt(),
+  );
+}
+
+double _memberSectionHeaderExtent(int index, String provider) {
+  if (provider.isEmpty) return index == 0 ? 4 : 14;
+  return index == 0 ? 32 : 42;
+}
+
+double _memberTopOffset(ProxyGroup group, int memberIndex, int columns) {
+  final sections = group.memberSections;
+  if (sections.isEmpty) {
+    return 4 +
+        (memberIndex ~/ columns) * (_cardMemberExtent + _cardMemberSpacing);
+  }
+
+  var offset = 0.0;
+  for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+    final section = sections[sectionIndex];
+    final range = _memberSectionRange(
+      section.offset,
+      section.count,
+      group.memberCount,
+    );
+    if (range.count == 0) continue;
+    offset += _memberSectionHeaderExtent(sectionIndex, section.provider);
+    if (memberIndex >= range.offset &&
+        memberIndex < range.offset + range.count) {
+      return offset +
+          ((memberIndex - range.offset) ~/ columns) *
+              (_cardMemberExtent + _cardMemberSpacing);
+    }
+    offset += _memberGridExtent(range.count, columns);
+  }
+  return 0;
+}
+
+double _memberGridExtent(int count, int columns) {
+  final rows = (count + columns - 1) ~/ columns;
+  if (rows == 0) return 0;
+  return rows * _cardMemberExtent + (rows - 1) * _cardMemberSpacing;
+}
+
+double _memberContentExtent(ProxyGroup group, int columns) {
+  final sections = group.memberSections;
+  if (sections.isEmpty) {
+    return 16 + _memberGridExtent(group.memberCount, columns);
+  }
+
+  var extent = 12.0;
+  for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+    final section = sections[sectionIndex];
+    final range = _memberSectionRange(
+      section.offset,
+      section.count,
+      group.memberCount,
+    );
+    if (range.count == 0) continue;
+    extent += _memberSectionHeaderExtent(sectionIndex, section.provider);
+    extent += _memberGridExtent(range.count, columns);
+  }
+  return extent;
+}
+
+int _memberGridColumns(double detailWidth) {
+  final gridWidth = (detailWidth - 24).clamp(0.0, double.infinity);
+  return (gridWidth / (_cardMemberMaxCrossAxisExtent + _cardMemberSpacing))
+      .ceil()
+      .clamp(1, 4)
+      .toInt();
+}
 
 Widget _memberTile(
   BuildContext context,
@@ -817,6 +921,7 @@ Future<void> showProxyGroupCardDetail(
   required bool showIcon,
   required bool colored,
   required bool showDelay,
+  required bool autoLocate,
   required Future<void> Function() onTestGroup,
   required ValueChanged<String> onSelect,
   required ValueChanged<String> onToggleFixed,
@@ -833,6 +938,7 @@ Future<void> showProxyGroupCardDetail(
       showIcon: showIcon,
       colored: colored,
       showDelay: showDelay,
+      autoLocate: autoLocate,
       onTestGroup: onTestGroup,
       onSelect: onSelect,
       onToggleFixed: onToggleFixed,
@@ -859,6 +965,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
     required this.showIcon,
     required this.colored,
     required this.showDelay,
+    required this.autoLocate,
     required this.onTestGroup,
     required this.onSelect,
     required this.onToggleFixed,
@@ -871,6 +978,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
   final bool showIcon;
   final bool colored;
   final bool showDelay;
+  final bool autoLocate;
   final Future<void> Function() onTestGroup;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onToggleFixed;
@@ -882,6 +990,7 @@ class _ProxyGroupCardDetail extends StatefulWidget {
 }
 
 class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
+  ScrollController? _memberScroll;
   bool _testing = false;
   Size _detailSize = Size.zero;
 
@@ -963,7 +1072,34 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   void dispose() {
     widget.session.proxies.removeListener(_guard);
     widget.session.proxies.releaseGroupMembers(widget.group.name);
+    _memberScroll?.dispose();
     super.dispose();
+  }
+
+  ScrollController _memberScrollController(int columns, double detailHeight) {
+    final existing = _memberScroll;
+    if (existing != null) return existing;
+
+    final group = widget.group;
+    if (!widget.autoLocate || group.hidesExactNow || group.now.value.isEmpty) {
+      return _memberScroll = ScrollController();
+    }
+    final memberIndex = group.locatedMemberIndex;
+    if (memberIndex == null || memberIndex < 0) {
+      return _memberScroll = ScrollController();
+    }
+    final viewportHeight = (detailHeight - _cardDetailHeaderExtent).clamp(
+      0.0,
+      double.infinity,
+    );
+    final memberTop = _memberTopOffset(group, memberIndex, columns);
+    final initialOffset =
+        memberTop + _cardMemberExtent / 2 - viewportHeight / 2;
+    final maxOffset = (_memberContentExtent(group, columns) - viewportHeight)
+        .clamp(0.0, double.infinity);
+    return _memberScroll = ScrollController(
+      initialScrollOffset: initialOffset.clamp(0.0, maxOffset).toDouble(),
+    );
   }
 
   // The catalog can drop (and dispose) this group on refresh; keeping the
@@ -1017,12 +1153,14 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth.clamp(0.0, 480.0);
-            final cols = ((width - 24) / 260).ceil().clamp(1, 4);
-            final count = group.memberCount;
-            final rows = count == 0 ? 1 : (count + cols - 1) ~/ cols;
+            final cols = _memberGridColumns(width);
             final maxHeight = constraints.maxHeight.clamp(0.0, 520.0);
-            final height = (rows * 72.0 + 76).clamp(0.0, maxHeight);
+            final contentHeight = group.memberCount == 0
+                ? 148.0
+                : _cardDetailHeaderExtent + _memberContentExtent(group, cols);
+            final height = contentHeight.clamp(0.0, maxHeight);
             _detailSize = Size(width, height);
+            final memberScroll = _memberScrollController(cols, height);
             return Center(
               child: SizedBox(
                 width: width,
@@ -1055,6 +1193,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                       onTestNode: widget.onTestNode,
                       loadNodeDetails: widget.loadNodeDetails,
                       onMissingMember: _queueMemberLoad,
+                      scrollController: memberScroll,
                     ),
                   ),
                 ),

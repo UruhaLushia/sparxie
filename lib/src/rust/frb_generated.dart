@@ -352,6 +352,7 @@ abstract class RustLibApi extends BaseApi {
     required int limit,
     required ProxyMemberSort memberSort,
     required bool groupByProvider,
+    String? currentName,
   });
 
   Future<List<ProxyProviderEntry>>
@@ -2440,6 +2441,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required int limit,
     required ProxyMemberSort memberSort,
     required bool groupByProvider,
+    String? currentName,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2451,6 +2453,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(limit, serializer);
           sse_encode_proxy_member_sort(memberSort, serializer);
           sse_encode_bool(groupByProvider, serializer);
+          sse_encode_opt_String(currentName, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2463,7 +2466,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_mihomo_error,
         ),
         constMeta: kCrateBackendApiProxiesControllerProxyGroupMembersConstMeta,
-        argValues: [target, group, offset, limit, memberSort, groupByProvider],
+        argValues: [
+          target,
+          group,
+          offset,
+          limit,
+          memberSort,
+          groupByProvider,
+          currentName,
+        ],
         apiImpl: this,
       ),
     );
@@ -2480,6 +2491,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "limit",
           "memberSort",
           "groupByProvider",
+          "currentName",
         ],
       );
 
@@ -5640,11 +5652,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProxyMemberWindow dco_decode_proxy_member_window(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return ProxyMemberWindow(
-      entries: dco_decode_list_proxy_member_entry(arr[0]),
-      sections: dco_decode_list_proxy_member_section(arr[1]),
+      offset: dco_decode_u_32(arr[0]),
+      currentIndex: dco_decode_i_32(arr[1]),
+      entries: dco_decode_list_proxy_member_entry(arr[2]),
+      sections: dco_decode_list_proxy_member_section(arr[3]),
     );
   }
 
@@ -6793,9 +6807,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_offset = sse_decode_u_32(deserializer);
+    var var_currentIndex = sse_decode_i_32(deserializer);
     var var_entries = sse_decode_list_proxy_member_entry(deserializer);
     var var_sections = sse_decode_list_proxy_member_section(deserializer);
-    return ProxyMemberWindow(entries: var_entries, sections: var_sections);
+    return ProxyMemberWindow(
+      offset: var_offset,
+      currentIndex: var_currentIndex,
+      entries: var_entries,
+      sections: var_sections,
+    );
   }
 
   @protected
@@ -7950,6 +7971,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.offset, serializer);
+    sse_encode_i_32(self.currentIndex, serializer);
     sse_encode_list_proxy_member_entry(self.entries, serializer);
     sse_encode_list_proxy_member_section(self.sections, serializer);
   }

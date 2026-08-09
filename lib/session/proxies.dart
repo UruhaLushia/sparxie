@@ -149,10 +149,18 @@ class ProxiesNotifier extends ChangeNotifier {
   ProxyMemberWindowRequest? memberWindowRequest(
     String groupName,
     int firstIndex,
-    int lastIndex,
-  ) {
-    return _groupsById[groupName]?._windowRequest(firstIndex, lastIndex);
+    int lastIndex, {
+    bool force = false,
+  }) {
+    return _groupsById[groupName]?._windowRequest(
+      firstIndex,
+      lastIndex,
+      force: force,
+    );
   }
+
+  String memberCurrentName(String groupName) =>
+      _groupsById[groupName]?.now.value ?? '';
 
   ProxyMemberWindowRequest? currentMemberWindowRequest(String groupName) {
     return _groupsById[groupName]?._currentWindowRequest();
@@ -164,11 +172,17 @@ class ProxiesNotifier extends ChangeNotifier {
     int offset,
     List<rust.ProxyMemberEntry> entries, {
     List<rust.ProxyMemberSection>? sections,
+    int? currentIndex,
   }) {
     final group = _groupsById[groupName];
     if (group == null) return;
     if (group._membersHash != membersHash) return;
-    if (group._setMemberWindow(offset, entries, sections: sections)) {
+    if (group._setMemberWindow(
+      offset,
+      entries,
+      sections: sections,
+      currentIndex: currentIndex,
+    )) {
       group._notifyMembers();
     }
   }
@@ -250,6 +264,7 @@ class ProxyGroup {
   List<ProxyMember> _members = const <ProxyMember>[];
   List<rust.ProxyMemberSection> _memberSections =
       const <rust.ProxyMemberSection>[];
+  int? _currentMemberIndex;
   final ValueNotifier<int> _membersVersion;
 
   String get type => _type;
@@ -266,6 +281,7 @@ class ProxyGroup {
   String get testUrl => _testUrl;
   int get memberCount => _memberCount;
   List<rust.ProxyMemberSection> get memberSections => _memberSections;
+  int? get locatedMemberIndex => _currentMemberIndex;
 
   final ValueNotifier<String> now;
   final ValueNotifier<int> nowDelay;
@@ -310,9 +326,11 @@ class ProxyGroup {
   void _setNow(String value) {
     if (now.value == value) return;
     now.value = value;
-    for (final member in _members) {
-      if (member.name == value) {
-        _setNowDelay(member.delay.value);
+    _currentMemberIndex = null;
+    for (var index = 0; index < _members.length; index++) {
+      if (_members[index].name == value) {
+        _currentMemberIndex = _memberOffset + index;
+        _setNowDelay(_members[index].delay.value);
         return;
       }
     }
@@ -341,12 +359,17 @@ class ProxyGroup {
     }
   }
 
-  ProxyMemberWindowRequest? _windowRequest(int firstIndex, int lastIndex) {
+  ProxyMemberWindowRequest? _windowRequest(
+    int firstIndex,
+    int lastIndex, {
+    bool force = false,
+  }) {
     if (_memberCount <= 0) return null;
     final first = firstIndex.clamp(0, _memberCount - 1);
     final last = lastIndex.clamp(first, _memberCount - 1);
     final cachedEnd = _memberOffset + _members.length;
-    if (_members.isNotEmpty &&
+    if (!force &&
+        _members.isNotEmpty &&
         first >= _memberOffset + _memberRefetchMargin &&
         last < cachedEnd - _memberRefetchMargin) {
       return null;
@@ -358,7 +381,8 @@ class ProxyGroup {
     final center = (first + last) ~/ 2;
     final maxOffset = (_memberCount - limit).clamp(0, _memberCount).toInt();
     final offset = (center - limit ~/ 2).clamp(0, maxOffset).toInt();
-    if (_members.isNotEmpty &&
+    if (!force &&
+        _members.isNotEmpty &&
         offset == _memberOffset &&
         limit == _members.length) {
       return null;
@@ -379,7 +403,11 @@ class ProxyGroup {
     int offset,
     List<rust.ProxyMemberEntry> entries, {
     List<rust.ProxyMemberSection>? sections,
+    int? currentIndex,
   }) {
+    final locationChanged =
+        currentIndex != null && currentIndex != _currentMemberIndex;
+    if (currentIndex != null) _currentMemberIndex = currentIndex;
     var sectionsChanged = false;
     if (sections != null && !listEquals(_memberSections, sections)) {
       _memberSections = List<rust.ProxyMemberSection>.unmodifiable(sections);
@@ -404,7 +432,7 @@ class ProxyGroup {
         if (_members[i]._setType(entry.proxyType)) typeChanged = true;
         _members[i]._setDelay(entry.delay);
       }
-      return typeChanged || sectionsChanged;
+      return typeChanged || sectionsChanged || locationChanged;
     }
 
     final oldByName = <String, ProxyMember>{};
@@ -462,6 +490,7 @@ class ProxyGroup {
     if (_members.isNotEmpty) _retireMembers(_members);
     _members = const <ProxyMember>[];
     _memberSections = const <rust.ProxyMemberSection>[];
+    _currentMemberIndex = null;
     return changed;
   }
 

@@ -1839,6 +1839,7 @@ fn wire__crate__backend__api__proxies__controller_proxy_group_members_impl(
             let api_member_sort =
                 <crate::backend::api::types::ProxyMemberSort>::sse_decode(&mut deserializer);
             let api_group_by_provider = <bool>::sse_decode(&mut deserializer);
+            let api_current_name = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::utils::error::MihomoError>(
@@ -1851,6 +1852,7 @@ fn wire__crate__backend__api__proxies__controller_proxy_group_members_impl(
                                 api_limit,
                                 api_member_sort,
                                 api_group_by_provider,
+                                api_current_name,
                             )
                             .await?;
                         Ok(output_ok)
@@ -5762,11 +5764,15 @@ impl SseDecode for crate::backend::api::types::ProxyMemberSort {
 impl SseDecode for crate::backend::api::types::ProxyMemberWindow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_offset = <u32>::sse_decode(deserializer);
+        let mut var_currentIndex = <i32>::sse_decode(deserializer);
         let mut var_entries =
             <Vec<crate::backend::api::types::ProxyMemberEntry>>::sse_decode(deserializer);
         let mut var_sections =
             <Vec<crate::backend::api::types::ProxyMemberSection>>::sse_decode(deserializer);
         return crate::backend::api::types::ProxyMemberWindow {
+            offset: var_offset,
+            current_index: var_currentIndex,
             entries: var_entries,
             sections: var_sections,
         };
@@ -6922,6 +6928,8 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberSo
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyMemberWindow {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.offset.into_into_dart().into_dart(),
+            self.current_index.into_into_dart().into_dart(),
             self.entries.into_into_dart().into_dart(),
             self.sections.into_into_dart().into_dart(),
         ]
@@ -8016,6 +8024,8 @@ impl SseEncode for crate::backend::api::types::ProxyMemberSort {
 impl SseEncode for crate::backend::api::types::ProxyMemberWindow {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.offset, serializer);
+        <i32>::sse_encode(self.current_index, serializer);
         <Vec<crate::backend::api::types::ProxyMemberEntry>>::sse_encode(self.entries, serializer);
         <Vec<crate::backend::api::types::ProxyMemberSection>>::sse_encode(
             self.sections,

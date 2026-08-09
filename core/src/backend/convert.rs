@@ -153,6 +153,8 @@ impl From<crate::clash::api::ProxyMemberSection> for ProxyMemberSection {
 impl From<crate::clash::api::ProxyMemberWindow> for ProxyMemberWindow {
     fn from(value: crate::clash::api::ProxyMemberWindow) -> Self {
         Self {
+            offset: value.offset,
+            current_index: value.current_index,
             entries: value.entries.into_iter().map(Into::into).collect(),
             sections: value.sections.into_iter().map(Into::into).collect(),
         }

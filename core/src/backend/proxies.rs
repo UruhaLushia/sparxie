@@ -127,7 +127,9 @@ pub async fn controller_proxy_group_members(
     limit: u32,
     member_sort: ProxyMemberSort,
     group_by_provider: bool,
+    current_name: Option<String>,
 ) -> Result<ProxyMemberWindow, MihomoError> {
+    let locate_current = current_name.as_deref().is_some_and(|name| !name.is_empty());
     match target.backend_type {
         BackendType::Clash => Ok(crate::clash::api::proxy_group_member_window(
             target.clash(),
@@ -136,30 +138,78 @@ pub async fn controller_proxy_group_members(
             limit,
             super::clash_member_sort(member_sort),
             group_by_provider,
+            current_name,
         )
         .await?
         .into()),
-        BackendType::Surge => Ok(ProxyMemberWindow {
-            entries: crate::surge::api::proxy_group_members(
+        BackendType::Surge => Ok(member_window(
+            crate::surge::api::proxy_group_members(
                 target.surge(),
                 group,
-                offset,
-                limit,
+                if locate_current { 0 } else { offset },
+                if locate_current { u32::MAX } else { limit },
                 member_sort,
             )
             .await?,
-            sections: Vec::new(),
-        }),
-        BackendType::SingBox => Ok(ProxyMemberWindow {
-            entries: crate::sing_box::api::proxy_group_members(
+            offset,
+            limit,
+            current_name.as_deref(),
+        )),
+        BackendType::SingBox => Ok(member_window(
+            crate::sing_box::api::proxy_group_members(
                 target.sing_box(),
                 group,
-                offset,
-                limit,
+                if locate_current { 0 } else { offset },
+                if locate_current { u32::MAX } else { limit },
                 member_sort,
             )
             .await?,
+            offset,
+            limit,
+            current_name.as_deref(),
+        )),
+    }
+}
+
+fn member_window(
+    entries: Vec<super::ProxyMemberEntry>,
+    requested_offset: u32,
+    limit: u32,
+    current_name: Option<&str>,
+) -> ProxyMemberWindow {
+    let Some(current_name) = current_name.filter(|name| !name.is_empty()) else {
+        return ProxyMemberWindow {
+            offset: requested_offset,
+            current_index: -1,
+            entries,
             sections: Vec::new(),
-        }),
+        };
+    };
+    let Some(index) = entries.iter().position(|entry| entry.name == current_name) else {
+        return ProxyMemberWindow {
+            offset: requested_offset,
+            current_index: -1,
+            entries: entries
+                .into_iter()
+                .skip(requested_offset as usize)
+                .take(limit as usize)
+                .collect(),
+            sections: Vec::new(),
+        };
+    };
+    let offset = index.saturating_sub((limit as usize) / 2).min(
+        entries
+            .len()
+            .saturating_sub((limit as usize).min(entries.len())),
+    );
+    ProxyMemberWindow {
+        offset: offset.min(u32::MAX as usize) as u32,
+        current_index: index.min(i32::MAX as usize) as i32,
+        entries: entries
+            .into_iter()
+            .skip(offset)
+            .take(limit as usize)
+            .collect(),
+        sections: Vec::new(),
     }
 }

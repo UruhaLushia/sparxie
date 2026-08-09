@@ -51,6 +51,14 @@ class _ProxiesSettingsSheet extends StatelessWidget {
               onChanged: prefs.setProxiesCardColored,
             ),
           ),
+        if (prefs.proxiesLayout == ProxiesLayout.cards)
+          _SettingsRow(
+            label: '打开卡片时定位当前选择',
+            trailing: CompactSwitch(
+              value: prefs.proxiesCardAutoLocate,
+              onChanged: prefs.setProxiesCardAutoLocate,
+            ),
+          ),
         _SettingsRow(
           label: '代理节点展示列数',
           trailing: _ColumnsDropdown(prefs: prefs),

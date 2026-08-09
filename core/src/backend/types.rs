@@ -231,6 +231,8 @@ pub struct ProxyMemberSection {
 
 #[derive(Clone, Debug, Default)]
 pub struct ProxyMemberWindow {
+    pub offset: u32,
+    pub current_index: i32,
     pub entries: Vec<ProxyMemberEntry>,
     pub sections: Vec<ProxyMemberSection>,
 }

@@ -350,7 +350,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     widget.session.proxies.applyGroupMembers(
       group.name,
       window.membersHash,
-      window.offset,
+      loaded.offset,
       loaded.entries,
       sections: loaded.sections,
     );
@@ -842,11 +842,25 @@ class _ProxyCardsBody extends StatelessWidget {
 
   Future<void> _ensureInitialMembers(ProxyGroup group) async {
     if (group.memberCount == 0) return;
+    final locateCurrent =
+        prefs.proxiesCardAutoLocate &&
+        !group.hidesExactNow &&
+        group.now.value.isNotEmpty;
     final last = prefs.proxiesGroupByProvider ? group.memberCount - 1 : 0;
     final deadline = DateTime.now().add(const Duration(seconds: 3));
     while (true) {
-      await session.ensureProxyGroupMembers(group.name, 0, last);
-      if (group.hasMemberRange(0, last) || DateTime.now().isAfter(deadline)) {
+      await session.ensureProxyGroupMembers(
+        group.name,
+        0,
+        last,
+        locateCurrent: locateCurrent,
+      );
+      final locatedIndex = group.locatedMemberIndex;
+      final loaded = locateCurrent
+          ? locatedIndex != null &&
+                (locatedIndex < 0 || group.memberAt(locatedIndex) != null)
+          : group.hasMemberRange(0, last);
+      if (loaded || DateTime.now().isAfter(deadline)) {
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -904,6 +918,7 @@ class _ProxyCardsBody extends StatelessWidget {
                     showIcon: prefs.proxiesShowGroupIcons,
                     colored: prefs.proxiesCardColored,
                     showDelay: prefs.proxiesCardShowDelay,
+                    autoLocate: prefs.proxiesCardAutoLocate,
                     onTestGroup: () => onTestGroup(group),
                     onSelect: (name) => onSelect(group, name),
                     onToggleFixed: (name) => onToggleFixed(group, name),

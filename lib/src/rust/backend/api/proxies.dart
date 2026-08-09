@@ -9,6 +9,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'target.dart';
 import 'types.dart';
 
+// These functions are ignored because they are not marked as `pub`: `member_window`
+
 Future<String> controllerGroups({required BackendTarget target}) =>
     RustLib.instance.api.crateBackendApiProxiesControllerGroups(target: target);
 
@@ -69,6 +71,7 @@ Future<ProxyMemberWindow> controllerProxyGroupMembers({
   required int limit,
   required ProxyMemberSort memberSort,
   required bool groupByProvider,
+  String? currentName,
 }) => RustLib.instance.api.crateBackendApiProxiesControllerProxyGroupMembers(
   target: target,
   group: group,
@@ -76,4 +79,5 @@ Future<ProxyMemberWindow> controllerProxyGroupMembers({
   limit: limit,
   memberSort: memberSort,
   groupByProvider: groupByProvider,
+  currentName: currentName,
 );
