@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       run_id:
-        description: Caller workflow run id used to keep caches created by this run
+        description: Caller workflow run id used to protect caches used by active runs
         required: true
         type: string
       cache_key_pattern:
@@ -38,8 +38,10 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CALLER_RUN_ID" --jq '.created_at'
           )"
 
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --paginate \
-            --jq '.workflow_runs[] | [.id, .name] | @tsv' > "$RUNNER_TEMP/active-runs.tsv"
+          for run_status in queued in_progress; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=$run_status&per_page=100" --paginate \
+              --jq '.workflow_runs[] | [.id, .name, .created_at] | @tsv'
+          done > "$RUNNER_TEMP/active-runs.tsv"
 
           gh api "repos/$GITHUB_REPOSITORY/actions/caches?per_page=100" --paginate \
             --jq '.actions_caches[] | [.id, .ref, .created_at, .last_accessed_at, .size_in_bytes, .key] | @tsv' > "$RUNNER_TEMP/caches.tsv"
@@ -66,13 +68,22 @@ jobs:
           cache_path = sys.argv[5]
           runs_path = sys.argv[6]
 
+          active_runs = []
           with open(runs_path, encoding="utf-8") as runs_file:
               for line in runs_file:
-                  run_id, name = line.rstrip("\n").split("\t")
+                  run_id, name, created_at = line.rstrip("\n").split("\t")
                   if run_id == caller_run_id or name == "Cache GC":
                       continue
-                  print("skip cache GC while another workflow run is active")
-                  sys.exit(0)
+                  active_runs.append((name, parse_time(created_at)))
+
+          protection_cutoff = min(
+              [caller_created, *(created_at for _, created_at in active_runs)]
+          )
+          if active_runs:
+              print(
+                  f"protect caches used since {protection_cutoff.isoformat()} "
+                  f"while {len(active_runs)} other workflow run(s) are active"
+              )
 
           rows = []
           with open(cache_path, encoding="utf-8") as cache_file:
@@ -82,7 +93,7 @@ jobs:
                       continue
                   family = key
                   while True:
-                      stripped = re.sub(r"-[0-9a-f]{16,}$", "", family)
+                      stripped = re.sub(r"-[0-9a-f]{8,}$", "", family)
                       if stripped == family:
                           break
                       family = stripped
@@ -95,6 +106,7 @@ jobs:
                       "size": int(size),
                       "key": key,
                       "family": family,
+                      "accessed_at": parse_time(accessed_at or created_at),
                   })
 
           newest = {}
@@ -103,7 +115,12 @@ jobs:
               if group not in newest or row["created_at"] > newest[group]["created_at"]:
                   newest[group] = row
 
-          protected_ids = {row["id"] for row in rows if row["created_at"] >= caller_created}
+          protected_ids = {
+              row["id"]
+              for row in rows
+              if row["created_at"] >= protection_cutoff
+              or row["accessed_at"] >= protection_cutoff
+          }
           doomed_ids = {
               row["id"]
               for row in rows
@@ -119,7 +136,7 @@ jobs:
               print(f"delete {row['size'] >> 20}MB {row['key']} ({row['ref']})")
               subprocess.run(
                   ["gh", "api", "-X", "DELETE", f"repos/{repository}/actions/caches/{row['id']}"],
-                  check=False,
+                  check=True,
               )
 
           kept_count = len(rows) - len(doomed_ids)
