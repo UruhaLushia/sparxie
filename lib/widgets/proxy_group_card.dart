@@ -626,6 +626,7 @@ Widget _memberGrid(
         final items = _groupedMemberItems(group, columns);
         return ListView.builder(
           controller: scrollController,
+          padding: EdgeInsets.zero,
           physics: scrollable ? null : const NeverScrollableScrollPhysics(),
           itemCount: items.length,
           itemExtentBuilder: (index, _) => items[index].extent,
@@ -1083,6 +1084,8 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
     final memberScroll = _memberScroll;
     final memberOffset = memberScroll == null
         ? 0.0
+        : direction == HeroFlightDirection.push
+        ? memberScroll.initialScrollOffset
         : memberScroll.hasClients
         ? memberScroll.offset
         : memberScroll.initialScrollOffset;
