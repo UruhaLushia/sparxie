@@ -287,7 +287,13 @@ jobs:
             next_url="https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&limit=200"
             while [[ -n "$next_url" ]]; do
               response="$(
-                curl --fail-with-body --silent --show-error \
+                curl --fail --silent --show-error \
+                  --connect-timeout 10 \
+                  --max-time 60 \
+                  --retry 3 \
+                  --retry-all-errors \
+                  --retry-delay 2 \
+                  --retry-max-time 180 \
                   -H "Authorization: Bearer $jwt" \
                   "$next_url"
               )"
@@ -436,11 +442,18 @@ jobs:
           test -s "$SIGNED_IPA"
           test -s "$PRIVATE_KEYS_DIR/AuthKey_${ASC_KEY_ID}.p8"
 
-          API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR" xcrun altool \
-            --validate-app "$SIGNED_IPA" \
-            --api-key "$ASC_KEY_ID" \
-            --api-issuer "$ASC_ISSUER_ID" \
-            --output-format json
+          export API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR"
+          python3 ./scripts/run-network-command.py \
+            --attempts 3 \
+            --attempt-timeout-seconds 300 \
+            --delay-seconds 15 \
+            --probe-host api.appstoreconnect.apple.com \
+            -- \
+              xcrun altool \
+                --validate-app "$SIGNED_IPA" \
+                --api-key "$ASC_KEY_ID" \
+                --api-issuer "$ASC_ISSUER_ID" \
+                --output-format json
 
       - name: Preserve signed IPA
         uses: actions/upload-artifact@v7
@@ -523,7 +536,13 @@ jobs:
             local jwt
             jwt="$(generate_jwt)"
             response="$(
-              curl --fail-with-body --silent --show-error \
+              curl --fail --silent --show-error \
+                --connect-timeout 10 \
+                --max-time 60 \
+                --retry 3 \
+                --retry-all-errors \
+                --retry-delay 2 \
+                --retry-max-time 180 \
                 -H "Authorization: Bearer $jwt" \
                 "https://api.appstoreconnect.apple.com/v1/builds?filter%5Bapp%5D=$ASC_APP_ID&filter%5Bversion%5D=$IOS_BUILD_NUMBER&limit=1"
             )"
@@ -637,12 +656,19 @@ jobs:
           else
             set +e
             upload_output="$(
-              API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR" xcrun altool \
-                --upload-package "$SIGNED_IPA" \
-                --api-key "$ASC_KEY_ID" \
-                --api-issuer "$ASC_ISSUER_ID" \
-                --wait \
-                --output-format json 2>&1
+              # A timed-out upload may have reached Apple, so do not retry it blindly.
+              API_PRIVATE_KEYS_DIR="$PRIVATE_KEYS_DIR" \
+                python3 ./scripts/run-network-command.py \
+                  --attempts 1 \
+                  --attempt-timeout-seconds 1200 \
+                  --probe-host api.appstoreconnect.apple.com \
+                  -- \
+                    xcrun altool \
+                      --upload-package "$SIGNED_IPA" \
+                      --api-key "$ASC_KEY_ID" \
+                      --api-issuer "$ASC_ISSUER_ID" \
+                      --wait \
+                      --output-format json 2>&1
             )"
             upload_status=$?
             set -e
