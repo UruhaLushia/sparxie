@@ -7,6 +7,11 @@ on:
         description: Caller workflow path recorded in the xcarchive manifest
         required: true
         type: string
+      upload:
+        description: Upload the validated build to TestFlight
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   actions: read
@@ -33,6 +38,7 @@ jobs:
           CURRENT_WORKFLOW: ${{ github.workflow }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           CURRENT_REF: ${{ github.ref }}
+          SHOULD_UPLOAD: ${{ inputs.upload }}
         run: |
           set -euo pipefail
 
@@ -41,7 +47,10 @@ jobs:
               [[ "$CURRENT_REF" == refs/tags/v* ]]
               ;;
             .github/workflows/testflight.yml:TestFlight:workflow_dispatch)
-              test "$CURRENT_REF" = "refs/heads/$DEFAULT_BRANCH"
+              if [[ "$CURRENT_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+                [[ "$CURRENT_REF" == refs/heads/ci/* ]]
+                test "$SHOULD_UPLOAD" = false
+              fi
               ;;
             *)
               printf '::error::Unsupported TestFlight caller: %s (%s, %s).\n' \
@@ -50,10 +59,11 @@ jobs:
               ;;
           esac
 
-      - name: Check out trusted verification script
+      - name: Check out verification script
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          # Uploads execute default-branch scripts; approved CI branches may test their own scripts.
+          ref: ${{ inputs.upload && github.event.repository.default_branch || github.sha }}
           persist-credentials: false
 
       - name: Download unsigned xcarchive for preflight
@@ -100,12 +110,13 @@ jobs:
       SOURCE_SHA: ${{ github.sha }}
       SOURCE_HEAD_BRANCH: ${{ github.ref_name }}
       SOURCE_PATH: ${{ inputs.source_path }}
-      SHOULD_UPLOAD: true
+      SHOULD_UPLOAD: ${{ inputs.upload }}
     steps:
-      - name: Check out trusted publishing scripts
+      - name: Check out publishing scripts
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          # Non-default refs are accepted only for validation-only runs behind the environment gate.
+          ref: ${{ inputs.upload && github.event.repository.default_branch || github.sha }}
           persist-credentials: false
 
       - name: Download unsigned xcarchive

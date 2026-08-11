@@ -2,6 +2,12 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload after validation (disable for CI branch smoke tests)
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   actions: read
@@ -25,6 +31,7 @@ jobs:
     uses: ./.github/workflows/publish-testflight.yml
     with:
       source_path: .github/workflows/testflight.yml
+      upload: ${{ inputs.upload }}
     secrets: inherit
 
   cleanup-cache:
