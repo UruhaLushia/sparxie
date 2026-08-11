@@ -3,15 +3,19 @@ part of 'theme_settings_screen.dart';
 String _backgroundSummary(AppPrefs prefs) {
   final source = switch (prefs.backgroundSource) {
     AppBackgroundSource.theme => '主题背景',
-    AppBackgroundSource.image => '图片背景',
+    AppBackgroundSource.image => '相册背景',
   };
   if (prefs.backgroundSource == AppBackgroundSource.theme) return source;
+  final count = prefs.backgroundImageReferences.length;
+  final rotation = prefs.backgroundRotationEnabled && count > 1
+      ? ' · 自动轮换'
+      : '';
   final effect = switch (prefs.surfaceEffect) {
     AppSurfaceEffect.solid => '透明表面',
     AppSurfaceEffect.blur => '模糊表面',
     AppSurfaceEffect.acrylic => '亚克力表面',
   };
-  return '$source · $effect';
+  return '$source · $count 张$rotation · $effect';
 }
 
 class BackgroundStyleScreen extends StatefulWidget {
@@ -135,29 +139,57 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
           expanded: true,
           segments: const [
             ButtonSegment(value: AppBackgroundSource.theme, label: Text('主题')),
-            ButtonSegment(value: AppBackgroundSource.image, label: Text('图片')),
+            ButtonSegment(value: AppBackgroundSource.image, label: Text('相册')),
           ],
           selected: {prefs.backgroundSource},
           onSelectionChanged: (selection) => _setSource(selection.first),
         ),
         if (prefs.backgroundSource == AppBackgroundSource.image) ...[
           const Divider(height: 24),
-          _BackgroundImageTile(
-            path: prefs.backgroundImagePath,
-            fit: prefs.backgroundFit,
-            focalPoint: Alignment(
-              prefs.backgroundFocalX,
-              prefs.backgroundFocalY,
-            ),
-            zoom: prefs.backgroundZoom,
+          _BackgroundAlbumTile(
+            paths: prefs.backgroundImagePaths,
+            selectedIndex: prefs.backgroundImageIndex,
             busy: _selectingImage,
-            onSelect: _selectImage,
-            onClear: prefs.backgroundImagePath.isEmpty ? null : _clearImage,
+            onAdd: _selectImages,
+            onSelect: prefs.selectBackgroundImage,
+            onRemove: _removeImage,
+            onReorder: _reorderImage,
+            onClear: prefs.backgroundImageReferences.isEmpty
+                ? null
+                : _clearImages,
           ),
-          const SizedBox(height: 14),
+          const Divider(height: 28),
+          CompactSwitch.tile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('自动轮换'),
+            subtitle: Text(
+              prefs.backgroundImageReferences.length > 1
+                  ? '在设定的触发时机切换背景，默认关闭'
+                  : '至少添加两张图片后可用',
+            ),
+            value:
+                prefs.backgroundRotationEnabled &&
+                prefs.backgroundImageReferences.length > 1,
+            onChanged: prefs.backgroundImageReferences.length > 1
+                ? prefs.setBackgroundRotationEnabled
+                : null,
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child:
+                prefs.backgroundRotationEnabled &&
+                    prefs.backgroundImageReferences.length > 1
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: _backgroundRotationControls(context),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const Divider(height: 28),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text('图片显示', style: Theme.of(context).textTheme.titleSmall),
+            child: Text('显示方式', style: Theme.of(context).textTheme.titleSmall),
           ),
           const SizedBox(height: 8),
           CompactSegmentedButton<AppBackgroundFit>(
@@ -196,6 +228,55 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
                 : const SizedBox.shrink(),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _backgroundRotationControls(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('触发条件', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        CompactSegmentedButton<BackgroundRotationTrigger>(
+          expanded: true,
+          segments: const [
+            ButtonSegment(
+              value: BackgroundRotationTrigger.appLaunch,
+              icon: Icon(Icons.restart_alt_rounded),
+              label: Text('重新启动'),
+            ),
+            ButtonSegment(
+              value: BackgroundRotationTrigger.appResume,
+              icon: Icon(Icons.play_arrow_rounded),
+              label: Text('恢复前台'),
+            ),
+          ],
+          selected: {prefs.backgroundRotationTrigger},
+          onSelectionChanged: (selection) =>
+              prefs.setBackgroundRotationTrigger(selection.first),
+        ),
+        const SizedBox(height: 14),
+        Text('轮换顺序', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        CompactSegmentedButton<BackgroundRotationOrder>(
+          expanded: true,
+          segments: const [
+            ButtonSegment(
+              value: BackgroundRotationOrder.sequential,
+              icon: Icon(Icons.arrow_forward_rounded),
+              label: Text('相册顺序'),
+            ),
+            ButtonSegment(
+              value: BackgroundRotationOrder.random,
+              icon: Icon(Icons.shuffle_rounded),
+              label: Text('随机顺序'),
+            ),
+          ],
+          selected: {prefs.backgroundRotationOrder},
+          onSelectionChanged: (selection) =>
+              prefs.setBackgroundRotationOrder(selection.first),
+        ),
       ],
     );
   }
@@ -265,7 +346,7 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
   Future<void> _setSource(AppBackgroundSource source) async {
     if (source == AppBackgroundSource.image &&
         prefs.backgroundImagePath.isEmpty) {
-      await _selectImage();
+      await _selectImages();
       return;
     }
     await prefs.setBackgroundSource(source);
@@ -352,16 +433,13 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
     );
   }
 
-  Future<void> _selectImage() async {
+  Future<void> _selectImages() async {
     if (_selectingImage) return;
     setState(() => _selectingImage = true);
     try {
-      final file = isMobilePlatform
-          ? await _imagePicker.pickImage(
-              source: ImageSource.gallery,
-              requestFullMetadata: false,
-            )
-          : await openFile(
+      final files = isMobilePlatform
+          ? await _imagePicker.pickMultiImage(requestFullMetadata: false)
+          : await openFiles(
               acceptedTypeGroups: const [
                 XTypeGroup(
                   label: 'Images',
@@ -379,8 +457,8 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
                 ),
               ],
             );
-      if (file == null || !mounted) return;
-      await _importImage(file.name, file.openRead());
+      if (files.isEmpty || !mounted) return;
+      await _importImages(files);
     } catch (error) {
       _showImageImportError(error);
     } finally {
@@ -397,8 +475,7 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
         throw response.exception ?? StateError('无法恢复上次选择的图片');
       }
       setState(() => _selectingImage = true);
-      final file = files.first;
-      await _importImage(file.name, file.openRead());
+      await _importImages(files);
     } catch (error) {
       _showImageImportError(error);
     } finally {
@@ -408,16 +485,20 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
     }
   }
 
-  Future<void> _importImage(String name, Stream<List<int>> bytes) async {
-    String? imported;
+  Future<void> _importImages(Iterable<XFile> files) async {
+    final imported = <String>[];
     try {
-      imported = await BackgroundImageStore.importStream(name, bytes);
-      await BackgroundImageStore.imageSize(imported);
-      final previous = prefs.backgroundImagePath;
-      await prefs.useBackgroundImage(imported);
-      await BackgroundImageStore.deleteManaged(previous);
+      for (final file in files) {
+        final path = await BackgroundImageStore.importStream(
+          file.name,
+          file.openRead(),
+        );
+        imported.add(path);
+        await BackgroundImageStore.imageSize(path);
+      }
+      await prefs.useBackgroundImages(imported);
     } catch (_) {
-      if (imported != null) await BackgroundImageStore.deleteManaged(imported);
+      await _deleteManagedImages(imported);
       rethrow;
     }
   }
@@ -429,18 +510,83 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
     ).showSnackBar(SnackBar(content: Text('背景图片导入失败：$error')));
   }
 
-  Future<void> _clearImage() async {
-    final path = prefs.backgroundImagePath;
-    await prefs.clearBackgroundImage();
+  Future<void> _removeImage(int index) async {
+    if (index < 0 || index >= prefs.backgroundImageReferences.length) return;
+    final confirmed = await _confirmDestructiveAction(
+      title: '移除背景图片',
+      message: '确定从背景相册中移除这张图片吗？\n已导入的图片文件也会被删除，此操作无法撤销。',
+      action: '移除',
+    );
+    if (!confirmed || !mounted) return;
+    final paths = prefs.backgroundImagePaths;
+    if (index < 0 || index >= paths.length) return;
+    final path = paths[index];
+    await prefs.removeBackgroundImage(index);
     await BackgroundImageStore.deleteManaged(path);
   }
 
+  Future<void> _reorderImage(int oldIndex, int newIndex) =>
+      prefs.reorderBackgroundImage(oldIndex, newIndex);
+
+  Future<void> _clearImages() async {
+    final count = prefs.backgroundImageReferences.length;
+    if (count == 0) return;
+    final confirmed = await _confirmDestructiveAction(
+      title: '清空背景相册',
+      message: '确定清空全部 $count 张背景图片吗？\n已导入的图片文件也会被删除，此操作无法撤销。',
+      action: '清空',
+    );
+    if (!confirmed || !mounted) return;
+    final paths = prefs.backgroundImagePaths;
+    await prefs.clearBackgroundImage();
+    await _deleteManagedImages(paths);
+  }
+
+  Future<bool> _confirmDestructiveAction({
+    required String title,
+    required String message,
+    required String action,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _deleteManagedImages(Iterable<String> paths) async {
+    for (final path in paths) {
+      await BackgroundImageStore.deleteManaged(path);
+    }
+  }
+
   Future<void> _reset() async {
+    final paths = prefs.backgroundImagePaths;
+    if (paths.isNotEmpty) {
+      final confirmed = await _confirmDestructiveAction(
+        title: '重置背景与表面',
+        message: '确定重置所有背景与表面设置吗？\n背景相册中的 ${paths.length} 张图片也会被删除，此操作无法撤销。',
+        action: '重置',
+      );
+      if (!confirmed || !mounted) return;
+    }
     _surfaceOpacityDraft = null;
     _surfaceBlurDraft = null;
-    final path = prefs.backgroundImagePath;
     await prefs.resetBackgroundStyle();
-    await BackgroundImageStore.deleteManaged(path);
+    await _deleteManagedImages(paths);
   }
 }
 
@@ -738,76 +884,6 @@ class _PreviewCard extends StatelessWidget {
         ),
         child: const Center(child: Icon(Icons.widgets_outlined)),
       ),
-    );
-  }
-}
-
-class _BackgroundImageTile extends StatelessWidget {
-  const _BackgroundImageTile({
-    required this.path,
-    required this.fit,
-    required this.focalPoint,
-    required this.zoom,
-    required this.busy,
-    required this.onSelect,
-    required this.onClear,
-  });
-
-  final String path;
-  final AppBackgroundFit fit;
-  final Alignment focalPoint;
-  final double zoom;
-  final bool busy;
-  final VoidCallback onSelect;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: path.isEmpty
-              ? const Icon(Icons.image_outlined)
-              : AppBackgroundFrame(
-                  source: AppBackgroundSource.image,
-                  imagePath: path,
-                  fit: fit,
-                  focalPoint: focalPoint,
-                  zoom: zoom,
-                  child: const SizedBox.shrink(),
-                ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Text(path.isEmpty ? '未选择图片' : '已选择自定义背景')),
-        TextButton.icon(
-          onPressed: busy ? null : onSelect,
-          icon: busy
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(
-                  isMobilePlatform
-                      ? Icons.photo_library_outlined
-                      : Icons.folder_open_outlined,
-                ),
-          label: Text(path.isEmpty ? '选择' : '更换'),
-        ),
-        if (onClear != null)
-          IconButton(
-            tooltip: '清除背景',
-            onPressed: busy ? null : onClear,
-            icon: const Icon(Icons.close),
-          ),
-      ],
     );
   }
 }

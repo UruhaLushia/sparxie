@@ -146,19 +146,20 @@ class BackgroundImageStore {
     await file.delete();
   }
 
-  static Future<void> cleanup(String keepPath) async {
+  static Future<void> cleanup(Iterable<String> keepPaths) async {
     final dir = await _directory();
-    final trimmed = keepPath.trim();
-    String? keep;
-    if (trimmed.isNotEmpty) {
-      final keepFile = File(trimmed);
+    final keep = <String>{};
+    for (final path in keepPaths) {
+      final trimmed = path.trim();
+      if (trimmed.isEmpty) continue;
+      final keepFile = File(trimmed).absolute;
       // A stale absolute path must not make cleanup delete the recoverable
       // contents of the current managed directory.
-      if (!await keepFile.exists()) return;
-      keep = keepFile.absolute.path;
+      if (keepFile.parent.path != dir.path && !await keepFile.exists()) return;
+      keep.add(keepFile.path);
     }
     await for (final entity in dir.list()) {
-      if (entity is! File || entity.absolute.path == keep) continue;
+      if (entity is! File || keep.contains(entity.absolute.path)) continue;
       await entity.delete().catchError((_) => entity);
       _forgetImage(entity.path);
     }

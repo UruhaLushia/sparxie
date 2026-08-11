@@ -21,6 +21,7 @@ import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
 part 'background_style_screen.dart';
+part 'background_album.dart';
 part 'background_crop_editor.dart';
 part 'component_style_screen.dart';
 part 'theme_settings_controls.dart';

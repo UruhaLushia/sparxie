@@ -48,6 +48,10 @@ enum AppBackgroundSource { theme, image }
 
 enum AppBackgroundFit { cover, focalPoint }
 
+enum BackgroundRotationOrder { sequential, random }
+
+enum BackgroundRotationTrigger { appLaunch, appResume }
+
 enum AppSurfaceEffect { solid, blur, acrylic }
 
 /// How the proxies screen renders groups: the classic pinned-header list or
@@ -189,6 +193,11 @@ class AppPrefs extends ChangeNotifier {
   static const _kDesktopTitleBarMode = 'desktopTitleBarMode';
   static const _kBackgroundSource = 'backgroundSource';
   static const _kBackgroundImagePath = 'backgroundImagePath';
+  static const _kBackgroundImagePaths = 'backgroundImagePaths';
+  static const _kBackgroundImageIndex = 'backgroundImageIndex';
+  static const _kBackgroundRotationEnabled = 'backgroundRotationEnabled';
+  static const _kBackgroundRotationOrder = 'backgroundRotationOrder';
+  static const _kBackgroundRotationTrigger = 'backgroundRotationTrigger';
   static const _kBackgroundFit = 'backgroundFit';
   static const _kBackgroundFocalX = 'backgroundFocalX';
   static const _kBackgroundFocalY = 'backgroundFocalY';
@@ -245,6 +254,11 @@ class AppPrefs extends ChangeNotifier {
   static const defaultDesktopTitleBarMode = DesktopTitleBarMode.system;
   static const defaultBackgroundSource = AppBackgroundSource.theme;
   static const defaultBackgroundFit = AppBackgroundFit.cover;
+  static const defaultBackgroundRotationEnabled = false;
+  static const defaultBackgroundRotationOrder =
+      BackgroundRotationOrder.sequential;
+  static const defaultBackgroundRotationTrigger =
+      BackgroundRotationTrigger.appLaunch;
   static const defaultBackgroundFocalX = 0.0;
   static const defaultBackgroundFocalY = 0.0;
   static const defaultBackgroundZoom = 1.0;
@@ -721,22 +735,81 @@ class AppPrefs extends ChangeNotifier {
     _put(_kBackgroundSource, value.name);
   }
 
-  String get backgroundImageReference => _str(_kBackgroundImagePath, '').trim();
+  List<String> get backgroundImageReferences {
+    final stored = _strList(_kBackgroundImagePaths);
+    if (stored.isNotEmpty) return stored;
+    final legacy = _str(_kBackgroundImagePath, '').trim();
+    return legacy.isEmpty ? const [] : [legacy];
+  }
+
+  List<String> get backgroundImagePaths => [
+    for (final reference in backgroundImageReferences)
+      BackgroundImageStore.resolveReference(reference),
+  ];
+
+  int get backgroundImageIndex {
+    final count = backgroundImageReferences.length;
+    if (count == 0) return 0;
+    return _int(_kBackgroundImageIndex, 0).clamp(0, count - 1).toInt();
+  }
+
+  String get backgroundImageReference {
+    final references = backgroundImageReferences;
+    return references.isEmpty ? '' : references[backgroundImageIndex];
+  }
 
   String get backgroundImagePath =>
       BackgroundImageStore.resolveReference(backgroundImageReference);
 
-  Future<void> setBackgroundImageReference(String reference) async {
-    final next = reference.trim();
-    if (next == backgroundImageReference) return;
-    _put(_kBackgroundImagePath, next);
+  Future<void> setBackgroundImageReferences(
+    Iterable<String> references, {
+    int? selectedIndex,
+    bool activate = false,
+  }) async {
+    final next = _sanitizeStringList(references);
+    if (next.isEmpty) {
+      _putAll({
+        _kBackgroundImagePaths: const <String>[],
+        _kBackgroundImageIndex: 0,
+        _kBackgroundImagePath: '',
+        _kBackgroundRotationEnabled: false,
+        _kBackgroundSource: AppBackgroundSource.theme.name,
+      });
+      return;
+    }
+    final index = (selectedIndex ?? backgroundImageIndex)
+        .clamp(0, next.length - 1)
+        .toInt();
+    _putAll({
+      _kBackgroundImagePaths: next,
+      _kBackgroundImageIndex: index,
+      _kBackgroundImagePath: next[index],
+      if (activate) _kBackgroundSource: AppBackgroundSource.image.name,
+    });
   }
 
-  Future<void> useBackgroundImage(String path) async {
-    final next = BackgroundImageStore.referenceForPath(path);
-    if (next.isEmpty) return;
+  Future<void> useBackgroundImages(Iterable<String> paths) async {
+    final next = backgroundImageReferences.toList();
+    final indices = <String, int>{
+      for (var index = 0; index < next.length; index++) next[index]: index,
+    };
+    var selected = -1;
+    for (final path in paths) {
+      final reference = BackgroundImageStore.referenceForPath(path);
+      if (reference.isEmpty) continue;
+      var index = indices[reference];
+      if (index == null) {
+        index = next.length;
+        next.add(reference);
+        indices[reference] = index;
+      }
+      if (selected < 0) selected = index;
+    }
+    if (selected < 0) return;
     _putAll({
-      _kBackgroundImagePath: next,
+      _kBackgroundImagePaths: next,
+      _kBackgroundImageIndex: selected,
+      _kBackgroundImagePath: next[selected],
       _kBackgroundFocalX: defaultBackgroundFocalX,
       _kBackgroundFocalY: defaultBackgroundFocalY,
       _kBackgroundZoom: defaultBackgroundZoom,
@@ -744,10 +817,99 @@ class AppPrefs extends ChangeNotifier {
     });
   }
 
+  Future<void> selectBackgroundImage(int index) async {
+    final references = backgroundImageReferences;
+    if (index < 0 ||
+        index >= references.length ||
+        index == backgroundImageIndex) {
+      return;
+    }
+    _putAll({
+      _kBackgroundImageIndex: index,
+      _kBackgroundImagePath: references[index],
+    });
+  }
+
+  Future<void> removeBackgroundImage(int index) async {
+    final references = backgroundImageReferences.toList();
+    if (index < 0 || index >= references.length) return;
+    final current = backgroundImageIndex;
+    references.removeAt(index);
+    if (references.isEmpty) {
+      await clearBackgroundImage();
+      return;
+    }
+    final nextIndex = index < current
+        ? current - 1
+        : index == current
+        ? current.clamp(0, references.length - 1).toInt()
+        : current;
+    await setBackgroundImageReferences(
+      references,
+      selectedIndex: nextIndex,
+      activate: backgroundSource == AppBackgroundSource.image,
+    );
+  }
+
+  Future<void> reorderBackgroundImage(int oldIndex, int newIndex) async {
+    final references = backgroundImageReferences.toList();
+    if (oldIndex < 0 ||
+        oldIndex >= references.length ||
+        newIndex < 0 ||
+        newIndex >= references.length ||
+        oldIndex == newIndex) {
+      return;
+    }
+    final current = backgroundImageReference;
+    final moved = references.removeAt(oldIndex);
+    references.insert(newIndex, moved);
+    await setBackgroundImageReferences(
+      references,
+      selectedIndex: references.indexOf(current),
+      activate: backgroundSource == AppBackgroundSource.image,
+    );
+  }
+
+  bool get backgroundRotationEnabled =>
+      _bool(_kBackgroundRotationEnabled, defaultBackgroundRotationEnabled);
+
+  Future<void> setBackgroundRotationEnabled(bool value) async {
+    if (value == backgroundRotationEnabled) return;
+    _put(_kBackgroundRotationEnabled, value);
+  }
+
+  BackgroundRotationOrder get backgroundRotationOrder =>
+      _decodeBackgroundRotationOrder(
+        _str(_kBackgroundRotationOrder, defaultBackgroundRotationOrder.name),
+      );
+
+  Future<void> setBackgroundRotationOrder(BackgroundRotationOrder value) async {
+    if (value == backgroundRotationOrder) return;
+    _put(_kBackgroundRotationOrder, value.name);
+  }
+
+  BackgroundRotationTrigger get backgroundRotationTrigger =>
+      _decodeBackgroundRotationTrigger(
+        _str(
+          _kBackgroundRotationTrigger,
+          defaultBackgroundRotationTrigger.name,
+        ),
+      );
+
+  Future<void> setBackgroundRotationTrigger(
+    BackgroundRotationTrigger value,
+  ) async {
+    if (value == backgroundRotationTrigger) return;
+    _put(_kBackgroundRotationTrigger, value.name);
+  }
+
   Future<void> clearBackgroundImage() async {
     _putAll({
       _kBackgroundSource: AppBackgroundSource.theme.name,
       _kBackgroundImagePath: '',
+      _kBackgroundImagePaths: const <String>[],
+      _kBackgroundImageIndex: 0,
+      _kBackgroundRotationEnabled: false,
     });
   }
 
@@ -755,6 +917,11 @@ class AppPrefs extends ChangeNotifier {
     _putAll({
       _kBackgroundSource: defaultBackgroundSource.name,
       _kBackgroundImagePath: '',
+      _kBackgroundImagePaths: const <String>[],
+      _kBackgroundImageIndex: 0,
+      _kBackgroundRotationEnabled: defaultBackgroundRotationEnabled,
+      _kBackgroundRotationOrder: defaultBackgroundRotationOrder.name,
+      _kBackgroundRotationTrigger: defaultBackgroundRotationTrigger.name,
       _kBackgroundFit: defaultBackgroundFit.name,
       _kBackgroundFocalX: defaultBackgroundFocalX,
       _kBackgroundFocalY: defaultBackgroundFocalY,
@@ -1162,6 +1329,22 @@ class AppPrefs extends ChangeNotifier {
       if (value.name == raw) return value;
     }
     return defaultBackgroundSource;
+  }
+
+  static BackgroundRotationOrder _decodeBackgroundRotationOrder(String? raw) {
+    for (final value in BackgroundRotationOrder.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultBackgroundRotationOrder;
+  }
+
+  static BackgroundRotationTrigger _decodeBackgroundRotationTrigger(
+    String? raw,
+  ) {
+    for (final value in BackgroundRotationTrigger.values) {
+      if (value.name == raw) return value;
+    }
+    return defaultBackgroundRotationTrigger;
   }
 
   static AppSurfaceEffect _decodeSurfaceEffect(String? raw) {

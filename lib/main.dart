@@ -18,6 +18,7 @@ import 'app_prefs.dart';
 import 'app_update_cleanup.dart';
 import 'background_accent_color.dart';
 import 'background_image_store.dart';
+import 'background_rotation.dart';
 import 'config_store.dart';
 import 'controller.dart';
 import 'controller_uri_import.dart';
@@ -76,15 +77,10 @@ Future<void> main() async {
   );
   await ImportedFonts.cleanup(prefs.importedFonts);
   await ImportedFonts.loadAll(prefs.importedFonts);
-  final backgroundImageReference = prefs.backgroundImageReference;
-  final normalizedBackgroundImageReference =
-      await BackgroundImageStore.normalizeReference(backgroundImageReference);
-  if (normalizedBackgroundImageReference != backgroundImageReference) {
-    await prefs.setBackgroundImageReference(normalizedBackgroundImageReference);
-    await config.flush();
-  }
+  await _normalizeBackgroundImages(prefs);
+  await config.flush();
   final backgroundImagePath = prefs.backgroundImagePath;
-  await BackgroundImageStore.cleanup(backgroundImagePath);
+  await BackgroundImageStore.cleanup(prefs.backgroundImagePaths);
   if (prefs.backgroundSource == AppBackgroundSource.image &&
       backgroundImagePath.isNotEmpty) {
     try {
@@ -158,6 +154,30 @@ Future<void> main() async {
       backgroundAccentColor: backgroundAccentColor,
       appLinks: appLinks,
     ),
+  );
+}
+
+Future<void> _normalizeBackgroundImages(AppPrefs prefs) async {
+  final backgroundImageReferences = prefs.backgroundImageReferences;
+  final selectedIndex = prefs.backgroundImageIndex;
+  final normalizedBackgroundImageReferences = <String>[];
+  final normalizedIndices = <String, int>{};
+  var normalizedSelectedIndex = 0;
+  for (var index = 0; index < backgroundImageReferences.length; index++) {
+    final reference = backgroundImageReferences[index];
+    final normalized = await BackgroundImageStore.normalizeReference(reference);
+    if (normalized.isEmpty) continue;
+    var normalizedIndex = normalizedIndices[normalized];
+    if (normalizedIndex == null) {
+      normalizedIndex = normalizedBackgroundImageReferences.length;
+      normalizedBackgroundImageReferences.add(normalized);
+      normalizedIndices[normalized] = normalizedIndex;
+    }
+    if (index == selectedIndex) normalizedSelectedIndex = normalizedIndex;
+  }
+  await prefs.setBackgroundImageReferences(
+    normalizedBackgroundImageReferences,
+    selectedIndex: normalizedSelectedIndex,
   );
 }
 
@@ -247,6 +267,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
   final _navigationInputController = NavigationInputController();
   late final StreamSubscription<NormalizedGamepadEvent> _gamepadEvents;
   late final ControllerUriImporter _controllerUriImporter;
+  late final BackgroundRotationController _backgroundRotation;
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
   int? _themeSeed;
@@ -320,6 +341,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
       store: store,
       navigatorKey: _navigatorKey,
     )..start();
+    _backgroundRotation = BackgroundRotationController(prefs)..start();
   }
 
   @override
@@ -328,6 +350,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     unawaited(_gamepadEvents.cancel());
     _navigationInputController.dispose();
     _controllerUriImporter.dispose();
+    _backgroundRotation.dispose();
     super.dispose();
   }
 
