@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app_update.dart';
 import 'app_update_cleanup.dart';
+import 'app_update_http.dart';
 
 enum AppUpdateStage { downloading, verifying, launchingInstaller }
 
@@ -35,10 +36,13 @@ abstract final class AppUpdateInstaller {
   static Future<AppUpdateLaunch> install(
     AppUpdateAsset asset, {
     required void Function(AppUpdateProgress progress) onProgress,
+    String githubToken = '',
   }) {
-    if (Platform.isAndroid) return _installAndroid(asset, onProgress);
+    if (Platform.isAndroid) {
+      return _installAndroid(asset, onProgress, githubToken);
+    }
     if (Platform.isWindows || Platform.isMacOS) {
-      return _installDesktop(asset, onProgress);
+      return _installDesktop(asset, onProgress, githubToken);
     }
     throw const AppUpdateException('当前平台暂不支持应用内安装');
   }
@@ -46,6 +50,7 @@ abstract final class AppUpdateInstaller {
   static Future<AppUpdateLaunch> _installAndroid(
     AppUpdateAsset asset,
     void Function(AppUpdateProgress progress) onProgress,
+    String githubToken,
   ) async {
     bool? permission;
     try {
@@ -58,7 +63,7 @@ abstract final class AppUpdateInstaller {
     if (permission != true) {
       throw const AppUpdateException('请允许 Sparxie 安装未知来源应用');
     }
-    final package = await _download(asset, onProgress);
+    final package = await _download(asset, onProgress, githubToken);
     try {
       onProgress(const AppUpdateProgress(AppUpdateStage.launchingInstaller));
       await _androidInstallerChannel.invokeMethod<void>(
@@ -83,8 +88,9 @@ abstract final class AppUpdateInstaller {
   static Future<AppUpdateLaunch> _installDesktop(
     AppUpdateAsset asset,
     void Function(AppUpdateProgress progress) onProgress,
+    String githubToken,
   ) async {
-    final file = await _download(asset, onProgress);
+    final file = await _download(asset, onProgress, githubToken);
     try {
       await AppUpdateCleanup.markPending(file.parent);
       onProgress(const AppUpdateProgress(AppUpdateStage.launchingInstaller));
@@ -101,69 +107,91 @@ abstract final class AppUpdateInstaller {
   static Future<File> _download(
     AppUpdateAsset asset,
     void Function(AppUpdateProgress progress) onProgress,
+    String githubToken,
   ) async {
     final directory = await _createDownloadDirectory();
     final file = File(
       '${directory.path}${Platform.pathSeparator}${asset.name}',
     );
-    final client = http.Client();
-    var downloaded = 0;
     try {
-      final request = http.Request('GET', asset.uri)
-        ..headers['User-Agent'] = 'Sparxie-Updater';
-      final response = await client
-          .send(request)
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200) {
-        throw AppUpdateException('下载安装包失败：服务器返回 ${response.statusCode}');
-      }
-      final contentLength = response.contentLength;
-      if (contentLength != null && contentLength != asset.size) {
-        throw const AppUpdateException('安装包大小与发布信息不一致');
-      }
-
-      final sink = file.openWrite();
-      try {
-        await for (final chunk in response.stream.timeout(
-          const Duration(seconds: 30),
-        )) {
-          if (chunk.length > asset.size - downloaded) {
+      for (var attempt = 0; attempt < AppUpdateHttp.attempts; attempt++) {
+        final client = http.Client();
+        var downloaded = 0;
+        try {
+          final request = http.Request('GET', asset.uri)
+            ..headers.addAll(AppUpdateHttp.assetHeaders(githubToken));
+          final response = await client
+              .send(request)
+              .timeout(const Duration(seconds: 20));
+          if (response.statusCode != 200) {
+            if (AppUpdateHttp.isTransientStatus(response.statusCode) &&
+                attempt + 1 < AppUpdateHttp.attempts) {
+              await AppUpdateHttp.waitBeforeRetry(attempt);
+              continue;
+            }
+            throw AppUpdateException('下载安装包失败：服务器返回 ${response.statusCode}');
+          }
+          final contentLength = response.contentLength;
+          if (contentLength != null && contentLength != asset.size) {
             throw const AppUpdateException('安装包大小与发布信息不一致');
           }
-          downloaded += chunk.length;
-          sink.add(chunk);
-          onProgress(
-            AppUpdateProgress(
-              AppUpdateStage.downloading,
-              fraction: (downloaded / asset.size).clamp(0, 1),
-            ),
-          );
-        }
-        await sink.flush();
-      } finally {
-        await sink.close();
-      }
-      if (downloaded != asset.size) {
-        throw const AppUpdateException('安装包大小与发布信息不一致');
-      }
 
-      onProgress(const AppUpdateProgress(AppUpdateStage.verifying));
-      final digest = await sha256.bind(file.openRead()).first;
-      if (digest.toString().toLowerCase() != asset.sha256) {
-        throw const AppUpdateException('安装包 SHA-256 校验失败');
+          final sink = file.openWrite();
+          try {
+            await for (final chunk in response.stream.timeout(
+              const Duration(seconds: 30),
+            )) {
+              if (chunk.length > asset.size - downloaded) {
+                throw const AppUpdateException('安装包大小与发布信息不一致');
+              }
+              downloaded += chunk.length;
+              sink.add(chunk);
+              onProgress(
+                AppUpdateProgress(
+                  AppUpdateStage.downloading,
+                  fraction: (downloaded / asset.size).clamp(0, 1),
+                ),
+              );
+            }
+            await sink.flush();
+          } finally {
+            await sink.close();
+          }
+          if (downloaded != asset.size) {
+            if (attempt + 1 < AppUpdateHttp.attempts) {
+              await AppUpdateHttp.waitBeforeRetry(attempt);
+              continue;
+            }
+            throw const AppUpdateException('安装包大小与发布信息不一致');
+          }
+
+          onProgress(const AppUpdateProgress(AppUpdateStage.verifying));
+          final digest = await sha256.bind(file.openRead()).first;
+          if (digest.toString().toLowerCase() != asset.sha256) {
+            throw const AppUpdateException('安装包 SHA-256 校验失败');
+          }
+          return file;
+        } on TimeoutException {
+          if (attempt + 1 >= AppUpdateHttp.attempts) {
+            throw const AppUpdateException('下载安装包超时');
+          }
+        } on http.ClientException catch (error) {
+          if (attempt + 1 >= AppUpdateHttp.attempts) {
+            throw AppUpdateException('下载安装包失败：${error.message}');
+          }
+        } on SocketException catch (error) {
+          if (attempt + 1 >= AppUpdateHttp.attempts) {
+            throw AppUpdateException('下载安装包失败：${error.message}');
+          }
+        } finally {
+          client.close();
+        }
+        await AppUpdateHttp.waitBeforeRetry(attempt);
       }
-      return file;
+      throw const AppUpdateException('下载安装包失败');
     } catch (error) {
       await _deleteDirectory(directory);
-      if (error is TimeoutException) {
-        throw const AppUpdateException('下载安装包超时');
-      }
-      if (error is http.ClientException) {
-        throw AppUpdateException('下载安装包失败：${error.message}');
-      }
       rethrow;
-    } finally {
-      client.close();
     }
   }
 

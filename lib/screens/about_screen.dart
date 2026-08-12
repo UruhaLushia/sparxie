@@ -236,7 +236,10 @@ class _UpdateControlsState extends State<_UpdateControls> {
     AppUpdateResult? result;
     try {
       final channel = _selectedChannel;
-      result = await AppUpdateService.check(channel);
+      result = await AppUpdateService.check(
+        channel,
+        githubToken: widget.prefs.githubToken,
+      );
       if (!mounted) return;
       setState(() {
         _status = _updateStatus(result!);
@@ -330,6 +333,7 @@ class _UpdateControlsState extends State<_UpdateControls> {
     try {
       final launch = await AppUpdateInstaller.install(
         asset,
+        githubToken: widget.prefs.githubToken,
         onProgress: (progress) {
           if (!mounted) return;
           setState(() {

@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_paths.dart';
 import 'app_prefs.dart';
+import 'app_update_http.dart';
 
 const _embeddedBuildNumber = int.fromEnvironment('SPARXIE_BUILD_NUMBER');
 const _embeddedUpdateChannel = String.fromEnvironment('SPARXIE_UPDATE_CHANNEL');
@@ -63,10 +65,6 @@ class AppUpdateAsset {
 }
 
 abstract final class AppUpdateService {
-  static const _stableMetadata =
-      'https://github.com/UruhaLushia/sparxie/releases/latest/download/release.json';
-  static const _betaMetadata =
-      'https://github.com/UruhaLushia/sparxie/releases/download/pre-release/pre-release.json';
   static final _stableRelease = Uri.parse(
     'https://github.com/UruhaLushia/sparxie/releases/latest',
   );
@@ -102,48 +100,34 @@ abstract final class AppUpdateService {
     return _versionLabel(package.version.trim(), build);
   }
 
-  static Future<AppUpdateResult> check(UpdateChannel channel) async {
+  static Future<AppUpdateResult> check(
+    UpdateChannel channel, {
+    String githubToken = '',
+  }) async {
     if (!canSelectChannel(channel)) {
       throw const AppUpdateException('Android 不支持切换更新通道');
     }
-    final metadataUri = Uri.parse(
-      channel == UpdateChannel.stable ? _stableMetadata : _betaMetadata,
-    );
     final releaseApiUri = channel == UpdateChannel.stable
         ? _stableReleaseApi
         : _betaReleaseApi;
+    final metadataName = channel == UpdateChannel.stable
+        ? 'release.json'
+        : 'pre-release.json';
     final package = await PackageInfo.fromPlatform();
-    late final List<http.Response> responses;
-    try {
-      responses = await Future.wait([
-        http.get(metadataUri, headers: const {'Accept': 'application/json'}),
-        http.get(
-          releaseApiUri,
-          headers: const {
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-            'User-Agent': 'Sparxie-Updater',
-          },
-        ),
-      ]).timeout(const Duration(seconds: 15));
-    } on TimeoutException {
-      throw const AppUpdateException('检查更新超时');
-    } on http.ClientException catch (error) {
-      throw AppUpdateException('网络错误：${error.message}');
-    }
-    for (final response in responses) {
-      if (response.statusCode != 200) {
-        throw AppUpdateException('更新服务器返回 ${response.statusCode}');
-      }
-    }
-
-    late final Object? metadata;
+    final client = http.Client();
     late final Object? release;
+    late final Object? metadata;
     try {
-      metadata = jsonDecode(responses[0].body);
-      release = jsonDecode(responses[1].body);
-    } on FormatException {
-      throw const AppUpdateException('更新服务器返回了无效数据');
+      release = await _getJson(
+        client,
+        releaseApiUri,
+        headers: AppUpdateHttp.apiHeaders(githubToken),
+        stage: '获取发布信息',
+      );
+      final metadataAsset = _assetNamed(release, metadataName, required: true)!;
+      metadata = await _getVerifiedJson(client, metadataAsset, githubToken);
+    } finally {
+      client.close();
     }
     final latest = _latestVersion(metadata);
     final currentVersion = package.version.trim();
@@ -173,16 +157,106 @@ abstract final class AppUpdateService {
       releaseUri: channel == UpdateChannel.stable
           ? _stableRelease
           : _betaRelease,
-      asset: _releaseAsset(release),
+      asset: switch (_platformAssetName()) {
+        final name? => _assetNamed(release, name),
+        null => null,
+      },
     );
   }
 
-  static AppUpdateAsset? _releaseAsset(Object? raw) {
-    final expectedName = _platformAssetName();
-    if (expectedName == null || raw is! Map) return null;
+  static Future<Object?> _getJson(
+    http.Client client,
+    Uri uri, {
+    required Map<String, String> headers,
+    required String stage,
+  }) async {
+    final response = await _getWithRetry(
+      client,
+      uri,
+      headers: headers,
+      stage: stage,
+    );
+    try {
+      return jsonDecode(utf8.decode(response.bodyBytes));
+    } on FormatException {
+      throw AppUpdateException('$stage 失败：服务器返回了无效数据');
+    }
+  }
+
+  static Future<Object?> _getVerifiedJson(
+    http.Client client,
+    AppUpdateAsset asset,
+    String githubToken,
+  ) async {
+    final response = await _getWithRetry(
+      client,
+      asset.uri,
+      headers: AppUpdateHttp.assetHeaders(githubToken),
+      stage: '获取更新元数据',
+    );
+    final bytes = response.bodyBytes;
+    if (bytes.length != asset.size) {
+      throw const AppUpdateException('更新元数据大小与发布信息不一致');
+    }
+    if (sha256.convert(bytes).toString().toLowerCase() != asset.sha256) {
+      throw const AppUpdateException('更新元数据 SHA-256 校验失败');
+    }
+    try {
+      return jsonDecode(utf8.decode(bytes));
+    } on FormatException {
+      throw const AppUpdateException('更新元数据格式错误');
+    }
+  }
+
+  static Future<http.Response> _getWithRetry(
+    http.Client client,
+    Uri uri, {
+    required Map<String, String> headers,
+    required String stage,
+  }) async {
+    for (var attempt = 0; attempt < AppUpdateHttp.attempts; attempt++) {
+      try {
+        final response = await client
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15));
+        if (AppUpdateHttp.isTransientStatus(response.statusCode) &&
+            attempt + 1 < AppUpdateHttp.attempts) {
+          await AppUpdateHttp.waitBeforeRetry(attempt);
+          continue;
+        }
+        if (response.statusCode != 200) {
+          throw AppUpdateException('$stage 失败：服务器返回 ${response.statusCode}');
+        }
+        return response;
+      } on TimeoutException {
+        if (attempt + 1 >= AppUpdateHttp.attempts) {
+          throw AppUpdateException('$stage 超时');
+        }
+      } on http.ClientException catch (error) {
+        if (attempt + 1 >= AppUpdateHttp.attempts) {
+          throw AppUpdateException('$stage 失败：${error.message}');
+        }
+      } on SocketException catch (error) {
+        if (attempt + 1 >= AppUpdateHttp.attempts) {
+          throw AppUpdateException('$stage 失败：${error.message}');
+        }
+      }
+      await AppUpdateHttp.waitBeforeRetry(attempt);
+    }
+    throw AppUpdateException('$stage 失败');
+  }
+
+  static AppUpdateAsset? _assetNamed(
+    Object? raw,
+    String expectedName, {
+    bool required = false,
+  }) {
+    if (raw is! Map) {
+      throw const AppUpdateException('发布信息格式错误');
+    }
     final assets = raw['assets'];
     if (assets is! List) {
-      throw const AppUpdateException('发布信息缺少安装包列表');
+      throw const AppUpdateException('发布信息缺少资源列表');
     }
     Map? selected;
     for (final candidate in assets) {
@@ -191,9 +265,12 @@ abstract final class AppUpdateService {
         break;
       }
     }
-    if (selected == null) return null;
+    if (selected == null) {
+      if (required) throw AppUpdateException('发布信息缺少 $expectedName');
+      return null;
+    }
 
-    final rawUri = selected['browser_download_url'];
+    final rawUri = selected['url'];
     final size = selected['size'];
     final digest = selected['digest'];
     final uri = rawUri is String ? Uri.tryParse(rawUri) : null;

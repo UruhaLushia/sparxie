@@ -160,7 +160,7 @@ class SettingsScreen extends StatelessWidget {
           _Tile(
             icon: Icons.app_settings_alt_outlined,
             title: '应用设置',
-            subtitle: '字体与缓存设置',
+            subtitle: '字体、更新与缓存设置',
             onTap: () => _push(
               context,
               AppSettingsScreen(prefs: prefs, session: session),
@@ -471,6 +471,8 @@ class AppSettingsPanel extends StatelessWidget {
                 const Divider(height: 24),
               ],
               _OnlineResourcesRow(prefs: prefs),
+              const Divider(height: 24),
+              _GitHubTokenRow(prefs: prefs),
               const Divider(height: 24),
               _CacheRow(session: session),
             ],
@@ -943,6 +945,129 @@ class _OnlineResourcesRow extends StatelessWidget {
       subtitle: const Text('用于图标 URL 等在线资源;不影响后端连接设置'),
       value: prefs.allowInsecureOnlineResources,
       onChanged: prefs.setAllowInsecureOnlineResources,
+    );
+  }
+}
+
+class _GitHubTokenRow extends StatelessWidget {
+  const _GitHubTokenRow({required this.prefs});
+
+  final AppPrefs prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    final configured = prefs.githubToken.isNotEmpty;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'GitHub 更新认证',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                configured
+                    ? '已设置 Token，提高 API 请求限额'
+                    : '可选，用于提高 GitHub API 请求限额',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton(
+          onPressed: () => _edit(context),
+          child: Text(configured ? '编辑' : '设置'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final token = await showDialog<String>(
+      context: context,
+      builder: (_) => _GitHubTokenDialog(initialValue: prefs.githubToken),
+    );
+    if (token != null) await prefs.setGitHubToken(token);
+  }
+}
+
+class _GitHubTokenDialog extends StatefulWidget {
+  const _GitHubTokenDialog({required this.initialValue});
+
+  final String initialValue;
+
+  @override
+  State<_GitHubTokenDialog> createState() => _GitHubTokenDialogState();
+}
+
+class _GitHubTokenDialogState extends State<_GitHubTokenDialog> {
+  late final TextEditingController _controller;
+  bool _showToken = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('GitHub 更新认证'),
+      content: SizedBox(
+        width: 400,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          obscureText: !_showToken,
+          autocorrect: false,
+          enableSuggestions: false,
+          keyboardType: TextInputType.visiblePassword,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: 'Token（可选）',
+            helperText: '仅用于 Sparxie 更新请求，并保存在本机',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              tooltip: _showToken ? '隐藏 Token' : '显示 Token',
+              onPressed: () => setState(() => _showToken = !_showToken),
+              icon: Icon(
+                _showToken
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+            ),
+          ),
+          onSubmitted: (value) => Navigator.pop(context, value.trim()),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        if (widget.initialValue.isNotEmpty)
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: const Text('清除'),
+          ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

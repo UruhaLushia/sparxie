@@ -184,6 +184,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kImportedFonts = 'importedFonts';
   static const _kAllowInsecureOnlineResources = 'allowInsecureOnlineResources';
   static const _kUpdateChannel = 'updateChannel';
+  static const _kGitHubToken = 'githubToken';
   static const _kGlobalThemeColor = 'globalThemeColor';
   static const _kAutomaticColor = 'automaticColor';
   static const _kAutomaticColorSource = 'automaticColorSource';
@@ -670,6 +671,14 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setUpdateChannel(UpdateChannel value) async {
     if (value == updateChannel) return;
     _put(_kUpdateChannel, value.name);
+  }
+
+  String get githubToken => _str(_kGitHubToken, '').trim();
+
+  Future<void> setGitHubToken(String value) async {
+    final token = value.trim();
+    if (token == githubToken) return;
+    _put(_kGitHubToken, token);
   }
 
   int get globalThemeColor => _int(_kGlobalThemeColor, defaultGlobalThemeColor);
