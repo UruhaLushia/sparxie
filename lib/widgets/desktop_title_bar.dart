@@ -94,10 +94,93 @@ class _DesktopTitleBarFrameState extends State<DesktopTitleBarFrame>
     final content =
         !supportsCustomTitleBar || !widget.showTitleBar || _fullScreen
         ? widget.child
+        : isMacOSPlatform
+        ? _MacCustomTitleBar(child: widget.child)
         : _CustomTitleBar(maximized: _maximized, child: widget.child);
     return _DesktopTitleBarScope(
       contentDragging: contentDragging,
       child: content,
+    );
+  }
+}
+
+class _MacCustomTitleBar extends StatefulWidget {
+  const _MacCustomTitleBar({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_MacCustomTitleBar> createState() => _MacCustomTitleBarState();
+}
+
+class _MacCustomTitleBarState extends State<_MacCustomTitleBar> {
+  static const _fallbackHeight = 28.0;
+
+  var _height = _fallbackHeight;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadTitleBarHeight());
+  }
+
+  Future<void> _loadTitleBarHeight() async {
+    try {
+      final height = await windowManager.getTitleBarHeight();
+      if (!mounted || height <= 0) return;
+      setState(() => _height = height.toDouble());
+    } catch (_) {
+      // Keep the standard logical-point fallback if native sizing is unavailable.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final surfaceTheme = AppSurfaceTheme.of(context);
+    return Column(
+      children: [
+        SizedBox(
+          height: _height,
+          child: AppSurfaceBackdrop(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: surfaceTheme.chromeColor(scheme.surface),
+                border: Border(
+                  bottom: surfaceTheme.outlineSide(
+                    scheme.outlineVariant.withValues(alpha: 0.65),
+                  ),
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DragToMoveArea(
+                      child: SizedBox.expand(),
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: Center(
+                      child: Text(
+                        'Sparxie',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Route transitions and composited background followers may transform
+        // beyond their layout bounds. Keep them below the window chrome.
+        Expanded(child: ClipRect(child: widget.child)),
+      ],
     );
   }
 }

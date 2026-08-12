@@ -50,6 +50,7 @@ import 'widgets/desktop_title_bar.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'widgets/page_body_transition.dart';
 import 'widgets/section_panel.dart';
+import 'platform_capabilities.dart';
 import 'window_state.dart';
 
 part 'app_theme.dart';
@@ -67,9 +68,11 @@ Future<void> main() async {
   final prefs = await AppPrefs.load(config);
   // Restore the desktop window's saved size / position / maximized state.
   // No-op on mobile and web — `WindowState.bind` short-circuits there.
+  final titleBarConfig = _windowTitleBarConfig(prefs.desktopTitleBarMode);
   final windowState = await WindowState.bind(
     config,
-    titleBarHidden: prefs.desktopTitleBarMode != DesktopTitleBarMode.system,
+    titleBarHidden: titleBarConfig.titleBarHidden,
+    windowButtonVisibility: titleBarConfig.windowButtonVisibility,
   );
   await _initRust();
   final systemAccentColor = await SystemAccentColor.load(
@@ -129,9 +132,11 @@ Future<void> main() async {
     final nextTitleBarMode = prefs.desktopTitleBarMode;
     if (nextTitleBarMode != titleBarMode) {
       titleBarMode = nextTitleBarMode;
+      final titleBarConfig = _windowTitleBarConfig(nextTitleBarMode);
       unawaited(
         windowState?.setTitleBarHidden(
-          nextTitleBarMode != DesktopTitleBarMode.system,
+          titleBarConfig.titleBarHidden,
+          windowButtonVisibility: titleBarConfig.windowButtonVisibility,
         ),
       );
     }
@@ -154,6 +159,18 @@ Future<void> main() async {
       backgroundAccentColor: backgroundAccentColor,
       appLinks: appLinks,
     ),
+  );
+}
+
+({bool titleBarHidden, bool windowButtonVisibility}) _windowTitleBarConfig(
+  DesktopTitleBarMode mode,
+) {
+  final nativeMacButtons =
+      isMacOSPlatform && mode == DesktopTitleBarMode.custom;
+  return (
+    titleBarHidden: mode != DesktopTitleBarMode.system,
+    windowButtonVisibility:
+        mode == DesktopTitleBarMode.system || nativeMacButtons,
   );
 }
 

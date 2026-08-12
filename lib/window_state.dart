@@ -10,7 +10,11 @@ import 'config_store.dart';
 /// Desktop-only persistence of the OS window's geometry. Mobile/web
 /// targets are no-ops.
 class WindowState with WindowListener {
-  WindowState._(this._store, this._titleBarHidden);
+  WindowState._(
+    this._store,
+    this._titleBarHidden,
+    this._windowButtonVisibility,
+  );
 
   static const _kWidth = 'width';
   static const _kHeight = 'height';
@@ -27,6 +31,7 @@ class WindowState with WindowListener {
 
   final JsonStore _store;
   bool _titleBarHidden;
+  bool _windowButtonVisibility;
   Timer? _saveTimer;
 
   Map<String, dynamic> get _s => _store.section('window');
@@ -37,13 +42,14 @@ class WindowState with WindowListener {
   static Future<WindowState?> bind(
     JsonStore store, {
     required bool titleBarHidden,
+    required bool windowButtonVisibility,
   }) async {
     if (!_isDesktop) return null;
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(_minimumSize);
     // setPreventClose lets us flush a pending save before the process exits.
     await windowManager.setPreventClose(true);
-    final state = WindowState._(store, titleBarHidden);
+    final state = WindowState._(store, titleBarHidden, windowButtonVisibility);
     await state._restore();
     windowManager.addListener(state);
     return state;
@@ -75,7 +81,7 @@ class WindowState with WindowListener {
         titleBarStyle: _titleBarHidden
             ? TitleBarStyle.hidden
             : TitleBarStyle.normal,
-        windowButtonVisibility: !_titleBarHidden,
+        windowButtonVisibility: _windowButtonVisibility,
       ),
       () async {
         // setSize + setPosition rather than setBounds — the latter's
@@ -97,12 +103,19 @@ class WindowState with WindowListener {
     );
   }
 
-  Future<void> setTitleBarHidden(bool value) async {
-    if (value == _titleBarHidden) return;
+  Future<void> setTitleBarHidden(
+    bool value, {
+    required bool windowButtonVisibility,
+  }) async {
+    if (value == _titleBarHidden &&
+        windowButtonVisibility == _windowButtonVisibility) {
+      return;
+    }
     _titleBarHidden = value;
+    _windowButtonVisibility = windowButtonVisibility;
     await windowManager.setTitleBarStyle(
       value ? TitleBarStyle.hidden : TitleBarStyle.normal,
-      windowButtonVisibility: !value,
+      windowButtonVisibility: windowButtonVisibility,
     );
   }
 
