@@ -6,6 +6,9 @@ bool get supportsProcessIdentity =>
 
 bool get supportsCustomTitleBar => isDesktopPlatform;
 
+bool get isMacOSPlatform =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
 bool get isDesktopPlatform =>
     !kIsWeb &&
     switch (defaultTargetPlatform) {

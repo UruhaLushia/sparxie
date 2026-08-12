@@ -51,3 +51,11 @@ app.*.map.json
 
 # VS Code Dart extension scratch
 /devtools_options.yaml
+
+# CodeGraph files
+/.codegraph/
+
+# Flutter-generated CocoaPods compatibility files
+/ios/Podfile
+/macos/Podfile
+/macos/Podfile.lock
