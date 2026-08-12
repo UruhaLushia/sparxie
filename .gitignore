@@ -57,5 +57,11 @@ app.*.map.json
 
 # Flutter-generated CocoaPods compatibility files
 /ios/Podfile
+/ios/Flutter/Debug.xcconfig
+/ios/Flutter/Release.xcconfig
 /macos/Podfile
 /macos/Podfile.lock
+/macos/Flutter/Flutter-Debug.xcconfig
+/macos/Flutter/Flutter-Release.xcconfig
+/macos/Runner.xcodeproj/project.pbxproj
+/macos/Runner.xcworkspace/contents.xcworkspacedata

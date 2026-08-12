@@ -153,11 +153,14 @@ class _MacCustomTitleBarState extends State<_MacCustomTitleBar> {
                   ),
                 ),
               ),
-              child: SizedBox.expand(
-                child: DragToMoveArea(
-                  child: Padding(
-                    // Leave the native traffic lights a clear hit target.
-                    padding: const EdgeInsets.only(left: 88, right: 16),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DragToMoveArea(
+                      child: SizedBox.expand(),
+                    ),
+                  ),
+                  IgnorePointer(
                     child: Center(
                       child: Text(
                         'Sparxie',
@@ -169,7 +172,7 @@ class _MacCustomTitleBarState extends State<_MacCustomTitleBar> {
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
