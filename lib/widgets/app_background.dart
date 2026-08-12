@@ -334,18 +334,19 @@ class _AppBackgroundTransitionState extends State<_AppBackgroundTransition>
 
   late AppBackgroundConfig _current = widget.config;
   AppBackgroundConfig? _next;
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _duration,
-  )..addStatusListener(_handleAnimationStatus);
-  late final CurvedAnimation _transition = CurvedAnimation(
-    parent: _controller,
-    curve: _curve,
-  );
-  late final Animation<double> _scale = Tween<double>(
-    begin: 1.012,
-    end: 1,
-  ).animate(_transition);
+  late final AnimationController _controller;
+  late final CurvedAnimation _transition;
+  late final Animation<double> _scale;
+  var _animationInitialized = false;
+
+  void _ensureAnimation() {
+    if (_animationInitialized) return;
+    _controller = AnimationController(vsync: this, duration: _duration)
+      ..addStatusListener(_handleAnimationStatus);
+    _transition = CurvedAnimation(parent: _controller, curve: _curve);
+    _scale = Tween<double>(begin: 1.012, end: 1).animate(_transition);
+    _animationInitialized = true;
+  }
 
   @override
   void didUpdateWidget(covariant _AppBackgroundTransition oldWidget) {
@@ -354,7 +355,7 @@ class _AppBackgroundTransitionState extends State<_AppBackgroundTransition>
     if (config.transitionKey == _current.transitionKey) {
       _current = config;
       _next = null;
-      _controller.reset();
+      if (_animationInitialized) _controller.reset();
       return;
     }
     if (config.transitionKey == _next?.transitionKey) {
@@ -362,6 +363,7 @@ class _AppBackgroundTransitionState extends State<_AppBackgroundTransition>
       return;
     }
     _next = config;
+    _ensureAnimation();
     _controller.reset();
     if (config.source == AppBackgroundSource.theme ||
         config.imagePath.isEmpty) {
@@ -371,10 +373,12 @@ class _AppBackgroundTransitionState extends State<_AppBackgroundTransition>
 
   @override
   void dispose() {
-    _transition.dispose();
-    _controller
-      ..removeStatusListener(_handleAnimationStatus)
-      ..dispose();
+    if (_animationInitialized) {
+      _transition.dispose();
+      _controller
+        ..removeStatusListener(_handleAnimationStatus)
+        ..dispose();
+    }
     super.dispose();
   }
 
