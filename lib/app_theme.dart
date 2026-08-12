@@ -221,7 +221,9 @@ ThemeData _appTheme({
       ),
     ),
     appBarTheme: AppBarThemeData(
-      backgroundColor: surfaceTheme.chromeColor(scheme.surface),
+      backgroundColor: surfaceTheme.enabled
+          ? Colors.transparent
+          : scheme.surface,
       surfaceTintColor: Colors.transparent,
     ),
     dialogTheme: DialogThemeData(

@@ -125,7 +125,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: AppBar(
           leading: AppRouteAppBar.leadingOf(context),
           automaticallyImplyLeading: false,
-          backgroundColor: surfaceTheme.chromeColor(scheme.surface),
           scrolledUnderElevation: 0,
           flexibleSpace: const DesktopAppBarDragArea(),
           title: Row(

@@ -267,29 +267,25 @@ class _AppBackgroundFrameState extends State<AppBackgroundFrame> {
       focalPoint: focalPoint ? widget.focalPoint : Alignment.center,
       zoom: focalPoint ? widget.zoom : AppPrefs.defaultBackgroundZoom,
     );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return AppBackgroundScope(
-          config: config,
-          viewportSize: constraints.biggest,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: _AppBackgroundTransition(config: config),
-                ),
-              ),
-              Positioned.fill(
-                child: BackdropGroup(
-                  backdropKey: _backdropKey,
-                  child: widget.child,
-                ),
-              ),
-            ],
+    return AppBackgroundScope(
+      config: config,
+      viewportSize: MediaQuery.sizeOf(context),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: _AppBackgroundTransition(config: config),
+            ),
           ),
-        );
-      },
+          Positioned.fill(
+            child: BackdropGroup(
+              backdropKey: _backdropKey,
+              child: widget.child,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -656,12 +652,14 @@ class AppSurfaceBackdrop extends StatelessWidget {
     this.borderRadius = BorderRadius.zero,
     this.surfaceTheme,
     this.grouped = false,
+    this.local = false,
   });
 
   final Widget child;
   final BorderRadiusGeometry borderRadius;
   final AppSurfaceTheme? surfaceTheme;
   final bool grouped;
+  final bool local;
 
   @override
   Widget build(BuildContext context) {
@@ -671,7 +669,7 @@ class AppSurfaceBackdrop extends StatelessWidget {
     // Keep mobile filters local so moving surfaces do not share a stale
     // backdrop snapshot. Page bodies no longer use an opacity layer, so the
     // platform-safe srcOver blend is also the correct choice while scrolling.
-    final filtered = isMobilePlatform && !grouped
+    final filtered = local || (isMobilePlatform && !grouped)
         ? BackdropFilter(filterConfig: filterConfig, child: child)
         : BackdropFilter.grouped(filterConfig: filterConfig, child: child);
     if (borderRadius == BorderRadius.zero) return ClipRect(child: filtered);

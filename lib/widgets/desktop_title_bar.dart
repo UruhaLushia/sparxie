@@ -156,9 +156,7 @@ class _MacCustomTitleBarState extends State<_MacCustomTitleBar> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: DragToMoveArea(
-                      child: SizedBox.expand(),
-                    ),
+                    child: DragToMoveArea(child: SizedBox.expand()),
                   ),
                   IgnorePointer(
                     child: Center(
@@ -272,10 +270,18 @@ class DesktopAppBarDragArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surfaceTheme = AppSurfaceTheme.of(context);
     final child = _DesktopTitleBarScope.contentDraggingOf(context)
         ? const DragToMoveArea(child: SizedBox.expand())
         : const SizedBox.expand();
-    return AppSurfaceBackdrop(child: child);
+    return AppSurfaceBackdrop(
+      local: true,
+      child: ColoredBox(
+        color: surfaceTheme.chromeColor(theme.colorScheme.surface),
+        child: child,
+      ),
+    );
   }
 }
 

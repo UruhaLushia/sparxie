@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'app_background.dart';
-
 class _RouteAppBarHeroTag {
   const _RouteAppBarHeroTag();
 }
@@ -44,7 +42,7 @@ class AppRouteAppBar extends StatelessWidget implements PreferredSizeWidget {
     BuildContext toHeroContext,
   ) {
     final destination = toHeroContext.widget as Hero;
-    Widget header = AppBackdropGroup(child: destination.child);
+    Widget header = destination.child;
     final mediaQuery = MediaQuery.maybeOf(toHeroContext);
     if (mediaQuery != null) {
       header = MediaQuery(data: mediaQuery, child: header);
