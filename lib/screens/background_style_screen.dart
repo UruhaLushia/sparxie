@@ -240,16 +240,16 @@ class _BackgroundStyleScreenState extends State<BackgroundStyleScreen> {
         const SizedBox(height: 8),
         CompactSegmentedButton<BackgroundRotationTrigger>(
           expanded: true,
-          segments: const [
-            ButtonSegment(
+          segments: [
+            const ButtonSegment(
               value: BackgroundRotationTrigger.appLaunch,
               icon: Icon(Icons.restart_alt_rounded),
               label: Text('重新启动'),
             ),
             ButtonSegment(
               value: BackgroundRotationTrigger.appResume,
-              icon: Icon(Icons.play_arrow_rounded),
-              label: Text('恢复前台'),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: Text(isDesktopPlatform ? '最小化恢复' : '恢复前台'),
             ),
           ],
           selected: {prefs.backgroundRotationTrigger},

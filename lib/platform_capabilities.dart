@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart'
 bool get supportsProcessIdentity =>
     !kIsWeb && defaultTargetPlatform != TargetPlatform.iOS;
 
-bool get supportsCustomTitleBar =>
+bool get supportsCustomTitleBar => isDesktopPlatform;
+
+bool get isDesktopPlatform =>
     !kIsWeb &&
     switch (defaultTargetPlatform) {
       TargetPlatform.linux ||

@@ -277,19 +277,7 @@ class _AppBackgroundFrameState extends State<AppBackgroundFrame> {
             children: [
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 280),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    layoutBuilder: (currentChild, previousChildren) => Stack(
-                      fit: StackFit.expand,
-                      children: [...previousChildren, ?currentChild],
-                    ),
-                    child: SizedBox.expand(
-                      key: ValueKey(config.transitionKey),
-                      child: _AppBackgroundVisual(config: config),
-                    ),
-                  ),
+                  child: _AppBackgroundTransition(config: config),
                 ),
               ),
               Positioned.fill(
@@ -307,9 +295,10 @@ class _AppBackgroundFrameState extends State<AppBackgroundFrame> {
 }
 
 class _AppBackgroundVisual extends StatelessWidget {
-  const _AppBackgroundVisual({required this.config});
+  const _AppBackgroundVisual({super.key, required this.config, this.onReady});
 
   final AppBackgroundConfig config;
+  final VoidCallback? onReady;
 
   @override
   Widget build(BuildContext context) {
@@ -322,8 +311,110 @@ class _AppBackgroundVisual extends StatelessWidget {
         fit: config.fit,
         focalPoint: config.focalPoint,
         zoom: config.zoom,
+        onReady: onReady,
       ),
     };
+  }
+}
+
+class _AppBackgroundTransition extends StatefulWidget {
+  const _AppBackgroundTransition({required this.config});
+
+  final AppBackgroundConfig config;
+
+  @override
+  State<_AppBackgroundTransition> createState() =>
+      _AppBackgroundTransitionState();
+}
+
+class _AppBackgroundTransitionState extends State<_AppBackgroundTransition>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 850);
+  static const _curve = Curves.easeInOutSine;
+
+  late AppBackgroundConfig _current = widget.config;
+  AppBackgroundConfig? _next;
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _duration,
+  )..addStatusListener(_handleAnimationStatus);
+  late final CurvedAnimation _transition = CurvedAnimation(
+    parent: _controller,
+    curve: _curve,
+  );
+  late final Animation<double> _scale = Tween<double>(
+    begin: 1.012,
+    end: 1,
+  ).animate(_transition);
+
+  @override
+  void didUpdateWidget(covariant _AppBackgroundTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final config = widget.config;
+    if (config.transitionKey == _current.transitionKey) {
+      _current = config;
+      _next = null;
+      _controller.reset();
+      return;
+    }
+    if (config.transitionKey == _next?.transitionKey) {
+      _next = config;
+      return;
+    }
+    _next = config;
+    _controller.reset();
+    if (config.source == AppBackgroundSource.theme ||
+        config.imagePath.isEmpty) {
+      _startTransition();
+    }
+  }
+
+  @override
+  void dispose() {
+    _transition.dispose();
+    _controller
+      ..removeStatusListener(_handleAnimationStatus)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _startTransition() {
+    if (!mounted || _next == null || _controller.isAnimating) return;
+    _controller.forward();
+  }
+
+  void _handleAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    setState(() {
+      _current = _next ?? _current;
+      _next = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final next = _next;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _AppBackgroundVisual(
+          key: ValueKey(_current.transitionKey),
+          config: _current,
+        ),
+        if (next != null)
+          FadeTransition(
+            opacity: _transition,
+            child: ScaleTransition(
+              scale: _scale,
+              child: _AppBackgroundVisual(
+                key: ValueKey(next.transitionKey),
+                config: next,
+                onReady: _startTransition,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -366,7 +457,7 @@ class _AppRouteBackgroundState extends State<AppRouteBackground> {
               maxHeight: viewportSize.height,
               child: SizedBox.fromSize(
                 size: viewportSize,
-                child: _AppBackgroundVisual(config: scope.config),
+                child: _AppBackgroundTransition(config: scope.config),
               ),
             ),
           ),
@@ -423,6 +514,7 @@ class _BackgroundImage extends StatefulWidget {
     required this.fit,
     required this.focalPoint,
     required this.zoom,
+    this.onReady,
   });
 
   final String path;
@@ -430,6 +522,7 @@ class _BackgroundImage extends StatefulWidget {
   final AppBackgroundFit fit;
   final Alignment focalPoint;
   final double zoom;
+  final VoidCallback? onReady;
 
   @override
   State<_BackgroundImage> createState() => _BackgroundImageState();
@@ -439,6 +532,7 @@ class _BackgroundImageState extends State<_BackgroundImage> {
   Size? _sourceSize;
   var _loadFailed = false;
   var _loadGeneration = 0;
+  var _readyNotified = false;
 
   @override
   void initState() {
@@ -456,6 +550,7 @@ class _BackgroundImageState extends State<_BackgroundImage> {
     final generation = ++_loadGeneration;
     _sourceSize = BackgroundImageStore.cachedImageSize(widget.path);
     _loadFailed = false;
+    _readyNotified = false;
     if (widget.path.isEmpty || _sourceSize != null) return;
     BackgroundImageStore.imageSize(widget.path).then(
       (size) {
@@ -465,8 +560,17 @@ class _BackgroundImageState extends State<_BackgroundImage> {
       onError: (_, _) {
         if (!mounted || generation != _loadGeneration) return;
         setState(() => _loadFailed = true);
+        _notifyReady();
       },
     );
+  }
+
+  void _notifyReady() {
+    if (_readyNotified) return;
+    _readyNotified = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onReady?.call();
+    });
   }
 
   @override
@@ -506,7 +610,14 @@ class _BackgroundImageState extends State<_BackgroundImage> {
                   fit: BoxFit.fill,
                   filterQuality: FilterQuality.medium,
                   gaplessPlayback: true,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  frameBuilder: (context, child, frame, loadedSynchronously) {
+                    if (loadedSynchronously || frame != null) _notifyReady();
+                    return child;
+                  },
+                  errorBuilder: (_, _, _) {
+                    _notifyReady();
+                    return const SizedBox.shrink();
+                  },
                 ),
               ),
             ],

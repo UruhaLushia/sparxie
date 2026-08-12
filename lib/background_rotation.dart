@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_prefs.dart';
+import 'platform_capabilities.dart';
 
 class BackgroundRotationController with WidgetsBindingObserver, WindowListener {
   BackgroundRotationController(this._prefs);
@@ -23,7 +23,7 @@ class BackgroundRotationController with WidgetsBindingObserver, WindowListener {
     final state = WidgetsBinding.instance.lifecycleState;
     _hasEnteredForeground = state == null || state == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
-    if (_isDesktop) windowManager.addListener(this);
+    if (isDesktopPlatform) windowManager.addListener(this);
     unawaited(_advance(BackgroundRotationTrigger.appLaunch));
   }
 
@@ -31,12 +31,12 @@ class BackgroundRotationController with WidgetsBindingObserver, WindowListener {
     if (!_started) return;
     _started = false;
     WidgetsBinding.instance.removeObserver(this);
-    if (_isDesktop) windowManager.removeListener(this);
+    if (isDesktopPlatform) windowManager.removeListener(this);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_isDesktop) return;
+    if (isDesktopPlatform) return;
     switch (state) {
       case AppLifecycleState.resumed:
         _enterForeground();
@@ -54,15 +54,6 @@ class BackgroundRotationController with WidgetsBindingObserver, WindowListener {
 
   @override
   void onWindowRestore() => _enterForeground();
-
-  bool get _isDesktop =>
-      !kIsWeb &&
-      switch (defaultTargetPlatform) {
-        TargetPlatform.linux ||
-        TargetPlatform.macOS ||
-        TargetPlatform.windows => true,
-        _ => false,
-      };
 
   void _leaveForeground() {
     if (_hasEnteredForeground) _leftForeground = true;
