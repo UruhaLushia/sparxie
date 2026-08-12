@@ -1,18 +1,20 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'app_prefs.dart';
 
-class BackgroundRotationController with WidgetsBindingObserver {
+class BackgroundRotationController with WidgetsBindingObserver, WindowListener {
   BackgroundRotationController(this._prefs);
 
   final AppPrefs _prefs;
   final _random = math.Random();
   bool _started = false;
   bool _hasEnteredForeground = false;
-  bool _wasBackgrounded = false;
+  bool _leftForeground = false;
   bool _advancing = false;
 
   void start() {
@@ -21,6 +23,7 @@ class BackgroundRotationController with WidgetsBindingObserver {
     final state = WidgetsBinding.instance.lifecycleState;
     _hasEnteredForeground = state == null || state == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
+    if (_isDesktop) windowManager.addListener(this);
     unawaited(_advance(BackgroundRotationTrigger.appLaunch));
   }
 
@@ -28,24 +31,49 @@ class BackgroundRotationController with WidgetsBindingObserver {
     if (!_started) return;
     _started = false;
     WidgetsBinding.instance.removeObserver(this);
+    if (_isDesktop) windowManager.removeListener(this);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_isDesktop) return;
     switch (state) {
       case AppLifecycleState.resumed:
-        final resumedFromBackground = _hasEnteredForeground && _wasBackgrounded;
-        _hasEnteredForeground = true;
-        _wasBackgrounded = false;
-        if (resumedFromBackground) {
-          unawaited(_advance(BackgroundRotationTrigger.appResume));
-        }
+        _enterForeground();
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
-        if (_hasEnteredForeground) _wasBackgrounded = true;
+        _leaveForeground();
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
         break;
+    }
+  }
+
+  @override
+  void onWindowMinimize() => _leaveForeground();
+
+  @override
+  void onWindowRestore() => _enterForeground();
+
+  bool get _isDesktop =>
+      !kIsWeb &&
+      switch (defaultTargetPlatform) {
+        TargetPlatform.linux ||
+        TargetPlatform.macOS ||
+        TargetPlatform.windows => true,
+        _ => false,
+      };
+
+  void _leaveForeground() {
+    if (_hasEnteredForeground) _leftForeground = true;
+  }
+
+  void _enterForeground() {
+    final shouldAdvance = _hasEnteredForeground && _leftForeground;
+    _hasEnteredForeground = true;
+    _leftForeground = false;
+    if (shouldAdvance) {
+      unawaited(_advance(BackgroundRotationTrigger.appResume));
     }
   }
 
