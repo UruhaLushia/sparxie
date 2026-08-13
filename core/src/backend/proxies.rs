@@ -16,6 +16,17 @@ pub async fn controller_groups(target: BackendTarget) -> Result<String, MihomoEr
                     .join("\n"),
             )
         }
+        BackendType::SurgeController => Ok(crate::surge_controller::api::proxy_catalog(
+            target.surge_controller(),
+            true,
+            String::new(),
+        )
+        .await?
+        .groups
+        .into_iter()
+        .map(|group| group.name)
+        .collect::<Vec<_>>()
+        .join("\n")),
         BackendType::SingBox => {
             Ok(
                 crate::sing_box::api::proxy_catalog(target.sing_box(), true, String::new())
@@ -49,6 +60,18 @@ pub async fn controller_proxies(
                 .map(|group| group.name)
                 .collect::<Vec<_>>(),
         )?),
+        BackendType::SurgeController => Ok(serde_json::to_string(
+            &crate::surge_controller::api::proxy_catalog(
+                target.surge_controller(),
+                true,
+                String::new(),
+            )
+            .await?
+            .groups
+            .into_iter()
+            .map(|group| group.name)
+            .collect::<Vec<_>>(),
+        )?),
         BackendType::SingBox => Ok(serde_json::to_string(
             &crate::sing_box::api::proxy_catalog(target.sing_box(), true, String::new())
                 .await?
@@ -67,6 +90,9 @@ pub async fn controller_proxy_detail(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::proxy_detail(target.clash(), name).await,
         BackendType::Surge => Ok(serde_json::json!({ "name": name }).to_string()),
+        BackendType::SurgeController => {
+            crate::surge_controller::api::proxy_detail(target.surge_controller(), name).await
+        }
         BackendType::SingBox => Ok(serde_json::json!({ "name": name }).to_string()),
     }
 }
@@ -79,6 +105,9 @@ pub async fn controller_select_proxy(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::select_proxy(target.clash(), group, name).await,
         BackendType::Surge => crate::surge::api::select_proxy(target.surge(), group, name).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::select_proxy(target.surge_controller(), group, name).await
+        }
         BackendType::SingBox => {
             crate::sing_box::api::select_proxy(target.sing_box(), group, name).await
         }
@@ -92,6 +121,9 @@ pub async fn controller_unfix_proxy(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::unfix_proxy(target.clash(), name).await,
         BackendType::Surge => crate::surge::api::unfix_proxy(target.surge(), name).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::unfix_proxy(target.surge_controller(), name).await
+        }
         BackendType::SingBox => crate::sing_box::api::unfix_proxy(target.sing_box(), name).await,
     }
 }
@@ -113,6 +145,14 @@ pub async fn controller_proxy_catalog(
         .into()),
         BackendType::Surge => {
             crate::surge::api::proxy_catalog(target.surge(), include_hidden, filter).await
+        }
+        BackendType::SurgeController => {
+            crate::surge_controller::api::proxy_catalog(
+                target.surge_controller(),
+                include_hidden,
+                filter,
+            )
+            .await
         }
         BackendType::SingBox => {
             crate::sing_box::api::proxy_catalog(target.sing_box(), include_hidden, filter).await
@@ -145,6 +185,19 @@ pub async fn controller_proxy_group_members(
         BackendType::Surge => Ok(member_window(
             crate::surge::api::proxy_group_members(
                 target.surge(),
+                group,
+                if locate_current { 0 } else { offset },
+                if locate_current { u32::MAX } else { limit },
+                member_sort,
+            )
+            .await?,
+            offset,
+            limit,
+            current_name.as_deref(),
+        )),
+        BackendType::SurgeController => Ok(member_window(
+            crate::surge_controller::api::proxy_group_members(
+                target.surge_controller(),
                 group,
                 if locate_current { 0 } else { offset },
                 if locate_current { u32::MAX } else { limit },

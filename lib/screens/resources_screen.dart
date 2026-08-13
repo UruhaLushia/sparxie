@@ -112,6 +112,7 @@ class _RuleProviderSection extends StatefulWidget {
 
 class _ProxyProvider {
   _ProxyProvider({
+    required this.key,
     required this.name,
     required this.vehicleType,
     required this.proxies,
@@ -122,6 +123,7 @@ class _ProxyProvider {
 
   factory _ProxyProvider.fromRust(rust.ProxyProviderEntry entry) {
     return _ProxyProvider(
+      key: entry.key,
       name: entry.name,
       vehicleType: entry.vehicleType,
       proxies: entry.proxies,
@@ -138,12 +140,15 @@ class _ProxyProvider {
     );
   }
 
+  final String key;
   final String name;
   final String vehicleType;
   final int proxies;
   final DateTime? updatedAt;
   final bool updatable;
   final _SubscriptionInfo? subscription;
+
+  bool get nodesAvailable => proxies > 0;
 }
 
 class _SubscriptionInfo {
@@ -164,6 +169,7 @@ class _SubscriptionInfo {
 
 class _RuleProvider {
   _RuleProvider({
+    required this.key,
     required this.name,
     required this.vehicleType,
     required this.behavior,
@@ -175,6 +181,7 @@ class _RuleProvider {
 
   factory _RuleProvider.fromRust(rust.RuleProviderEntry entry) {
     return _RuleProvider(
+      key: entry.key,
       name: entry.name,
       vehicleType: entry.vehicleType,
       behavior: entry.behavior,
@@ -185,6 +192,7 @@ class _RuleProvider {
     );
   }
 
+  final String key;
   final String name;
   final String vehicleType;
   final String behavior;
@@ -192,6 +200,8 @@ class _RuleProvider {
   final int ruleCount;
   final DateTime? updatedAt;
   final bool updatable;
+
+  String get kind => vehicleType.toLowerCase();
 }
 
 DateTime? _parseDateTime(String value) =>
@@ -210,6 +220,9 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   final Set<String> _busy = <String>{};
   List<_ProxyProvider> _items = const [];
   bool _updatingAll = false;
+
+  bool get _isSurgeController =>
+      widget.store.active?.type == ctl.BackendType.surgeController;
 
   @override
   void initState() {
@@ -249,9 +262,9 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
   Future<void> _update(_ProxyProvider p) async {
     final target = _targetFor(widget.store);
     if (target == null || _updatingAll) return;
-    setState(() => _busy.add(p.name));
+    setState(() => _busy.add(p.key));
     try {
-      await rust.controllerProxyProviderUpdate(target: target, name: p.name);
+      await rust.controllerProxyProviderUpdate(target: target, name: p.key);
       await _refresh(force: true);
     } catch (e) {
       if (!mounted) return;
@@ -259,7 +272,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
         SnackBar(content: Text('${p.name} 更新失败:${_formatError(e)}')),
       );
     } finally {
-      if (mounted) setState(() => _busy.remove(p.name));
+      if (mounted) setState(() => _busy.remove(p.key));
     }
   }
 
@@ -271,6 +284,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
         AppPageRoute<void>(
           builder: (_) => ProxyProviderNodesScreen(
             target: target,
+            providerKey: provider.key,
             providerName: provider.name,
             prefs: widget.prefs,
           ),
@@ -290,7 +304,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
         try {
           await rust.controllerProxyProviderUpdate(
             target: target,
-            name: provider.name,
+            name: provider.key,
           );
         } catch (error) {
           failures.add('${provider.name}: ${_formatError(error)}');
@@ -314,7 +328,7 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
       builder: (context, _) {
         final style = widget.prefs.proxyProviderStyle;
         return SectionPanel(
-          title: '代理订阅',
+          title: _isSurgeController ? '策略组' : '代理订阅',
           icon: Icons.cloud_queue_outlined,
           trailing: _ProviderActions(
             hasUpdates: _items.any((provider) => provider.updatable),
@@ -322,13 +336,12 @@ class _ProxyProviderSectionState extends State<_ProxyProviderSection> {
             loading: _loading,
             updatingAll: _updatingAll,
             onUpdateAll: _updateAll,
-            onRefresh: () => _refresh(force: true),
           ),
           child: _ProviderBody(
             loading: _loading && _items.isEmpty,
             error: _error,
             empty: _items.isEmpty,
-            emptyText: '暂无代理订阅',
+            emptyText: _isSurgeController ? '暂无策略组资源' : '暂无代理订阅',
             children: [
               _ProxyProviderList(
                 providers: _items,
@@ -355,6 +368,9 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   final Set<String> _busy = <String>{};
   List<_RuleProvider> _items = const [];
   bool _updatingAll = false;
+
+  bool get _isSurgeController =>
+      widget.store.active?.type == ctl.BackendType.surgeController;
 
   @override
   void initState() {
@@ -394,9 +410,9 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
   Future<void> _update(_RuleProvider p) async {
     final target = _targetFor(widget.store);
     if (target == null || _updatingAll) return;
-    setState(() => _busy.add(p.name));
+    setState(() => _busy.add(p.key));
     try {
-      await rust.controllerRuleProviderUpdate(target: target, name: p.name);
+      await rust.controllerRuleProviderUpdate(target: target, name: p.key);
       await _refresh(force: true);
     } catch (e) {
       if (!mounted) return;
@@ -404,13 +420,13 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
         SnackBar(content: Text('${p.name} 更新失败:${_formatError(e)}')),
       );
     } finally {
-      if (mounted) setState(() => _busy.remove(p.name));
+      if (mounted) setState(() => _busy.remove(p.key));
     }
   }
 
-  Future<void> _updateAll() async {
+  Future<void> _updateAll(List<_RuleProvider> items) async {
     final target = _targetFor(widget.store);
-    final providers = _items.where((p) => p.updatable).toList(growable: false);
+    final providers = items.where((p) => p.updatable).toList(growable: false);
     if (target == null || providers.isEmpty) return;
     final failures = <String>[];
     setState(() => _updatingAll = true);
@@ -419,7 +435,7 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
         try {
           await rust.controllerRuleProviderUpdate(
             target: target,
-            name: provider.name,
+            name: provider.key,
           );
         } catch (error) {
           failures.add('${provider.name}: ${_formatError(error)}');
@@ -441,29 +457,68 @@ class _RuleProviderSectionState extends State<_RuleProviderSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isSurgeController) {
+      return _buildSection(
+        title: '规则集',
+        icon: Icons.rule,
+        emptyText: '暂无规则集',
+        items: _items,
+      );
+    }
+    final rules = _items
+        .where((item) => const {'ruleset', 'domainset'}.contains(item.kind))
+        .toList(growable: false);
+    final scripts = _items
+        .where((item) => item.kind == 'script')
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSection(
+          title: '规则',
+          icon: Icons.rule,
+          emptyText: '暂无规则资源',
+          items: rules,
+        ),
+        const SizedBox(height: 16),
+        _buildSection(
+          title: '脚本',
+          icon: Icons.code_rounded,
+          emptyText: '暂无脚本资源',
+          items: scripts,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required IconData icon,
+    required String emptyText,
+    required List<_RuleProvider> items,
+  }) {
     return SectionPanel(
-      title: '规则集',
-      icon: Icons.rule,
+      title: title,
+      icon: icon,
       trailing: _ProviderActions(
-        hasUpdates: _items.any((provider) => provider.updatable),
+        hasUpdates: items.any((provider) => provider.updatable),
         busy: _busy.isNotEmpty,
         loading: _loading,
         updatingAll: _updatingAll,
-        onUpdateAll: _updateAll,
-        onRefresh: () => _refresh(force: true),
+        onUpdateAll: () => _updateAll(items),
       ),
       child: _ProviderBody(
         loading: _loading && _items.isEmpty,
         error: _error,
-        empty: _items.isEmpty,
-        emptyText: '暂无规则集',
+        empty: items.isEmpty,
+        emptyText: emptyText,
         children: [
-          for (final p in _items)
+          for (final provider in items)
             _RuleProviderTile(
-              provider: p,
-              busy: _busy.contains(p.name),
+              provider: provider,
+              busy: _busy.contains(provider.key),
               enabled: !_updatingAll,
-              onUpdate: () => _update(p),
+              onUpdate: () => _update(provider),
             ),
         ],
       ),
@@ -478,7 +533,6 @@ class _ProviderActions extends StatelessWidget {
     required this.loading,
     required this.updatingAll,
     required this.onUpdateAll,
-    required this.onRefresh,
   });
 
   final bool hasUpdates;
@@ -486,7 +540,6 @@ class _ProviderActions extends StatelessWidget {
   final bool loading;
   final bool updatingAll;
   final VoidCallback onUpdateAll;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -504,16 +557,6 @@ class _ProviderActions extends StatelessWidget {
                   )
                 : const Icon(Icons.cloud_sync_outlined, size: 20),
           ),
-        IconButton(
-          tooltip: '刷新',
-          onPressed: loading || updatingAll ? null : onRefresh,
-          icon: loading && !updatingAll && !busy
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.refresh, size: 20),
-        ),
       ],
     );
   }
@@ -625,7 +668,7 @@ class _ProxyProviderList extends StatelessWidget {
           if (liquid)
             _LiquidProxyProviderTile(
               provider: providers[i],
-              busy: busy.contains(providers[i].name),
+              busy: busy.contains(providers[i].key),
               enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
               onView: () => onView(providers[i]),
@@ -633,7 +676,7 @@ class _ProxyProviderList extends StatelessWidget {
           else
             _PlainProxyProviderTile(
               provider: providers[i],
-              busy: busy.contains(providers[i].name),
+              busy: busy.contains(providers[i].key),
               enabled: updatesEnabled,
               onUpdate: () => onUpdate(providers[i]),
               onView: () => onView(providers[i]),
@@ -820,8 +863,8 @@ class _ProxyProviderHeader extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 [
-                  provider.vehicleType,
-                  '${provider.proxies} 个节点',
+                  _resourceTypeLabel(provider.vehicleType),
+                  if (provider.nodesAvailable) '${provider.proxies} 个节点',
                   if (updated.isNotEmpty) updated,
                 ].join('  ·  '),
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -834,7 +877,7 @@ class _ProxyProviderHeader extends StatelessWidget {
         ),
         IconButton(
           tooltip: '查看节点',
-          onPressed: provider.proxies == 0 ? null : onView,
+          onPressed: provider.nodesAvailable ? onView : null,
           padding: compact ? EdgeInsets.zero : null,
           constraints: compact
               ? const BoxConstraints.tightFor(width: 36, height: 36)
@@ -989,10 +1032,12 @@ class _RuleProviderTile extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 [
-                  provider.vehicleType,
-                  if (provider.behavior.isNotEmpty) provider.behavior,
+                  _resourceTypeLabel(provider.vehicleType),
+                  if (provider.behavior.isNotEmpty &&
+                      provider.behavior.toLowerCase() != provider.kind)
+                    provider.behavior,
                   if (provider.format.isNotEmpty) provider.format,
-                  '${provider.ruleCount} 条',
+                  if (provider.ruleCount > 0) '${provider.ruleCount} 条',
                   if (updated.isNotEmpty) updated,
                 ].join('  ·  '),
                 style: Theme.of(
@@ -1017,4 +1062,14 @@ class _RuleProviderTile extends StatelessWidget {
       ],
     );
   }
+}
+
+String _resourceTypeLabel(String value) {
+  return switch (value.toLowerCase()) {
+    'policy-group' => '策略组',
+    'ruleset' => '规则集',
+    'domainset' => '域名集',
+    'script' => '脚本',
+    _ => value,
+  };
 }

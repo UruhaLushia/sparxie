@@ -6,11 +6,15 @@ use crate::surge::client::SurgeTarget;
 
 pub async fn load(target: SurgeTarget) -> Result<Vec<RuleEntry>, MihomoError> {
     let raw = target.client()?.get_json("v1/rules").await?;
-    Ok(rule_values(&raw)
+    Ok(parse_rules(&raw))
+}
+
+pub(crate) fn parse_rules(raw: &Value) -> Vec<RuleEntry> {
+    rule_values(raw)
         .into_iter()
         .enumerate()
         .map(|(index, item)| parse_rule(index, &item))
-        .collect())
+        .collect()
 }
 
 fn rule_values(raw: &Value) -> Vec<Value> {

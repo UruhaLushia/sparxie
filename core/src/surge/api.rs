@@ -9,7 +9,7 @@ use crate::surge::client::SurgeTarget;
 mod config;
 mod connections;
 mod policies;
-mod traffic;
+pub(crate) mod traffic;
 mod value;
 
 use config::{profile_general_config, to_surge_mode, to_ui_mode};

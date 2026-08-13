@@ -222,6 +222,9 @@ pub async fn controller_rules_load(
                     .map(Into::into)
                     .collect(),
                 BackendType::Surge => crate::surge::api::fetch_rules(target.surge()).await?,
+                BackendType::SurgeController => {
+                    crate::surge_controller::api::fetch_rules(target.surge_controller()).await?
+                }
                 BackendType::SingBox => Vec::new(),
             };
             if let Some(previous) = previous {
@@ -280,6 +283,9 @@ pub async fn controller_rules_disable(
             crate::clash::api::rules_disable(target.clash(), index, disabled).await?
         }
         BackendType::Surge => return crate::surge::api::unsupported("禁用规则").await,
+        BackendType::SurgeController => {
+            return crate::surge_controller::api::unsupported("禁用规则").await;
+        }
         BackendType::SingBox => return crate::sing_box::api::unsupported("禁用规则").await,
     }
     if let Some(cache) = cache().get(&target.cache_key())

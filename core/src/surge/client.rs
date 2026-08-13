@@ -88,9 +88,10 @@ impl SurgeClient {
 }
 
 pub fn target_key(target: &SurgeTarget) -> String {
+    let key_hash = blake3::hash(target.key.as_deref().unwrap_or_default().as_bytes());
     format!(
         "{}|{}",
         target.base_url.trim_end_matches('/'),
-        target.key.as_deref().unwrap_or("")
+        key_hash.to_hex()
     )
 }

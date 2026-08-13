@@ -781,6 +781,7 @@ class ProxyMemberWindow {
 }
 
 class ProxyProviderEntry {
+  final String key;
   final String name;
   final String vehicleType;
   final int proxies;
@@ -793,6 +794,7 @@ class ProxyProviderEntry {
   final BigInt subscriptionExpire;
 
   const ProxyProviderEntry({
+    required this.key,
     required this.name,
     required this.vehicleType,
     required this.proxies,
@@ -810,6 +812,7 @@ class ProxyProviderEntry {
 
   @override
   int get hashCode =>
+      key.hashCode ^
       name.hashCode ^
       vehicleType.hashCode ^
       proxies.hashCode ^
@@ -826,6 +829,7 @@ class ProxyProviderEntry {
       identical(this, other) ||
       other is ProxyProviderEntry &&
           runtimeType == other.runtimeType &&
+          key == other.key &&
           name == other.name &&
           vehicleType == other.vehicleType &&
           proxies == other.proxies &&
@@ -932,6 +936,7 @@ class RuleEntry {
 }
 
 class RuleProviderEntry {
+  final String key;
   final String name;
   final String vehicleType;
   final String behavior;
@@ -941,6 +946,7 @@ class RuleProviderEntry {
   final bool updatable;
 
   const RuleProviderEntry({
+    required this.key,
     required this.name,
     required this.vehicleType,
     required this.behavior,
@@ -955,6 +961,7 @@ class RuleProviderEntry {
 
   @override
   int get hashCode =>
+      key.hashCode ^
       name.hashCode ^
       vehicleType.hashCode ^
       behavior.hashCode ^
@@ -968,6 +975,7 @@ class RuleProviderEntry {
       identical(this, other) ||
       other is RuleProviderEntry &&
           runtimeType == other.runtimeType &&
+          key == other.key &&
           name == other.name &&
           vehicleType == other.vehicleType &&
           behavior == other.behavior &&

@@ -9,7 +9,9 @@ use crate::MihomoError;
 use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
 use crate::backend::log_store::LogStore;
 use crate::backend::retry::RetryBackoff;
-use crate::surge::client::{SurgeTarget, target_key};
+use crate::surge_controller::client::SurgeControllerTarget;
+
+use super::target::Target;
 
 struct LogSlot {
     store: Mutex<LogStore>,
@@ -23,15 +25,12 @@ fn slots() -> &'static AsyncMutex<SlotMap> {
     M.get_or_init(|| AsyncMutex::new(HashMap::new()))
 }
 
-fn slot_key(target: &SurgeTarget) -> String {
-    target_key(target)
-}
-
 pub async fn subscribe(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     info_capacity: usize,
 ) -> Result<(LogsFrame, broadcast::Receiver<LogsFrame>), MihomoError> {
-    let key = slot_key(&target);
+    let target = target.into();
+    let key = target.key();
     let mut map = slots().lock().await;
     let slot = if let Some(slot) = map.get(&key) {
         slot.clone()
@@ -54,7 +53,7 @@ pub async fn subscribe(
 }
 
 pub async fn fetch_window(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     level: &str,
     query: &str,
     offset: usize,
@@ -62,7 +61,8 @@ pub async fn fetch_window(
     from_end: bool,
     anchor_id: u64,
 ) -> LogWindow {
-    let key = slot_key(&target);
+    let target = target.into();
+    let key = target.key();
     let map = slots().lock().await;
     let Some(slot) = map.get(&key) else {
         return LogWindow::default();
@@ -73,8 +73,9 @@ pub async fn fetch_window(
         .window(level, query, offset, limit, from_end, anchor_id)
 }
 
-pub async fn clear(target: SurgeTarget) {
-    let key = slot_key(&target);
+pub async fn clear(target: impl Into<Target>) {
+    let target = target.into();
+    let key = target.key();
     let map = slots().lock().await;
     if let Some(slot) = map.get(&key) {
         let frame = slot
@@ -86,29 +87,59 @@ pub async fn clear(target: SurgeTarget) {
     }
 }
 
-async fn poll_loop(target: SurgeTarget, key: String, slot: Arc<LogSlot>) {
+async fn poll_loop(target: Target, key: String, slot: Arc<LogSlot>) {
     let mut backoff = RetryBackoff::new();
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
             return;
         }
-        match poll_once(&target, &slot).await {
+        let result = match &target {
+            Target::Http(_) => poll_once(&target, &slot).await,
+            Target::Controller(target) => watch_once(target, &slot).await,
+        };
+        match result {
             Ok(()) => {
                 backoff.reset();
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                if target.is_http() {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
             }
             Err(error) => {
-                eprintln!("[backend] surge events stream {key}: {error}");
+                eprintln!("[backend] surge events stream: {error}");
                 tokio::time::sleep(backoff.next_delay()).await;
             }
         }
     }
 }
 
-async fn poll_once(target: &SurgeTarget, slot: &LogSlot) -> Result<(), MihomoError> {
+async fn poll_once(target: &Target, slot: &LogSlot) -> Result<(), MihomoError> {
+    let Target::Http(target) = target else {
+        return Err(MihomoError::Other("无效的 Surge HTTP 日志目标".into()));
+    };
     let raw = target.client()?.get_json("v1/events").await?;
-    let mut entries = parse_events(&raw);
+    push_raw(slot, &raw);
+    Ok(())
+}
+
+async fn watch_once(target: &SurgeControllerTarget, slot: &LogSlot) -> Result<(), MihomoError> {
+    let mut connection = target.connect().await?;
+    let initial = connection.request(["log"]).await?;
+    push_raw(slot, &initial);
+    connection.send(["log", "watch"]).await?;
+    loop {
+        if slot.sender.receiver_count() == 0 {
+            return Ok(());
+        }
+        match tokio::time::timeout(Duration::from_secs(1), connection.next_stream_value()).await {
+            Ok(raw) => push_raw(slot, &raw?),
+            Err(_) => continue,
+        }
+    }
+}
+
+fn push_raw(slot: &LogSlot, raw: &Value) {
+    let mut entries = parse_events(raw);
     entries.reverse();
     for entry in entries {
         let key = event_key(&entry);
@@ -121,27 +152,43 @@ async fn poll_once(target: &SurgeTarget, slot: &LogSlot) -> Result<(), MihomoErr
             let _ = slot.sender.send(frame);
         }
     }
-    Ok(())
 }
 
 fn parse_events(raw: &Value) -> Vec<LogEntry> {
-    raw.get("events")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(parse_event)
-        .collect()
+    let payload = raw.get("data").unwrap_or(raw);
+    if let Some(entries) = ["events", "logs", "entries"]
+        .iter()
+        .find_map(|key| payload.get(*key).and_then(Value::as_array))
+        .or_else(|| payload.as_array())
+    {
+        return entries.iter().filter_map(parse_event).collect();
+    }
+    parse_event(payload).into_iter().collect()
 }
 
 fn parse_event(raw: &Value) -> Option<LogEntry> {
-    let message = string_field(raw, "content");
+    if let Some(message) = raw.as_str().filter(|message| !message.is_empty()) {
+        return Some(LogEntry {
+            level: "info".into(),
+            message: message.into(),
+            ..Default::default()
+        });
+    }
+    let message = ["content", "message", "text", "output"]
+        .iter()
+        .map(|key| string_field(raw, key))
+        .find(|value| !value.is_empty())?;
     if message.is_empty() {
         return None;
     }
     let identifier = string_field(raw, "identifier");
     Some(LogEntry {
         id: 0,
-        time: string_field(raw, "date"),
+        time: ["date", "time", "timestamp"]
+            .iter()
+            .map(|key| string_field(raw, key))
+            .find(|value| !value.is_empty())
+            .unwrap_or_default(),
         level: event_level(raw, &identifier),
         message,
     })

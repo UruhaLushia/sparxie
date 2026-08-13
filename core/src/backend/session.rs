@@ -72,6 +72,16 @@ pub async fn controller_prepare_target(target: BackendTarget) -> SessionBootstra
                 rule_count: rules.map(|summary| summary.total).unwrap_or_default(),
             }
         }
+        BackendType::SurgeController => {
+            let (_, rules, _) = tokio::join!(
+                super::control::controller_configs(target.clone()),
+                super::rules::controller_rules_load(target.clone(), String::new(), false),
+                super::providers::controller_proxy_provider_catalog(target.clone(), false),
+            );
+            SessionBootstrap {
+                rule_count: rules.map(|summary| summary.total).unwrap_or_default(),
+            }
+        }
         BackendType::SingBox => {
             let _ = tokio::join!(
                 super::control::controller_configs(target.clone()),
@@ -91,6 +101,9 @@ pub(crate) fn release_target(target: &BackendTarget) {
         BackendType::Clash => {
             crate::clash::api::clear_provider_cache(&target.clash());
             crate::clash::api::clear_proxy_catalog_cache(&target.clash());
+        }
+        BackendType::SurgeController => {
+            crate::surge_controller::api::release_target(&target.surge_controller());
         }
         BackendType::Surge | BackendType::SingBox => {}
     }

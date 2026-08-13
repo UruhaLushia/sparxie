@@ -24,11 +24,13 @@ class ProxyProviderNodesScreen extends StatefulWidget {
   const ProxyProviderNodesScreen({
     super.key,
     required this.target,
+    required this.providerKey,
     required this.providerName,
     required this.prefs,
   });
 
   final rust.BackendTarget target;
+  final String providerKey;
   final String providerName;
   final AppPrefs prefs;
 
@@ -107,7 +109,7 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
       try {
         final window = await rust.controllerProxyProviderNodes(
           target: widget.target,
-          name: widget.providerName,
+          name: widget.providerKey,
           filter: request.query,
           offset: request.offset,
           limit: request.limit,
@@ -321,7 +323,7 @@ class _ProxyProviderNodesScreenState extends State<ProxyProviderNodesScreen> {
             final member = _nodeAt(index);
             if (member == null) return const _ProviderNodePlaceholder();
             return ScrollDeferredContent(
-              key: ValueKey('${widget.providerName}::${member.name}::$index'),
+              key: ValueKey('${widget.providerKey}::${member.name}::$index'),
               placeholder: const _ProviderNodePlaceholder(),
               child: StandaloneProxyNodeTile(
                 member: member,

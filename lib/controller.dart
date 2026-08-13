@@ -5,17 +5,22 @@ import 'config_store.dart';
 enum BackendType {
   clash,
   surge,
+  surgeController,
   singBox;
 
   String get label => switch (this) {
     BackendType.clash => 'Clash',
-    BackendType.surge => 'Surge',
+    BackendType.surge => 'Surge HTTP API',
+    BackendType.surgeController => 'Surge 控制器',
     BackendType.singBox => 'sing-box',
   };
 
   static BackendType fromJson(Object? value) => switch (value) {
     'clash' => BackendType.clash,
     'surge' => BackendType.surge,
+    'surgeController' ||
+    'surge_controller' ||
+    'surge-controller' => BackendType.surgeController,
     'singBox' || 'sing_box' || 'sing-box' => BackendType.singBox,
     _ => BackendType.clash,
   };
@@ -161,6 +166,10 @@ class ControllerImportRequest {
     if (name.length > 120) {
       throw const FormatException('目标服务名称过长');
     }
+    final secret = ipc ? '' : params['secret']?.trim() ?? '';
+    if (type == BackendType.surgeController && secret.isEmpty) {
+      throw const FormatException('缺少 Surge 控制器密码 secret');
+    }
 
     return ControllerImportRequest(
       ControllerDraft(
@@ -168,7 +177,7 @@ class ControllerImportRequest {
         type: type,
         baseUrl: baseUrl,
         icon: icon,
-        secret: ipc ? '' : params['secret']?.trim() ?? '',
+        secret: secret,
         allowInsecure:
             !ipc &&
             _isSecureUrl(baseUrl) &&
@@ -181,6 +190,9 @@ class ControllerImportRequest {
     return switch (value?.trim().toLowerCase()) {
       null || '' || 'clash' || 'mihomo' => BackendType.clash,
       'surge' => BackendType.surge,
+      'surge-controller' ||
+      'surge_controller' ||
+      'surgecontroller' => BackendType.surgeController,
       'sing-box' || 'sing_box' || 'singbox' => BackendType.singBox,
       _ => throw const FormatException('不支持的目标服务类型'),
     };
@@ -192,6 +204,7 @@ class ControllerImportRequest {
     final hasKnownScheme = const [
       'http://',
       'https://',
+      'tcp://',
       'grpc://',
       'grpcs://',
       'unix:',
@@ -202,7 +215,11 @@ class ControllerImportRequest {
       if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(url)) {
         throw const FormatException('不支持的目标服务连接方式');
       }
-      url = '${type == BackendType.singBox ? 'grpc' : 'http'}://$url';
+      url = switch (type) {
+        BackendType.singBox => 'grpc://$url',
+        BackendType.surgeController => 'tcp://$url',
+        _ => 'http://$url',
+      };
     }
 
     final separator = url.indexOf(':');
@@ -228,6 +245,7 @@ class ControllerImportRequest {
         'sparkle-service',
       },
       BackendType.surge => const {'http', 'https'},
+      BackendType.surgeController => const {'tcp'},
       BackendType.singBox => const {'grpc', 'grpcs'},
     };
     if (!allowed.contains(normalizedScheme)) {
@@ -245,6 +263,13 @@ class ControllerImportRequest {
     final parsed = Uri.tryParse(url);
     if (parsed == null || !parsed.hasAuthority || parsed.host.isEmpty) {
       throw const FormatException('目标服务地址无效');
+    }
+    if (type == BackendType.surgeController &&
+        (!parsed.hasPort ||
+            (parsed.path.isNotEmpty && parsed.path != '/') ||
+            parsed.hasQuery ||
+            parsed.hasFragment)) {
+      throw const FormatException('Surge 控制器地址必须包含端口且不能包含路径或参数');
     }
     if (parsed.userInfo.isNotEmpty) {
       throw const FormatException('请使用 secret 参数传递密钥');

@@ -524,11 +524,15 @@ class ControllerViewState {
     supportsCoreManagement.value = false;
     supportsCacheFlush.value = false;
     supportsDnsFlush.value =
-        _activeKey?.type == BackendType.surge && _target != null;
+        (_activeKey?.type == BackendType.surge ||
+            _activeKey?.type == BackendType.surgeController) &&
+        _target != null;
     supportsCoreActions.value = supportsDnsFlush.value;
     supportsMemory.value = false;
     supportsExternalResources.value =
-        _activeKey?.type == BackendType.clash && _target != null;
+        (_activeKey?.type == BackendType.clash ||
+            _activeKey?.type == BackendType.surgeController) &&
+        _target != null;
     supportsRules.value =
         _target != null && _activeKey?.type != BackendType.singBox;
     supportsTailscale.value = false;
@@ -650,7 +654,9 @@ class ControllerViewState {
       supportsCoreManagement.value = info.supportsCoreManagement;
       supportsCacheFlush.value = info.supportsCacheFlush;
       supportsDnsFlush.value =
-          info.supportsCacheFlush || controller?.type == BackendType.surge;
+          info.supportsCacheFlush ||
+          controller?.type == BackendType.surge ||
+          controller?.type == BackendType.surgeController;
       supportsCoreActions.value =
           info.supportsCoreActions || supportsDnsFlush.value;
       supportsMemory.value = info.supportsMemory;
@@ -815,9 +821,10 @@ class ControllerViewState {
               return;
             }
             connections.applyFrame(frame);
+            final currentTraffic = traffic.value;
             connectionsTotals.value = ConnectionsTotals(
-              upload: frame.totals.upload,
-              download: frame.totals.download,
+              upload: currentTraffic.upTotal,
+              download: currentTraffic.downTotal,
               memory: supportsMemory.value ? frame.totals.memory : BigInt.zero,
               connectionsIn: frame.totals.connectionsIn,
               connectionsOut: frame.totals.connectionsOut,

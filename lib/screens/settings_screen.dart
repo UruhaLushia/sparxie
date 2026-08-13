@@ -1514,7 +1514,7 @@ class _EditDialog extends StatefulWidget {
   State<_EditDialog> createState() => _EditDialogState();
 }
 
-enum _Scheme { http, https, unix, pipe, sparkleService }
+enum _Scheme { http, https, tcp, unix, pipe, sparkleService }
 
 class _EditDialogState extends State<_EditDialog> {
   late final TextEditingController _name;
@@ -1544,23 +1544,24 @@ class _EditDialogState extends State<_EditDialog> {
       _scheme == _Scheme.sparkleService;
   bool get _isDirectIpc => _scheme == _Scheme.unix || _scheme == _Scheme.pipe;
   bool get _isSparkleService => _scheme == _Scheme.sparkleService;
+  bool get _isSurgeController => _type == ctl.BackendType.surgeController;
 
   String get _defaultTcpAddress => switch (_type) {
     ctl.BackendType.clash => '127.0.0.1:9090',
     ctl.BackendType.surge => '127.0.0.1:6171',
+    ctl.BackendType.surgeController => '127.0.0.1:6170',
     ctl.BackendType.singBox => '127.0.0.1:9091',
   };
 
   String get _addressHint => switch (_scheme) {
-    _Scheme.http || _Scheme.https => _defaultTcpAddress,
+    _Scheme.http || _Scheme.https || _Scheme.tcp => _defaultTcpAddress,
     _Scheme.unix => '/path/to/clash.sock',
     _Scheme.pipe => r'\\.\pipe\clash',
     _Scheme.sparkleService => '默认读取 Sparkle service-auth.json',
   };
 
   List<_Scheme> get _schemeOptions => [
-    _Scheme.http,
-    _Scheme.https,
+    if (_isSurgeController) _Scheme.tcp else ...[_Scheme.http, _Scheme.https],
     if (_canUseIpc) _isWindows ? _Scheme.pipe : _Scheme.unix,
     if (_canUseSparkleService) _Scheme.sparkleService,
   ];
@@ -1568,6 +1569,7 @@ class _EditDialogState extends State<_EditDialog> {
   String _schemeLabel(_Scheme scheme) => switch (scheme) {
     _Scheme.http => _type == ctl.BackendType.singBox ? 'gRPC' : 'HTTP',
     _Scheme.https => _type == ctl.BackendType.singBox ? 'gRPC TLS' : 'HTTPS',
+    _Scheme.tcp => '控制器 TCP',
     _Scheme.unix || _Scheme.pipe => 'IPC',
     _Scheme.sparkleService => 'Sparkle 服务',
   };
@@ -1575,7 +1577,11 @@ class _EditDialogState extends State<_EditDialog> {
   String get _addressLabel {
     if (_isSparkleService) return '鉴权文件';
     if (_isDirectIpc) return '路径';
-    return _type == ctl.BackendType.singBox ? 'gRPC 地址' : '地址';
+    return switch (_type) {
+      ctl.BackendType.singBox => 'gRPC 地址',
+      ctl.BackendType.surgeController => '控制器地址',
+      _ => '地址',
+    };
   }
 
   String get _tlsSkipSubtitle => _type == ctl.BackendType.singBox
@@ -1599,7 +1605,9 @@ class _EditDialogState extends State<_EditDialog> {
       c?.baseUrl ?? initial?.baseUrl ?? 'http://127.0.0.1:9090',
     );
     final allowed = _isSchemeAllowed(scheme);
-    _scheme = allowed ? scheme : _Scheme.http;
+    _scheme = allowed
+        ? scheme
+        : (_isSurgeController ? _Scheme.tcp : _Scheme.http);
     _address = TextEditingController(text: allowed ? addr : _defaultTcpAddress);
     _secret = TextEditingController(text: c?.secret ?? initial?.secret ?? '');
     _allowInsecure = c?.allowInsecure ?? initial?.allowInsecure ?? false;
@@ -1612,7 +1620,7 @@ class _EditDialogState extends State<_EditDialog> {
     setState(() {
       _type = type;
       if (!_isSchemeAllowed(_scheme)) {
-        _scheme = _Scheme.http;
+        _scheme = _isSurgeController ? _Scheme.tcp : _Scheme.http;
       }
       final addr = _address.text.trim();
       if (addr.isEmpty || addr == oldDefault || _isIpcScheme(oldScheme)) {
@@ -1622,6 +1630,7 @@ class _EditDialogState extends State<_EditDialog> {
   }
 
   bool _isSchemeAllowed(_Scheme scheme) {
+    if (_isSurgeController) return scheme == _Scheme.tcp;
     if (scheme == _Scheme.http || scheme == _Scheme.https) return true;
     if (!_supportsIpc) return false;
     return switch (scheme) {
@@ -1693,6 +1702,9 @@ class _EditDialogState extends State<_EditDialog> {
     if (u.startsWith('http://')) {
       return (_Scheme.http, u.substring('http://'.length));
     }
+    if (u.startsWith('tcp://')) {
+      return (_Scheme.tcp, u.substring('tcp://'.length));
+    }
     return (_Scheme.http, u);
   }
 
@@ -1706,6 +1718,7 @@ class _EditDialogState extends State<_EditDialog> {
         '${_type == ctl.BackendType.singBox ? 'grpc' : 'http'}://$addr',
       _Scheme.https =>
         '${_type == ctl.BackendType.singBox ? 'grpcs' : 'https'}://$addr',
+      _Scheme.tcp => 'tcp://$addr',
       _Scheme.unix => 'unix:$addr',
       _Scheme.pipe => 'pipe:$addr',
       _Scheme.sparkleService =>
@@ -1791,6 +1804,7 @@ class _EditDialogState extends State<_EditDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<_Scheme>(
+                key: ValueKey(_type),
                 initialValue: _scheme,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '连接方式'),
@@ -1825,6 +1839,16 @@ class _EditDialogState extends State<_EditDialog> {
                   if (addr.isEmpty) {
                     return _isDirectIpc ? '请输入路径' : '请输入地址';
                   }
+                  if (_isSurgeController) {
+                    final uri = Uri.tryParse('tcp://$addr');
+                    if (uri == null ||
+                        uri.host.isEmpty ||
+                        !uri.hasPort ||
+                        uri.userInfo.isNotEmpty ||
+                        (uri.path.isNotEmpty && uri.path != '/')) {
+                      return '请输入包含端口的控制器地址';
+                    }
+                  }
                   return null;
                 },
               ),
@@ -1835,7 +1859,7 @@ class _EditDialogState extends State<_EditDialog> {
                   autocorrect: false,
                   enableSuggestions: false,
                   decoration: InputDecoration(
-                    labelText: '密钥 (可选)',
+                    labelText: _isSurgeController ? '控制器密码' : '密钥 (可选)',
                     suffixIcon: IconButton(
                       tooltip: _showSecret ? '隐藏密钥' : '显示密钥',
                       onPressed: () =>
@@ -1848,6 +1872,10 @@ class _EditDialogState extends State<_EditDialog> {
                     ),
                   ),
                   obscureText: !_showSecret,
+                  validator: (value) =>
+                      _isSurgeController && (value?.trim().isEmpty ?? true)
+                      ? '控制器密码不能为空'
+                      : null,
                 ),
               ],
               if (_scheme == _Scheme.https) ...[
@@ -1879,7 +1907,7 @@ class _EditDialogState extends State<_EditDialog> {
                 type: _type,
                 baseUrl: _composeUrl(),
                 icon: ctl.normalizeControllerIconUrl(_icon.text),
-                // Secret is only meaningful for TCP backends.
+                // IPC backends use their local transport's own authentication.
                 secret: _isIpc ? '' : _secret.text.trim(),
                 allowInsecure: _scheme == _Scheme.https && _allowInsecure,
               ),

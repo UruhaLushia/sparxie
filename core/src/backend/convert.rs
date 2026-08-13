@@ -194,6 +194,7 @@ impl From<crate::clash::api::GroupDelayEntry> for GroupDelayEntry {
 impl From<crate::clash::api::ProxyProviderEntry> for ProxyProviderEntry {
     fn from(value: crate::clash::api::ProxyProviderEntry) -> Self {
         Self {
+            key: value.name.clone(),
             name: value.name,
             vehicle_type: value.vehicle_type,
             proxies: value.proxies,
@@ -222,6 +223,7 @@ impl From<crate::clash::api::ProxyProviderNodeWindow> for ProxyProviderNodeWindo
 impl From<crate::clash::api::RuleProviderEntry> for RuleProviderEntry {
     fn from(value: crate::clash::api::RuleProviderEntry) -> Self {
         Self {
+            key: value.name.clone(),
             name: value.name,
             vehicle_type: value.vehicle_type,
             behavior: value.behavior,

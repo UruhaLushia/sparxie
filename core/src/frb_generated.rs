@@ -4927,7 +4927,8 @@ impl SseDecode for crate::backend::api::target::BackendType {
         return match inner {
             0 => crate::backend::api::target::BackendType::Clash,
             1 => crate::backend::api::target::BackendType::Surge,
-            2 => crate::backend::api::target::BackendType::SingBox,
+            2 => crate::backend::api::target::BackendType::SurgeController,
+            3 => crate::backend::api::target::BackendType::SingBox,
             _ => unreachable!("Invalid variant for BackendType: {}", inner),
         };
     }
@@ -5782,6 +5783,7 @@ impl SseDecode for crate::backend::api::types::ProxyMemberWindow {
 impl SseDecode for crate::backend::api::types::ProxyProviderEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_vehicleType = <String>::sse_decode(deserializer);
         let mut var_proxies = <u32>::sse_decode(deserializer);
@@ -5793,6 +5795,7 @@ impl SseDecode for crate::backend::api::types::ProxyProviderEntry {
         let mut var_subscriptionTotal = <u64>::sse_decode(deserializer);
         let mut var_subscriptionExpire = <u64>::sse_decode(deserializer);
         return crate::backend::api::types::ProxyProviderEntry {
+            key: var_key,
             name: var_name,
             vehicle_type: var_vehicleType,
             proxies: var_proxies,
@@ -5857,6 +5860,7 @@ impl SseDecode for crate::backend::api::types::RuleEntry {
 impl SseDecode for crate::backend::api::types::RuleProviderEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_vehicleType = <String>::sse_decode(deserializer);
         let mut var_behavior = <String>::sse_decode(deserializer);
@@ -5865,6 +5869,7 @@ impl SseDecode for crate::backend::api::types::RuleProviderEntry {
         let mut var_updatedAt = <String>::sse_decode(deserializer);
         let mut var_updatable = <bool>::sse_decode(deserializer);
         return crate::backend::api::types::RuleProviderEntry {
+            key: var_key,
             name: var_name,
             vehicle_type: var_vehicleType,
             behavior: var_behavior,
@@ -6298,7 +6303,8 @@ impl flutter_rust_bridge::IntoDart for crate::backend::api::target::BackendType 
         match self {
             Self::Clash => 0.into_dart(),
             Self::Surge => 1.into_dart(),
-            Self::SingBox => 2.into_dart(),
+            Self::SurgeController => 2.into_dart(),
+            Self::SingBox => 3.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -6978,6 +6984,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::ProxyMemberWi
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::ProxyProviderEntry {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.key.into_into_dart().into_dart(),
             self.name.into_into_dart().into_dart(),
             self.vehicle_type.into_into_dart().into_dart(),
             self.proxies.into_into_dart().into_dart(),
@@ -7060,6 +7067,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::backend::api::types::RuleEntry>
 impl flutter_rust_bridge::IntoDart for crate::backend::api::types::RuleProviderEntry {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.key.into_into_dart().into_dart(),
             self.name.into_into_dart().into_dart(),
             self.vehicle_type.into_into_dart().into_dart(),
             self.behavior.into_into_dart().into_dart(),
@@ -7468,7 +7476,8 @@ impl SseEncode for crate::backend::api::target::BackendType {
             match self {
                 crate::backend::api::target::BackendType::Clash => 0,
                 crate::backend::api::target::BackendType::Surge => 1,
-                crate::backend::api::target::BackendType::SingBox => 2,
+                crate::backend::api::target::BackendType::SurgeController => 2,
+                crate::backend::api::target::BackendType::SingBox => 3,
                 _ => {
                     unimplemented!("");
                 }
@@ -8104,6 +8113,7 @@ impl SseEncode for crate::backend::api::types::ProxyMemberWindow {
 impl SseEncode for crate::backend::api::types::ProxyProviderEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.key, serializer);
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.vehicle_type, serializer);
         <u32>::sse_encode(self.proxies, serializer);
@@ -8147,6 +8157,7 @@ impl SseEncode for crate::backend::api::types::RuleEntry {
 impl SseEncode for crate::backend::api::types::RuleProviderEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.key, serializer);
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.vehicle_type, serializer);
         <String>::sse_encode(self.behavior, serializer);

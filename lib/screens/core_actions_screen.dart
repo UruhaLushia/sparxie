@@ -109,6 +109,8 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
           ]),
           builder: (context, _) {
             final showManagement = widget.session.supportsCoreManagement.value;
+            final surgeController =
+                widget.store.active?.type == ctl.BackendType.surgeController;
             final showDns = widget.session.supportsDnsFlush.value;
             final showFakeip = widget.session.supportsCacheFlush.value;
             final showCache = showDns || showFakeip;
@@ -142,36 +144,39 @@ class _CoreActionsScreenState extends State<CoreActionsScreen> {
                                   force: false,
                                 ),
                               ),
-                              _action(
-                                icon: Icons.travel_explore,
-                                title: '更新 GeoData',
-                                subtitle: '刷新 GeoIP / GeoSite 数据库',
-                                id: 'geo',
-                                success: 'GeoData 已更新',
-                                run: (t) => rust.controllerUpdateGeo(target: t),
-                              ),
-                              _action(
-                                icon: Icons.restart_alt,
-                                title: '重启核心',
-                                subtitle: '重新启动后端核心',
-                                id: 'restart',
-                                success: '核心已重启',
-                                run: (t) =>
-                                    rust.controllerRestartCore(target: t),
-                                confirm: '确定重启核心？',
-                              ),
-                              _action(
-                                icon: Icons.upgrade,
-                                title: '升级核心',
-                                subtitle: '下载并替换核心二进制',
-                                id: 'upgrade',
-                                success: '核心升级已触发',
-                                run: (t) => rust.controllerUpgradeCore(
-                                  target: t,
-                                  force: false,
+                              if (!surgeController) ...[
+                                _action(
+                                  icon: Icons.travel_explore,
+                                  title: '更新 GeoData',
+                                  subtitle: '刷新 GeoIP / GeoSite 数据库',
+                                  id: 'geo',
+                                  success: 'GeoData 已更新',
+                                  run: (t) =>
+                                      rust.controllerUpdateGeo(target: t),
                                 ),
-                                confirm: '确定升级核心？这会下载并替换核心二进制。',
-                              ),
+                                _action(
+                                  icon: Icons.restart_alt,
+                                  title: '重启核心',
+                                  subtitle: '重新启动后端核心',
+                                  id: 'restart',
+                                  success: '核心已重启',
+                                  run: (t) =>
+                                      rust.controllerRestartCore(target: t),
+                                  confirm: '确定重启核心？',
+                                ),
+                                _action(
+                                  icon: Icons.upgrade,
+                                  title: '升级核心',
+                                  subtitle: '下载并替换核心二进制',
+                                  id: 'upgrade',
+                                  success: '核心升级已触发',
+                                  run: (t) => rust.controllerUpgradeCore(
+                                    target: t,
+                                    force: false,
+                                  ),
+                                  confirm: '确定升级核心？这会下载并替换核心二进制。',
+                                ),
+                              ],
                             ],
                           ),
                         ),

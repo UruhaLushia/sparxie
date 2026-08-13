@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -10,61 +10,18 @@ use crate::backend::api::{
     ConnectionsSort, ConnectionsTotals,
 };
 use crate::backend::retry::RetryBackoff;
-use crate::surge::api::traffic_sample;
-use crate::surge::client::{SurgeTarget, target_key as base_target_key};
+use crate::surge_controller::client::{SurgeControllerTarget, with_unary_connection};
+
+use super::target::Target;
 
 mod parse;
 mod sort;
+mod store;
 mod time;
 mod value;
 
 use parse::{fallback_id, parse_request, request_items};
-use sort::{sort_groups, sort_rows};
-
-#[derive(Default)]
-struct State {
-    active: HashMap<String, Connection>,
-    closed: VecDeque<Connection>,
-    closed_capacity: usize,
-    sort: ConnectionsSort,
-    asc: bool,
-}
-
-impl State {
-    fn new(closed_capacity: usize) -> Self {
-        Self {
-            closed_capacity: closed_capacity.max(1),
-            ..Self::default()
-        }
-    }
-
-    fn set_closed_capacity(&mut self, closed_capacity: usize) {
-        self.closed_capacity = closed_capacity.max(1);
-        while self.closed.len() > self.closed_capacity {
-            self.closed.pop_front();
-        }
-        if self.closed.capacity() > self.closed_capacity {
-            self.closed.shrink_to(self.closed_capacity);
-        }
-    }
-
-    fn push_closed(&mut self, row: Connection) {
-        if self.closed.len() >= self.closed_capacity {
-            self.closed.pop_front();
-        }
-        self.closed.push_back(row);
-    }
-
-    fn clear_closed(&mut self) {
-        self.closed = VecDeque::new();
-    }
-
-    fn compact_active(&mut self) {
-        if self.active.capacity() > self.active.len().saturating_mul(4).max(64) {
-            self.active.shrink_to_fit();
-        }
-    }
-}
+use store::State;
 
 struct TargetSlot {
     state: Mutex<State>,
@@ -82,11 +39,11 @@ fn interval_or_default(interval_ms: u32) -> u32 {
     if interval_ms == 0 { 1000 } else { interval_ms }
 }
 
-fn target_key(target: &SurgeTarget, interval_ms: u32) -> String {
-    format!("{}|{}", base_target_key(target), interval_ms)
+fn target_key(target: &Target, interval_ms: u32) -> String {
+    format!("{}|{interval_ms}", target.key())
 }
 
-async fn slot_for(target: &SurgeTarget, interval_ms: u32) -> Option<Arc<TargetSlot>> {
+async fn slot_for(target: &Target, interval_ms: u32) -> Option<Arc<TargetSlot>> {
     slots()
         .lock()
         .await
@@ -95,10 +52,11 @@ async fn slot_for(target: &SurgeTarget, interval_ms: u32) -> Option<Arc<TargetSl
 }
 
 pub async fn subscribe(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     interval_ms: u32,
     closed_capacity: usize,
 ) -> Result<broadcast::Receiver<ConnectionsFrame>, MihomoError> {
+    let target = target.into();
     let interval = interval_or_default(interval_ms);
     let key = target_key(&target, interval);
     let mut map = slots().lock().await;
@@ -120,16 +78,22 @@ pub async fn subscribe(
     Ok(rx)
 }
 
-pub async fn set_sort(target: SurgeTarget, interval_ms: u32, sort: ConnectionsSort, asc: bool) {
+pub async fn set_sort(
+    target: impl Into<Target>,
+    interval_ms: u32,
+    sort: ConnectionsSort,
+    asc: bool,
+) {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return;
     };
     let mut state = slot.state.lock().expect("surge connections state poisoned");
-    state.sort = sort;
-    state.asc = asc;
+    state.set_sort(sort, asc);
 }
 
-pub async fn clear_closed(target: SurgeTarget, interval_ms: u32) {
+pub async fn clear_closed(target: impl Into<Target>, interval_ms: u32) {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return;
     };
@@ -139,171 +103,89 @@ pub async fn clear_closed(target: SurgeTarget, interval_ms: u32) {
         .clear_closed();
 }
 
-pub async fn clear_closed_by_group(target: SurgeTarget, interval_ms: u32, group: String) {
+pub async fn clear_closed_by_group(target: impl Into<Target>, interval_ms: u32, group: String) {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return;
     };
-    let mut state = slot.state.lock().expect("surge connections state poisoned");
-    state.closed.retain(|row| !connection_in_group(row, &group));
-    state.closed.shrink_to_fit();
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .clear_closed_by_group(&group);
 }
 
 pub async fn fetch_window(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     interval_ms: u32,
     kind: ConnectionsListKind,
     offset: u32,
     limit: u32,
     query: String,
 ) -> (u32, Vec<Connection>) {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return (0, Vec::new());
     };
     let query = query.trim().to_lowercase();
-    let state = slot.state.lock().expect("surge connections state poisoned");
-    let mut rows: Vec<Connection> = match kind {
-        ConnectionsListKind::Active => state.active.values().cloned().collect(),
-        ConnectionsListKind::Closed => state.closed.iter().rev().cloned().collect(),
-    };
-    sort_rows(&mut rows, state.sort, state.asc);
-    rows.retain(|row| row.matches_query(&query));
-    let total = rows.len() as u32;
-    let window = rows
-        .into_iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .collect();
-    (total, window)
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .window(kind, offset, limit, &query)
 }
 
 /// Return one connection's volatile counters outside the paged window.
 pub async fn fetch_connection_stats_by_id(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     interval_ms: u32,
     id: String,
 ) -> Option<(u64, u64, u64, u64)> {
+    let target = target.into();
     let slot = slot_for(&target, interval_ms).await?;
-    let state = slot.state.lock().expect("surge connections state poisoned");
-    let connection = state.active.get(&id).or_else(|| {
-        state
-            .closed
-            .iter()
-            .rev()
-            .find(|connection| connection.id == id)
-    })?;
-    Some((
-        connection.upload,
-        connection.download,
-        connection.upload_speed,
-        connection.download_speed,
-    ))
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .connection_stats(&id)
 }
 
 pub async fn fetch_groups(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     interval_ms: u32,
     kind: ConnectionsListKind,
     sort: ConnectionGroupSort,
     asc: bool,
     query: String,
 ) -> Vec<ConnectionGroup> {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
-    let state = slot.state.lock().expect("surge connections state poisoned");
-    let mut groups: HashMap<String, ConnectionGroup> = HashMap::new();
-    let rows: Vec<&Connection> = match kind {
-        ConnectionsListKind::Active => state.active.values().collect(),
-        ConnectionsListKind::Closed => state.closed.iter().rev().collect(),
-    };
     let query = query.trim().to_lowercase();
-    let matching_groups = (!query.is_empty()).then(|| {
-        rows.iter()
-            .filter(|row| row.matches_query(&query))
-            .map(|row| connection_group_key(row))
-            .collect::<HashSet<_>>()
-    });
-    for row in rows.into_iter().filter(|row| {
-        matching_groups
-            .as_ref()
-            .is_none_or(|groups| groups.contains(&connection_group_key(row)))
-    }) {
-        let key = connection_group_key(row);
-        let entry = groups
-            .entry(key.clone())
-            .or_insert_with(|| ConnectionGroup {
-                key: key.clone(),
-                label: if key.is_empty() {
-                    "未知".into()
-                } else {
-                    key.clone()
-                },
-                process: row.process.clone(),
-                process_path: row.process_path.clone(),
-                source_ip: row.source_ip.clone(),
-                ..Default::default()
-            });
-        entry.count += 1;
-        entry.upload = entry.upload.saturating_add(row.upload);
-        entry.download = entry.download.saturating_add(row.download);
-        entry.upload_speed = entry.upload_speed.saturating_add(row.upload_speed);
-        entry.download_speed = entry.download_speed.saturating_add(row.download_speed);
-    }
-    let mut out: Vec<_> = groups.into_values().collect();
-    sort_groups(&mut out, sort, asc);
-    out
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .groups(kind, sort, asc, &query)
 }
 
 pub async fn fetch_group_connections(
-    target: SurgeTarget,
+    target: impl Into<Target>,
     interval_ms: u32,
     kind: ConnectionsListKind,
     group: String,
     limit: u32,
     query: String,
 ) -> Vec<Connection> {
+    let target = target.into();
     let Some(slot) = slot_for(&target, interval_ms).await else {
         return Vec::new();
     };
-    let state = slot.state.lock().expect("surge connections state poisoned");
-    let mut rows: Vec<Connection> = match kind {
-        ConnectionsListKind::Active => state
-            .active
-            .values()
-            .filter(|row| connection_in_group(row, &group))
-            .cloned()
-            .collect(),
-        ConnectionsListKind::Closed => state
-            .closed
-            .iter()
-            .rev()
-            .filter(|row| connection_in_group(row, &group))
-            .cloned()
-            .collect(),
-    };
     let query = query.trim().to_lowercase();
-    rows.retain(|row| row.matches_query(&query));
-    sort_rows(&mut rows, state.sort, state.asc);
-    rows.into_iter().take(limit as usize).collect()
+    slot.state
+        .lock()
+        .expect("surge connections state poisoned")
+        .group_connections(kind, &group, limit, &query)
 }
 
-fn connection_group_key(row: &Connection) -> String {
-    if row.process.is_empty() {
-        row.source_ip.clone()
-    } else {
-        row.process.clone()
-    }
-}
-
-fn connection_in_group(row: &Connection, group: &str) -> bool {
-    if row.process.is_empty() {
-        row.source_ip == group
-    } else {
-        row.process == group
-    }
-}
-
-async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {
+async fn stream_loop(target: Target, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {
     let mut first = true;
     let mut backoff = RetryBackoff::new();
     loop {
@@ -311,7 +193,13 @@ async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: A
             slots().lock().await.remove(&key);
             return;
         }
-        match fetch_snapshot(&target, interval_ms, &slot, first).await {
+        let result = match &target {
+            Target::Http(_) => fetch_snapshot(&target, interval_ms, &slot, first).await,
+            Target::Controller(target) => {
+                fetch_controller_snapshot(target, interval_ms, &slot, first).await
+            }
+        };
+        match result {
             Ok(frame) => {
                 first = false;
                 backoff.reset();
@@ -319,7 +207,7 @@ async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: A
                 tokio::time::sleep(Duration::from_millis(interval_ms as u64)).await;
             }
             Err(error) => {
-                eprintln!("[backend] surge connections stream {key}: {error}");
+                eprintln!("[backend] surge connections stream: {error}");
                 tokio::time::sleep(backoff.next_delay()).await;
             }
         }
@@ -327,19 +215,42 @@ async fn stream_loop(target: SurgeTarget, interval_ms: u32, key: String, slot: A
 }
 
 async fn fetch_snapshot(
-    target: &SurgeTarget,
+    target: &Target,
     interval_ms: u32,
     slot: &TargetSlot,
     is_initial: bool,
 ) -> Result<ConnectionsFrame, MihomoError> {
-    let client = target.client()?;
-    let raw = client.get_json("v1/requests/active").await?;
-    let traffic = traffic_sample(target.clone()).await.unwrap_or_default();
+    let Target::Http(target) = target else {
+        return Err(MihomoError::Other("无效的 Surge HTTP 状态目标".into()));
+    };
+    let raw = target.client()?.get_json("v1/requests/active").await?;
+    apply_snapshot(&raw, interval_ms, slot, is_initial)
+}
+
+async fn fetch_controller_snapshot(
+    target: &SurgeControllerTarget,
+    interval_ms: u32,
+    slot: &TargetSlot,
+    is_initial: bool,
+) -> Result<ConnectionsFrame, MihomoError> {
+    let raw = with_unary_connection(target, |connection| {
+        Box::pin(async move { connection.request(["dump", "active"]).await })
+    })
+    .await?;
+    apply_snapshot(&raw, interval_ms, slot, is_initial)
+}
+
+fn apply_snapshot(
+    raw: &serde_json::Value,
+    interval_ms: u32,
+    slot: &TargetSlot,
+    is_initial: bool,
+) -> Result<ConnectionsFrame, MihomoError> {
     let dt_secs = (interval_ms as f64 / 1000.0).max(0.05);
 
     let mut state = slot.state.lock().expect("surge connections state poisoned");
     let mut current_ids = HashSet::with_capacity(state.active.len());
-    for item in request_items(&raw) {
+    for item in request_items(raw) {
         let mut conn = parse_request(item);
         if conn.id.is_empty() {
             conn.id = fallback_id(&conn);
@@ -378,13 +289,7 @@ async fn fetch_snapshot(
     Ok(ConnectionsFrame {
         active_count: state.active.len() as u32,
         closed_count: state.closed.len() as u32,
-        totals: ConnectionsTotals {
-            upload: traffic.up_total,
-            download: traffic.down_total,
-            memory: 0,
-            connections_in: 0,
-            connections_out: 0,
-        },
+        totals: ConnectionsTotals::default(),
         is_initial,
     })
 }

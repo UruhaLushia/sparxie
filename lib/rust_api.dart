@@ -25,6 +25,7 @@ api.BackendTarget backendTargetForController(ctl.Controller c) =>
       backendType: switch (c.type) {
         ctl.BackendType.clash => api.BackendType.clash,
         ctl.BackendType.surge => api.BackendType.surge,
+        ctl.BackendType.surgeController => api.BackendType.surgeController,
         ctl.BackendType.singBox => api.BackendType.singBox,
       },
       baseUrl: c.baseUrl,

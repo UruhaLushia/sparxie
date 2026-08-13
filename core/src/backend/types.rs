@@ -268,6 +268,7 @@ pub struct GroupDelayEntry {
 
 #[derive(Clone, Debug, Default)]
 pub struct ProxyProviderEntry {
+    pub key: String,
     pub name: String,
     pub vehicle_type: String,
     pub proxies: u32,
@@ -282,6 +283,7 @@ pub struct ProxyProviderEntry {
 
 #[derive(Clone, Debug, Default)]
 pub struct RuleProviderEntry {
+    pub key: String,
     pub name: String,
     pub vehicle_type: String,
     pub behavior: String,

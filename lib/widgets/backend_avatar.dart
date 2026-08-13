@@ -30,6 +30,7 @@ class _BackendTypeIcon extends StatelessWidget {
   String get _asset => switch (type) {
     BackendType.clash => 'assets/backend_icons/clash.png',
     BackendType.surge => 'assets/backend_icons/surge.png',
+    BackendType.surgeController => 'assets/backend_icons/surge.png',
     BackendType.singBox => 'assets/backend_icons/sing_box.png',
   };
 

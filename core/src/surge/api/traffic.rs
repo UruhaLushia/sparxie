@@ -4,7 +4,8 @@ use crate::backend::api::TrafficSample;
 
 use super::value::first_u64;
 
-pub(super) fn parse_traffic(raw: &Value) -> TrafficSample {
+pub(crate) fn parse_traffic(raw: &Value) -> TrafficSample {
+    let raw = raw.get("data").unwrap_or(raw);
     if let Some(interfaces) = raw.get("interface").and_then(Value::as_object) {
         let mut sample = TrafficSample::default();
         for value in interfaces.values() {

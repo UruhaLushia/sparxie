@@ -31,6 +31,17 @@ pub async fn controller_traffic_stream(
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         },
+        BackendType::SurgeController => loop {
+            let raw = target
+                .surge_controller()
+                .request(["dump", "traffic"])
+                .await?;
+            let sample = crate::surge::api::traffic::parse_traffic(&raw);
+            if sink.add(sample).is_err() {
+                break Ok(());
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        },
         BackendType::SingBox => {
             let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
             let mut stream = BroadcastStream::new(rx);
@@ -64,6 +75,10 @@ pub async fn controller_memory_stream(
         BackendType::Surge => {
             let _ = sink;
             crate::surge::api::unsupported("内存流").await
+        }
+        BackendType::SurgeController => {
+            let _ = sink;
+            crate::surge_controller::api::unsupported("内存流").await
         }
         BackendType::SingBox => {
             let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
@@ -104,6 +119,24 @@ pub async fn controller_logs_stream(
         BackendType::Surge => {
             let (frame, rx) =
                 crate::surge::state::logs::subscribe(target.surge(), info_capacity).await?;
+            if sink.add(frame).is_err() {
+                return Ok(());
+            }
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok(frame) = item else { continue };
+                if sink.add(frame).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
+        BackendType::SurgeController => {
+            let (frame, rx) = crate::surge_controller::state::logs::subscribe(
+                target.surge_controller(),
+                info_capacity,
+            )
+            .await?;
             if sink.add(frame).is_err() {
                 return Ok(());
             }
@@ -170,6 +203,18 @@ pub async fn controller_fetch_logs_window(
             )
             .await
         }
+        BackendType::SurgeController => {
+            crate::surge_controller::state::logs::fetch_window(
+                target.surge_controller(),
+                &level,
+                &query,
+                offset,
+                limit,
+                from_end,
+                anchor_id,
+            )
+            .await
+        }
         BackendType::SingBox => {
             crate::sing_box::state::logs::fetch_window(
                 target.sing_box(),
@@ -189,6 +234,9 @@ pub async fn controller_clear_logs(target: BackendTarget) {
     match target.backend_type {
         BackendType::Clash => crate::clash::state::logs::clear(target.clash()).await,
         BackendType::Surge => crate::surge::state::logs::clear(target.surge()).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::state::logs::clear(target.surge_controller()).await
+        }
         BackendType::SingBox => {
             let _ = crate::sing_box::state::logs::clear(target.sing_box()).await;
         }

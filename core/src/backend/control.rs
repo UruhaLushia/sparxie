@@ -9,6 +9,9 @@ pub async fn controller_configs(target: BackendTarget) -> Result<ControllerConfi
         let raw = match load_target.backend_type {
             BackendType::Clash => crate::clash::api::configs(load_target.clash()).await,
             BackendType::Surge => crate::surge::api::configs(load_target.surge()).await,
+            BackendType::SurgeController => {
+                crate::surge_controller::api::configs(load_target.surge_controller()).await
+            }
             BackendType::SingBox => crate::sing_box::api::configs(load_target.sing_box()).await,
         }?;
         Ok(core_config_from_value(&raw))
@@ -24,6 +27,9 @@ pub async fn controller_set_config_mode(
     let result = match target.backend_type {
         BackendType::Clash => patch_config_value(target, json!({ "mode": mode })).await,
         BackendType::Surge => crate::surge::api::set_config_mode(target.surge(), mode).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::set_config_mode(target.surge_controller(), mode).await
+        }
         BackendType::SingBox => {
             crate::sing_box::api::set_config_mode(target.sing_box(), mode).await
         }
@@ -87,6 +93,10 @@ async fn patch_config_value(target: BackendTarget, body: Value) -> Result<(), Mi
         BackendType::Surge => {
             crate::surge::api::patch_configs(target.surge(), body.to_string()).await
         }
+        BackendType::SurgeController => {
+            crate::surge_controller::api::patch_configs(target.surge_controller(), body.to_string())
+                .await
+        }
         BackendType::SingBox => {
             crate::sing_box::api::patch_configs(target.sing_box(), body.to_string()).await
         }
@@ -110,6 +120,14 @@ pub async fn controller_reload_configs(
             }
             crate::surge::api::reload_configs(target.surge()).await
         }
+        BackendType::SurgeController => {
+            if path.is_some() || payload.is_some() || force {
+                return Err(MihomoError::Other(
+                    "Surge 控制器仅支持重载当前配置文件".into(),
+                ));
+            }
+            crate::surge_controller::api::reload_configs(target.surge_controller()).await
+        }
         BackendType::SingBox => crate::sing_box::api::unsupported("重载配置").await,
     };
     if result.is_ok() {
@@ -122,6 +140,9 @@ pub async fn controller_update_geo(target: BackendTarget) -> Result<(), MihomoEr
     match target.backend_type {
         BackendType::Clash => crate::clash::api::update_geo(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("更新 GeoData").await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::unsupported("更新 GeoData").await
+        }
         BackendType::SingBox => crate::sing_box::api::unsupported("更新 GeoData").await,
     }
 }
@@ -130,6 +151,9 @@ pub async fn controller_flush_fakeip(target: BackendTarget) -> Result<(), Mihomo
     match target.backend_type {
         BackendType::Clash => crate::clash::api::flush_fakeip(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("清空 FakeIP").await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::unsupported("清空 FakeIP").await
+        }
         BackendType::SingBox => crate::sing_box::api::unsupported("清空 FakeIP").await,
     }
 }
@@ -138,6 +162,9 @@ pub async fn controller_flush_dns(target: BackendTarget) -> Result<(), MihomoErr
     match target.backend_type {
         BackendType::Clash => crate::clash::api::flush_dns(target.clash()).await,
         BackendType::Surge => crate::surge::api::flush_dns(target.surge()).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::flush_dns(target.surge_controller()).await
+        }
         BackendType::SingBox => crate::sing_box::api::unsupported("清理 DNS 缓存").await,
     }
 }
@@ -150,6 +177,7 @@ pub async fn controller_dns_query(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::dns_query(target.clash(), name, qtype).await,
         BackendType::Surge => crate::surge::api::unsupported("DNS 查询").await,
+        BackendType::SurgeController => crate::surge_controller::api::unsupported("DNS 查询").await,
         BackendType::SingBox => crate::sing_box::api::unsupported("DNS 查询").await,
     }
 }
@@ -161,6 +189,7 @@ pub async fn controller_upgrade_core(
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_core(target.clash(), None, force).await,
         BackendType::Surge => crate::surge::api::unsupported("升级核心").await,
+        BackendType::SurgeController => crate::surge_controller::api::unsupported("升级核心").await,
         BackendType::SingBox => crate::sing_box::api::unsupported("升级核心").await,
     }
 }
@@ -169,6 +198,7 @@ pub async fn controller_upgrade_ui(target: BackendTarget) -> Result<(), MihomoEr
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_ui(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("升级 UI").await,
+        BackendType::SurgeController => crate::surge_controller::api::unsupported("升级 UI").await,
         BackendType::SingBox => crate::sing_box::api::unsupported("升级 UI").await,
     }
 }
@@ -177,6 +207,9 @@ pub async fn controller_upgrade_geo(target: BackendTarget) -> Result<(), MihomoE
     match target.backend_type {
         BackendType::Clash => crate::clash::api::upgrade_geo(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("升级 GeoData").await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::unsupported("升级 GeoData").await
+        }
         BackendType::SingBox => crate::sing_box::api::unsupported("升级 GeoData").await,
     }
 }
@@ -186,6 +219,7 @@ pub async fn controller_restart_core(target: BackendTarget) -> Result<(), Mihomo
     let result = match target.backend_type {
         BackendType::Clash => crate::clash::api::restart_core(target.clash()).await,
         BackendType::Surge => crate::surge::api::unsupported("重启核心").await,
+        BackendType::SurgeController => crate::surge_controller::api::unsupported("重启核心").await,
         BackendType::SingBox => crate::sing_box::api::unsupported("重启核心").await,
     };
     if result.is_ok() {
@@ -253,6 +287,9 @@ pub async fn controller_version(target: BackendTarget) -> Result<String, MihomoE
     match target.backend_type {
         BackendType::Clash => crate::clash::api::version(target.clash()).await,
         BackendType::Surge => crate::surge::api::version(target.surge()).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::version(target.surge_controller()).await
+        }
         BackendType::SingBox => crate::sing_box::api::version(target.sing_box()).await,
     }
 }
@@ -263,6 +300,9 @@ pub async fn controller_version_info(target: BackendTarget) -> Result<VersionInf
             .await?
             .into()),
         BackendType::Surge => crate::surge::api::version_info(target.surge()).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::version_info(target.surge_controller()).await
+        }
         BackendType::SingBox => crate::sing_box::api::version_info(target.sing_box()).await,
     }
 }

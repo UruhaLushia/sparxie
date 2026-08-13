@@ -160,6 +160,21 @@ impl<T: Clone> ActiveTargetCache<T> {
             state.stale = true;
         }
     }
+
+    pub(crate) fn invalidate_if<F>(&self, key: &str, predicate: F)
+    where
+        F: FnOnce(&T) -> bool,
+    {
+        let mut state = self.state.lock().expect("active target cache poisoned");
+        if state
+            .value
+            .as_ref()
+            .filter(|(cached_key, _)| cached_key == key)
+            .is_some_and(|(_, value)| predicate(value))
+        {
+            state.stale = true;
+        }
+    }
 }
 
 impl<T: Clone> InFlight<T> {

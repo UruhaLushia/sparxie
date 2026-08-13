@@ -30,6 +30,9 @@ pub async fn controller_group_delay(
         .map(Into::into)
         .collect()),
         BackendType::Surge => crate::surge::api::group_delay(target.surge(), group).await,
+        BackendType::SurgeController => {
+            crate::surge_controller::api::group_delay(target.surge_controller(), group).await
+        }
         BackendType::SingBox => crate::sing_box::api::group_delay(target.sing_box(), group).await,
     }
 }
@@ -62,6 +65,16 @@ pub async fn controller_proxy_delay(
                     .unwrap_or(-1),
             )
         }
+        BackendType::SurgeController => Ok(crate::surge_controller::api::proxy_batch_delay(
+            target.surge_controller(),
+            vec![name],
+            test_url,
+        )
+        .await?
+        .into_iter()
+        .next()
+        .map(|entry| i64::from(entry.delay))
+        .unwrap_or(-1)),
         BackendType::SingBox => Ok(crate::sing_box::api::proxy_batch_delay(
             target.sing_box(),
             vec![name],
@@ -98,6 +111,14 @@ pub async fn controller_proxy_batch_delay(
         BackendType::Surge => {
             crate::surge::api::proxy_batch_delay(target.surge(), names, test_url).await
         }
+        BackendType::SurgeController => {
+            crate::surge_controller::api::proxy_batch_delay(
+                target.surge_controller(),
+                names,
+                test_url,
+            )
+            .await
+        }
         BackendType::SingBox => {
             crate::sing_box::api::proxy_batch_delay(target.sing_box(), names).await
         }
@@ -127,6 +148,14 @@ pub async fn controller_proxy_group_batch_delay(
         .collect()),
         BackendType::Surge => {
             crate::surge::api::proxy_group_batch_delay(target.surge(), group, test_url).await
+        }
+        BackendType::SurgeController => {
+            crate::surge_controller::api::proxy_group_batch_delay(
+                target.surge_controller(),
+                group,
+                test_url,
+            )
+            .await
         }
         BackendType::SingBox => {
             crate::sing_box::api::proxy_group_batch_delay(target.sing_box(), group).await
@@ -224,6 +253,37 @@ pub async fn controller_proxy_group_delay_stream(
             }
             Ok(())
         }
+        BackendType::SurgeController => {
+            let delays = crate::surge_controller::api::proxy_group_batch_delay(
+                target.surge_controller(),
+                group.clone(),
+                test_url,
+            )
+            .await?;
+            let window_entries = crate::surge_controller::api::proxy_group_members(
+                target.surge_controller(),
+                group,
+                window_offset,
+                window_limit,
+                member_sort,
+            )
+            .await?;
+            for entry in delays {
+                if sink
+                    .add(ProxyDelayEvent {
+                        name: entry.name,
+                        delay: entry.delay,
+                        window_offset,
+                        window_members_hash,
+                        window_entries: window_entries.clone(),
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            Ok(())
+        }
         BackendType::SingBox => {
             let delays =
                 crate::sing_box::api::proxy_group_batch_delay(target.sing_box(), group.clone())
@@ -289,6 +349,31 @@ pub async fn controller_proxy_delay_window(
                 window_members_hash,
             )
             .await
+        }
+        BackendType::SurgeController => {
+            let _ = test_url;
+            let delay =
+                crate::surge_controller::api::group_delay(target.surge_controller(), group.clone())
+                    .await?
+                    .into_iter()
+                    .find(|entry| entry.name == name)
+                    .map(|entry| entry.delay)
+                    .unwrap_or(-1);
+            let window_entries = crate::surge_controller::api::proxy_group_members(
+                target.surge_controller(),
+                group,
+                window_offset,
+                window_limit,
+                member_sort,
+            )
+            .await?;
+            Ok(ProxyDelayEvent {
+                name,
+                delay,
+                window_offset,
+                window_members_hash,
+                window_entries,
+            })
         }
         BackendType::SingBox => {
             crate::sing_box::api::proxy_delay_window(
