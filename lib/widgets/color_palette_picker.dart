@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../gamepad_navigation.dart';
+import 'compact_controls.dart';
 
 Future<Color?> showColorPalettePicker(
   BuildContext context, {
@@ -89,18 +90,12 @@ class _ColorPaletteDialogState extends State<_ColorPaletteDialog> {
                 children: [
                   const Icon(Icons.palette_outlined, size: 18),
                   Expanded(
-                    child: GamepadSliderControl(
+                    child: CompactSlider(
                       value: _hsv.hue,
                       min: 0,
                       max: 360,
                       divisions: 360,
                       onChanged: (hue) => _setHsv(_hsv.withHue(hue)),
-                      child: Slider(
-                        value: _hsv.hue,
-                        min: 0,
-                        max: 360,
-                        onChanged: (hue) => _setHsv(_hsv.withHue(hue)),
-                      ),
                     ),
                   ),
                   SizedBox(
@@ -113,10 +108,7 @@ class _ColorPaletteDialogState extends State<_ColorPaletteDialog> {
                         ),
                         LengthLimitingTextInputFormatter(7),
                       ],
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        prefixText: '#',
-                      ),
+                      decoration: const InputDecoration(prefixText: '#'),
                       onChanged: (value) {
                         final parsed = _parseHex(value);
                         if (parsed != null) _setHexColor(parsed);

@@ -807,21 +807,25 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                   brightness: Theme.of(context).brightness,
                   surfaceColor: Theme.of(context).colorScheme.surface,
                   child: CompactControlTheme(
-                    buttonStyle: compactStyles[CompactControlKind.button]!,
-                    searchStyle: compactStyles[CompactControlKind.search]!,
-                    segmentedStyle:
-                        compactStyles[CompactControlKind.segmented]!,
-                    switchStyle: compactStyles[CompactControlKind.toggle]!,
-                    navigationBarStyle:
-                        compactStyles[CompactControlKind.navigationBar]!,
-                    child: _SystemBarStyle(
-                      child: UiScrollActivityScope(
-                        child: GamepadControl(
-                          onBeforeIntent: _handleGamepadIntent,
-                          shortcuts: gamepadShortcuts,
-                          repeatIntents: gamepadRepeatIntents,
-                          child: FocusTraversalGroup(
-                            child: child ?? const SizedBox.shrink(),
+                    styles: compactStyles,
+                    child: Builder(
+                      builder: (context) => Theme(
+                        data: Theme.of(context).copyWith(
+                          inputDecorationTheme: compactInputDecorationTheme(
+                            context,
+                            compactStyles[CompactControlKind.textField]!,
+                          ),
+                        ),
+                        child: _SystemBarStyle(
+                          child: UiScrollActivityScope(
+                            child: GamepadControl(
+                              onBeforeIntent: _handleGamepadIntent,
+                              shortcuts: gamepadShortcuts,
+                              repeatIntents: gamepadRepeatIntents,
+                              child: FocusTraversalGroup(
+                                child: child ?? const SizedBox.shrink(),
+                              ),
+                            ),
                           ),
                         ),
                       ),

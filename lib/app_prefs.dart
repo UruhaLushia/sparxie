@@ -34,7 +34,15 @@ enum NavBarStyle {
   m3,
 }
 
-enum CompactControlKind { navigationBar, button, search, segmented, toggle }
+enum CompactControlKind {
+  navigationBar,
+  button,
+  search,
+  textField,
+  segmented,
+  toggle,
+  slider,
+}
 
 enum AppThemeMode { system, light, dark }
 
@@ -300,11 +308,12 @@ class AppPrefs extends ChangeNotifier {
     NavBarStyle.m3 => 26,
   };
 
-  static double _minimumCompactHeight(CompactControlKind kind) =>
-      kind == CompactControlKind.navigationBar ? 52 : 32;
-
-  static double _maximumCompactHeight(CompactControlKind kind) =>
-      kind == CompactControlKind.navigationBar ? 76 : 52;
+  static (double, double) compactHeightRange(CompactControlKind kind) =>
+      switch (kind) {
+        CompactControlKind.navigationBar => (52, 76),
+        CompactControlKind.slider => (28, 44),
+        _ => (32, 52),
+      };
 
   static Future<AppPrefs> load(JsonStore store) async => AppPrefs._(store);
 
@@ -1064,18 +1073,20 @@ class AppPrefs extends ChangeNotifier {
     _put(key, next);
   }
 
-  double compactControlHeight(CompactControlKind kind) => _double(
-    _compactStyleKey(kind, 'height'),
-    _double(_compactKey(kind, 'height'), _defaultCompactHeight(kind)),
-  ).clamp(_minimumCompactHeight(kind), _maximumCompactHeight(kind));
+  double compactControlHeight(CompactControlKind kind) {
+    final range = compactHeightRange(kind);
+    return _double(
+      _compactStyleKey(kind, 'height'),
+      _double(_compactKey(kind, 'height'), _defaultCompactHeight(kind)),
+    ).clamp(range.$1, range.$2);
+  }
 
   Future<void> setCompactControlHeight(
     CompactControlKind kind,
     double value,
   ) async {
-    final next = value
-        .clamp(_minimumCompactHeight(kind), _maximumCompactHeight(kind))
-        .toDouble();
+    final range = compactHeightRange(kind);
+    final next = value.clamp(range.$1, range.$2).toDouble();
     final key = _compactStyleKey(kind, 'height');
     if (_s[key] == next) return;
     _put(key, next);

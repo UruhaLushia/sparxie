@@ -159,8 +159,11 @@ class ProxyGroupHeader extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                         decoration: const InputDecoration(
                           isDense: true,
+                          filled: false,
                           hintText: '搜索组内节点',
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
                           prefixIcon: Icon(Icons.search, size: 18),
                           prefixIconConstraints: BoxConstraints(
                             minWidth: 36,

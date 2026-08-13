@@ -1039,7 +1039,6 @@ class _GitHubTokenDialogState extends State<_GitHubTokenDialog> {
           decoration: InputDecoration(
             labelText: 'Token（可选）',
             helperText: '仅用于 Sparxie 更新请求，并保存在本机',
-            border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               tooltip: _showToken ? '隐藏 Token' : '显示 Token',
               onPressed: () => setState(() => _showToken = !_showToken),
@@ -1753,7 +1752,6 @@ class _EditDialogState extends State<_EditDialog> {
                 decoration: const InputDecoration(
                   labelText: '名称',
                   hintText: '例如：家用机',
-                  border: OutlineInputBorder(),
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? '名称不能为空' : null,
@@ -1767,7 +1765,6 @@ class _EditDialogState extends State<_EditDialog> {
                 decoration: const InputDecoration(
                   labelText: '图标 URL (可选)',
                   hintText: 'https://example.com/icon.png',
-                  border: OutlineInputBorder(),
                   suffixIcon: Icon(Icons.image_outlined),
                 ),
                 validator: (value) {
@@ -1783,10 +1780,7 @@ class _EditDialogState extends State<_EditDialog> {
               DropdownButtonFormField<ctl.BackendType>(
                 initialValue: _type,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: '后端类型',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: '后端类型'),
                 items: [
                   for (final type in ctl.BackendType.values)
                     DropdownMenuItem(value: type, child: Text(type.label)),
@@ -1799,10 +1793,7 @@ class _EditDialogState extends State<_EditDialog> {
               DropdownButtonFormField<_Scheme>(
                 initialValue: _scheme,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: '连接方式',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: '连接方式'),
                 items: [
                   for (final scheme in _schemeOptions)
                     DropdownMenuItem(
@@ -1820,7 +1811,6 @@ class _EditDialogState extends State<_EditDialog> {
                 decoration: InputDecoration(
                   labelText: _addressLabel,
                   hintText: _addressHint,
-                  border: OutlineInputBorder(),
                   suffixIcon: _isSparkleService
                       ? IconButton(
                           tooltip: '选择鉴权文件',
@@ -1846,7 +1836,6 @@ class _EditDialogState extends State<_EditDialog> {
                   enableSuggestions: false,
                   decoration: InputDecoration(
                     labelText: '密钥 (可选)',
-                    border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       tooltip: _showSecret ? '隐藏密钥' : '显示密钥',
                       onPressed: () =>

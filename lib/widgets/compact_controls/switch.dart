@@ -1,10 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../gamepad_navigation.dart';
 import '../transient_animation.dart';
 import 'style.dart';
 
-const _switchAnimationDuration = Duration(milliseconds: 180);
+const _switchAnimationDuration = Duration(milliseconds: 200);
 final _switchThumbShadows = [
   BoxShadow(
     color: Colors.black.withValues(alpha: 0.14),
@@ -94,27 +96,20 @@ class CompactSwitch extends StatelessWidget {
                   duration: _switchAnimationDuration,
                   curve: Curves.easeOutCubic,
                   lerp: _SwitchVisual.lerp,
-                  builder: (_, visual, _) => Container(
-                    padding: visual.padding,
-                    decoration: BoxDecoration(
-                      color: visual.trackColor,
-                      borderRadius: visual.borderRadius,
-                      border: Border.all(color: visual.outlineColor),
-                    ),
-                    child: Align(
-                      alignment: Alignment(visual.position * 2 - 1, 0),
-                      child: SizedBox.square(
-                        dimension: visual.thumbSize,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: visual.thumbColor,
-                            shape: BoxShape.circle,
-                            boxShadow: _switchThumbShadows,
-                          ),
-                        ),
+                  builder: (_, visual, _) {
+                    return Container(
+                      padding: visual.padding,
+                      decoration: BoxDecoration(
+                        color: visual.trackColor,
+                        borderRadius: visual.borderRadius,
+                        border: Border.all(color: visual.outlineColor),
                       ),
-                    ),
-                  ),
+                      child: Align(
+                        alignment: Alignment(visual.position * 2 - 1, 0),
+                        child: _SwitchThumb(visual: visual),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -178,6 +173,32 @@ class CompactSwitch extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwitchThumb extends StatelessWidget {
+  const _SwitchThumb({required this.visual});
+
+  final _SwitchVisual visual;
+
+  @override
+  Widget build(BuildContext context) {
+    // A moving switch thumb stretches along its path, then returns to a circle
+    // at either endpoint. This gives motion feedback without a second ticker.
+    final travel = math.sin(visual.position * math.pi).clamp(0.0, 1.0);
+    return Transform.scale(
+      scaleX: 1 + travel * 0.14,
+      child: SizedBox.square(
+        dimension: visual.thumbSize,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: visual.thumbColor,
+            shape: BoxShape.circle,
+            boxShadow: _switchThumbShadows,
           ),
         ),
       ),

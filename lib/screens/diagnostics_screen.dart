@@ -248,10 +248,8 @@ class _QualityPanelState extends State<_QualityPanel> {
             controller: _configCtl,
             enabled: !_running,
             decoration: const InputDecoration(
-              isDense: true,
               labelText: '配置地址',
               hintText: _defaultConfigUrl,
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 10),
@@ -471,10 +469,8 @@ class _StunPanelState extends State<_StunPanel> {
             controller: _serverCtl,
             enabled: !_running,
             decoration: const InputDecoration(
-              isDense: true,
               labelText: 'STUN 服务器',
               hintText: _defaultServer,
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 10),
@@ -560,11 +556,7 @@ class _OutboundDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: known ? value : '',
       isExpanded: true,
-      decoration: const InputDecoration(
-        isDense: true,
-        labelText: '出站',
-        border: OutlineInputBorder(),
-      ),
+      decoration: const InputDecoration(labelText: '出站'),
       items: [
         const DropdownMenuItem(value: '', child: Text('默认')),
         for (final entry in outbounds)

@@ -304,8 +304,6 @@ class _DelayTestUrlRowState extends State<_DelayTestUrlRow> {
           TextField(
             controller: _ctl,
             decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
               hintText: 'https://www.gstatic.com/generate_204',
             ),
             onSubmitted: widget.prefs.setDelayTestUrl,
@@ -384,11 +382,7 @@ class _DelayTestConcurrencyRowState extends State<_DelayTestConcurrencyRow> {
               controller: _ctl,
               textAlign: TextAlign.end,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
-                hintText: '50',
-              ),
+              decoration: const InputDecoration(hintText: '50'),
               onSubmitted: (_) => _commit(),
               onEditingComplete: _commit,
             ),

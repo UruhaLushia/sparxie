@@ -1481,39 +1481,17 @@ class _DeferredPageTheme extends StatefulWidget {
 
 class _DeferredPageThemeState extends State<_DeferredPageTheme> {
   ThemeData? _theme;
-  CompactControlStyle? _buttonStyle;
-  CompactControlStyle? _searchStyle;
-  CompactControlStyle? _segmentedStyle;
-  CompactControlStyle? _switchStyle;
-  CompactControlStyle? _navigationBarStyle;
+  CompactControlTheme? _controls;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final buttonStyle = CompactControlTheme.buttonOf(context);
-    final searchStyle = CompactControlTheme.searchOf(context);
-    final segmentedStyle = CompactControlTheme.segmentedOf(context);
-    final switchStyle = CompactControlTheme.switchOf(context);
-    final navigationBarStyle = CompactControlTheme.navigationBarOf(context);
+    final controls = CompactControlTheme.maybeOf(context)!;
     if (_theme == null || widget.active) {
       _theme = theme;
-      _buttonStyle = buttonStyle;
-      _searchStyle = searchStyle;
-      _segmentedStyle = segmentedStyle;
-      _switchStyle = switchStyle;
-      _navigationBarStyle = navigationBarStyle;
+      _controls = controls;
     }
-    return Theme(
-      data: _theme!,
-      child: CompactControlTheme(
-        buttonStyle: _buttonStyle!,
-        searchStyle: _searchStyle!,
-        segmentedStyle: _segmentedStyle!,
-        switchStyle: _switchStyle!,
-        navigationBarStyle: _navigationBarStyle!,
-        child: widget.child,
-      ),
-    );
+    return Theme(data: _theme!, child: _controls!.wrap(context, widget.child));
   }
 }
 

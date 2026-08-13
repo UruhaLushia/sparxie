@@ -33,6 +33,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   int _previewNavigationIndex = 2;
   int _previewSegment = 0;
   bool _previewSwitchValue = true;
+  double _previewSliderValue = 0.62;
   final _searchController = TextEditingController(text: 'Search');
   final _scrollController = ScrollController();
 
@@ -125,6 +126,8 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
     final surfaceTheme = AppSurfaceTheme.of(context);
     final automaticColor = widget.prefs.automaticColor;
     final navigationBar = widget.kind == CompactControlKind.navigationBar;
+    final slider = widget.kind == CompactControlKind.slider;
+    final heightRange = AppPrefs.compactHeightRange(widget.kind);
     final floatingNavigationBar =
         navigationBar && widget.prefs.navLayout == NavLayout.floating;
     final screenWidth = MediaQuery.sizeOf(context).width;
@@ -385,7 +388,8 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                   ),
                                 ),
                               ),
-                            if (!navigationBar || floatingNavigationBar)
+                            if ((!navigationBar || floatingNavigationBar) &&
+                                !slider)
                               _StyleSlider(
                                 label: navigationBar ? '外层圆角' : '圆角',
                                 valueLabel: '${_radius.round()} px',
@@ -402,15 +406,17 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                               label: navigationBar ? '外层高度' : '高度',
                               valueLabel: '${_height.round()} px',
                               value: _height,
-                              min: navigationBar ? 52 : 32,
-                              max: navigationBar ? 76 : 52,
-                              divisions: navigationBar ? 24 : 20,
+                              min: heightRange.$1,
+                              max: heightRange.$2,
+                              divisions: (heightRange.$2 - heightRange.$1)
+                                  .round(),
                               onChanged: (value) =>
                                   setState(() => _height = value),
                               onChangeEnd: (value) => widget.prefs
                                   .setCompactControlHeight(widget.kind, value),
                             ),
-                            if (!navigationBar || floatingNavigationBar)
+                            if ((!navigationBar || floatingNavigationBar) &&
+                                !slider)
                               _StyleSlider(
                                 label: navigationBar ? '外层长度' : '长度',
                                 valueLabel: '${(_widthScale * 100).round()}%',
@@ -543,6 +549,25 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
             style: style,
           ),
         );
+      case CompactControlKind.textField:
+        return SizedBox(
+          width: (260 * _widthScale).clamp(
+            180,
+            MediaQuery.sizeOf(context).width - 32,
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              inputDecorationTheme: compactInputDecorationTheme(context, style),
+            ),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                labelText: '输入框',
+                hintText: '请输入内容',
+              ),
+            ),
+          ),
+        );
       case CompactControlKind.segmented:
         return CompactSegmentedButton<int>(
           segments: const [
@@ -562,6 +587,18 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
             _previewSwitchValue = value;
           }),
           style: style,
+        );
+      case CompactControlKind.slider:
+        return SizedBox(
+          width: (260 * _widthScale).clamp(
+            180,
+            MediaQuery.sizeOf(context).width - 32,
+          ),
+          child: CompactSlider(
+            value: _previewSliderValue,
+            onChanged: (value) => setState(() => _previewSliderValue = value),
+            style: style,
+          ),
         );
       case CompactControlKind.navigationBar:
         final floating = widget.prefs.navLayout == NavLayout.floating;

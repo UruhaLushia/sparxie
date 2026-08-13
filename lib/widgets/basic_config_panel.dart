@@ -444,16 +444,6 @@ class _PortsSectionState extends State<_PortsSection> {
             controller: c,
             readOnly: widget.readOnly,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-            ),
           ),
         ),
         const SizedBox(width: 8),

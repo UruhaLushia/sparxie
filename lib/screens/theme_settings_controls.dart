@@ -154,32 +154,13 @@ class _StyleSlider extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 2),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
-              activeTrackColor: scheme.primary,
-              inactiveTrackColor: scheme.outlineVariant.withValues(alpha: 0.6),
-              thumbColor: scheme.primary,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-              tickMarkShape: SliderTickMarkShape.noTickMark,
-            ),
-            child: GamepadSliderControl(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              onChanged: onChanged,
-              onChangeEnd: onChangeEnd,
-              child: Slider(
-                value: value,
-                min: min,
-                max: max,
-                divisions: divisions,
-                onChanged: onChanged,
-                onChangeEnd: onChangeEnd,
-              ),
-            ),
+          CompactSlider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ],
       ),
@@ -338,16 +319,20 @@ extension on CompactControlKind {
   String get label => switch (this) {
     CompactControlKind.button => '按钮',
     CompactControlKind.search => '搜索框',
+    CompactControlKind.textField => '输入框',
     CompactControlKind.segmented => '分段选择',
     CompactControlKind.toggle => '开关',
+    CompactControlKind.slider => '滑块',
     CompactControlKind.navigationBar => '导航栏',
   };
 
   IconData get icon => switch (this) {
     CompactControlKind.button => Icons.smart_button_outlined,
     CompactControlKind.search => Icons.search,
+    CompactControlKind.textField => Icons.text_fields_outlined,
     CompactControlKind.segmented => Icons.view_week_outlined,
     CompactControlKind.toggle => Icons.toggle_on_outlined,
+    CompactControlKind.slider => Icons.tune_rounded,
     CompactControlKind.navigationBar => Icons.navigation_outlined,
   };
 }

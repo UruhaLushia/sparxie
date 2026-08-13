@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app_prefs.dart';
+
 BorderRadius _indicatorRadius(
   double outerRadius,
   double inset,
@@ -394,59 +396,55 @@ class CompactControlStyle {
 class CompactControlTheme extends InheritedTheme {
   const CompactControlTheme({
     super.key,
-    required this.buttonStyle,
-    required this.searchStyle,
-    required this.segmentedStyle,
-    required this.switchStyle,
-    required this.navigationBarStyle,
+    required this.styles,
     required super.child,
   });
 
-  final CompactControlStyle buttonStyle;
-  final CompactControlStyle searchStyle;
-  final CompactControlStyle segmentedStyle;
-  final CompactControlStyle switchStyle;
-  final CompactControlStyle navigationBarStyle;
+  final Map<CompactControlKind, CompactControlStyle> styles;
 
-  static CompactControlTheme? _of(BuildContext context) =>
+  static CompactControlTheme? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<CompactControlTheme>();
 
+  static CompactControlStyle _styleOf(
+    BuildContext context,
+    CompactControlKind kind, [
+    CompactControlStyle fallback = const CompactControlStyle(),
+  ]) => maybeOf(context)?.styles[kind] ?? fallback;
+
   static CompactControlStyle buttonOf(BuildContext context) =>
-      _of(context)?.buttonStyle ?? const CompactControlStyle();
+      _styleOf(context, CompactControlKind.button);
 
   static CompactControlStyle searchOf(BuildContext context) =>
-      _of(context)?.searchStyle ?? const CompactControlStyle();
+      _styleOf(context, CompactControlKind.search);
+
+  static CompactControlStyle textFieldOf(BuildContext context) =>
+      _styleOf(context, CompactControlKind.textField);
 
   static CompactControlStyle segmentedOf(BuildContext context) =>
-      _of(context)?.segmentedStyle ?? const CompactControlStyle();
+      _styleOf(context, CompactControlKind.segmented);
 
   static CompactControlStyle switchOf(BuildContext context) =>
-      _of(context)?.switchStyle ?? const CompactControlStyle();
+      _styleOf(context, CompactControlKind.toggle);
 
-  static CompactControlStyle navigationBarOf(BuildContext context) =>
-      _of(context)?.navigationBarStyle ??
-      const CompactControlStyle(
-        buttonHeight: 56,
-        indicatorHeight: 42,
-        borderRadius: BorderRadius.all(Radius.circular(28)),
-        indicatorBorderRadius: BorderRadius.all(Radius.circular(21)),
-      );
+  static CompactControlStyle sliderOf(BuildContext context) =>
+      _styleOf(context, CompactControlKind.slider);
+
+  static CompactControlStyle navigationBarOf(BuildContext context) => _styleOf(
+    context,
+    CompactControlKind.navigationBar,
+    const CompactControlStyle(
+      buttonHeight: 56,
+      indicatorHeight: 42,
+      borderRadius: BorderRadius.all(Radius.circular(28)),
+      indicatorBorderRadius: BorderRadius.all(Radius.circular(21)),
+    ),
+  );
 
   @override
   bool updateShouldNotify(CompactControlTheme oldWidget) =>
-      buttonStyle != oldWidget.buttonStyle ||
-      searchStyle != oldWidget.searchStyle ||
-      segmentedStyle != oldWidget.segmentedStyle ||
-      switchStyle != oldWidget.switchStyle ||
-      navigationBarStyle != oldWidget.navigationBarStyle;
+      !identical(styles, oldWidget.styles);
 
   @override
-  Widget wrap(BuildContext context, Widget child) => CompactControlTheme(
-    buttonStyle: buttonStyle,
-    searchStyle: searchStyle,
-    segmentedStyle: segmentedStyle,
-    switchStyle: switchStyle,
-    navigationBarStyle: navigationBarStyle,
-    child: child,
-  );
+  Widget wrap(BuildContext context, Widget child) =>
+      CompactControlTheme(styles: styles, child: child);
 }
