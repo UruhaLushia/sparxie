@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use serde_json::Value;
 
-use crate::surge_controller::api::{value_i32, value_string};
+use crate::surge_controller::api::value_string;
 
 use super::source::{GroupMeta, SourceMember};
 
@@ -19,7 +19,20 @@ pub(super) fn policy_group_names(raw: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub(super) fn source_members(items: &[Value]) -> Vec<SourceMember> {
+pub(super) fn proxy_names(raw: &Value) -> HashSet<String> {
+    raw.get("proxies")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| value_string(Some(item)))
+        .collect()
+}
+
+pub(super) fn source_members(
+    items: &[Value],
+    local_proxies: &HashSet<String>,
+    smart_info: Option<&Value>,
+) -> Vec<SourceMember> {
     items
         .iter()
         .filter(|item| item.get("enabled").and_then(Value::as_bool).unwrap_or(true))
@@ -29,65 +42,53 @@ pub(super) fn source_members(items: &[Value]) -> Vec<SourceMember> {
                     .iter()
                     .find_map(|key| value_string(item.get(*key)))
             })?;
+            let delay_key = ["lineHash", "line_hash", "hash"]
+                .iter()
+                .find_map(|key| value_string(item.get(*key)));
+            let is_group = item.get("isGroup").and_then(Value::as_bool) == Some(true);
             Some(SourceMember {
                 proxy_type: ["typeDescription", "type", "policyType"]
                     .iter()
                     .find_map(|key| value_string(item.get(*key)))
                     .unwrap_or_else(|| {
-                        if item.get("isGroup").and_then(Value::as_bool) == Some(true) {
+                        if is_group {
                             "PolicyGroup".into()
                         } else {
                             "Policy".into()
                         }
                     }),
-                delay_key: ["lineHash", "line_hash", "hash"]
-                    .iter()
-                    .find_map(|key| value_string(item.get(*key))),
+                test_key: if is_group || local_proxies.contains(&name) {
+                    name.clone()
+                } else {
+                    delay_key.clone().unwrap_or_else(|| name.clone())
+                },
+                usage: delay_key
+                    .as_ref()
+                    .and_then(|key| smart_info?.get(key))
+                    .and_then(|value| value.get("usage"))
+                    .and_then(Value::as_i64)
+                    .and_then(|usage| i32::try_from(usage).ok()),
+                delay_key,
                 name,
             })
         })
         .collect()
 }
 
-pub(super) fn delay_map(raw: &Value) -> HashMap<String, i32> {
-    let mut output = HashMap::new();
-    collect_delays(raw, None, &mut output);
-    output
-}
-
-fn collect_delays(raw: &Value, key: Option<&str>, output: &mut HashMap<String, i32>) {
-    if let (Some(key), Some(delay)) = (key, value_i32(Some(raw))) {
-        output.insert(key.to_string(), delay);
-    }
-    match raw {
-        Value::Object(map) => {
-            let name = ["name", "policy", "policyName", "lineHash"]
-                .iter()
-                .find_map(|key| value_string(map.get(*key)));
-            if let (Some(name), Some(delay)) = (name, value_i32(Some(raw))) {
-                output.insert(name, delay);
-            }
-            for (key, value) in map {
-                collect_delays(value, Some(key), output);
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                collect_delays(item, None, output);
-            }
-        }
-        _ => {}
-    }
-}
-
-pub(super) fn selected_from_delays(raw: &Value, group: &str) -> Option<String> {
+pub(super) fn auto_group_selection(raw: &Value, group: &str) -> Option<String> {
     let value = group_result(raw, group)?;
-    if let Some(value) = value.as_str() {
-        return Some(value.to_string());
+    if let Some(value) = value
+        .as_array()
+        .and_then(|values| values.first())
+        .and_then(|value| value_string(Some(value)))
+    {
+        return Some(value);
     }
-    ["policy", "policyName", "selected", "name"]
-        .iter()
-        .find_map(|key| value_string(value.get(*key)))
+    value_string(Some(value)).or_else(|| {
+        ["policy", "policyName", "selected", "name"]
+            .iter()
+            .find_map(|key| value_string(value.get(*key)))
+    })
 }
 
 pub(super) fn is_auto_group(raw: &Value, group: &str) -> bool {

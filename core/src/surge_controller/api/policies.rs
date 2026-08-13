@@ -13,11 +13,25 @@ mod resources;
 mod source;
 
 pub use catalog::{proxy_catalog, proxy_group_members};
-pub use delay::{group_delay, proxy_batch_delay, proxy_group_batch_delay};
+pub use delay::{group_delay, proxy_batch_delay, proxy_delay, proxy_group_batch_delay};
 use parse::is_auto_group;
 pub(super) use resources::{ResourceGroup, ResourceMembers, resource_group_members};
 
 const CACHE_TTL: Duration = Duration::from_secs(30);
+
+pub(super) async fn member_runtime_key(
+    target: SurgeControllerTarget,
+    name: &str,
+) -> Result<String, MihomoError> {
+    catalog::member_runtime_key(target, name).await
+}
+
+pub(super) async fn member_usage(
+    target: SurgeControllerTarget,
+    name: &str,
+) -> Result<Option<i32>, MihomoError> {
+    catalog::member_usage(target, name).await
+}
 
 pub(crate) fn clear_cache(target: &SurgeControllerTarget) {
     catalog::clear(target);

@@ -26,6 +26,8 @@ pub(crate) struct SourceMember {
     pub(crate) name: String,
     pub(crate) proxy_type: String,
     pub(crate) delay_key: Option<String>,
+    pub(crate) test_key: String,
+    pub(crate) usage: Option<i32>,
 }
 
 #[derive(Default)]
@@ -61,7 +63,12 @@ pub(super) async fn load(
                     let member_map = connection
                         .request(["dump", "policy-group-sub-policies"])
                         .await?;
+                    let smart_info = connection
+                        .request(["dump", "smart-group-info"])
+                        .await
+                        .unwrap_or_default();
                     let map = member_map.get("map").unwrap_or(&member_map);
+                    let local_proxies = super::parse::proxy_names(&policies);
                     let mut groups = Vec::new();
                     for name in policy_group_names(&policies) {
                         let raw = connection
@@ -71,7 +78,9 @@ pub(super) async fn load(
                         let members = map
                             .get(&name)
                             .and_then(Value::as_array)
-                            .map(|items| source_members(items))
+                            .map(|items| {
+                                source_members(items, &local_proxies, smart_info.get(&name))
+                            })
                             .unwrap_or_default()
                             .into();
                         groups.push(SourceGroup {

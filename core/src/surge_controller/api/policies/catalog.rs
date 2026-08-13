@@ -8,7 +8,7 @@ use crate::surge_controller::api::string_map;
 use crate::surge_controller::client::{SurgeControllerTarget, target_key, with_unary_connection};
 
 use super::CACHE_TTL;
-use super::parse::{delay_map, group_type, is_auto_group, member_hash, selected_from_delays};
+use super::parse::{auto_group_selection, group_type, is_auto_group, member_hash};
 use super::source::{CatalogSource, SourceMember};
 
 struct CatalogCache {
@@ -52,7 +52,7 @@ pub async fn proxy_catalog(
     let environment = environment.get("environment").unwrap_or(&environment);
     let selections = string_map(environment.get("ProxyGroupSelection"));
     let overrides = string_map(environment.get("AutoPolicyGroupOverride"));
-    let delay_map = delay_map(&delays);
+    let delay_map = crate::surge_controller::state::benchmark::snapshot(&target).await;
     let needle = filter.trim().to_lowercase();
     let mut entries = Vec::with_capacity(source.groups.len());
     let mut icon_urls = Vec::new();
@@ -67,7 +67,7 @@ pub async fn proxy_catalog(
             .get(&name)
             .or_else(|| selections.get(&name))
             .cloned()
-            .or_else(|| selected_from_delays(&delays, &name))
+            .or_else(|| auto_group_selection(&delays, &name))
             .unwrap_or_default();
         let fixed = overrides.get(&name).cloned().unwrap_or_default();
         let selectable = selections.contains_key(&name) || group.meta.selectable;
@@ -141,6 +141,10 @@ pub async fn proxy_group_members(
     sort: ProxyMemberSort,
 ) -> Result<Vec<ProxyMemberEntry>, MihomoError> {
     ensure(target.clone()).await?;
+    replace_delays(
+        &target,
+        crate::surge_controller::state::benchmark::cached_delays(&target),
+    );
     let mut members = members(&target, &group);
     sort_members(&mut members, sort);
     Ok(members
@@ -212,6 +216,119 @@ pub(super) fn delay_candidates(
         .unwrap_or_default()
 }
 
+pub(super) async fn member_test_key(
+    target: SurgeControllerTarget,
+    name: &str,
+) -> Result<String, MihomoError> {
+    ensure(target.clone()).await?;
+    Ok(cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get(&target_key(&target))
+        .and_then(|catalog| {
+            catalog
+                .source
+                .groups
+                .iter()
+                .flat_map(|group| group.members.iter())
+                .find(|member| member.name == name)
+                .map(|member| member.test_key.clone())
+        })
+        .unwrap_or_else(|| name.to_string()))
+}
+
+pub(super) async fn member_runtime_key(
+    target: SurgeControllerTarget,
+    name: &str,
+) -> Result<String, MihomoError> {
+    ensure(target.clone()).await?;
+    Ok(cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get(&target_key(&target))
+        .and_then(|catalog| {
+            catalog
+                .source
+                .groups
+                .iter()
+                .flat_map(|group| group.members.iter())
+                .find(|member| member.name == name)
+                .and_then(|member| member.delay_key.clone())
+        })
+        .unwrap_or_else(|| name.to_string()))
+}
+
+pub(super) async fn member_usage(
+    target: SurgeControllerTarget,
+    name: &str,
+) -> Result<Option<i32>, MihomoError> {
+    ensure(target.clone()).await?;
+    Ok(cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get(&target_key(&target))
+        .and_then(|catalog| {
+            catalog
+                .source
+                .groups
+                .iter()
+                .flat_map(|group| group.members.iter())
+                .find(|member| member.name == name && member.usage.is_some())
+                .and_then(|member| member.usage)
+        }))
+}
+
+pub(super) fn update_delay(target: &SurgeControllerTarget, key: String, delay: i32) {
+    if let Some(catalog) = cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get_mut(&target_key(target))
+    {
+        catalog.delays.insert(key, delay);
+    }
+}
+
+fn replace_delays(target: &SurgeControllerTarget, delays: HashMap<String, i32>) {
+    if let Some(catalog) = cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get_mut(&target_key(target))
+    {
+        catalog.delays = delays;
+    }
+}
+
+pub(super) async fn group_test_keys(
+    target: SurgeControllerTarget,
+    group: &str,
+) -> Result<Vec<String>, MihomoError> {
+    ensure(target.clone()).await?;
+    Ok(cache()
+        .lock()
+        .expect("surge controller policy cache poisoned")
+        .get(&target_key(&target))
+        .and_then(|catalog| {
+            catalog
+                .source
+                .groups
+                .iter()
+                .find(|candidate| candidate.name == group)
+        })
+        .map(|group| {
+            group
+                .members
+                .iter()
+                .map(|member| {
+                    member
+                        .delay_key
+                        .clone()
+                        .unwrap_or_else(|| member.name.clone())
+                })
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
 pub(super) fn delays_by_name(target: &SurgeControllerTarget) -> HashMap<String, i32> {
     let cache = cache()
         .lock()
@@ -269,9 +386,19 @@ fn sort_members(entries: &mut [ProxyMemberEntry], sort: ProxyMemberSort) {
         ProxyMemberSort::Original => {}
         ProxyMemberSort::Name => entries.sort_by(|a, b| a.name.cmp(&b.name)),
         ProxyMemberSort::Delay => entries.sort_by(|a, b| {
-            let a_delay = if a.delay < 0 { i32::MAX } else { a.delay };
-            let b_delay = if b.delay < 0 { i32::MAX } else { b.delay };
-            a_delay.cmp(&b_delay).then_with(|| a.name.cmp(&b.name))
+            delay_sort_key(a.delay)
+                .cmp(&delay_sort_key(b.delay))
+                .then_with(|| a.name.cmp(&b.name))
         }),
+    }
+}
+
+fn delay_sort_key(delay: i32) -> (u8, i32) {
+    if delay > 0 {
+        (0, delay)
+    } else if delay < 0 {
+        (1, 0)
+    } else {
+        (2, 0)
     }
 }

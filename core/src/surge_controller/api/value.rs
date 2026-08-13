@@ -23,17 +23,3 @@ pub(crate) fn value_string(value: Option<&Value>) -> Option<String> {
         _ => None,
     }
 }
-
-pub(crate) fn value_i32(value: Option<&Value>) -> Option<i32> {
-    match value? {
-        Value::Number(value) => value
-            .as_i64()
-            .and_then(|value| i32::try_from(value).ok())
-            .or_else(|| value.as_f64().map(|value| value.round() as i32)),
-        Value::String(value) => value.parse().ok(),
-        Value::Object(map) => ["delay", "latency", "rtt", "lastTestScoreInMS"]
-            .iter()
-            .find_map(|key| value_i32(map.get(*key))),
-        _ => None,
-    }
-}

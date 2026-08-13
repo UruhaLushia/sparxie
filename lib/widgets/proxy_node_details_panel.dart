@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../controller_view_state.dart';
@@ -33,9 +32,11 @@ class ProxyNodeDetailsPanel extends StatefulWidget {
 
 class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
   _ProxyNodeDetails? _details;
+  Timer? _refreshTimer;
   Animation<double>? _routeAnimation;
   var _initialLoadScheduled = false;
   var _loading = false;
+  var _refreshing = false;
   var _testing = false;
 
   bool get _awaitingDetails => widget.loadDetails != null && _details == null;
@@ -88,6 +89,28 @@ class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
       _details = details;
       _loading = false;
     });
+    if (details.traffic != null) {
+      _refreshTimer ??= Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => unawaited(_refreshDetails()),
+      );
+    }
+  }
+
+  Future<void> _refreshDetails() async {
+    final loader = widget.loadDetails;
+    if (loader == null || _loading || _refreshing || _testing) return;
+    _refreshing = true;
+    try {
+      final details = _ProxyNodeDetails.parse(await loader());
+      if (mounted && details.traffic != null) {
+        setState(() => _details = details);
+      }
+    } catch (_) {
+      // Keep the last successful snapshot while the controller is unavailable.
+    } finally {
+      _refreshing = false;
+    }
   }
 
   Future<void> _runDelayTest() async {
@@ -120,15 +143,16 @@ class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
             loading: _loading && !_testing,
           ),
           const SizedBox(height: 11),
-          _NodeDelayHistory(
-            member: widget.member,
-            samples: details?.history ?? const [],
-            showPlaceholder: awaitingDetails,
-          ),
-          if (awaitingDetails) ...[
-            const SizedBox(height: 11),
-            const _NodeMetadataPlaceholder(),
-          ] else if (attributes.isNotEmpty) ...[
+          if (awaitingDetails) const _NodeMetadataPlaceholder(),
+          if (!awaitingDetails && details?.status != null)
+            _NodeStatusDetails(status: details!.status!),
+          if (!awaitingDetails &&
+              details?.status != null &&
+              details?.traffic != null)
+            const SizedBox(height: 8),
+          if (!awaitingDetails && details?.traffic != null)
+            _NodeTrafficDetails(traffic: details!.traffic!),
+          if (!awaitingDetails && attributes.isNotEmpty) ...[
             const SizedBox(height: 11),
             SelectionArea(child: _NodeAttributes(rows: attributes)),
           ],
@@ -168,6 +192,7 @@ class _ProxyNodeDetailsPanelState extends State<ProxyNodeDetailsPanel> {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _routeAnimation?.removeStatusListener(_handleRouteStatus);
     super.dispose();
   }
@@ -178,7 +203,8 @@ class _ProxyNodeDetails {
     this.alive,
     this.attributes = const [],
     this.capabilities = const [],
-    this.history = const [],
+    this.traffic,
+    this.status,
   });
 
   factory _ProxyNodeDetails.parse(String raw) {
@@ -196,7 +222,9 @@ class _ProxyNodeDetails {
       'mptcp': 'MPTCP',
       'smux': 'SMUX',
     };
-    final rawHistory = fields['history'];
+    final traffic = _NodeTraffic.parse(fields['traffic']);
+    final testError = text('test-error');
+    final usage = text('usage-label');
     return _ProxyNodeDetails(
       alive: fields['alive'] is bool ? fields['alive'] as bool : null,
       attributes: [
@@ -212,32 +240,65 @@ class _ProxyNodeDetails {
         for (final entry in capabilityLabels.entries)
           if (fields[entry.key] == true) entry.value,
       ],
-      history: rawHistory is! List
-          ? const []
-          : [
-              for (final item in rawHistory)
-                if (asMap(item) case final entry when entry['delay'] != null)
-                  _NodeDelaySample(
-                    delay: asInt(entry['delay']),
-                    time: DateTime.tryParse(
-                      '${entry['time'] ?? ''}',
-                    )?.toLocal(),
-                  ),
-            ],
+      traffic: traffic,
+      status: testError.isNotEmpty
+          ? _NodeStatus(label: '延迟测试', value: testError, error: true)
+          : usage.isNotEmpty
+          ? _NodeStatus(label: '使用频率', value: usage)
+          : null,
     );
   }
 
   final bool? alive;
   final List<(String, String)> attributes;
   final List<String> capabilities;
-  final List<_NodeDelaySample> history;
+  final _NodeTraffic? traffic;
+  final _NodeStatus? status;
 }
 
-class _NodeDelaySample {
-  const _NodeDelaySample({required this.delay, required this.time});
+class _NodeStatus {
+  const _NodeStatus({
+    required this.label,
+    required this.value,
+    this.error = false,
+  });
 
-  final int delay;
-  final DateTime? time;
+  final String label;
+  final String value;
+  final bool error;
+}
+
+class _NodeTraffic {
+  const _NodeTraffic({
+    required this.upload,
+    required this.download,
+    required this.uploadSpeed,
+    required this.downloadSpeed,
+    required this.uploadMaxSpeed,
+    required this.downloadMaxSpeed,
+  });
+
+  static _NodeTraffic? parse(Object? raw) {
+    final traffic = asMap(raw);
+    if (traffic.isEmpty) return null;
+    return _NodeTraffic(
+      upload: asBigInt(traffic['out']),
+      download: asBigInt(traffic['in']),
+      uploadSpeed: asBigInt(traffic['outCurrentSpeed']),
+      downloadSpeed: asBigInt(traffic['inCurrentSpeed']),
+      uploadMaxSpeed: asBigInt(traffic['outMaxSpeed']),
+      downloadMaxSpeed: asBigInt(traffic['inMaxSpeed']),
+    );
+  }
+
+  final BigInt upload;
+  final BigInt download;
+  final BigInt uploadSpeed;
+  final BigInt downloadSpeed;
+  final BigInt uploadMaxSpeed;
+  final BigInt downloadMaxSpeed;
+
+  BigInt get total => upload + download;
 }
 
 class _NodeHeader extends StatelessWidget {
@@ -311,316 +372,147 @@ class _NodeHeader extends StatelessWidget {
   }
 }
 
-class _NodeDelayHistory extends StatelessWidget {
-  const _NodeDelayHistory({
-    required this.member,
-    required this.samples,
-    required this.showPlaceholder,
-  });
+class _NodeTrafficDetails extends StatelessWidget {
+  const _NodeTrafficDetails({required this.traffic});
 
-  final ProxyMember member;
-  final List<_NodeDelaySample> samples;
-  final bool showPlaceholder;
+  final _NodeTraffic traffic;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final visible = samples.length > 12
-        ? samples.sublist(samples.length - 12)
-        : samples;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final valueStyle = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 9),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.timeline_rounded,
-                size: 16,
-                color: scheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
               Text(
-                '历史延迟',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                '详细信息',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const Spacer(),
-              ActiveValueListenableBuilder<int>(
-                valueListenable: member.delay,
-                builder: (_, delay, _) {
-                  final color = _delayColor(scheme, delay);
-                  return Text(
-                    '当前 ${_delayText(delay)}',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  );
-                },
-              ),
+              Text('总计 ${formatBytes(traffic.total)}', style: valueStyle),
             ],
           ),
           const SizedBox(height: 8),
-          if (showPlaceholder && samples.isEmpty)
-            SizedBox(
-              height: 104,
-              child: Center(
-                child: Text(
-                  '正在加载延迟记录…',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            )
-          else if (visible.isEmpty)
-            Text(
-              '暂无历史延迟',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            )
-          else
-            RepaintBoundary(child: _NodeDelayChart(samples: visible)),
+          _NodeTrafficRow(
+            label: '流量',
+            value:
+                '上传 ${formatBytes(traffic.upload)}  下载 ${formatBytes(traffic.download)}',
+          ),
+          _NodeTrafficRow(
+            label: '当前速度',
+            value:
+                '上传 ${formatBytes(traffic.uploadSpeed)}/s  下载 ${formatBytes(traffic.downloadSpeed)}/s',
+          ),
+          _NodeTrafficRow(
+            label: '最高速度',
+            value:
+                '上传 ${formatBytes(traffic.uploadMaxSpeed)}/s  下载 ${formatBytes(traffic.downloadMaxSpeed)}/s',
+          ),
         ],
       ),
     );
   }
 }
 
-class _NodeDelayChart extends StatelessWidget {
-  const _NodeDelayChart({required this.samples});
+class _NodeStatusDetails extends StatelessWidget {
+  const _NodeStatusDetails({required this.status});
 
-  final List<_NodeDelaySample> samples;
+  final _NodeStatus status;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final measured = samples.where((sample) => sample.delay > 0).toList();
-    final minDelay = measured.isEmpty
-        ? 0
-        : measured
-              .map((sample) => sample.delay)
-              .reduce((a, b) => a < b ? a : b);
-    final maxDelay = measured.isEmpty
-        ? 0
-        : measured
-              .map((sample) => sample.delay)
-              .reduce((a, b) => a > b ? a : b);
-    final range = measured.isEmpty
-        ? '全部超时'
-        : '最低 $minDelay ms · 最高 $maxDelay ms';
-    final firstTime = samples.first.time;
-    final lastTime = samples.last.time;
-    final padding = measured.length <= 1
-        ? 1.0
-        : ((maxDelay - minDelay) * 0.14).clamp(2.0, 80.0);
-    final minY = measured.isEmpty
-        ? 0.0
-        : (minDelay - padding).clamp(0.0, double.infinity);
-    final maxY = measured.isEmpty ? 1.0 : maxDelay + padding;
-    final maxX = samples.length <= 1 ? 1.0 : (samples.length - 1).toDouble();
-    double xFor(int index) => samples.length == 1 ? 0.5 : index.toDouble();
-    final delaySpots = [
-      for (var i = 0; i < samples.length; i++)
-        samples[i].delay > 0
-            ? FlSpot(xFor(i), samples[i].delay.toDouble())
-            : FlSpot.nullSpot,
-    ];
-    final timeoutSpots = [
-      for (var i = 0; i < samples.length; i++)
-        samples[i].delay <= 0 ? FlSpot(xFor(i), minY) : FlSpot.nullSpot,
-    ];
-    final gridColor = scheme.outlineVariant.withValues(alpha: 0.42);
-    final tooltipText = TextStyle(
-      color: scheme.onInverseSurface,
-      fontSize: 10,
-      fontWeight: FontWeight.w600,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    return Semantics(
-      label: '历史延迟，$range，共 ${samples.length} 次',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final color = status.error ? scheme.error : scheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 88,
-            child: LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: maxX,
-                minY: minY,
-                maxY: maxY,
-                clipData: const FlClipData.all(),
-                borderData: FlBorderData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                gridData: FlGridData(
-                  drawVerticalLine: false,
-                  horizontalInterval: (maxY - minY) / 2,
-                  getDrawingHorizontalLine: (_) =>
-                      FlLine(color: gridColor, strokeWidth: 0.7),
-                ),
-                lineTouchData: LineTouchData(
-                  touchSpotThreshold: 18,
-                  getTouchedSpotIndicator: (bar, indexes) {
-                    final color = bar.color == Colors.transparent
-                        ? scheme.error
-                        : scheme.primary;
-                    return [
-                      for (final _ in indexes)
-                        TouchedSpotIndicatorData(
-                          FlLine(
-                            color: color.withValues(alpha: 0.28),
-                            strokeWidth: 1,
-                          ),
-                          FlDotData(
-                            getDotPainter: (_, _, _, _) => FlDotCirclePainter(
-                              radius: 4,
-                              color: color,
-                              strokeWidth: 1.5,
-                              strokeColor: scheme.surface,
-                            ),
-                          ),
-                        ),
-                    ];
-                  },
-                  touchTooltipData: LineTouchTooltipData(
-                    tooltipPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    tooltipMargin: 6,
-                    tooltipBorderRadius: BorderRadius.circular(8),
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipColor: (_) => scheme.inverseSurface,
-                    getTooltipItems: (spots) => [
-                      for (final spot in spots)
-                        if (spot.spotIndex >= 0 &&
-                            spot.spotIndex < samples.length)
-                          LineTooltipItem(
-                            '${_delayText(samples[spot.spotIndex].delay)}\n'
-                            '${_fullTime(samples[spot.spotIndex].time)}',
-                            tooltipText,
-                          ),
-                    ],
-                  ),
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: delaySpots,
-                    color: scheme.primary,
-                    barWidth: 2,
-                    isCurved: true,
-                    curveSmoothness: 0.25,
-                    preventCurveOverShooting: true,
-                    isStrokeCapRound: true,
-                    isStrokeJoinRound: true,
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          scheme.primary.withValues(alpha: 0.18),
-                          scheme.primary.withValues(alpha: 0.01),
-                        ],
-                      ),
-                    ),
-                    dotData: FlDotData(
-                      getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
-                        radius: 2.5,
-                        color: _delayColor(scheme, spot.y.round()),
-                        strokeWidth: 1.2,
-                        strokeColor: scheme.surface,
-                      ),
-                    ),
-                  ),
-                  LineChartBarData(
-                    spots: timeoutSpots,
-                    color: Colors.transparent,
-                    barWidth: 0,
-                    dotData: FlDotData(
-                      getDotPainter: (_, _, _, _) => FlDotCirclePainter(
-                        radius: 2.5,
-                        color: scheme.error,
-                        strokeWidth: 1.2,
-                        strokeColor: scheme.surface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              duration: Duration.zero,
+          Icon(
+            status.error ? Icons.error_outline_rounded : Icons.insights_rounded,
+            size: 17,
+            color: color,
+          ),
+          const SizedBox(width: 7),
+          Text(
+            status.label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                firstTime == null ? '--:--' : _shortTime(firstTime),
-                style: _chartLabelStyle(context),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              status.value,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: status.error ? color : scheme.onSurface,
+                fontWeight: FontWeight.w600,
               ),
-              Expanded(
-                child: Text(
-                  range,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _chartLabelStyle(context),
-                ),
-              ),
-              Text(
-                lastTime == null ? '--:--' : _shortTime(lastTime),
-                style: _chartLabelStyle(context),
-              ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
-
-  TextStyle? _chartLabelStyle(BuildContext context) =>
-      Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-        fontSize: 9,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
 }
 
-Color _delayColor(ColorScheme scheme, int delay) =>
-    switch (classifyDelay(delay)) {
-      DelayBucket.untested => scheme.onSurfaceVariant,
-      DelayBucket.timeout => scheme.error,
-      DelayBucket.fast => const Color(0xff16a34a),
-      DelayBucket.slow => const Color(0xffd97706),
-    };
+class _NodeTrafficRow extends StatelessWidget {
+  const _NodeTrafficRow({required this.label, required this.value});
 
-String _delayText(int delay) => switch (classifyDelay(delay)) {
-  DelayBucket.untested => '未测试',
-  DelayBucket.timeout => '超时',
-  DelayBucket.fast || DelayBucket.slow => '$delay ms',
-};
+  final String label;
+  final String value;
 
-String _shortTime(DateTime time) =>
-    '${_twoDigits(time.hour)}:${_twoDigits(time.minute)}';
-
-String _fullTime(DateTime? time) => time == null
-    ? '时间未知'
-    : '${time.year}-${_twoDigits(time.month)}-${_twoDigits(time.day)} '
-          '${_twoDigits(time.hour)}:${_twoDigits(time.minute)}:'
-          '${_twoDigits(time.second)}';
-
-String _twoDigits(int value) => value.toString().padLeft(2, '0');
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 66,
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _NodeMetadataPlaceholder extends StatelessWidget {
   const _NodeMetadataPlaceholder();

@@ -32,23 +32,25 @@ pub async fn subscribe(
     let target = target.into();
     let key = target.key();
     let mut map = slots().lock().await;
-    let slot = if let Some(slot) = map.get(&key) {
-        slot.clone()
+    let (slot, rx) = if let Some(slot) = map.get(&key) {
+        let slot = slot.clone();
+        let rx = slot.sender.subscribe();
+        (slot, rx)
     } else {
         let (tx, _) = broadcast::channel::<LogsFrame>(64);
         let slot = Arc::new(LogSlot {
             store: Mutex::new(LogStore::new(info_capacity)),
             sender: tx,
         });
+        let rx = slot.sender.subscribe();
         map.insert(key.clone(), slot.clone());
         tokio::spawn(poll_loop(target, key, slot.clone()));
-        slot
+        (slot, rx)
     };
     drop(map);
 
     let mut store = slot.store.lock().expect("surge logs store poisoned");
     store.set_info_capacity(info_capacity);
-    let rx = slot.sender.subscribe();
     Ok((store.frame(true), rx))
 }
 
@@ -156,6 +158,17 @@ fn push_raw(slot: &LogSlot, raw: &Value) {
 
 fn parse_events(raw: &Value) -> Vec<LogEntry> {
     let payload = raw.get("data").unwrap_or(raw);
+    if let Some(log) = payload.get("log").and_then(Value::as_str) {
+        let fallback_level = string_field(payload, "level");
+        // `log` snapshots are oldest-first while event lists are newest-first.
+        // Return newest-first here so `push_raw` can normalize both sources.
+        let mut entries = log
+            .lines()
+            .filter_map(|line| parse_log_line(line, &fallback_level))
+            .collect::<Vec<_>>();
+        entries.reverse();
+        return entries;
+    }
     if let Some(entries) = ["events", "logs", "entries"]
         .iter()
         .find_map(|key| payload.get(*key).and_then(Value::as_array))
@@ -164,6 +177,52 @@ fn parse_events(raw: &Value) -> Vec<LogEntry> {
         return entries.iter().filter_map(parse_event).collect();
     }
     parse_event(payload).into_iter().collect()
+}
+
+fn parse_log_line(line: &str, fallback_level: &str) -> Option<LogEntry> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let Some(marker_start) = line.find(" <") else {
+        return Some(LogEntry {
+            level: normalize_log_level(fallback_level),
+            message: line.to_string(),
+            ..Default::default()
+        });
+    };
+    let level_start = marker_start + 2;
+    let Some(level_end) = line[level_start..].find('>') else {
+        return Some(LogEntry {
+            level: normalize_log_level(fallback_level),
+            message: line.to_string(),
+            ..Default::default()
+        });
+    };
+    let level_end = level_start + level_end;
+    let time = line[..marker_start].trim().to_string();
+    let message = line[level_end + 1..].trim().to_string();
+    if message.is_empty() {
+        return None;
+    }
+    Some(LogEntry {
+        id: 0,
+        time,
+        level: normalize_log_level(&line[level_start..level_end]),
+        message,
+    })
+}
+
+fn normalize_log_level(level: &str) -> String {
+    match level.trim().to_ascii_lowercase().as_str() {
+        "trace" => "trace",
+        "verbose" | "debug" => "debug",
+        "warning" | "warn" => "warning",
+        "error" => "error",
+        "fatal" => "fatal",
+        _ => "info",
+    }
+    .to_string()
 }
 
 fn parse_event(raw: &Value) -> Option<LogEntry> {

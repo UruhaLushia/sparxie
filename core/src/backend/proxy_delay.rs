@@ -65,16 +65,9 @@ pub async fn controller_proxy_delay(
                     .unwrap_or(-1),
             )
         }
-        BackendType::SurgeController => Ok(crate::surge_controller::api::proxy_batch_delay(
-            target.surge_controller(),
-            vec![name],
-            test_url,
-        )
-        .await?
-        .into_iter()
-        .next()
-        .map(|entry| i64::from(entry.delay))
-        .unwrap_or(-1)),
+        BackendType::SurgeController => Ok(i64::from(
+            crate::surge_controller::api::proxy_delay(target.surge_controller(), name).await?,
+        )),
         BackendType::SingBox => Ok(crate::sing_box::api::proxy_batch_delay(
             target.sing_box(),
             vec![name],
@@ -353,12 +346,8 @@ pub async fn controller_proxy_delay_window(
         BackendType::SurgeController => {
             let _ = test_url;
             let delay =
-                crate::surge_controller::api::group_delay(target.surge_controller(), group.clone())
-                    .await?
-                    .into_iter()
-                    .find(|entry| entry.name == name)
-                    .map(|entry| entry.delay)
-                    .unwrap_or(-1);
+                crate::surge_controller::api::proxy_delay(target.surge_controller(), name.clone())
+                    .await?;
             let window_entries = crate::surge_controller::api::proxy_group_members(
                 target.surge_controller(),
                 group,

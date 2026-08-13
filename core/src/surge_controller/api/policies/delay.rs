@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
+use serde_json::Value;
+
 use crate::MihomoError;
 use crate::backend::api::{GroupDelayEntry, ProxyDelayEntry};
-use crate::surge_controller::api::command_ok;
 use crate::surge_controller::client::SurgeControllerTarget;
+use crate::surge_controller::state::benchmark;
 
 use super::catalog;
 
@@ -11,7 +13,8 @@ pub async fn group_delay(
     target: SurgeControllerTarget,
     group: String,
 ) -> Result<Vec<GroupDelayEntry>, MihomoError> {
-    test_group(&target, &group).await?;
+    let keys = catalog::group_test_keys(target.clone(), &group).await?;
+    benchmark::test_group(&target, &group, &keys).await?;
     catalog::refresh(target.clone()).await?;
     Ok(catalog::members(&target, &group)
         .into_iter()
@@ -20,6 +23,16 @@ pub async fn group_delay(
             name: member.name,
         })
         .collect())
+}
+
+pub async fn proxy_delay(target: SurgeControllerTarget, name: String) -> Result<i32, MihomoError> {
+    let key = catalog::member_test_key(target.clone(), &name).await?;
+    let mut connection = target.connect().await?;
+    let raw = connection.request(["test-policy", key.as_str()]).await?;
+    let delay = policy_delay(&raw, &name, &key).unwrap_or(-1);
+    benchmark::update_policy(&target, key.clone(), delay);
+    catalog::update_delay(&target, key, delay);
+    Ok(delay)
 }
 
 pub async fn proxy_batch_delay(
@@ -35,7 +48,8 @@ pub async fn proxy_batch_delay(
         if !covered.iter().any(|name| remaining.contains(name)) {
             continue;
         }
-        test_group(&target, &group).await?;
+        let keys = catalog::group_test_keys(target.clone(), &group).await?;
+        benchmark::test_group(&target, &group, &keys).await?;
         for name in covered {
             remaining.remove(&name);
         }
@@ -75,6 +89,14 @@ pub async fn proxy_group_batch_delay(
         .collect())
 }
 
-async fn test_group(target: &SurgeControllerTarget, group: &str) -> Result<(), MihomoError> {
-    command_ok(target, ["test-group", group]).await
+fn policy_delay(raw: &Value, name: &str, key: &str) -> Option<i32> {
+    let result = raw
+        .get(name)
+        .or_else(|| raw.get(key))
+        .or_else(|| raw.as_object()?.values().next())?;
+    result
+        .get("receive")
+        .and_then(Value::as_i64)
+        .and_then(|delay| i32::try_from(delay).ok())
+        .map(|delay| if delay > 0 { delay } else { 0 })
 }
