@@ -1,9 +1,11 @@
 use serde_json::Value;
 
-use super::value::value_to_f64;
-
 pub(super) fn unix_seconds_to_iso(value: &Value) -> Option<String> {
-    let seconds = value_to_f64(Some(value))?;
+    let seconds = match value {
+        Value::Number(value) => value.as_f64()?,
+        Value::String(value) => value.parse().ok()?,
+        _ => return None,
+    };
     if !seconds.is_finite() || seconds < 0.0 {
         return None;
     }
@@ -30,7 +32,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let doe = z - era * 146_097;
     let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
     let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let doy = doe - (365 * y + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = mp + if mp < 10 { 3 } else { -9 };

@@ -67,7 +67,41 @@ class _UiScrollActivityScopeState extends State<UiScrollActivityScope> {
   final _fastScrolling = ValueNotifier(false);
   Timer? _idleTimer;
   var _activeScrolls = 0;
+  var _nextScrolling = false;
+  var _nextFastScrolling = false;
+  var _activityUpdateScheduled = false;
   Duration? _lastScrollUpdate;
+
+  void _setScrolling(bool value) {
+    if (_nextScrolling == value) return;
+    _nextScrolling = value;
+    _publishActivity();
+  }
+
+  void _setFastScrolling(bool value) {
+    if (_nextFastScrolling == value) return;
+    _nextFastScrolling = value;
+    _publishActivity();
+  }
+
+  void _publishActivity() {
+    final scheduler = SchedulerBinding.instance;
+    if (scheduler.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      if (_activityUpdateScheduled) return;
+      _activityUpdateScheduled = true;
+      scheduler.addPostFrameCallback((_) {
+        _activityUpdateScheduled = false;
+        if (mounted) _applyActivity();
+      });
+      return;
+    }
+    _applyActivity();
+  }
+
+  void _applyActivity() {
+    _scrolling.value = _nextScrolling;
+    _fastScrolling.value = _nextFastScrolling;
+  }
 
   void _updateFastScrolling(ScrollUpdateNotification notification) {
     final now = SchedulerBinding.instance.currentSystemFrameTimeStamp;
@@ -76,7 +110,7 @@ class _UiScrollActivityScopeState extends State<UiScrollActivityScope> {
     // Direct finger drags must remain visually exact. Deferral is reserved for
     // ballistic flings, wheel bursts, and programmatic high-speed movement.
     if (notification.dragDetails != null) {
-      _fastScrolling.value = false;
+      _setFastScrolling(false);
       return;
     }
     final delta = notification.scrollDelta?.abs();
@@ -88,10 +122,10 @@ class _UiScrollActivityScopeState extends State<UiScrollActivityScope> {
     final enterThreshold = viewportThreshold < 1400
         ? 1400.0
         : viewportThreshold;
-    final threshold = _fastScrolling.value
+    final threshold = _nextFastScrolling
         ? enterThreshold * 0.65
         : enterThreshold;
-    _fastScrolling.value = velocity >= threshold;
+    _setFastScrolling(velocity >= threshold);
   }
 
   bool _onScroll(ScrollNotification notification) {
@@ -101,22 +135,22 @@ class _UiScrollActivityScopeState extends State<UiScrollActivityScope> {
       if (_activeScrolls == 0) {
         _lastScrollUpdate =
             SchedulerBinding.instance.currentSystemFrameTimeStamp;
-        _fastScrolling.value = false;
+        _setFastScrolling(false);
       }
       _activeScrolls++;
-      _scrolling.value = true;
+      _setScrolling(true);
     } else if (notification is ScrollUpdateNotification) {
       _updateFastScrolling(notification);
     } else if (notification is ScrollEndNotification) {
       if (_activeScrolls > 0) _activeScrolls--;
       if (_activeScrolls == 0) {
         _lastScrollUpdate = null;
-        _fastScrolling.value = false;
+        _setFastScrolling(false);
         // Pointer-wheel scrolling can start and end synchronously for every
         // event. Keep the flag through the resulting frame and wheel burst.
         _idleTimer?.cancel();
         _idleTimer = Timer(_wheelIdleGrace, () {
-          _scrolling.value = false;
+          _setScrolling(false);
         });
       }
     }

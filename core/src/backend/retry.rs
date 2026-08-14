@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::MihomoError;
+
 const DELAYS: [Duration; 4] = [
     Duration::from_secs(5),
     Duration::from_secs(10),
@@ -9,6 +11,11 @@ const DELAYS: [Duration; 4] = [
 
 pub(crate) struct RetryBackoff {
     attempt: usize,
+}
+
+pub(crate) struct RetryErrorLog {
+    label: &'static str,
+    failed: bool,
 }
 
 impl RetryBackoff {
@@ -24,5 +31,26 @@ impl RetryBackoff {
 
     pub(crate) fn reset(&mut self) {
         self.attempt = 0;
+    }
+}
+
+impl RetryErrorLog {
+    pub(crate) fn new(label: &'static str) -> Self {
+        Self {
+            label,
+            failed: false,
+        }
+    }
+
+    pub(crate) fn record(&mut self, error: &MihomoError) {
+        if self.failed {
+            return;
+        }
+        self.failed = true;
+        eprintln!("[backend] {}: {error}", self.label);
+    }
+
+    pub(crate) fn recovered(&mut self) {
+        self.failed = false;
     }
 }

@@ -6,7 +6,7 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use crate::MihomoError;
-use crate::backend::retry::RetryBackoff;
+use crate::backend::retry::{RetryBackoff, RetryErrorLog};
 use crate::surge_controller::client::{SurgeControllerTarget, target_key};
 
 #[derive(Clone, Default)]
@@ -185,19 +185,15 @@ fn slot(target: &SurgeControllerTarget) -> Arc<Slot> {
 
 async fn watch_loop(target: SurgeControllerTarget, slot: Arc<Slot>) {
     let mut backoff = RetryBackoff::new();
+    let mut error_log = RetryErrorLog::new("surge policy benchmark stream");
     loop {
         if *slot.stop.borrow() {
             return;
         }
         slot.ready.send_replace(false);
-        match watch_once(&target, &slot).await {
+        match watch_once(&target, &slot, &mut backoff, &mut error_log).await {
             Ok(()) => return,
-            Err(error) => {
-                if *slot.ready.borrow() {
-                    backoff.reset();
-                }
-                eprintln!("[backend] surge policy benchmark stream: {error}");
-            }
+            Err(error) => error_log.record(&error),
         }
         let mut stop = slot.stop.subscribe();
         if *stop.borrow() {
@@ -210,7 +206,12 @@ async fn watch_loop(target: SurgeControllerTarget, slot: Arc<Slot>) {
     }
 }
 
-async fn watch_once(target: &SurgeControllerTarget, slot: &Slot) -> Result<(), MihomoError> {
+async fn watch_once(
+    target: &SurgeControllerTarget,
+    slot: &Slot,
+    backoff: &mut RetryBackoff,
+    error_log: &mut RetryErrorLog,
+) -> Result<(), MihomoError> {
     if *slot.stop.borrow() {
         return Ok(());
     }
@@ -228,7 +229,12 @@ async fn watch_once(target: &SurgeControllerTarget, slot: &Slot) -> Result<(), M
                     return Ok(());
                 }
             }
-            raw = connection.next_stream_value() => slot.update(&raw?),
+            raw = connection.next_stream_value() => {
+                let raw = raw?;
+                backoff.reset();
+                error_log.recovered();
+                slot.update(&raw);
+            },
         }
     }
 }

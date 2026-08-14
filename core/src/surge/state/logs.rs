@@ -8,10 +8,11 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use crate::MihomoError;
 use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
 use crate::backend::log_store::LogStore;
-use crate::backend::retry::RetryBackoff;
-use crate::surge_controller::client::SurgeControllerTarget;
+use crate::backend::retry::{RetryBackoff, RetryErrorLog};
+use crate::surge_controller::client::{SurgeControllerConnection, SurgeControllerTarget};
 
 use super::target::Target;
+use super::time::unix_seconds_to_iso;
 
 struct LogSlot {
     store: Mutex<LogStore>,
@@ -91,6 +92,8 @@ pub async fn clear(target: impl Into<Target>) {
 
 async fn poll_loop(target: Target, key: String, slot: Arc<LogSlot>) {
     let mut backoff = RetryBackoff::new();
+    let mut error_log = RetryErrorLog::new("surge events stream");
+    let mut controller_connection = None;
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
@@ -98,17 +101,23 @@ async fn poll_loop(target: Target, key: String, slot: Arc<LogSlot>) {
         }
         let result = match &target {
             Target::Http(_) => poll_once(&target, &slot).await,
-            Target::Controller(target) => watch_once(target, &slot).await,
+            Target::Controller(target) => {
+                poll_controller_once(target, &mut controller_connection, &slot).await
+            }
         };
         match result {
             Ok(()) => {
                 backoff.reset();
-                if target.is_http() {
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
+                error_log.recovered();
+                let interval = match &target {
+                    Target::Http(_) => Duration::from_secs(5),
+                    Target::Controller(_) => Duration::from_secs(15),
+                };
+                tokio::time::sleep(interval).await;
             }
             Err(error) => {
-                eprintln!("[backend] surge events stream: {error}");
+                controller_connection = None;
+                error_log.record(&error);
                 tokio::time::sleep(backoff.next_delay()).await;
             }
         }
@@ -124,24 +133,29 @@ async fn poll_once(target: &Target, slot: &LogSlot) -> Result<(), MihomoError> {
     Ok(())
 }
 
-async fn watch_once(target: &SurgeControllerTarget, slot: &LogSlot) -> Result<(), MihomoError> {
-    let mut connection = target.connect().await?;
-    let initial = connection.request(["log"]).await?;
-    push_raw(slot, &initial);
-    connection.send(["log", "watch"]).await?;
-    loop {
-        if slot.sender.receiver_count() == 0 {
-            return Ok(());
-        }
-        match tokio::time::timeout(Duration::from_secs(1), connection.next_stream_value()).await {
-            Ok(raw) => push_raw(slot, &raw?),
-            Err(_) => continue,
-        }
+async fn poll_controller_once(
+    target: &SurgeControllerTarget,
+    connection: &mut Option<SurgeControllerConnection>,
+    slot: &LogSlot,
+) -> Result<(), MihomoError> {
+    if connection.is_none() {
+        *connection = Some(target.connect().await?);
     }
+    let connection = connection
+        .as_mut()
+        .expect("surge controller event connection initialized");
+    let events = connection.request(["dump", "event"]).await?;
+    push_raw(slot, &events);
+    let logbook = connection.request(["logbook", "100"]).await?;
+    push_entries(slot, parse_script_records(&logbook));
+    Ok(())
 }
 
 fn push_raw(slot: &LogSlot, raw: &Value) {
-    let mut entries = parse_events(raw);
+    push_entries(slot, parse_events(raw));
+}
+
+fn push_entries(slot: &LogSlot, mut entries: Vec<LogEntry>) {
     entries.reverse();
     for entry in entries {
         let key = event_key(&entry);
@@ -158,17 +172,6 @@ fn push_raw(slot: &LogSlot, raw: &Value) {
 
 fn parse_events(raw: &Value) -> Vec<LogEntry> {
     let payload = raw.get("data").unwrap_or(raw);
-    if let Some(log) = payload.get("log").and_then(Value::as_str) {
-        let fallback_level = string_field(payload, "level");
-        // `log` snapshots are oldest-first while event lists are newest-first.
-        // Return newest-first here so `push_raw` can normalize both sources.
-        let mut entries = log
-            .lines()
-            .filter_map(|line| parse_log_line(line, &fallback_level))
-            .collect::<Vec<_>>();
-        entries.reverse();
-        return entries;
-    }
     if let Some(entries) = ["events", "logs", "entries"]
         .iter()
         .find_map(|key| payload.get(*key).and_then(Value::as_array))
@@ -179,50 +182,33 @@ fn parse_events(raw: &Value) -> Vec<LogEntry> {
     parse_event(payload).into_iter().collect()
 }
 
-fn parse_log_line(line: &str, fallback_level: &str) -> Option<LogEntry> {
-    let line = line.trim();
-    if line.is_empty() {
-        return None;
-    }
-    let Some(marker_start) = line.find(" <") else {
-        return Some(LogEntry {
-            level: normalize_log_level(fallback_level),
-            message: line.to_string(),
-            ..Default::default()
-        });
-    };
-    let level_start = marker_start + 2;
-    let Some(level_end) = line[level_start..].find('>') else {
-        return Some(LogEntry {
-            level: normalize_log_level(fallback_level),
-            message: line.to_string(),
-            ..Default::default()
-        });
-    };
-    let level_end = level_start + level_end;
-    let time = line[..marker_start].trim().to_string();
-    let message = line[level_end + 1..].trim().to_string();
-    if message.is_empty() {
-        return None;
-    }
-    Some(LogEntry {
-        id: 0,
-        time,
-        level: normalize_log_level(&line[level_start..level_end]),
-        message,
-    })
+fn parse_script_records(raw: &Value) -> Vec<LogEntry> {
+    raw.get("data")
+        .unwrap_or(raw)
+        .get("records")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|record| string_field(record, "type").eq_ignore_ascii_case("script"))
+        .filter_map(parse_script_record)
+        .collect()
 }
 
-fn normalize_log_level(level: &str) -> String {
-    match level.trim().to_ascii_lowercase().as_str() {
-        "trace" => "trace",
-        "verbose" | "debug" => "debug",
-        "warning" | "warn" => "warning",
-        "error" => "error",
-        "fatal" => "fatal",
-        _ => "info",
-    }
-    .to_string()
+fn parse_script_record(raw: &Value) -> Option<LogEntry> {
+    let content = string_field(raw, "content");
+    let script = string_field(raw, "subtitle");
+    let message = match (script.is_empty(), content.is_empty()) {
+        (true, true) => return None,
+        (true, false) => content,
+        (false, true) => script,
+        (false, false) => format!("[{script}] {content}"),
+    };
+    Some(LogEntry {
+        id: 0,
+        time: value_field(raw, "timestamp"),
+        level: event_level(raw, &string_field(raw, "subsystem")),
+        message,
+    })
 }
 
 fn parse_event(raw: &Value) -> Option<LogEntry> {
@@ -245,7 +231,7 @@ fn parse_event(raw: &Value) -> Option<LogEntry> {
         id: 0,
         time: ["date", "time", "timestamp"]
             .iter()
-            .map(|key| string_field(raw, key))
+            .map(|key| value_field(raw, key))
             .find(|value| !value.is_empty())
             .unwrap_or_default(),
         level: event_level(raw, &identifier),
@@ -277,4 +263,14 @@ fn string_field(raw: &Value, key: &str) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string()
+}
+
+fn value_field(raw: &Value, key: &str) -> String {
+    match raw.get(key) {
+        Some(Value::String(value)) => value.clone(),
+        Some(value @ Value::Number(_)) => {
+            unix_seconds_to_iso(value).unwrap_or_else(|| value.to_string())
+        }
+        _ => String::new(),
+    }
 }

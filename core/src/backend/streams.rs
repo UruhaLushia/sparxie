@@ -31,17 +31,17 @@ pub async fn controller_traffic_stream(
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         },
-        BackendType::SurgeController => loop {
-            let raw = target
-                .surge_controller()
-                .request(["dump", "traffic"])
-                .await?;
-            let sample = crate::surge::api::traffic::parse_traffic(&raw);
-            if sink.add(sample).is_err() {
-                break Ok(());
+        BackendType::SurgeController => {
+            let rx = crate::surge_controller::state::traffic::subscribe(target.surge_controller());
+            let mut stream = BroadcastStream::new(rx);
+            while let Some(item) = stream.next().await {
+                let Ok(sample) = item else { continue };
+                if sink.add(sample).is_err() {
+                    break;
+                }
             }
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        },
+            Ok(())
+        }
         BackendType::SingBox => {
             let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
             let mut stream = BroadcastStream::new(rx);

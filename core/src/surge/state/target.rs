@@ -16,10 +16,6 @@ impl Target {
             }
         }
     }
-
-    pub(crate) fn is_http(&self) -> bool {
-        matches!(self, Self::Http(_))
-    }
 }
 
 impl From<SurgeTarget> for Target {

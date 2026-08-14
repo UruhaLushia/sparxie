@@ -90,6 +90,7 @@ pub fn release_target(target: &SurgeControllerTarget) {
     policies::clear_cache(target);
     resources::clear_cache(target);
     super::state::benchmark::release_target(target);
+    super::state::traffic::release_target(target);
     super::client::release_target(target);
 }
 

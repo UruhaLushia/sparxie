@@ -35,14 +35,6 @@ fn value_to_u64(value: Option<&Value>) -> Option<u64> {
     }
 }
 
-pub(super) fn value_to_f64(value: Option<&Value>) -> Option<f64> {
-    match value? {
-        Value::Number(n) => n.as_f64(),
-        Value::String(s) => s.parse().ok(),
-        _ => None,
-    }
-}
-
 pub(super) fn value_to_string(value: Option<&Value>) -> Option<String> {
     match value? {
         Value::String(s) => Some(s.clone()),

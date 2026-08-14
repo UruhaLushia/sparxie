@@ -9,7 +9,7 @@ use crate::backend::api::{
     Connection, ConnectionGroup, ConnectionGroupSort, ConnectionsFrame, ConnectionsListKind,
     ConnectionsSort, ConnectionsTotals,
 };
-use crate::backend::retry::RetryBackoff;
+use crate::backend::retry::{RetryBackoff, RetryErrorLog};
 use crate::surge_controller::client::{SurgeControllerTarget, with_unary_connection};
 
 use super::target::Target;
@@ -17,7 +17,6 @@ use super::target::Target;
 mod parse;
 mod sort;
 mod store;
-mod time;
 mod value;
 
 use parse::{fallback_id, parse_request, request_items};
@@ -188,6 +187,7 @@ pub async fn fetch_group_connections(
 async fn stream_loop(target: Target, interval_ms: u32, key: String, slot: Arc<TargetSlot>) {
     let mut first = true;
     let mut backoff = RetryBackoff::new();
+    let mut error_log = RetryErrorLog::new("surge connections stream");
     loop {
         if slot.sender.receiver_count() == 0 {
             slots().lock().await.remove(&key);
@@ -203,11 +203,12 @@ async fn stream_loop(target: Target, interval_ms: u32, key: String, slot: Arc<Ta
             Ok(frame) => {
                 first = false;
                 backoff.reset();
+                error_log.recovered();
                 let _ = slot.sender.send(frame);
                 tokio::time::sleep(Duration::from_millis(interval_ms as u64)).await;
             }
             Err(error) => {
-                eprintln!("[backend] surge connections stream: {error}");
+                error_log.record(&error);
                 tokio::time::sleep(backoff.next_delay()).await;
             }
         }
