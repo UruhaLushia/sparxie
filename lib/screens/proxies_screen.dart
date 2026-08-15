@@ -16,6 +16,7 @@ import '../widgets/proxy_group_card.dart';
 import '../widgets/proxy_group_header.dart';
 import '../widgets/proxy_node_tile.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/sliver_extent_transition.dart';
 
 class ProxiesScreen extends StatefulWidget {
   const ProxiesScreen({
@@ -119,7 +120,6 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     var expanded = false;
     setState(() {
       if (_expanded.remove(name)) {
-        widget.session.proxies.releaseGroupMembers(name);
         if (_searchOpen.remove(name)) _searchCtls[name]?.clear();
       } else {
         _expanded.add(name);
@@ -479,9 +479,10 @@ class _ProxiesBody extends StatefulWidget {
 }
 
 class _ProxiesBodyState extends State<_ProxiesBody> {
-  static const double _tileExtent = 60;
-  static const double _tileSpacing = 8;
+  static const double _tileExtent = 48;
+  static const double _tileSpacing = 6;
   static const double _emptyExtent = 48;
+  static const _gridPadding = EdgeInsets.fromLTRB(12, 4, 12, 12);
 
   late List<ProxyGroup> _groups;
   final Map<String, _PendingMemberRange> _pendingMemberLoads = {};
@@ -592,7 +593,9 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     }
     if (count == 0) return _emptyExtent;
     final rows = (count + _cols - 1) ~/ _cols;
-    return rows * (_tileExtent + _tileSpacing) + 16;
+    return rows * (_tileExtent + _tileSpacing) +
+        _gridPadding.vertical -
+        _tileSpacing;
   }
 
   Future<void> _waitForFullMembers(ProxyGroup group) async {
@@ -614,9 +617,16 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   }
 
   Future<void> _locate(ProxyGroup group) async {
-    if (!widget.expanded.contains(group.name)) widget.onToggle(group.name);
+    Future<void>? expansion;
+    if (!widget.expanded.contains(group.name)) {
+      widget.onToggle(group.name);
+      expansion = Future<void>.delayed(ProxyGroupHeader.transitionDuration);
+    }
     await _waitForFullMembers(group);
-    if (!mounted || !_active) return;
+    if (expansion != null) await expansion;
+    if (!mounted || !_active || !widget.expanded.contains(group.name)) {
+      return;
+    }
     final now = group.hidesExactNow ? '' : group.now.value;
     final query = _queryFor(group.name);
     var row = -1;
@@ -645,7 +655,9 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
       );
       if (widget.expanded.contains(g.name)) offset += _gridExtentFor(g);
     }
-    if (row >= 0) offset += 8 + row * (_tileExtent + _tileSpacing);
+    if (row >= 0) {
+      offset += _gridPadding.top + row * (_tileExtent + _tileSpacing);
+    }
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_active || !_scroll.hasClients) return;
     unawaited(
@@ -667,45 +679,54 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _cols = _resolveColumns(constraints.maxWidth);
-        return CustomScrollView(
-          controller: _scroll,
-          slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            for (final group in _groups)
-              MultiSliver(
-                pushPinnedChildren: true,
-                children: [
-                  SliverPinnedHeader(
-                    child: RepaintBoundary(
-                      child: ProxyGroupHeader(
-                        group: group,
-                        showIcon: widget.prefs.proxiesShowGroupIcons,
-                        testing: widget.testingGroups.contains(group.name),
-                        expanded: widget.expanded.contains(group.name),
-                        searchOpen: widget.searchOpen.contains(group.name),
-                        searchController: widget.searchControllers[group.name],
-                        onToggle: () => widget.onToggle(group.name),
-                        onTest: () => widget.onTestGroup(group),
-                        onToggleSearch: () => widget.onToggleSearch(group),
-                        onSearchChanged: (_) => widget.onSearchChanged(),
-                        onLocate: () => unawaited(_locate(group)),
+        return AppBackdropGroup(
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              const SliverToBoxAdapter(child: SizedBox(height: 8)),
+              for (final group in _groups)
+                MultiSliver(
+                  key: ValueKey(group.name),
+                  pushPinnedChildren: true,
+                  children: [
+                    SliverPinnedHeader(
+                      child: RepaintBoundary(
+                        child: ProxyGroupHeader(
+                          group: group,
+                          showIcon: widget.prefs.proxiesShowGroupIcons,
+                          testing: widget.testingGroups.contains(group.name),
+                          expanded: widget.expanded.contains(group.name),
+                          searchOpen: widget.searchOpen.contains(group.name),
+                          searchController:
+                              widget.searchControllers[group.name],
+                          onToggle: () => widget.onToggle(group.name),
+                          onTest: () => widget.onTestGroup(group),
+                          onToggleSearch: () => widget.onToggleSearch(group),
+                          onSearchChanged: (_) => widget.onSearchChanged(),
+                          onLocate: () => unawaited(_locate(group)),
+                        ),
                       ),
                     ),
-                  ),
-                  if (widget.expanded.contains(group.name))
-                    ActiveValueListenableBuilder<int>(
-                      valueListenable: group.membersVersion,
-                      builder: (_, _, _) => _membersSliver(group),
+                    SliverExpandTransition(
+                      expanded: widget.expanded.contains(group.name),
+                      duration: ProxyGroupHeader.transitionDuration,
+                      onCollapsed: () => widget.session.proxies
+                          .releaseGroupMembers(group.name),
+                      sliver: ActiveValueListenableBuilder<int>(
+                        valueListenable: group.membersVersion,
+                        builder: (_, _, _) => _membersSliver(group),
+                      ),
                     ),
-                ],
+                  ],
+                ),
+              // Extend scroll content behind the bottom system gesture bar.
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 24 + MediaQuery.paddingOf(context).bottom,
+                ),
               ),
-            // Extend scroll content behind the bottom system gesture bar.
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 24 + MediaQuery.paddingOf(context).bottom,
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -714,10 +735,9 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
   Widget _membersSliver(ProxyGroup group) {
     final query = _queryFor(group.name);
     if (query.isEmpty) {
-      // SliverGrid virtualizes — only viewport-intersecting tiles build,
-      // so a 200-node group expands instantly.
+      // SliverGrid keeps the reveal cheap by building only viewport rows.
       return SliverPadding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        padding: _gridPadding,
         sliver: SliverGrid.builder(
           addRepaintBoundaries: false,
           addAutomaticKeepAlives: false,
@@ -764,7 +784,7 @@ class _ProxiesBodyState extends State<_ProxiesBody> {
       );
     }
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      padding: _gridPadding,
       sliver: SliverGrid.builder(
         addRepaintBoundaries: false,
         addAutomaticKeepAlives: false,

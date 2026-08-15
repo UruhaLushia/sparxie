@@ -43,6 +43,7 @@ class ConnectionGroupHeader extends StatelessWidget {
   /// Sentinel key for mihomo's internal connections (see Rust `INNER_KEY`).
   /// These have no source/process, so they get a fixed icon and label.
   static const String innerKey = 'inner';
+  static const transitionDuration = Duration(milliseconds: 280);
   bool get _isInner => summary.key == innerKey;
 
   String get _key {
@@ -171,7 +172,8 @@ class ConnectionGroupHeader extends StatelessWidget {
                         ),
                       TransientAnimatedRotation(
                         turns: expanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
+                        duration: transitionDuration,
+                        curve: Curves.easeInOutCubic,
                         child: Icon(
                           Icons.expand_more,
                           color: scheme.onSurfaceVariant,

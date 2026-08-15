@@ -21,6 +21,7 @@ import '../widgets/connections_settings_menu.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
 import '../widgets/route_app_bar.dart';
+import '../widgets/sliver_extent_transition.dart';
 import '../widgets/transient_animation.dart';
 
 double _lerpDouble(double begin, double end, double progress) =>
@@ -1137,6 +1138,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
             const SliverToBoxAdapter(child: SizedBox(height: 4)),
             for (final group in groups)
               MultiSliver(
+                key: ValueKey('connection-group::${group.key}'),
                 pushPinnedChildren: true,
                 children: [
                   SliverPinnedHeader(
@@ -1158,8 +1160,10 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                       ),
                     ),
                   ),
-                  if (cn.isExpanded(group.key))
-                    SliverPadding(
+                  SliverExpandTransition(
+                    expanded: cn.isExpanded(group.key),
+                    duration: ConnectionGroupHeader.transitionDuration,
+                    sliver: SliverPadding(
                       padding: const EdgeInsets.fromLTRB(28, 0, 12, 0),
                       sliver: Builder(
                         builder: (_) {
@@ -1236,6 +1240,7 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                         },
                       ),
                     ),
+                  ),
                 ],
               ),
             SliverToBoxAdapter(

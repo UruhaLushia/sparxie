@@ -24,11 +24,12 @@ class ProxyGroupHeader extends StatelessWidget {
     required this.onLocate,
   });
 
-  static const double cardHeight = 56;
+  static const double cardHeight = 52;
   static const double searchRowExtent = 46;
+  static const transitionDuration = Duration(milliseconds: 300);
 
   static double extentFor({required bool searchOpen}) =>
-      cardHeight + 12 + (searchOpen ? searchRowExtent : 0);
+      cardHeight + 8 + (searchOpen ? searchRowExtent : 0);
 
   final ProxyGroup group;
   final bool showIcon;
@@ -50,7 +51,7 @@ class ProxyGroupHeader extends StatelessWidget {
     return ColoredBox(
       color: surfaceTheme.pageColor(scheme.surface),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -61,6 +62,7 @@ class ProxyGroupHeader extends StatelessWidget {
                   height: cardHeight,
                   child: AppSurfaceBackdrop(
                     borderRadius: radius,
+                    grouped: true,
                     child: Material(
                       color: surfaceTheme.surfaceColor(
                         scheme.surfaceContainerHighest.withValues(alpha: 0.7),
@@ -119,7 +121,8 @@ class ProxyGroupHeader extends StatelessWidget {
                               ),
                               TransientAnimatedRotation(
                                 turns: expanded ? 0.5 : 0,
-                                duration: const Duration(milliseconds: 200),
+                                duration: transitionDuration,
+                                curve: Curves.easeInOutCubic,
                                 child: Icon(
                                   Icons.expand_more,
                                   color: scheme.onSurfaceVariant,

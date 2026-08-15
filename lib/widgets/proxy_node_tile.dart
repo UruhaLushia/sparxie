@@ -49,6 +49,7 @@ class ProxyNodeTile extends StatelessWidget {
               member: member,
               selected: selected,
               pinned: isPinned,
+              dense: true,
               onActivate: group.canSelectOnTap ? onSelect : null,
               onTestDelay: onTestDelay,
             ),
@@ -84,6 +85,7 @@ class StandaloneProxyNodeTile extends StatelessWidget {
         member: member,
         selected: false,
         pinned: false,
+        dense: false,
         onTestDelay: onTestDelay,
       ),
     );
@@ -95,6 +97,7 @@ class _ProxyNodeTileSurface extends StatelessWidget {
     required this.member,
     required this.selected,
     required this.pinned,
+    required this.dense,
     this.onActivate,
     required this.onTestDelay,
   });
@@ -102,6 +105,7 @@ class _ProxyNodeTileSurface extends StatelessWidget {
   final ProxyMember member;
   final bool selected;
   final bool pinned;
+  final bool dense;
   final VoidCallback? onActivate;
   final Future<void> Function() onTestDelay;
 
@@ -148,7 +152,12 @@ class _ProxyNodeTileSurface extends StatelessWidget {
         canRequestFocus: false,
         onTap: onActivate,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+          padding: EdgeInsets.fromLTRB(
+            dense ? 10 : 12,
+            dense ? 4 : 8,
+            dense ? 6 : 10,
+            dense ? 4 : 8,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -190,7 +199,7 @@ class _ProxyNodeTileSurface extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: dense ? 4 : 8),
               NodeDelay(
                 delay: member.delay,
                 onTest: () => unawaited(onTestDelay()),
@@ -202,7 +211,7 @@ class _ProxyNodeTileSurface extends StatelessWidget {
     );
     final surface = pinned
         ? tile
-        : AppSurfaceBackdrop(borderRadius: radius, child: tile);
+        : AppSurfaceBackdrop(borderRadius: radius, grouped: dense, child: tile);
     return AppFocusHighlight(borderRadius: radius, child: surface);
   }
 }
