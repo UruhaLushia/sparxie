@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// Keeps one controller for the lifetime of a sliver and removes its subtree
-/// only after the collapse animation has finished.
+/// Keeps one controller and render sliver for the lifetime of an expandable
+/// section, then unloads only its contents after collapsing.
 class SliverExpandTransition extends StatefulWidget {
   const SliverExpandTransition({
     super.key,
@@ -103,13 +103,14 @@ class _SliverExpandTransitionState extends State<SliverExpandTransition>
 
   @override
   Widget build(BuildContext context) {
-    if (!_showChild) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
     return _SliverExtentTransition(
       factor: _controller,
       slideExtent: widget.slideExtent,
-      sliver: widget.sliver,
+      // Keeping the wrapper mounted avoids a one-frame pinned-header reset
+      // when a collapsed section releases its heavier list subtree.
+      sliver: _showChild
+          ? widget.sliver
+          : const SliverToBoxAdapter(child: SizedBox.shrink()),
     );
   }
 }
@@ -147,6 +148,13 @@ class _RenderSliverExtentTransition extends RenderProxySliver {
 
   Animation<double> _factor;
   double _slideExtent;
+  double? _lastProgress;
+  double? _lastFullScrollExtent;
+  double? _anchoredChildScrollOffset;
+  double? _anchorTraversedExtent;
+  double _anchorBeyondExtent = 0;
+  double? _normalizedGroupScrollOffset;
+  double? _lastTargetGroupScrollOffset;
 
   set factor(Animation<double> value) {
     if (identical(value, _factor)) return;
@@ -180,12 +188,40 @@ class _RenderSliverExtentTransition extends RenderProxySliver {
   void performLayout() {
     final child = this.child;
     if (child == null) {
+      _lastProgress = null;
+      _lastFullScrollExtent = null;
+      _clearScrollAnchor();
       geometry = SliverGeometry.zero;
       return;
     }
-    child.layout(constraints, parentUsesSize: true);
-    final childGeometry = child.geometry!;
     final progress = _factor.value.clamp(0.0, 1.0);
+    final previousProgress = _lastProgress;
+    final fullScrollExtent = _lastFullScrollExtent;
+    if (_anchoredChildScrollOffset == null &&
+        previousProgress != null &&
+        fullScrollExtent != null &&
+        progress < previousProgress &&
+        previousProgress > 0 &&
+        constraints.scrollOffset > 0) {
+      _captureScrollAnchor(previousProgress, fullScrollExtent);
+    }
+    final anchoredScrollOffset = _anchoredChildScrollOffset;
+    final correction = _scrollOffsetCorrection(progress, previousProgress);
+    if (correction != null) {
+      _lastProgress = progress;
+      geometry = SliverGeometry(scrollOffsetCorrection: correction);
+      return;
+    }
+
+    child.layout(
+      anchoredScrollOffset == null
+          ? constraints
+          : constraints.copyWith(scrollOffset: anchoredScrollOffset),
+      parentUsesSize: true,
+    );
+    final childGeometry = child.geometry!;
+    _lastProgress = progress;
+    _lastFullScrollExtent = childGeometry.scrollExtent;
     final maxPaintExtent = childGeometry.maxPaintExtent * progress;
     final paintExtent = math.max(
       0.0,
@@ -214,6 +250,67 @@ class _RenderSliverExtentTransition extends RenderProxySliver {
       hitTestExtent: hitTestExtent,
       hasVisualOverflow: progress < 1 || childGeometry.hasVisualOverflow,
       scrollOffsetCorrection: childGeometry.scrollOffsetCorrection,
+    );
+    if (progress <= 0 || progress >= 1) _clearScrollAnchor();
+  }
+
+  void _captureScrollAnchor(double progress, double fullScrollExtent) {
+    final previousExtent = fullScrollExtent * progress;
+    final traversed = math.min(constraints.scrollOffset, previousExtent);
+    _anchorTraversedExtent = traversed / progress;
+    _anchorBeyondExtent = constraints.scrollOffset - traversed;
+    _anchoredChildScrollOffset = _anchorBeyondExtent + _anchorTraversedExtent!;
+    if (constraints.scrollOffset >= previousExtent) return;
+
+    final groupScrollOffset = _leadingScrollExtent + constraints.scrollOffset;
+    _normalizedGroupScrollOffset = groupScrollOffset / progress;
+    _lastTargetGroupScrollOffset = groupScrollOffset;
+  }
+
+  double? _scrollOffsetCorrection(double progress, double? previousProgress) {
+    final traversed = _anchorTraversedExtent;
+    if (_anchoredChildScrollOffset == null ||
+        traversed == null ||
+        previousProgress == null ||
+        progress == previousProgress) {
+      return null;
+    }
+
+    // Keep the child's starting viewport and clip it instead of racing through
+    // offscreen rows as the wrapper's scroll range shrinks.
+    final normalizedGroupOffset = _normalizedGroupScrollOffset;
+    final double correction;
+    if (normalizedGroupOffset == null) {
+      final target = _anchorBeyondExtent + traversed * progress;
+      correction = target - constraints.scrollOffset;
+    } else {
+      // Stop at the pinned header's start, not its trailing edge, so a
+      // following group cannot replace it on the animation's final frame.
+      final target = normalizedGroupOffset * progress;
+      final current = constraints.scrollOffset > 0
+          ? _leadingScrollExtent + constraints.scrollOffset
+          : _lastTargetGroupScrollOffset!;
+      correction = target - current;
+      _lastTargetGroupScrollOffset = target;
+    }
+    return correction.abs() > 0.01 ? correction : null;
+  }
+
+  void _clearScrollAnchor() {
+    _anchoredChildScrollOffset = null;
+    _anchorTraversedExtent = null;
+    _anchorBeyondExtent = 0;
+    _normalizedGroupScrollOffset = null;
+    _lastTargetGroupScrollOffset = null;
+  }
+
+  double get _leadingScrollExtent {
+    final parent = this.parent;
+    if (parent is! RenderSliver) return 0;
+    return math.max(
+      0,
+      constraints.precedingScrollExtent -
+          parent.constraints.precedingScrollExtent,
     );
   }
 

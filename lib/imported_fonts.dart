@@ -92,7 +92,7 @@ class ImportedFonts {
       }
 
       final bytes = await source.readAsBytes();
-      return importBytes(
+      return await importBytes(
         name,
         bytes,
         reservedFamilies: reservedFamilies,

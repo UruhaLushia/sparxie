@@ -7,29 +7,26 @@ import '../rust_api.dart' as rust;
 
 part 'connections/models.dart';
 
-typedef WindowFetcher =
-    Future<rust.ConnectionWindow> Function(
-      ConnectionsTab tab,
-      int offset,
-      int limit,
-      String query,
-    );
+typedef WindowFetcher = Future<rust.ConnectionWindow> Function(
+  ConnectionsTab tab,
+  int offset,
+  int limit,
+  String query,
+);
 
-typedef GroupsFetcher =
-    Future<List<rust.ConnectionGroup>> Function(
-      ConnectionsTab tab,
-      rust.ConnectionGroupSort sort,
-      bool asc,
-      String query,
-    );
+typedef GroupsFetcher = Future<List<rust.ConnectionGroup>> Function(
+  ConnectionsTab tab,
+  rust.ConnectionGroupSort sort,
+  bool asc,
+  String query,
+);
 
-typedef GroupMembersFetcher =
-    Future<List<rust.Connection>> Function(
-      ConnectionsTab tab,
-      String groupKey,
-      int limit,
-      String query,
-    );
+typedef GroupMembersFetcher = Future<List<rust.Connection>> Function(
+  ConnectionsTab tab,
+  String groupKey,
+  int limit,
+  String query,
+);
 
 /// Virtual paging: Rust holds the full sorted list, Dart only ever holds the
 /// visible rows plus a small overscan around the viewport.
@@ -180,14 +177,24 @@ class ConnectionListNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ordered member ids of an expanded group (empty until first fetch).
-  List<String> groupMemberIds(String groupKey) =>
-      _groupMemberIds[groupKey] ?? const <String>[];
+  /// Keeps expansion geometry stable while the member window is loading.
+  int groupMemberItemCount(String groupKey) {
+    final ids = _groupMemberIds[groupKey];
+    if (ids != null) return ids.length;
+    final count = _groupsByKey[groupKey]?.count.value ?? 0;
+    return count.clamp(0, _groupMemberCap);
+  }
 
   ConnectionRow? groupMemberAt(String groupKey, int index) {
     final ids = _groupMemberIds[groupKey];
     if (ids == null || index < 0 || index >= ids.length) return null;
     return _groupMemberRows[groupKey]?[ids[index]];
+  }
+
+  void releaseGroupMembers(String groupKey) {
+    if (_expandedGroups.contains(groupKey)) return;
+    _queuedGroupMembers.remove(groupKey);
+    _disposeGroupMembers(groupKey);
   }
 
   int get activeCount => _activeCount;

@@ -27,17 +27,15 @@ import '../widgets/transient_animation.dart';
 double _lerpDouble(double begin, double end, double progress) =>
     begin + (end - begin) * progress;
 
-typedef _ConnectionDetailsCallback =
-    void Function(
-      ConnectionRow row,
-      BuildContext sourceContext,
-      ConnectionPreviewBuilder previewBuilder,
-    );
-typedef _ConnectionPreviewCallback =
-    void Function(
-      BuildContext sourceContext,
-      ConnectionPreviewBuilder previewBuilder,
-    );
+typedef _ConnectionDetailsCallback = void Function(
+  ConnectionRow row,
+  BuildContext sourceContext,
+  ConnectionPreviewBuilder previewBuilder,
+);
+typedef _ConnectionPreviewCallback = void Function(
+  BuildContext sourceContext,
+  ConnectionPreviewBuilder previewBuilder,
+);
 
 class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({
@@ -206,9 +204,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       await rust.controllerCloseConnection(target: target, id: id);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
@@ -238,9 +235,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       await rust.controllerCloseAllConnections(target: target);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
@@ -258,9 +254,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
       }
     }
   }
@@ -332,9 +327,8 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       selector: (totals) => (totals.upload, totals.download),
                       builder: (_, totals, _) => Text(
                         '↑${formatBytes(totals.$1)}/↓${formatBytes(totals.$2)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -777,9 +771,8 @@ class _ConnectionsListState extends State<_ConnectionsList> {
         final titleStyle = widget.prefs.connectionTitleStyle;
         return AppBackdropGroup(
           child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(
-              context,
-            ).copyWith(scrollbars: false),
+            behavior: ScrollConfiguration.of(context)
+                .copyWith(scrollbars: false),
             child: ListView.builder(
               controller: _scrollController,
               padding: EdgeInsets.fromLTRB(
@@ -1072,9 +1065,8 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('关闭失败:${_formatError(e)}')));
       }
     }
   }
@@ -1091,9 +1083,8 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('清空失败:${_formatError(e)}')));
       }
     }
   }
@@ -1159,15 +1150,15 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
                   SliverExpandTransition(
                     expanded: cn.isExpanded(group.key),
                     duration: ConnectionGroupHeader.transitionDuration,
+                    onCollapsed: () => cn.releaseGroupMembers(group.key),
                     sliver: SliverPadding(
                       padding: const EdgeInsets.fromLTRB(28, 0, 12, 0),
                       sliver: Builder(
                         builder: (_) {
-                          final ids = cn.groupMemberIds(group.key);
                           return SliverList.builder(
                             addRepaintBoundaries: false,
                             addAutomaticKeepAlives: false,
-                            itemCount: ids.length,
+                            itemCount: cn.groupMemberItemCount(group.key),
                             itemBuilder: (context, index) {
                               final row = cn.groupMemberAt(group.key, index);
                               if (row == null) {
