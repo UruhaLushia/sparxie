@@ -995,7 +995,6 @@ class _GroupedConnectionsList extends StatefulWidget {
 
 class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   var _active = true;
-  var _scrolling = false;
 
   @override
   void initState() {
@@ -1018,8 +1017,6 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final active = isUiActive(context);
-    final scrolling = active && isUiScrolling(context);
-    _scrolling = scrolling;
     if (_active != active) {
       _active = active;
       if (active) {
@@ -1040,7 +1037,6 @@ class _GroupedConnectionsListState extends State<_GroupedConnectionsList> {
   void _onChange() {
     if (mounted &&
         _active &&
-        !_scrolling &&
         widget.session.connections.visibleTab == widget.tab) {
       setState(() {});
     }
