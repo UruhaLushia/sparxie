@@ -137,9 +137,8 @@ class _RulesScreenState extends State<_RulesView> {
     _filtered = 0;
   }
 
-  /// (Re)fetch the full ruleset into the backend cache, then load the head
-  /// window. Used on bind, controller switch, and manual refresh.
-  Future<void> _load({bool force = false}) async {
+  /// Load the backend-cached ruleset and its first visible window.
+  Future<void> _load() async {
     final target = _target();
     if (target == null) return;
     final loadEpoch = ++_windowEpoch;
@@ -152,7 +151,7 @@ class _RulesScreenState extends State<_RulesView> {
       final summary = await rust.controllerRulesLoad(
         target: target,
         filter: requestedFilter,
-        force: force,
+        force: false,
       );
       if (!_isCurrent(loadEpoch)) return;
       if (requestedFilter != _filter) {
@@ -369,13 +368,6 @@ class _RulesScreenState extends State<_RulesView> {
           automaticallyImplyLeading: false,
           title: const Text('分流规则'),
           flexibleSpace: const DesktopAppBarDragArea(),
-          actions: [
-            IconButton(
-              tooltip: '刷新',
-              onPressed: _loading ? null : () => _load(force: true),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
         ),
       ),
       body: SafeArea(
@@ -408,6 +400,11 @@ class _RulesScreenState extends State<_RulesView> {
                         style: TextStyle(color: scheme.onErrorContainer),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _loading ? null : _load,
+                      child: const Text('重试'),
+                    ),
                   ],
                 ),
               ),
@@ -421,33 +418,30 @@ class _RulesScreenState extends State<_RulesView> {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     )
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: AppBackdropGroup(
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          // RuleContextMenu isolates each real row below its
-                          // press transform; avoid a duplicate automatic layer.
-                          addRepaintBoundaries: false,
-                          addAutomaticKeepAlives: false,
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            4,
-                            16,
-                            24 + MediaQuery.paddingOf(context).bottom,
-                          ),
-                          itemExtent: _rowHeight,
-                          itemCount: _filtered,
-                          itemBuilder: (_, index) {
-                            final rule = _ruleAt(index);
-                            if (rule == null) return const _RulePlaceholder();
-                            return _RuleTile(
-                              key: ValueKey(rule.index),
-                              rule: rule,
-                              onToggle: (v) => _toggle(rule, v),
-                            );
-                          },
+                  : AppBackdropGroup(
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        // RuleContextMenu isolates each real row below its
+                        // press transform; avoid a duplicate automatic layer.
+                        addRepaintBoundaries: false,
+                        addAutomaticKeepAlives: false,
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          4,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
                         ),
+                        itemExtent: _rowHeight,
+                        itemCount: _filtered,
+                        itemBuilder: (_, index) {
+                          final rule = _ruleAt(index);
+                          if (rule == null) return const _RulePlaceholder();
+                          return _RuleTile(
+                            key: ValueKey(rule.index),
+                            rule: rule,
+                            onToggle: (v) => _toggle(rule, v),
+                          );
+                        },
                       ),
                     ),
             ),

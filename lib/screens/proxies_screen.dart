@@ -366,14 +366,7 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
           automaticallyImplyLeading: false,
           title: const Text('代理组'),
           flexibleSpace: const DesktopAppBarDragArea(),
-          actions: [
-            IconButton(
-              tooltip: '刷新',
-              onPressed: widget.session.refreshProxies,
-              icon: const Icon(Icons.refresh),
-            ),
-            ProxiesSettingsMenu(prefs: widget.prefs),
-          ],
+          actions: [ProxiesSettingsMenu(prefs: widget.prefs)],
         ),
       ),
       body: AppPageBodyTransition(
