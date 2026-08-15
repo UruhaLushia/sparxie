@@ -6,3 +6,4 @@ export 'compact_controls/settings_panel.dart';
 export 'compact_controls/slider.dart';
 export 'compact_controls/style.dart';
 export 'compact_controls/switch.dart';
+export 'compact_controls/text_field.dart';

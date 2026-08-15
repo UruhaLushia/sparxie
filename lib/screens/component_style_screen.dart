@@ -34,7 +34,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   int _previewSegment = 0;
   bool _previewSwitchValue = true;
   double _previewSliderValue = 0.62;
-  final _searchController = TextEditingController(text: 'Search');
+  final _fieldController = TextEditingController(text: '输入或搜索');
   final _scrollController = ScrollController();
 
   @override
@@ -63,7 +63,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _fieldController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -172,7 +172,8 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                 ),
                 child: CompactSettingsPanel(
                   surfaceTheme: surfaceTheme,
-                  expandBody: true,
+                  expandBody: navigationBar,
+                  shrinkWrap: !navigationBar,
                   header: AnimatedBuilder(
                     animation: _scrollController,
                     builder: (context, _) {
@@ -191,6 +192,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                       context,
                     ).copyWith(scrollbars: false),
                     child: ListView(
+                      shrinkWrap: !navigationBar,
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                       children: [
@@ -535,37 +537,18 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
             ),
           ],
         );
-      case CompactControlKind.search:
-        return SizedBox(
-          width: (260 * _widthScale).clamp(
-            180,
-            MediaQuery.sizeOf(context).width - 32,
-          ),
-          child: CompactSearchField(
-            controller: _searchController,
-            hintText: 'Search',
-            onChanged: (_) {},
-            onClear: _searchController.clear,
-            style: style,
-          ),
-        );
       case CompactControlKind.textField:
         return SizedBox(
           width: (260 * _widthScale).clamp(
             180,
             MediaQuery.sizeOf(context).width - 32,
           ),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              inputDecorationTheme: compactInputDecorationTheme(context, style),
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: '输入框',
-                hintText: '请输入内容',
-              ),
-            ),
+          child: CompactSearchField(
+            controller: _fieldController,
+            hintText: '输入或搜索',
+            onChanged: (_) {},
+            onClear: _fieldController.clear,
+            style: style,
           ),
         );
       case CompactControlKind.segmented:

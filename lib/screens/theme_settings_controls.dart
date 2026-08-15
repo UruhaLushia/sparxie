@@ -318,8 +318,7 @@ class _ComponentTile extends StatelessWidget {
 extension on CompactControlKind {
   String get label => switch (this) {
     CompactControlKind.button => '按钮',
-    CompactControlKind.search => '搜索框',
-    CompactControlKind.textField => '输入框',
+    CompactControlKind.textField => '输入框与搜索框',
     CompactControlKind.segmented => '分段选择',
     CompactControlKind.toggle => '开关',
     CompactControlKind.slider => '滑块',
@@ -328,7 +327,6 @@ extension on CompactControlKind {
 
   IconData get icon => switch (this) {
     CompactControlKind.button => Icons.smart_button_outlined,
-    CompactControlKind.search => Icons.search,
     CompactControlKind.textField => Icons.text_fields_outlined,
     CompactControlKind.segmented => Icons.view_week_outlined,
     CompactControlKind.toggle => Icons.toggle_on_outlined,

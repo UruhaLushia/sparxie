@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'input_theme.dart';
 import 'style.dart';
+import 'text_field.dart';
 
 class CompactSearchField extends StatelessWidget {
   const CompactSearchField({
@@ -24,51 +24,54 @@ class CompactSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = this.controller;
-    if (controller == null) return _buildField(context, false);
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: controller,
-      builder: (context, value, _) =>
-          _buildField(context, value.text.isNotEmpty),
+    final clear = onClear;
+    return CompactTextField(
+      controller: controller,
+      style: style,
+      decoration: InputDecoration(
+        suffixText: suffixText,
+        hintText: hintText,
+        prefixIcon: const Icon(Icons.search, size: 18),
+        suffixIcon: controller != null && clear != null
+            ? _SearchClearButton(controller: controller, onPressed: clear)
+            : null,
+      ),
+      onChanged: onChanged,
     );
   }
+}
 
-  Widget _buildField(BuildContext context, bool hasText) {
-    final controlStyle = style ?? CompactControlTheme.searchOf(context);
-    final canClear = hasText && onClear != null;
-    return Theme(
-      data: Theme.of(context).copyWith(
-        inputDecorationTheme: compactInputDecorationTheme(
-          context,
-          controlStyle,
-        ),
-      ),
-      child: SizedBox(
-        height: controlStyle.fieldHeight,
-        child: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            suffixText: suffixText,
-            hintText: hintText,
-            prefixIcon: Icon(
-              Icons.search,
-              size: 18,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            suffixIcon: canClear
-                ? Semantics(
-                    button: true,
-                    label: '清除筛选',
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: onClear,
-                      icon: const Icon(Icons.close, size: 18),
-                    ),
-                  )
-                : null,
-          ),
-          onChanged: onChanged,
-        ),
+class _SearchClearButton extends StatelessWidget {
+  const _SearchClearButton({required this.controller, required this.onPressed});
+
+  final TextEditingController controller;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 120),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: value.text.isEmpty
+            ? const SizedBox(key: ValueKey(false), width: 32, height: 32)
+            : Semantics(
+                key: const ValueKey(true),
+                button: true,
+                label: '清除筛选',
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  onPressed: onPressed,
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ),
       ),
     );
   }

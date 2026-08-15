@@ -9,15 +9,17 @@ class CompactSettingsPanel extends StatelessWidget {
     required this.header,
     required this.child,
     this.expandBody = false,
+    this.shrinkWrap = false,
     this.borderRadius = kAppPanelRadius,
     this.surfaceTheme,
     this.backgroundColor,
     this.surfaceLift = 0.05,
-  });
+  }) : assert(!expandBody || !shrinkWrap);
 
   final Widget header;
   final Widget child;
   final bool expandBody;
+  final bool shrinkWrap;
   final BorderRadiusGeometry borderRadius;
   final AppSurfaceTheme? surfaceTheme;
   final Color? backgroundColor;
@@ -30,15 +32,18 @@ class CompactSettingsPanel extends StatelessWidget {
     final outline = Border.all(
       color: scheme.outlineVariant.withValues(alpha: 0.72),
     );
+    Widget body = child;
+    if (expandBody) {
+      body = Expanded(child: body);
+    } else if (shrinkWrap) {
+      body = Flexible(fit: FlexFit.loose, child: body);
+    }
     final content = Column(
       mainAxisSize: expandBody ? MainAxisSize.max : MainAxisSize.min,
-      children: [
-        header,
-        if (expandBody) Expanded(child: child) else child,
-      ],
+      children: [header, body],
     );
 
-    return AppSurfaceBackdrop(
+    final panel = AppSurfaceBackdrop(
       borderRadius: borderRadius,
       surfaceTheme: effectiveSurfaceTheme,
       child: Container(
@@ -58,6 +63,11 @@ class CompactSettingsPanel extends StatelessWidget {
           child: ClipRRect(borderRadius: borderRadius, child: content),
         ),
       ),
+    );
+    if (!shrinkWrap) return panel;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SizedBox(width: double.infinity, child: panel),
     );
   }
 }

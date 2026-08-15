@@ -37,7 +37,6 @@ enum NavBarStyle {
 enum CompactControlKind {
   navigationBar,
   button,
-  search,
   textField,
   segmented,
   toggle,

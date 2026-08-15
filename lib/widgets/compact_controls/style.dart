@@ -414,9 +414,6 @@ class CompactControlTheme extends InheritedTheme {
   static CompactControlStyle buttonOf(BuildContext context) =>
       _styleOf(context, CompactControlKind.button);
 
-  static CompactControlStyle searchOf(BuildContext context) =>
-      _styleOf(context, CompactControlKind.search);
-
   static CompactControlStyle textFieldOf(BuildContext context) =>
       _styleOf(context, CompactControlKind.textField);
 
