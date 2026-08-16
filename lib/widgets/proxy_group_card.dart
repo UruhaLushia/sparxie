@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:material_color_utilities/hct/hct.dart';
 
 import '../gamepad_navigation.dart';
@@ -31,6 +32,122 @@ const _gradientHueOffsets = <double>[
   52,
   60,
 ];
+const _cardFlightEdge = 1 / 6;
+const _cardFlightCurve = Interval(
+  _cardFlightEdge,
+  1 - _cardFlightEdge,
+  curve: Curves.fastOutSlowIn,
+);
+const _cardFlightDepartureCurve = Interval(
+  0,
+  _cardFlightEdge,
+  curve: Curves.easeInOutCubic,
+);
+const _cardFlightHandoffCurve = Interval(
+  1 - _cardFlightEdge,
+  1,
+  curve: Curves.easeOutCubic,
+);
+const _cardFlightDetailCurve = Interval(
+  _cardFlightEdge,
+  1 - 2 * _cardFlightEdge,
+  curve: Curves.easeInOutCubic,
+);
+const _cardFlightShuttleOpacityCurve = _CardFlightShuttleOpacityCurve();
+
+class _CardFlightShuttleOpacityCurve extends Curve {
+  const _CardFlightShuttleOpacityCurve();
+
+  @override
+  double transformInternal(double t) =>
+      _cardFlightDepartureCurve.transform(t) *
+      (1 - _cardFlightHandoffCurve.transform(t));
+}
+
+RectTween _cardRectTween(Rect? begin, Rect? end) =>
+    _CardRectTween(begin: begin, end: end);
+
+class _CardRectTween extends MaterialRectArcTween {
+  _CardRectTween({super.begin, super.end});
+
+  @override
+  Rect lerp(double t) => super.lerp(_cardFlightCurve.transform(t));
+}
+
+enum _FlightAnchorKind { avatar, title, subtitle }
+
+// Uses the actual endpoint bounds so the Hero never hands off to an estimated
+// icon or text position after it stops moving.
+class _FlightAnchor extends SingleChildRenderObjectWidget {
+  const _FlightAnchor({required this.kind, required super.child});
+
+  final _FlightAnchorKind kind;
+
+  @override
+  _RenderFlightAnchor createRenderObject(BuildContext context) =>
+      _RenderFlightAnchor(kind);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderFlightAnchor renderObject,
+  ) {
+    renderObject.kind = kind;
+  }
+}
+
+class _RenderFlightAnchor extends RenderProxyBox {
+  _RenderFlightAnchor(this.kind);
+
+  _FlightAnchorKind kind;
+}
+
+class _FlightIdentityGeometry {
+  const _FlightIdentityGeometry({
+    required this.avatar,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final Rect avatar;
+  final Rect title;
+  final Rect subtitle;
+
+  _FlightIdentityGeometry lerpTo(
+    _FlightIdentityGeometry end,
+    double progress,
+  ) => _FlightIdentityGeometry(
+    avatar: Rect.lerp(avatar, end.avatar, progress)!,
+    title: Rect.lerp(title, end.title, progress)!,
+    subtitle: Rect.lerp(subtitle, end.subtitle, progress)!,
+  );
+
+  static _FlightIdentityGeometry? read(BuildContext context) {
+    final root = context.findRenderObject();
+    if (root is! RenderBox || !root.hasSize) return null;
+    final anchors = <_FlightAnchorKind, Rect>{};
+
+    void visit(RenderObject object) {
+      if (anchors.length == _FlightAnchorKind.values.length) return;
+      if (object is _RenderFlightAnchor && object.hasSize) {
+        anchors[object.kind] =
+            object.localToGlobal(Offset.zero, ancestor: root) & object.size;
+      }
+      object.visitChildren(visit);
+    }
+
+    visit(root);
+    final avatar = anchors[_FlightAnchorKind.avatar];
+    final title = anchors[_FlightAnchorKind.title];
+    final subtitle = anchors[_FlightAnchorKind.subtitle];
+    if (avatar == null || title == null || subtitle == null) return null;
+    return _FlightIdentityGeometry(
+      avatar: avatar,
+      title: title,
+      subtitle: subtitle,
+    );
+  }
+}
 
 (int, bool, Hct, List<LinearGradient?>)? _gradientCache;
 
@@ -50,9 +167,9 @@ LinearGradient _themeGradient(
       ? source.chroma
       : source.chroma.clamp(24.0, 48.0).toDouble();
   final opacity = translucent ? 0.84 : 1.0;
-  Color tone(double hueOffset, double chromaScale, double value) => Color(
-    Hct.from(hue + hueOffset, chroma * chromaScale, value).toInt(),
-  ).withValues(alpha: opacity);
+  Color tone(double hueOffset, double chromaScale, double value) =>
+      Color(Hct.from(hue + hueOffset, chroma * chromaScale, value).toInt())
+          .withValues(alpha: opacity);
 
   return LinearGradient(
     begin: Alignment.topLeft,
@@ -225,6 +342,11 @@ class _CardSurface extends StatelessWidget {
   }
 }
 
+typedef ProxyGroupCardTap = Future<void> Function(
+  FocusNode sourceFocusNode,
+  ValueChanged<Animation<double>?> setFlightPlaceholderAnimation,
+);
+
 class ProxyGroupCard extends StatefulWidget {
   const ProxyGroupCard({
     super.key,
@@ -239,7 +361,7 @@ class ProxyGroupCard extends StatefulWidget {
   final bool showIcon;
   final bool colored;
   final bool showDelay;
-  final Future<void> Function(FocusNode sourceFocusNode) onTap;
+  final ProxyGroupCardTap onTap;
 
   @override
   State<ProxyGroupCard> createState() => _ProxyGroupCardState();
@@ -247,6 +369,7 @@ class ProxyGroupCard extends StatefulWidget {
 
 class _ProxyGroupCardState extends State<ProxyGroupCard> {
   final _focusNode = FocusNode();
+  Animation<double>? _flightPlaceholderAnimation;
 
   @override
   void initState() {
@@ -285,9 +408,10 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     await Future<void>.value();
     if (!mounted) return;
     try {
-      await widget.onTap(_focusNode);
+      await widget.onTap(_focusNode, _setFlightPlaceholderAnimation);
     } finally {
       if (mounted) {
+        _setFlightPlaceholderAnimation(null);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _focusNode.canRequestFocus) {
             _focusNode.requestFocus();
@@ -297,9 +421,15 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     }
   }
 
+  void _setFlightPlaceholderAnimation(Animation<double>? animation) {
+    if (!mounted || identical(_flightPlaceholderAnimation, animation)) return;
+    setState(() => _flightPlaceholderAnimation = animation);
+  }
+
   @override
   Widget build(BuildContext context) {
     final style = _styleFor(context, widget.group.name, widget.colored);
+    final flightPlaceholderAnimation = _flightPlaceholderAnimation;
     final showFocus =
         _focusNode.hasFocus &&
         isDirectionalNavigationActive &&
@@ -318,6 +448,18 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
         child: RepaintBoundary(
           child: Hero(
             tag: 'proxy-group-card-${widget.group.name}',
+            createRectTween: _cardRectTween,
+            curve: Curves.linear,
+            reverseCurve: Curves.linear,
+            placeholderBuilder: (_, size, child) => SizedBox.fromSize(
+              size: size,
+              child: flightPlaceholderAnimation == null
+                  ? null
+                  : _ProxyGroupCardFlightPlaceholder(
+                      animation: flightPlaceholderAnimation,
+                      child: child,
+                    ),
+            ),
             child: _CardSurface(
               style: style,
               radius: 16,
@@ -341,9 +483,80 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   }
 }
 
+class _ProxyGroupCardFlightPlaceholder extends StatelessWidget {
+  const _ProxyGroupCardFlightPlaceholder({
+    required this.animation,
+    required this.child,
+    this.curve = _cardFlightHandoffCurve,
+    this.fadeOut = false,
+  });
+
+  final Animation<double> animation;
+  final Widget child;
+  final Curve curve;
+  final bool fadeOut;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: animation,
+    child: IgnorePointer(child: child),
+    builder: (context, child) {
+      final status = animation.status;
+      final returning =
+          status == AnimationStatus.reverse ||
+          status == AnimationStatus.dismissed;
+      final progress = returning ? 1 - animation.value : 0.0;
+      final curved = curve.transform(progress);
+      return Opacity(
+        opacity: returning && fadeOut ? 1 - curved : curved,
+        child: child,
+      );
+    },
+  );
+}
+
 String _subtitle(ProxyGroup group, String now) {
   final displayNow = group.hidesExactNow ? '*' : now;
   return displayNow.isEmpty ? group.type : '${group.type} · $displayNow';
+}
+
+Widget _groupIdentity(
+  ProxyGroup group,
+  _CardStyle style, {
+  required double titleSize,
+  required double subtitleSize,
+}) {
+  return ActiveValueListenableBuilder<String>(
+    valueListenable: group.now,
+    builder: (_, now, _) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FlightAnchor(
+          kind: _FlightAnchorKind.title,
+          child: Text(
+            group.name,
+            style: TextStyle(
+              color: style.title,
+              fontSize: titleSize,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _FlightAnchor(
+          kind: _FlightAnchorKind.subtitle,
+          child: Text(
+            _subtitle(group, now),
+            style: TextStyle(color: style.subtitle, fontSize: subtitleSize),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 Widget _collapsedContent(
@@ -363,33 +576,12 @@ Widget _iconCollapsedContent(ProxyGroup group, _CardStyle style) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ProxyAvatar(name: group.name, icon: group.icon, size: 32),
-        const Spacer(),
-        ActiveValueListenableBuilder<String>(
-          valueListenable: group.now,
-          builder: (_, now, _) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                group.name,
-                style: TextStyle(
-                  color: style.title,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                _subtitle(group, now),
-                style: TextStyle(color: style.subtitle, fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
+        _FlightAnchor(
+          kind: _FlightAnchorKind.avatar,
+          child: ProxyAvatar(name: group.name, icon: group.icon, size: 32),
         ),
+        const Spacer(),
+        _groupIdentity(group, style, titleSize: 15, subtitleSize: 11),
       ],
     ),
   );
@@ -506,42 +698,26 @@ Widget _headerRow(
   ProxyGroup group,
   bool showIcon,
   _CardStyle style,
-  Widget trailing,
-) {
+  Widget trailing, {
+  bool showIdentity = true,
+}) {
   return Padding(
     padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
     child: Row(
       children: [
         if (showIcon) ...[
-          ProxyAvatar(name: group.name, icon: group.icon),
+          showIdentity
+              ? _FlightAnchor(
+                  kind: _FlightAnchorKind.avatar,
+                  child: ProxyAvatar(name: group.name, icon: group.icon),
+                )
+              : const SizedBox.square(dimension: 44),
           const SizedBox(width: 12),
         ],
         Expanded(
-          child: ActiveValueListenableBuilder<String>(
-            valueListenable: group.now,
-            builder: (_, now, _) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  group.name,
-                  style: TextStyle(
-                    color: style.title,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  _subtitle(group, now),
-                  style: TextStyle(color: style.subtitle, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
+          child: showIdentity
+              ? _groupIdentity(group, style, titleSize: 18, subtitleSize: 12)
+              : const SizedBox.shrink(),
         ),
         trailing,
       ],
@@ -578,10 +754,17 @@ Widget _detailBody(
   ValueChanged<int>? onMissingMember,
   ScrollController? scrollController,
   bool scrollable = true,
+  bool showHeaderIdentity = true,
 }) {
   return Column(
     children: [
-      _headerRow(group, showIcon, style, trailing),
+      _headerRow(
+        group,
+        showIcon,
+        style,
+        trailing,
+        showIdentity: showHeaderIdentity,
+      ),
       Expanded(
         child: ActiveValueListenableBuilder<int>(
           valueListenable: group.membersVersion,
@@ -979,12 +1162,15 @@ class _ProxyGroupCardDetailRoute extends PageRouteBuilder<void>
          barrierDismissible: true,
          barrierLabel: '关闭',
          barrierColor: Colors.black.withValues(alpha: 0.45),
-         transitionDuration: const Duration(milliseconds: 300),
-         reverseTransitionDuration: const Duration(milliseconds: 240),
+         transitionDuration: const Duration(milliseconds: 450),
+         reverseTransitionDuration: const Duration(milliseconds: 360),
        );
 
   @override
   final FocusNode? sourceFocusNode;
+
+  @override
+  Curve get barrierCurve => _cardFlightCurve;
 }
 
 Future<void> showProxyGroupCardDetail(
@@ -1001,6 +1187,7 @@ Future<void> showProxyGroupCardDetail(
   required Future<void> Function(String) onTestNode,
   required Future<String> Function(String) loadNodeDetails,
   required FocusNode sourceFocusNode,
+  required ValueChanged<Animation<double>?> setFlightPlaceholderAnimation,
 }) async {
   final navigator = Navigator.of(context);
   final route = _ProxyGroupCardDetailRoute(
@@ -1020,7 +1207,13 @@ Future<void> showProxyGroupCardDetail(
     ),
   );
   final popped = navigator.push(route);
-  await popped;
+  setFlightPlaceholderAnimation(route.animation);
+  try {
+    await popped;
+    await route.completed;
+  } finally {
+    setFlightPlaceholderAnimation(null);
+  }
   final sourceContext = sourceFocusNode.context;
   if (sourceContext != null &&
       sourceContext.mounted &&
@@ -1028,7 +1221,6 @@ Future<void> showProxyGroupCardDetail(
     sourceFocusNode.requestFocus();
     FocusManager.instance.applyFocusChangesIfNeeded();
   }
-  await route.completed;
 }
 
 class _ProxyGroupCardDetail extends StatefulWidget {
@@ -1062,6 +1254,115 @@ class _ProxyGroupCardDetail extends StatefulWidget {
   State<_ProxyGroupCardDetail> createState() => _ProxyGroupCardDetailState();
 }
 
+class _IconCardFlightIdentity extends StatelessWidget {
+  const _IconCardFlightIdentity({
+    required this.animation,
+    required this.timeline,
+    required this.reverse,
+    required this.group,
+    required this.style,
+    required this.collapsedGeometry,
+    required this.settledGeometry,
+  });
+
+  final Animation<double> animation;
+  final Animation<double> timeline;
+  final bool reverse;
+  final ProxyGroup group;
+  final _CardStyle style;
+  final _FlightIdentityGeometry collapsedGeometry;
+  final _FlightIdentityGeometry settledGeometry;
+
+  static double _lerp(double begin, double end, double progress) =>
+      begin + (end - begin) * progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarSize = reverse ? 32.0 : 44.0;
+    final avatar = RepaintBoundary(
+      child: ProxyAvatar(name: group.name, icon: group.icon, size: avatarSize),
+    );
+    final subtitleText = _subtitle(group, group.now.value);
+    final initialIdentity = reverse
+        ? Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              height: _cardDetailHeaderExtent,
+              child: _headerRow(
+                group,
+                true,
+                style,
+                const SizedBox.square(dimension: 48),
+              ),
+            ),
+          )
+        : _iconCollapsedContent(group, style);
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: timeline,
+        builder: (context, _) {
+          final progress = animation.value.clamp(0.0, 1.0);
+          final phase = timeline.value.clamp(0.0, 1.0);
+          final departure = _cardFlightDepartureCurve.transform(phase);
+          final geometry = collapsedGeometry.lerpTo(settledGeometry, progress);
+          Widget movingText(
+            String text,
+            double collapsedSize,
+            double settledSize,
+            FontWeight? weight,
+          ) => RepaintBoundary(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: weight == null ? style.subtitle : style.title,
+                fontSize: _lerp(collapsedSize, settledSize, progress),
+                fontWeight: weight,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Opacity(opacity: 1 - departure, child: initialIdentity),
+              ),
+              Positioned.fromRect(
+                rect: geometry.avatar,
+                child: Opacity(
+                  opacity: departure,
+                  child: FittedBox(
+                    fit: BoxFit.fill,
+                    child: SizedBox.square(
+                      dimension: avatarSize,
+                      child: avatar,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fromRect(
+                rect: geometry.title,
+                child: Opacity(
+                  opacity: departure,
+                  child: movingText(group.name, 15, 18, FontWeight.w700),
+                ),
+              ),
+              Positioned.fromRect(
+                rect: geometry.subtitle,
+                child: Opacity(
+                  opacity: departure,
+                  child: movingText(subtitleText, 11, 12, null),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   ScrollController? _memberScroll;
   bool _testing = false;
@@ -1080,7 +1381,54 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   ) {
     final group = widget.group;
     final style = _styleFor(flightContext, group.name, widget.colored);
+    final flightProgress = direction == HeroFlightDirection.push
+        ? animation
+        : ReverseAnimation(animation);
+    final curvedProgress = flightProgress.drive(
+      CurveTween(curve: _cardFlightCurve),
+    );
+    final motion = direction == HeroFlightDirection.push
+        ? curvedProgress
+        : ReverseAnimation(curvedProgress);
+    final detailProgress = flightProgress.drive(
+      CurveTween(curve: _cardFlightDetailCurve),
+    );
+    final detailOpacity = direction == HeroFlightDirection.push
+        ? detailProgress
+        : ReverseAnimation(detailProgress);
+    final animateIdentity = widget.showIcon && !widget.showDelay;
+    final collapsedContext = direction == HeroFlightDirection.push
+        ? fromContext
+        : toContext;
+    final settledContext = direction == HeroFlightDirection.push
+        ? toContext
+        : fromContext;
+    final collapsedRenderObject = collapsedContext.findRenderObject();
+    final collapsedSize =
+        collapsedRenderObject is RenderBox && collapsedRenderObject.hasSize
+        ? collapsedRenderObject.size
+        : const Size(216, 96);
     final detailSize = _detailSize;
+    final textWidth =
+        (detailSize.width > 0
+                ? detailSize.width - 126
+                : collapsedSize.width - 20)
+            .clamp(80.0, 354.0)
+            .toDouble();
+    final collapsedGeometry =
+        _FlightIdentityGeometry.read(collapsedContext) ??
+        _FlightIdentityGeometry(
+          avatar: const Rect.fromLTWH(10, 10, 32, 32),
+          title: Rect.fromLTWH(10, collapsedSize.height - 41, textWidth, 22),
+          subtitle: Rect.fromLTWH(10, collapsedSize.height - 23, textWidth, 16),
+        );
+    final settledGeometry =
+        _FlightIdentityGeometry.read(settledContext) ??
+        _FlightIdentityGeometry(
+          avatar: const Rect.fromLTWH(14, 14, 44, 44),
+          title: Rect.fromLTWH(70, 18, textWidth, 22),
+          subtitle: Rect.fromLTWH(70, 40, textWidth, 16),
+        );
     final memberScroll = _memberScroll;
     final memberOffset = memberScroll == null
         ? 0.0
@@ -1109,31 +1457,53 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
               _groupDelayButton(style, testing: _testing),
               scrollController: scrollController,
               scrollable: false,
+              showHeaderIdentity: !animateIdentity,
             ),
           ),
         ),
       );
     }
-    return _CardSurface(
-      style: style,
-      radius: 16,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: FadeTransition(
-              opacity: ReverseAnimation(animation),
-              child: _collapsedContent(
-                group,
-                widget.showIcon,
-                widget.showDelay,
-                style,
+    final shuttleOpacity = direction == HeroFlightDirection.pop
+        ? flightProgress.drive(
+            CurveTween(curve: _cardFlightShuttleOpacityCurve),
+          )
+        : kAlwaysCompleteAnimation;
+    return FadeTransition(
+      opacity: shuttleOpacity,
+      child: _CardSurface(
+        style: style,
+        radius: 16,
+        child: Stack(
+          children: [
+            if (!animateIdentity)
+              Positioned.fill(
+                child: FadeTransition(
+                  opacity: ReverseAnimation(motion),
+                  child: _collapsedContent(
+                    group,
+                    widget.showIcon,
+                    widget.showDelay,
+                    style,
+                  ),
+                ),
               ),
+            Positioned.fill(
+              child: FadeTransition(opacity: detailOpacity, child: detailLayer),
             ),
-          ),
-          Positioned.fill(
-            child: FadeTransition(opacity: animation, child: detailLayer),
-          ),
-        ],
+            if (animateIdentity)
+              Positioned.fill(
+                child: _IconCardFlightIdentity(
+                  animation: motion,
+                  timeline: flightProgress,
+                  reverse: direction == HeroFlightDirection.pop,
+                  group: group,
+                  style: style,
+                  collapsedGeometry: collapsedGeometry,
+                  settledGeometry: settledGeometry,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1227,6 +1597,7 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   Widget build(BuildContext context) {
     final group = widget.group;
     final style = _styleFor(context, group.name, widget.colored);
+    final routeAnimation = ModalRoute.of(context)?.animation;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1247,7 +1618,21 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
                 height: height,
                 child: Hero(
                   tag: 'proxy-group-card-${group.name}',
+                  createRectTween: _cardRectTween,
+                  curve: Curves.linear,
+                  reverseCurve: Curves.linear,
                   flightShuttleBuilder: _shuttle,
+                  placeholderBuilder: routeAnimation == null
+                      ? null
+                      : (_, size, child) => SizedBox.fromSize(
+                          size: size,
+                          child: _ProxyGroupCardFlightPlaceholder(
+                            animation: routeAnimation,
+                            curve: _cardFlightDepartureCurve,
+                            fadeOut: true,
+                            child: child,
+                          ),
+                        ),
                   child: _CardSurface(
                     style: style,
                     radius: 16,
@@ -1293,6 +1678,8 @@ class _FlightSnapshot extends StatefulWidget {
 
 class _FlightSnapshotState extends State<_FlightSnapshot>
     with WidgetsBindingObserver {
+  static const _maxPixelRatio = 1.25;
+
   late final SnapshotController _controller;
   late final ScrollController _scrollController;
 
@@ -1325,10 +1712,16 @@ class _FlightSnapshotState extends State<_FlightSnapshot>
 
   @override
   Widget build(BuildContext context) {
-    return SnapshotWidget(
+    final mediaQuery = MediaQuery.of(context);
+    final snapshot = SnapshotWidget(
       controller: _controller,
       mode: SnapshotMode.permissive,
       child: widget.builder(_scrollController),
+    );
+    if (mediaQuery.devicePixelRatio <= _maxPixelRatio) return snapshot;
+    return MediaQuery(
+      data: mediaQuery.copyWith(devicePixelRatio: _maxPixelRatio),
+      child: snapshot,
     );
   }
 }
