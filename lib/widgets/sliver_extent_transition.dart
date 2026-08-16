@@ -244,7 +244,7 @@ class _RenderSliverExtentTransition extends RenderProxySliver {
       paintExtent: paintExtent,
       layoutExtent: layoutExtent,
       maxPaintExtent: maxPaintExtent,
-      cacheExtent: childGeometry.cacheExtent,
+      cacheExtent: childGeometry.cacheExtent * progress,
       maxScrollObstructionExtent: childGeometry.maxScrollObstructionExtent,
       visible: progress > 0 && childGeometry.visible,
       hitTestExtent: hitTestExtent,

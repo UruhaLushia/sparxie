@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
@@ -242,9 +243,8 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
     } catch (e) {
       widget.session.proxies.setFixedOptimistic(group.name, previous);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('取消固定失败:$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('取消固定失败:$e')));
       }
     }
   }
@@ -292,9 +292,8 @@ class _ProxiesScreenState extends State<ProxiesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('测速失败:$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('测速失败:$e')));
       }
     } finally {
       if (mounted) setState(() => _testingGroup.remove(group.name));

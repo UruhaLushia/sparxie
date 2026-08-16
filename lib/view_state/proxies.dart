@@ -62,6 +62,7 @@ class ProxiesNotifier extends ChangeNotifier {
           shapeChanged = true;
         }
         if (existing._setMemberShape(entry.memberCount, entry.membersHash)) {
+          existing._notifyMembers();
           shapeChanged = true;
         }
         existing._setNow(entry.now);

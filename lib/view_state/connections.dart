@@ -179,10 +179,9 @@ class ConnectionListNotifier extends ChangeNotifier {
 
   /// Keeps expansion geometry stable while the member window is loading.
   int groupMemberItemCount(String groupKey) {
-    final ids = _groupMemberIds[groupKey];
-    if (ids != null) return ids.length;
-    final count = _groupsByKey[groupKey]?.count.value ?? 0;
-    return count.clamp(0, _groupMemberCap);
+    final loaded = _groupMemberIds[groupKey]?.length ?? 0;
+    final expected = _expectedGroupMemberCount(groupKey);
+    return loaded > expected ? loaded : expected;
   }
 
   ConnectionRow? groupMemberAt(String groupKey, int index) {
@@ -472,12 +471,16 @@ class ConnectionListNotifier extends ChangeNotifier {
     final newKeys = fresh.map((g) => g.key).toList(growable: false);
     final oldKeys = _groups.map((g) => g.key).toList(growable: false);
     final orderChanged = force || !_listEq(oldKeys, newKeys);
+    var expandedCountChanged = false;
 
     final seen = newKeys.toSet();
     for (final g in fresh) {
       final existing = _groupsByKey[g.key];
       if (existing != null) {
-        if (existing.count.value != g.count) existing.count.value = g.count;
+        if (existing.count.value != g.count) {
+          existing.count.value = g.count;
+          expandedCountChanged |= _expandedGroups.contains(g.key);
+        }
         final b = RowBytes(g.upload, g.download);
         if (existing.bytes.value != b) existing.bytes.value = b;
         final s = RowSpeeds(g.uploadSpeed, g.downloadSpeed);
@@ -497,6 +500,8 @@ class ConnectionListNotifier extends ChangeNotifier {
       _groups
         ..clear()
         ..addAll(newKeys.map((k) => _groupsByKey[k]!));
+    }
+    if (orderChanged || expandedCountChanged) {
       notifyListeners();
     }
   }
@@ -555,10 +560,30 @@ class ConnectionListNotifier extends ChangeNotifier {
         rowMap[c.id] = ConnectionRow.fromConnection(c);
       }
     }
+    _retainPreviousGroupMembers(groupKey, rowMap, prev, newIds);
     final orderChanged = !_listEq(prev, newIds);
     _retainRows(rowMap, newIds);
     _groupMemberIds[groupKey] = newIds;
     if (orderChanged) notifyListeners();
+  }
+
+  int _expectedGroupMemberCount(String groupKey) =>
+      (_groupsByKey[groupKey]?.count.value ?? 0).clamp(0, _groupMemberCap);
+
+  /// Bridges brief snapshot differences between a group and its members.
+  void _retainPreviousGroupMembers(
+    String groupKey,
+    Map<String, ConnectionRow> rows,
+    List<String> previous,
+    List<String> current,
+  ) {
+    final expected = _expectedGroupMemberCount(groupKey);
+    if (current.length >= expected) return;
+    final seen = current.toSet();
+    for (final id in previous) {
+      if (rows.containsKey(id) && seen.add(id)) current.add(id);
+      if (current.length >= expected) return;
+    }
   }
 
   void _disposeGroupMembers(String groupKey) {
