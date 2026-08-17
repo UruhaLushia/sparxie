@@ -98,6 +98,14 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# package:jni 1.0.3 passes JNIEnv** to the C JNI API's void** parameters.
+# Clang 22 promotes that otherwise-compatible call to a compilation error.
+if(TARGET jni)
+  target_compile_options(jni PRIVATE
+    "$<$<COMPILE_LANG_AND_ID:C,Clang>:-Wno-incompatible-pointer-types>"
+  )
+endif()
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

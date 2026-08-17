@@ -992,7 +992,7 @@ class _ProxyCardsBodyState extends State<_ProxyCardsBody> {
                 showIcon: widget.prefs.proxiesShowGroupIcons,
                 colored: widget.prefs.proxiesCardColored,
                 showDelay: widget.prefs.proxiesCardShowDelay,
-                onTap: (sourceFocusNode, setFlightPlaceholderAnimation) async {
+                onTap: (sourceFocusNode, setFlightActive) async {
                   await _ensureInitialMembers(group);
                   if (!context.mounted) return;
                   await showProxyGroupCardDetail(
@@ -1009,8 +1009,7 @@ class _ProxyCardsBodyState extends State<_ProxyCardsBody> {
                     onTestNode: (name) => widget.onTestNode(group, name),
                     loadNodeDetails: widget.loadNodeDetails,
                     sourceFocusNode: sourceFocusNode,
-                    setFlightPlaceholderAnimation:
-                        setFlightPlaceholderAnimation,
+                    setFlightActive: setFlightActive,
                   );
                   if (context.mounted) _queueWarm(group);
                 },
