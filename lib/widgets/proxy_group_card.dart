@@ -47,6 +47,10 @@ const _cardFlightDetailCurve = Interval(
   1 - _cardFlightEdge,
   curve: Curves.easeInOutCubic,
 );
+// A non-zero opacity makes Impeller prepaint the route card before the source
+// and route swap visibility on the following frame.
+const _cardPrepaintOpacity = 0.001;
+
 (int, bool, Hct, List<LinearGradient?>)? _gradientCache;
 
 BoxDecoration _lerpBoxDecoration(
@@ -251,6 +255,7 @@ class _CardSurface extends StatelessWidget {
 typedef ProxyGroupCardTap = Future<void> Function(
   FocusNode sourceFocusNode,
   ValueChanged<bool> setFlightActive,
+  double openingScale,
 );
 
 class ProxyGroupCard extends StatefulWidget {
@@ -277,6 +282,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   final _focusNode = FocusNode();
   bool _activationInProgress = false;
   bool _flightActive = false;
+  bool _holdPress = false;
 
   @override
   void initState() {
@@ -309,18 +315,24 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
     super.dispose();
   }
 
-  Future<void> _activate() async {
+  Future<void> _activate({required bool fromPointer}) async {
     if (_activationInProgress) return;
     _activationInProgress = true;
+    if (fromPointer) setState(() => _holdPress = true);
     try {
       _focusNode.requestFocus();
       FocusManager.instance.applyFocusChangesIfNeeded();
       await Future<void>.value();
       if (!mounted) return;
-      await widget.onTap(_focusNode, _setFlightActive);
+      await widget.onTap(
+        _focusNode,
+        _setFlightActive,
+        fromPointer ? PressableScale.pressedScale : 1,
+      );
     } finally {
       _activationInProgress = false;
       if (mounted) {
+        if (_holdPress) setState(() => _holdPress = false);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _focusNode.canRequestFocus) {
             _focusNode.requestFocus();
@@ -331,8 +343,13 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
   }
 
   void _setFlightActive(bool active) {
-    if (!mounted || _flightActive == active) return;
-    setState(() => _flightActive = active);
+    if (!mounted) return;
+    final releasePress = active && _holdPress;
+    if (_flightActive == active && !releasePress) return;
+    setState(() {
+      _flightActive = active;
+      if (active) _holdPress = false;
+    });
   }
 
   @override
@@ -347,7 +364,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) {
-            unawaited(_activate());
+            unawaited(_activate(fromPointer: false));
             return null;
           },
         ),
@@ -356,6 +373,7 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
         child: Opacity(
           opacity: _flightActive ? 0 : 1,
           child: PressableScale(
+            holdPressed: _holdPress,
             child: _CardSurface(
               style: style,
               radius: 16,
@@ -363,8 +381,8 @@ class _ProxyGroupCardState extends State<ProxyGroupCard> {
               focused: showFocus,
               child: InkWell(
                 canRequestFocus: false,
-                onTap: () => unawaited(_activate()),
-                child: _collapsedContent(
+                onTap: () => unawaited(_activate(fromPointer: true)),
+                child: _flightSourceContent(
                   widget.group,
                   widget.showIcon,
                   widget.showDelay,
@@ -384,68 +402,48 @@ String _subtitle(ProxyGroup group, String now) {
   return displayNow.isEmpty ? group.type : '${group.type} · $displayNow';
 }
 
-Widget _groupIdentity(
-  ProxyGroup group,
-  _CardStyle style, {
-  required double titleSize,
-  required double subtitleSize,
-}) {
-  return ActiveValueListenableBuilder<String>(
-    valueListenable: group.now,
-    builder: (_, now, _) => Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          group.name,
-          style: TextStyle(
-            color: style.title,
-            fontSize: titleSize,
-            fontWeight: FontWeight.w700,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Text(
-          _subtitle(group, now),
-          style: TextStyle(color: style.subtitle, fontSize: subtitleSize),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _collapsedContent(
+Widget _collapsedChrome(
   ProxyGroup group,
   bool showIcon,
   bool showDelay,
   _CardStyle style,
 ) {
-  if (!showIcon) return _compactCollapsedContent(group, style);
-  if (!showDelay) return _iconCollapsedContent(group, style);
-  return _compactCollapsedContent(group, style, showIcon: true);
+  if (showIcon && !showDelay) return const SizedBox.expand();
+  return _compactCollapsedChrome(group, style, reserveIconSpace: showIcon);
 }
 
-Widget _iconCollapsedContent(ProxyGroup group, _CardStyle style) {
-  return Padding(
-    padding: const EdgeInsets.all(10),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ProxyAvatar(name: group.name, icon: group.icon, size: 32),
-        const Spacer(),
-        _groupIdentity(group, style, titleSize: 15, subtitleSize: 11),
-      ],
-    ),
+Widget _flightSourceContent(
+  ProxyGroup group,
+  bool showIcon,
+  bool showDelay,
+  _CardStyle style,
+) {
+  return LayoutBuilder(
+    builder: (_, constraints) {
+      final sourceSize = constraints.biggest;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          _collapsedChrome(group, showIcon, showDelay, style),
+          _CardFlightIdentity(
+            animation: kAlwaysDismissedAnimation,
+            group: group,
+            style: style,
+            showIcon: showIcon,
+            showDelay: showDelay,
+            sourceSize: sourceSize,
+            detailSize: sourceSize,
+          ),
+        ],
+      );
+    },
   );
 }
 
-Widget _compactCollapsedContent(
+Widget _compactCollapsedChrome(
   ProxyGroup group,
   _CardStyle style, {
-  bool showIcon = false,
+  required bool reserveIconSpace,
 }) {
   return ActiveValueListenableBuilder<String>(
     valueListenable: group.now,
@@ -464,16 +462,7 @@ Widget _compactCollapsedContent(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          group.name,
-                          style: TextStyle(
-                            color: style.title,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        const SizedBox(height: 22),
                         const Spacer(),
                         Text(
                           group.type.toUpperCase(),
@@ -492,12 +481,8 @@ Widget _compactCollapsedContent(
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (showIcon)
-                        ProxyAvatar(
-                          name: group.name,
-                          icon: group.icon,
-                          size: 28,
-                        )
+                      if (reserveIconSpace)
+                        const SizedBox.square(dimension: 28)
                       else ...[
                         Text(
                           '${group.memberCount}',
@@ -1005,22 +990,29 @@ class _ProxyGroupCardDetailRoute extends PageRouteBuilder<void>
 
   bool _closing = false;
   bool _removalScheduled = false;
+  bool _removing = false;
+  bool _disposed = false;
 
   @override
-  Curve get barrierCurve => _cardFlightCurve;
+  Curve get barrierCurve => _cardFlightDepartureCurve;
 
   void _beginClosing() {
-    if (_closing) return;
+    if (_closing || _removing || _disposed) return;
+    final animationController = controller;
+    if (animationController == null) return;
     _closing = true;
     onPopStarted();
-    controller!.reverse();
+    animationController.reverse();
   }
 
-  void reopen() {
-    if (!_closing) return;
+  bool reopen() {
+    if (!_closing || _removing || _disposed) return false;
+    final animationController = controller;
+    if (animationController == null) return false;
     _closing = false;
     _armDismissal();
-    controller!.forward();
+    animationController.forward();
+    return true;
   }
 
   void _armDismissal() {
@@ -1048,12 +1040,14 @@ class _ProxyGroupCardDetailRoute extends PageRouteBuilder<void>
           animation?.status != AnimationStatus.dismissed) {
         return;
       }
+      _removing = true;
       navigator?.removeRoute(this);
     });
   }
 
   @override
   void dispose() {
+    _disposed = true;
     animation?.removeStatusListener(_handleStatus);
     super.dispose();
   }
@@ -1074,6 +1068,7 @@ Future<void> showProxyGroupCardDetail(
   required Future<String> Function(String) loadNodeDetails,
   required FocusNode sourceFocusNode,
   required ValueChanged<bool> setFlightActive,
+  required double openingScale,
 }) async {
   final navigator = Navigator.of(context);
   final sourceRect = _boundsInOverlay(sourceFocusNode, navigator);
@@ -1096,9 +1091,13 @@ Future<void> showProxyGroupCardDetail(
           behavior: HitTestBehavior.opaque,
           onPointerDown: (event) {
             if (!_sourceContains(sourceFocusNode, event.position)) return;
+            if (!route.reopen()) {
+              removeInputGuard();
+              setFlightActive(false);
+              return;
+            }
             removeInputGuard();
             setFlightActive(true);
-            route.reopen();
           },
           child: const SizedBox.expand(),
         ),
@@ -1124,13 +1123,12 @@ Future<void> showProxyGroupCardDetail(
       loadNodeDetails: loadNodeDetails,
       flightTimeline: route.animation ?? kAlwaysDismissedAnimation,
       sourceRect: sourceRect,
+      openingScale: openingScale,
+      onFlightReady: () => setFlightActive(true),
     ),
   );
   final popped = navigator.push(route);
   final animation = route.animation;
-  // The route card starts in the source rect and is installed in the same
-  // frame, so only one visible copy participates in the transition.
-  setFlightActive(true);
   void handleRouteStatus(AnimationStatus status) {
     if (status == AnimationStatus.dismissed) setFlightActive(false);
   }
@@ -1198,6 +1196,8 @@ class _ProxyGroupCardDetail extends StatefulWidget {
     required this.loadNodeDetails,
     required this.flightTimeline,
     required this.sourceRect,
+    required this.openingScale,
+    required this.onFlightReady,
   });
 
   final ControllerViewState session;
@@ -1213,6 +1213,8 @@ class _ProxyGroupCardDetail extends StatefulWidget {
   final Future<String> Function(String) loadNodeDetails;
   final Animation<double> flightTimeline;
   final Rect sourceRect;
+  final double openingScale;
+  final VoidCallback onFlightReady;
 
   @override
   State<_ProxyGroupCardDetail> createState() => _ProxyGroupCardDetailState();
@@ -1291,7 +1293,6 @@ class _CardFlightIdentity extends StatelessWidget {
         builder: (_, _) {
           final timeline = animation.value.clamp(0.0, 1.0);
           final motion = _cardFlightCurve.transform(timeline);
-          final visibility = _cardFlightDepartureCurve.transform(timeline);
 
           Widget movingText(
             String text,
@@ -1311,42 +1312,43 @@ class _CardFlightIdentity extends StatelessWidget {
             );
           }
 
-          return Opacity(
-            opacity: visibility,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (showIcon)
-                  Positioned.fromRect(
-                    rect: Rect.lerp(sourceAvatar, detailAvatar, motion)!,
-                    child: FittedBox(
-                      fit: BoxFit.fill,
-                      child: SizedBox.square(
-                        dimension: 44,
-                        child: ProxyAvatar(name: group.name, icon: group.icon),
-                      ),
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showIcon)
+                Positioned.fromRect(
+                  rect: Rect.lerp(sourceAvatar, detailAvatar, motion)!,
+                  child: FittedBox(
+                    fit: BoxFit.fill,
+                    child: SizedBox.square(
+                      dimension: 44,
+                      child: ProxyAvatar(name: group.name, icon: group.icon),
                     ),
                   ),
-                Positioned.fromRect(
-                  rect: Rect.lerp(sourceTitle, detailTitle, motion)!,
-                  child: movingText(
-                    group.name,
-                    iconLayout ? 15 : 18,
-                    18,
-                    FontWeight.w700,
-                  ),
                 ),
+              Positioned.fromRect(
+                rect: Rect.lerp(sourceTitle, detailTitle, motion)!,
+                child: movingText(
+                  group.name,
+                  iconLayout ? 15 : 18,
+                  18,
+                  FontWeight.w700,
+                ),
+              ),
+              if (iconLayout || motion > 0)
                 Positioned.fromRect(
                   rect: Rect.lerp(sourceSubtitle, detailSubtitle, motion)!,
-                  child: movingText(
-                    _subtitle(group, now),
-                    iconLayout ? 11 : 12,
-                    12,
-                    null,
+                  child: Opacity(
+                    opacity: iconLayout ? 1 : motion,
+                    child: movingText(
+                      _subtitle(group, now),
+                      iconLayout ? 11 : 12,
+                      12,
+                      null,
+                    ),
                   ),
                 ),
-              ],
-            ),
+            ],
           );
         },
       ),
@@ -1357,6 +1359,8 @@ class _CardFlightIdentity extends StatelessWidget {
 class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   ScrollController? _memberScroll;
   bool _testing = false;
+  bool _initialOpening = true;
+  bool _handoffComplete = false;
   int _pendingFirst = -1;
   int _pendingLast = -1;
   bool _loadScheduled = false;
@@ -1365,10 +1369,33 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
   void initState() {
     super.initState();
     widget.session.proxies.addListener(_guard);
+    widget.flightTimeline.addStatusListener(_handleFlightStatus);
+    WidgetsBinding.instance.addPostFrameCallback(_completeFlightHandoff);
+  }
+
+  void _completeFlightHandoff(Duration _) {
+    if (!mounted || _handoffComplete) return;
+    final status = widget.flightTimeline.status;
+    if (status == AnimationStatus.reverse ||
+        status == AnimationStatus.dismissed) {
+      return;
+    }
+    setState(() => _handoffComplete = true);
+    widget.onFlightReady();
+  }
+
+  void _handleFlightStatus(AnimationStatus status) {
+    if (!_initialOpening ||
+        (status != AnimationStatus.reverse &&
+            status != AnimationStatus.completed)) {
+      return;
+    }
+    if (mounted) setState(() => _initialOpening = false);
   }
 
   @override
   void dispose() {
+    widget.flightTimeline.removeStatusListener(_handleFlightStatus);
     widget.session.proxies.removeListener(_guard);
     _memberScroll?.dispose();
     super.dispose();
@@ -1465,30 +1492,34 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
         final targetRect = Alignment.center.inscribe(detailSize, availableRect);
         final memberScroll = _memberScrollController(cols, height);
 
-        final collapsedLayer = FittedBox(
-          fit: BoxFit.fill,
-          alignment: Alignment.topLeft,
-          child: SizedBox.fromSize(
-            size: widget.sourceRect.size,
-            child: _collapsedContent(
-              group,
-              widget.showIcon,
-              widget.showDelay,
-              style,
+        final collapsedLayer = RepaintBoundary(
+          child: FittedBox(
+            fit: BoxFit.fill,
+            alignment: Alignment.topLeft,
+            child: SizedBox.fromSize(
+              size: widget.sourceRect.size,
+              child: _collapsedChrome(
+                group,
+                widget.showIcon,
+                widget.showDelay,
+                style,
+              ),
             ),
           ),
         );
-        final detailLayer = _detailBody(
-          group,
-          widget.showIcon,
-          style,
-          _groupDelayButton(style, testing: _testing, onPressed: _runTest),
-          onSelect: widget.onSelect,
-          onToggleFixed: widget.onToggleFixed,
-          onTestNode: widget.onTestNode,
-          loadNodeDetails: widget.loadNodeDetails,
-          onMissingMember: _queueMemberLoad,
-          scrollController: memberScroll,
+        final detailLayer = RepaintBoundary(
+          child: _detailBody(
+            group,
+            widget.showIcon,
+            style,
+            _groupDelayButton(style, testing: _testing, onPressed: _runTest),
+            onSelect: widget.onSelect,
+            onToggleFixed: widget.onToggleFixed,
+            onTestNode: widget.onTestNode,
+            loadNodeDetails: widget.loadNodeDetails,
+            onMissingMember: _queueMemberLoad,
+            scrollController: memberScroll,
+          ),
         );
         final cardContent = AnimatedBuilder(
           animation: widget.flightTimeline,
@@ -1536,13 +1567,23 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
           builder: (_, card) {
             final timeline = widget.flightTimeline.value.clamp(0.0, 1.0);
             final motion = _cardFlightCurve.transform(timeline);
+            final departure = _cardFlightDepartureCurve.transform(timeline);
+            final openingScale = _initialOpening
+                ? widget.openingScale + (1 - widget.openingScale) * departure
+                : 1.0;
             final rect = Rect.lerp(widget.sourceRect, targetRect, motion)!;
             return Stack(
               fit: StackFit.expand,
               children: [
                 Positioned.fromRect(
                   rect: rect,
-                  child: IgnorePointer(ignoring: timeline < 1, child: card),
+                  child: Opacity(
+                    opacity: _handoffComplete ? 1 : _cardPrepaintOpacity,
+                    child: Transform.scale(
+                      scale: openingScale,
+                      child: IgnorePointer(ignoring: timeline < 1, child: card),
+                    ),
+                  ),
                 ),
               ],
             );
