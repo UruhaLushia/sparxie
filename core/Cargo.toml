@@ -49,6 +49,6 @@ tonic-prost-build = "0.14"
 # resolves icons outside Rust (Android) or skips process icons/fonts (iOS), so
 # the desktop-only deps stay out of mobile cross-builds.
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
-file-icon = { git = "https://github.com/UruhaLushia/file-icon-rs", rev = "1a70444f17e47e0e7755f67a5e91a4c0664c78fe" }
+file-icon = { git = "https://github.com/UruhaLushia/file-icon-rs", rev = "6cd8adc85ff06471fad2a3b3de8a5765ab6482f4" }
 fontdb = "0.23"
 png = "0.18.1"

@@ -448,7 +448,7 @@ dependencies = [
 [[package]]
 name = "file-icon"
 version = "0.1.2"
-source = "git+https://github.com/UruhaLushia/file-icon-rs?rev=1a70444f17e47e0e7755f67a5e91a4c0664c78fe#1a70444f17e47e0e7755f67a5e91a4c0664c78fe"
+source = "git+https://github.com/UruhaLushia/file-icon-rs?rev=6cd8adc85ff06471fad2a3b3de8a5765ab6482f4#6cd8adc85ff06471fad2a3b3de8a5765ab6482f4"
 dependencies = [
  "base64",
  "objc",
