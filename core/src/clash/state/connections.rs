@@ -85,8 +85,9 @@ impl State {
 }
 
 pub(super) struct TargetSlot {
-    pub(super) state: Mutex<State>,
+    pub(super) state: Arc<Mutex<State>>,
     pub(super) sender: broadcast::Sender<ConnectionsFrame>,
+    pub(super) generation: u64,
 }
 
 type SlotMap = HashMap<String, Arc<TargetSlot>>;
@@ -117,18 +118,34 @@ pub async fn subscribe(
 ) -> Result<broadcast::Receiver<ConnectionsFrame>, MihomoError> {
     let interval = interval_or_default(interval_ms);
     let key = target_key(&target, interval);
+    let generation = crate::clash::state::stream_manager::generation(&target);
     let mut map = slots().lock().await;
-    if let Some(slot) = map.get(&key) {
+    if let Some(slot) = map.get(&key)
+        && slot.generation == generation
+    {
         slot.state
             .lock()
             .expect("connections state poisoned")
             .set_closed_capacity(closed_capacity);
         return Ok(slot.sender.subscribe());
     }
+
+    // A hard target restart replaces only the producer/sender while retaining
+    // the authoritative row cache, so the UI stays populated until the fresh
+    // socket delivers its first snapshot.
+    let state = map
+        .get(&key)
+        .map(|slot| slot.state.clone())
+        .unwrap_or_else(|| Arc::new(Mutex::new(State::new(closed_capacity))));
+    state
+        .lock()
+        .expect("connections state poisoned")
+        .set_closed_capacity(closed_capacity);
     let (tx, rx) = broadcast::channel::<ConnectionsFrame>(64);
     let slot = Arc::new(TargetSlot {
-        state: Mutex::new(State::new(closed_capacity)),
+        state,
         sender: tx,
+        generation,
     });
     map.insert(key.clone(), slot.clone());
     drop(map);

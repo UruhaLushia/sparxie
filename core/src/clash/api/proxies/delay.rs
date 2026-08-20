@@ -189,7 +189,7 @@ pub(crate) async fn proxy_delay_window_with_client(
     .await
     .unwrap_or_default();
     let Some((visible_delay, window_entries)) = update_cached_node_delay_window(
-        &target,
+        target,
         group,
         member_sort,
         window_offset,

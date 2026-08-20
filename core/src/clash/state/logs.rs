@@ -10,13 +10,13 @@ use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use crate::MihomoError;
 use crate::backend::api::{LogEntry, LogWindow, LogsFrame};
 use crate::backend::log_store::LogStore;
-use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
-use crate::clash::client::{MihomoClient, read_ws_text};
+use crate::clash::client::read_ws_text;
 
 struct LogSlot {
-    store: Mutex<LogStore>,
+    store: Arc<Mutex<LogStore>>,
     sender: broadcast::Sender<LogsFrame>,
+    generation: u64,
 }
 
 type SlotMap = HashMap<String, Arc<LogSlot>>;
@@ -37,14 +37,22 @@ pub async fn subscribe(
     info_capacity: usize,
 ) -> Result<(LogsFrame, broadcast::Receiver<LogsFrame>), MihomoError> {
     let key = slot_key(&target);
+    let generation = crate::clash::state::stream_manager::generation(&target);
     let mut map = slots().lock().await;
-    let slot = if let Some(s) = map.get(&key) {
-        s.clone()
+    let slot = if let Some(slot) = map.get(&key).filter(|slot| slot.generation == generation) {
+        slot.clone()
     } else {
+        // Rotate the producer after a hard target restart, but retain the log
+        // store so existing rows do not disappear while the new WS connects.
+        let store = map
+            .get(&key)
+            .map(|slot| slot.store.clone())
+            .unwrap_or_else(|| Arc::new(Mutex::new(LogStore::new(info_capacity))));
         let (tx, _) = broadcast::channel::<LogsFrame>(64);
         let slot = Arc::new(LogSlot {
-            store: Mutex::new(LogStore::new(info_capacity)),
+            store,
             sender: tx,
+            generation,
         });
         map.insert(key.clone(), slot.clone());
         tokio::spawn(stream_loop(target, key, slot.clone()));
@@ -88,48 +96,45 @@ pub async fn clear(target: MihomoTarget) {
 }
 
 async fn stream_loop(target: MihomoTarget, key: String, slot: Arc<LogSlot>) {
-    // Capture the target's stop generation; bail if Dart stops it (a dead
-    // upstream produces no frames, so the sink-failure path never fires).
-    let base = crate::clash::state::stop::base_key(&target);
-    let start_gen = crate::clash::state::stop::generation(&base);
-    let mut backoff = RetryBackoff::new();
+    let mut stream =
+        crate::clash::state::stream_manager::TargetStream::new(&target, slot.generation);
     loop {
         // Re-check under the slots lock before removing, so a subscriber that
         // attaches just as the stream ends isn't orphaned.
         {
             let mut map = slots().lock().await;
-            if slot.sender.receiver_count() == 0
-                || crate::clash::state::stop::generation(&base) != start_gen
-            {
+            let is_current = map
+                .get(&key)
+                .is_some_and(|current| Arc::ptr_eq(current, &slot));
+            if !is_current {
+                return;
+            }
+            if slot.sender.receiver_count() == 0 || stream.stopped() {
                 map.remove(&key);
                 return;
             }
         }
-        match stream_once(&target, &base, start_gen, &slot).await {
-            Ok(()) => backoff.reset(),
-            Err(error) => {
-                eprintln!("[mihomo_backend] logs stream {key}: {error}");
-                // Wake early if a stop arrives during the retry backoff.
-                let mut ticks = crate::clash::state::stop::ticks();
-                let _ = tokio::time::timeout(backoff.next_delay(), ticks.changed()).await;
-            }
+        if !stream.wait_ready(&slot.sender).await {
+            continue;
+        }
+        if let Err(error) = stream_once(&mut stream, &slot).await
+            && stream.disconnect()
+        {
+            eprintln!("[mihomo_backend] logs stream {key}: {error}");
         }
     }
 }
 
 async fn stream_once(
-    target: &MihomoTarget,
-    base: &str,
-    start_gen: u64,
+    stream: &mut crate::clash::state::stream_manager::TargetStream,
     slot: &LogSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(
-        &target.base_url,
-        target.secret.clone(),
-        target.allow_insecure,
-    )?;
-    let mut ws = client.open_ws("logs?level=debug&format=structured").await?;
-    let mut ticks = crate::clash::state::stop::ticks();
+    let Some(mut ws) = stream
+        .open("logs?level=debug&format=structured", &slot.sender)
+        .await?
+    else {
+        return Ok(());
+    };
     loop {
         // Tear down promptly on either signal: the last subscriber dropping
         // (live switch — `closed()`) or an explicit Dart stop (dead upstream —
@@ -138,15 +143,10 @@ async fn stream_once(
         let text = tokio::select! {
             biased;
             _ = slot.sender.closed() => return Ok(()),
-            _ = ticks.changed() => {
-                if crate::clash::state::stop::generation(base) != start_gen {
-                    return Ok(());
-                }
-                continue;
-            }
+            _ = stream.changed() => return Ok(()),
             read = read_ws_text(&mut ws) => match read? {
                 Some(t) => t,
-                None => return Ok(()),
+                None => return Err(MihomoError::Network("logs WebSocket closed".into())),
             },
         };
         let trimmed = text.trim();

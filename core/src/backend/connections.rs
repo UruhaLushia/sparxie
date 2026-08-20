@@ -494,7 +494,7 @@ pub async fn controller_clear_closed_connections_by_group(
 
 pub fn controller_stop_target_streams(target: BackendTarget) {
     if target.backend_type == BackendType::Clash {
-        crate::clash::state::stop::stop(&target.clash());
+        crate::clash::state::stream_manager::stop(&target.clash());
     }
     super::session::release_target(&target);
 }

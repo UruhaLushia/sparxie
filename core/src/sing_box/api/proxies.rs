@@ -109,6 +109,7 @@ pub async fn proxy_group_batch_delay(
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn proxy_delay_window(
     target: SingBoxTarget,
     group: String,

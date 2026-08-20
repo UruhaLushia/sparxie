@@ -1,17 +1,19 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::Value;
 
 use crate::MihomoError;
-use crate::backend::retry::RetryBackoff;
 use crate::clash::api::MihomoTarget;
-use crate::clash::client::{MihomoClient, read_ws_text};
+use crate::clash::client::read_ws_text;
 
 use super::TargetSlot;
 use super::parse::parse_connection;
 use super::slots;
 use super::types::{Connection, ConnectionsFrame, ConnectionsSort, ConnectionsTotals};
+
+const MIN_FRAME_DEADLINE: Duration = Duration::from_secs(5);
 
 pub(super) async fn stream_loop(
     target: MihomoTarget,
@@ -19,48 +21,45 @@ pub(super) async fn stream_loop(
     key: String,
     slot: Arc<TargetSlot>,
 ) {
-    // Capture the target's stop generation; bail if Dart stops it (a dead
-    // upstream produces no frames, so the sink-failure path never fires).
-    let base = crate::clash::state::stop::base_key(&target);
-    let start_gen = crate::clash::state::stop::generation(&base);
-    let mut backoff = RetryBackoff::new();
+    let mut stream =
+        crate::clash::state::stream_manager::TargetStream::new(&target, slot.generation);
     loop {
         {
             let mut map = slots().lock().await;
-            if slot.sender.receiver_count() == 0
-                || crate::clash::state::stop::generation(&base) != start_gen
-            {
+            let is_current = map
+                .get(&key)
+                .is_some_and(|current| Arc::ptr_eq(current, &slot));
+            if !is_current {
+                return;
+            }
+            if slot.sender.receiver_count() == 0 || stream.stopped() {
                 map.remove(&key);
                 return;
             }
         }
-        match stream_once(&target, interval_ms, &base, start_gen, &slot).await {
-            Ok(()) => backoff.reset(),
-            Err(error) => {
-                eprintln!("[mihomo_backend] connections stream {key}: {error}");
-                let mut ticks = crate::clash::state::stop::ticks();
-                let _ = tokio::time::timeout(backoff.next_delay(), ticks.changed()).await;
-            }
+        if !stream.wait_ready(&slot.sender).await {
+            continue;
+        }
+        if let Err(error) = stream_once(interval_ms, &mut stream, &slot).await
+            && stream.disconnect()
+        {
+            eprintln!("[mihomo_backend] connections stream {key}: {error}");
         }
     }
 }
 
 async fn stream_once(
-    target: &MihomoTarget,
     interval_ms: u32,
-    base: &str,
-    start_gen: u64,
+    stream: &mut crate::clash::state::stream_manager::TargetStream,
     slot: &TargetSlot,
 ) -> Result<(), MihomoError> {
-    let client = MihomoClient::new(
-        &target.base_url,
-        target.secret.clone(),
-        target.allow_insecure,
-    )?;
     let path = format!("connections?interval={interval_ms}");
-    let mut ws = client.open_ws(&path).await?;
+    let Some(mut ws) = stream.open(&path, &slot.sender).await? else {
+        return Ok(());
+    };
     let mut first = true;
-    let mut ticks = crate::clash::state::stop::ticks();
+    let deadline =
+        Duration::from_millis((interval_ms as u64).saturating_mul(3)).max(MIN_FRAME_DEADLINE);
 
     loop {
         // Tear down promptly on either signal: the last subscriber dropping
@@ -68,15 +67,16 @@ async fn stream_once(
         let text = tokio::select! {
             biased;
             _ = slot.sender.closed() => return Ok(()),
-            _ = ticks.changed() => {
-                if crate::clash::state::stop::generation(base) != start_gen {
-                    return Ok(());
+            _ = stream.changed() => return Ok(()),
+            read = tokio::time::timeout(deadline, read_ws_text(&mut ws)) => match read {
+                Ok(Ok(Some(text))) => text,
+                Ok(Ok(None)) => {
+                    return Err(MihomoError::Network("connections WebSocket closed".into()));
                 }
-                continue;
-            }
-            read = read_ws_text(&mut ws) => match read? {
-                Some(t) => t,
-                None => return Ok(()),
+                Ok(Err(error)) => return Err(error),
+                Err(_) => return Err(MihomoError::Network(format!(
+                    "connections WebSocket missed its {deadline:?} frame deadline"
+                ))),
             },
         };
         let trimmed = text.trim();

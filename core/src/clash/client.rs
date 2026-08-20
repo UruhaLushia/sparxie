@@ -162,7 +162,7 @@ impl MihomoClient {
         let mut sender = slot.lock().await;
 
         for attempt in 0..2 {
-            if sender.as_ref().map_or(true, |sender| sender.is_closed()) {
+            if sender.as_ref().is_none_or(|sender| sender.is_closed()) {
                 *sender = Some(self.open_ipc_sender().await?);
             }
             let headers = self
