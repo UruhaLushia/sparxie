@@ -54,7 +54,7 @@ jobs:
           size=$(stat --format=%s "$IPA_PATH")
           released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           repository_url="https://github.com/$GITHUB_REPOSITORY"
-          icon_url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/assets/icon.jpg"
+          icon_url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/assets/icon.png"
           download_url="$repository_url/releases/download/$RELEASE_TAG/sparxie-ios.ipa"
           source_path="$RUNNER_TEMP/$SOURCE_FILE"
 

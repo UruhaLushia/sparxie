@@ -95,7 +95,7 @@ jobs:
           mkdir -p "$STAGE/usr/lib/sparxie" "$STAGE/usr/bin" "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/512x512/apps"
           cp -r "$BUNDLE"/* "$STAGE/usr/lib/sparxie/"
           ln -sf /usr/lib/sparxie/sparxie "$STAGE/usr/bin/sparxie"
-          cp assets/icon.jpg "$STAGE/usr/share/icons/hicolor/512x512/apps/sparxie.png"
+          cp assets/icon.png "$STAGE/usr/share/icons/hicolor/512x512/apps/sparxie.png"
           cat > "$STAGE/usr/share/applications/sparxie.desktop" <<EOF
           [Desktop Entry]
           Name=Sparxie
