@@ -49,7 +49,8 @@ val resolvedVersionCode = buildDate * 100 + gitCommitCount() + unifiedApkVersion
 
 android {
     namespace = "zip.atri.sparxie"
-    compileSdk = 36
+    buildToolsVersion = "37.0.0"
+    compileSdk = 37
     ndkVersion = "29.0.14206865"
 
     compileOptions {
@@ -60,7 +61,7 @@ android {
     defaultConfig {
         applicationId = "zip.atri.sparxie"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 37
         versionCode = resolvedVersionCode
         versionName = flutter.versionName
     }

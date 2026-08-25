@@ -20,7 +20,15 @@ permissions:
   contents: read
 
 env:
-  RUST_TOOLCHAIN: stable
+  ANDROID_BUILD_TOOLS_VERSION: 37.0.0
+  ANDROID_CMAKE_VERSION: 3.22.1
+  ANDROID_COMPILE_SDK: '37'
+  ANDROID_PLATFORM_PACKAGE: '37.0'
+  ANDROID_NDK_RELEASE: r29
+  ANDROID_NDK_VERSION: 29.0.14206865
+  FLUTTER_VERSION: 3.47.1
+  JAVA_VERSION: '26'
+  RUST_TOOLCHAIN: 1.97.1
 
 jobs:
   build:
@@ -34,11 +42,12 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '26'
+          java-version: ${{ env.JAVA_VERSION }}
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: false
           pub-cache: true
           pub-cache-key: 'pub-:os:-:arch:-${{ hashFiles(''pubspec.lock'') }}'
@@ -51,12 +60,12 @@ jobs:
       - uses: nttld/setup-ndk@v1
         id: ndk
         with:
-          ndk-version: r27c
+          ndk-version: ${{ env.ANDROID_NDK_RELEASE }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: v1-rust
-          key: android-aarch64-linux-android-x86_64-linux-android-ndk-r27c
+          key: android-aarch64-linux-android-x86_64-linux-android-ndk-r29
           workspaces: 'core -> target'
           save-if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
 
@@ -69,6 +78,35 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
           restore-keys: |
             gradle-${{ runner.os }}-
+
+      - name: Install matching Android SDK dependencies
+        run: |
+          sdkmanager --install \
+            "platforms;android-$ANDROID_PLATFORM_PACKAGE" \
+            "build-tools;$ANDROID_BUILD_TOOLS_VERSION" \
+            "cmake;$ANDROID_CMAKE_VERSION"
+
+      - name: Verify Android toolchain versions
+        env:
+          INSTALLED_NDK: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^Pkg.Revision = //p' \
+            "$INSTALLED_NDK/source.properties")" = "$ANDROID_NDK_VERSION"
+          PLATFORM_DIR="$ANDROID_SDK_ROOT/platforms/android-$ANDROID_PLATFORM_PACKAGE"
+          BUILD_TOOLS_DIR="$ANDROID_SDK_ROOT/build-tools/$ANDROID_BUILD_TOOLS_VERSION"
+          CMAKE_DIR="$ANDROID_SDK_ROOT/cmake/$ANDROID_CMAKE_VERSION"
+          test "${ANDROID_PLATFORM_PACKAGE%%.*}" = "$ANDROID_COMPILE_SDK"
+          test "$(sed -n 's/^AndroidVersion.ApiLevel=//p' \
+            "$PLATFORM_DIR/source.properties")" = "$ANDROID_PLATFORM_PACKAGE"
+          test "$(sed -n 's/^Pkg.Revision=//p' \
+            "$BUILD_TOOLS_DIR/source.properties")" = "$ANDROID_BUILD_TOOLS_VERSION"
+          test "$(sed -n 's/^Pkg.Revision = //p' \
+            "$CMAKE_DIR/source.properties")" = "$ANDROID_CMAKE_VERSION"
+          test "$(flutter --version --machine \
+            | jq -r '.frameworkVersion')" = "$FLUTTER_VERSION"
+          test "$(rustc --version \
+            | awk '{print $2}')" = "$RUST_TOOLCHAIN"
 
       - uses: taiki-e/install-action@v2
         with:
