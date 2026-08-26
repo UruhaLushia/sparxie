@@ -166,18 +166,27 @@ class _AppHorizontalPageTransitionState
   void handleCancelBackGesture() {
     _beginSettle(_BackGesturePhase.cancel);
     widget.route.handleCancelBackGesture();
+    _resetGestureIfStopped();
   }
 
   @override
   void handleCommitBackGesture() {
     _beginSettle(_BackGesturePhase.commit);
     widget.route.handleCommitBackGesture();
+    _resetGestureIfStopped();
   }
 
   void _beginSettle(_BackGesturePhase phase) {
     _settleStartValue = widget.animation.value.clamp(0.0, 1.0);
     _settleStartDistance = _gestureDistance(_settleStartValue);
     if (mounted) setState(() => _gesturePhase = phase);
+  }
+
+  void _resetGestureIfStopped() {
+    if (widget.animation.isAnimating || !mounted) return;
+    if (_gesturePhase != _BackGesturePhase.idle) {
+      setState(() => _gesturePhase = _BackGesturePhase.idle);
+    }
   }
 
   double _gestureDistance(double animationValue) {
