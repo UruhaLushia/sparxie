@@ -6,11 +6,13 @@ class HomeShell extends StatefulWidget {
     required this.store,
     required this.prefs,
     required this.session,
+    required this.core,
   });
 
   final ControllerStore store;
   final AppPrefs prefs;
   final ControllerViewState session;
+  final CoreController core;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -200,9 +202,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       const AppNavDestination(icon: Icons.account_tree_outlined, label: '代理组'),
       if (isStandardLike)
         const AppNavDestination(icon: Icons.lan_outlined, label: '连接'),
-      if (showOnStandardWide && supportsCoreConfig)
-        const AppNavDestination(icon: Icons.memory_outlined, label: '核心配置'),
-      const AppNavDestination(icon: Icons.terminal, label: '日志'),
+      if (isStandardLike)
+        const AppNavDestination(icon: Icons.terminal, label: '日志'),
       if (showOnStandardWide && supportsExternalResources)
         const AppNavDestination(icon: Icons.cloud_outlined, label: '外部资源'),
       if (showOnStandardWide && supportsCoreActions)
@@ -295,7 +296,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   String _pageName(int index, List<AppNavDestination> destinations) =>
       switch (index) {
-        -1 => '核心配置',
         -2 => '连接',
         -3 => '分流规则',
         _ => destinations[index].label,
@@ -310,7 +310,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildPage(AppNavDestination dest) {
     return switch (dest.label) {
-      '概览' => DashboardScreen(store: widget.store, session: widget.session),
+      '概览' => DashboardScreen(
+        store: widget.store,
+        session: widget.session,
+        core: widget.core,
+      ),
       '代理组' => ProxiesScreen(
         store: widget.store,
         session: widget.session,
@@ -320,10 +324,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         store: widget.store,
         prefs: widget.prefs,
         session: widget.session,
-      ),
-      '核心配置' => RemoteCoreConfigScreen(
-        store: widget.store,
-        prefs: widget.prefs,
       ),
       '外部资源' => ResourcesScreen(store: widget.store, prefs: widget.prefs),
       '日志' => LogsScreen(
@@ -339,6 +339,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         store: widget.store,
         prefs: widget.prefs,
         session: widget.session,
+        core: widget.core,
       ),
     };
   }
@@ -460,6 +461,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                     store: widget.store,
                     prefs: widget.prefs,
                     session: widget.session,
+                    core: widget.core,
                     extras: extras,
                     railManagesPages: true,
                   ),
@@ -503,10 +505,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     //   -2: 连接列表  (实时流量 / 连接 hero card)
     //   -3: 分流规则  (规则 card)
     final Widget mainArea = switch (effectiveIndex) {
-      -1 => _focusablePage(
-        '核心配置',
-        RemoteCoreConfigScreen(store: widget.store, prefs: widget.prefs),
-      ),
       -2 => _focusablePage(
         '连接',
         ConnectionsScreen(
@@ -665,12 +663,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             AppPageRoute<void>(builder: (_) => _buildPage(destinations[i])),
           ),
           onKernelTap: () => Navigator.of(context).push(
-            AppPageRoute<void>(
-              builder: (_) => RemoteCoreConfigScreen(
-                store: widget.store,
-                prefs: widget.prefs,
-              ),
-            ),
+            AppPageRoute<void>(builder: (_) => const CoreProfilesScreen()),
           ),
           kernelSelected: false,
           onConnectionsTap: () => Navigator.of(context).push(

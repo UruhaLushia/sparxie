@@ -27,6 +27,10 @@ impl std::fmt::Debug for BackendTarget {
 }
 
 impl BackendTarget {
+    pub(in crate::backend) fn is_local(&self) -> bool {
+        self.backend_type == BackendType::Clash && self.base_url == "local://core"
+    }
+
     pub(in crate::backend) fn cache_key(&self) -> String {
         let secret = self.secret.as_deref().unwrap_or_default();
         let secret_hash = blake3::hash(secret.as_bytes());

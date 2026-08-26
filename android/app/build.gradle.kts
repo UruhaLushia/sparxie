@@ -44,14 +44,19 @@ val buildDate = ZonedDateTime.now(ZoneOffset.ofHours(8))
     .toInt()
 // Older split APKs used Flutter's ABI offsets of up to 4000. Start the unified
 // APK sequence above that range so existing installations can update in place.
+// Older split APKs used Flutter's ABI offsets of up to 4000. Start the unified
+// APK sequence above that range so existing installations can update in place.
 val unifiedApkVersionOffset = 5000
-val resolvedVersionCode = buildDate * 100 + gitCommitCount() + unifiedApkVersionOffset
+val resolvedVersionCode = providers.gradleProperty("sparxieVersionCode")
+    .orNull
+    ?.toIntOrNull()
+    ?: (buildDate * 100 + gitCommitCount() + unifiedApkVersionOffset)
 
 android {
     namespace = "zip.atri.sparxie"
     buildToolsVersion = "37.0.0"
     compileSdk = 37
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "30.0.16248370"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -97,6 +102,10 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

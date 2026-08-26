@@ -5,7 +5,7 @@ use super::{BackendTarget, BackendType, ControllerConfig, VersionInfo};
 
 pub async fn controller_configs(target: BackendTarget) -> Result<ControllerConfig, MihomoError> {
     let load_target = target.clone();
-    super::session::configs(&target, move || async move {
+    let loader = move || async move {
         let raw = match load_target.backend_type {
             BackendType::Clash => crate::clash::api::configs(load_target.clash()).await,
             BackendType::Surge => crate::surge::api::configs(load_target.surge()).await,
@@ -15,8 +15,12 @@ pub async fn controller_configs(target: BackendTarget) -> Result<ControllerConfi
             BackendType::SingBox => crate::sing_box::api::configs(load_target.sing_box()).await,
         }?;
         Ok(core_config_from_value(&raw))
-    })
-    .await
+    };
+    if target.is_local() {
+        loader().await
+    } else {
+        super::session::configs(&target, loader).await
+    }
 }
 
 pub async fn controller_set_config_mode(
@@ -296,9 +300,19 @@ pub async fn controller_version(target: BackendTarget) -> Result<String, MihomoE
 
 pub async fn controller_version_info(target: BackendTarget) -> Result<VersionInfo, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(crate::clash::api::version_info(target.clash())
-            .await?
-            .into()),
+        BackendType::Clash => {
+            let local = target.is_local();
+            let mut info: VersionInfo = crate::clash::api::version_info(target.clash())
+                .await?
+                .into();
+            if local {
+                info.is_cmfa = true;
+                info.supports_core_config = false;
+                info.supports_core_management = false;
+                info.supports_core_actions = info.supports_cache_flush;
+            }
+            Ok(info)
+        }
         BackendType::Surge => crate::surge::api::version_info(target.surge()).await,
         BackendType::SurgeController => {
             crate::surge_controller::api::version_info(target.surge_controller()).await

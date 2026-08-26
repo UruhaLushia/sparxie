@@ -3,6 +3,90 @@ import 'package:flutter/material.dart';
 import '../../gamepad_navigation.dart';
 import 'style.dart';
 
+class CompactButton extends StatelessWidget {
+  const CompactButton({
+    super.key,
+    required this.label,
+    required this.semanticLabel,
+    required this.onPressed,
+    this.icon,
+    this.outlined = false,
+    this.style,
+  });
+
+  final String label;
+  final String semanticLabel;
+  final VoidCallback? onPressed;
+  final Widget? icon;
+  final bool outlined;
+  final CompactControlStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final controlStyle = style ?? CompactControlTheme.buttonOf(context);
+    final theme = Theme.of(context);
+    final enabled = onPressed != null;
+    final foreground = controlStyle.foreground(context);
+    return AppFocusHighlight(
+      borderRadius: controlStyle.borderRadius,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        enabled: enabled,
+        onTap: enabled ? onPressed : null,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.38,
+          child: Container(
+            height: controlStyle.buttonHeight,
+            padding: EdgeInsets.symmetric(
+              horizontal: 12 * controlStyle.widthScale,
+            ),
+            decoration: BoxDecoration(
+              color: outlined
+                  ? Colors.transparent
+                  : controlStyle.background(context),
+              border: outlined
+                  ? Border.all(color: theme.colorScheme.outline)
+                  : null,
+              borderRadius: controlStyle.borderRadius,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onPressed,
+                borderRadius: controlStyle.borderRadius,
+                hoverColor: controlStyle.hover(context),
+                splashColor: controlStyle.pressed(context),
+                highlightColor: controlStyle.pressed(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: IconTheme(
+                    data: IconThemeData(color: foreground, size: 18),
+                    child: DefaultTextStyle.merge(
+                      style: controlStyle
+                          .labelStyle(context)
+                          ?.copyWith(color: foreground),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (icon != null) ...[icon!],
+                          if (icon != null) const SizedBox(width: 6),
+                          Text(label),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class CompactMenuButton<T> extends StatelessWidget {
   const CompactMenuButton({
     super.key,

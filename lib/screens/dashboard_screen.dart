@@ -3,7 +3,10 @@ import 'dart:collection';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../rust_api.dart' as rust;
+
 import '../controller.dart' as ctl;
+import '../core/core_controller.dart';
 import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
@@ -11,6 +14,7 @@ import '../widgets/app_background.dart';
 import '../widgets/backend_switcher.dart';
 import '../widgets/desktop_title_bar.dart';
 import '../widgets/page_body_transition.dart';
+import '../widgets/memory_details_sheet.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
@@ -19,10 +23,12 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.store,
     required this.session,
+    this.core,
   });
 
   final ctl.ControllerStore store;
   final ControllerViewState session;
+  final CoreController? core;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -47,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.supportsMemory.addListener(_onSupportsMemory);
     widget.session.error.addListener(_onSessionError);
     widget.session.versionString.addListener(_onVersion);
+    widget.core?.addListener(_onCore);
     _bind();
   }
 
@@ -58,6 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.supportsMemory.removeListener(_onSupportsMemory);
     widget.session.error.removeListener(_onSessionError);
     widget.session.versionString.removeListener(_onVersion);
+    widget.core?.removeListener(_onCore);
     _history.dispose();
     super.dispose();
   }
@@ -99,16 +107,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted && _active) setState(() {});
   }
 
+  void _onCore() {
+    final core = widget.core;
+    if (core == null) return;
+    if (core.state == rust.CoreState.stopped ||
+        core.state == rust.CoreState.error) {
+      _history.reset(notify: false);
+    }
+    if (_isLocalCore) {
+      _error = core.lastError.isEmpty
+          ? widget.session.error.value
+          : core.lastError;
+    }
+    if (mounted && _active) setState(() {});
+  }
+
   void _onSessionError() {
     if (!mounted) return;
-    _error = widget.session.error.value;
+    final coreError = _isLocalCore ? widget.core?.lastError ?? '' : '';
+    _error = coreError.isEmpty ? widget.session.error.value : coreError;
     if (_active) setState(() {});
+  }
+
+  Widget _coreFab() {
+    final core = widget.core!;
+    return ListenableBuilder(
+      listenable: core,
+      builder: (context, _) {
+        return FloatingActionButton.extended(
+          heroTag: 'core-fab',
+          onPressed: core.state == rust.CoreState.stopping
+              ? null
+              : core.running
+              ? core.stop
+              : core.start,
+          icon: Icon(core.running ? Icons.stop : Icons.play_arrow),
+          label: Text(
+            core.state == rust.CoreState.stopping
+                ? '停止中'
+                : core.running
+                ? '停止'
+                : '启动',
+          ),
+          // Explicit colors: some custom themes yield a near-invisible
+          // primaryContainer for the idle state, so pin both states.
+          backgroundColor: core.running
+              ? Theme.of(context).colorScheme.errorContainer
+              : Theme.of(context).colorScheme.primary,
+          foregroundColor: core.running
+              ? Theme.of(context).colorScheme.onErrorContainer
+              : Theme.of(context).colorScheme.onPrimary,
+        );
+      },
+    );
+  }
+
+  bool get _isLocalCore {
+    final core = widget.core;
+    return core != null &&
+        widget.store.active?.id == ctl.ControllerStore.localId;
   }
 
   void _bind() {
     _activeKey = widget.store.active;
     _history.reset(notify: false);
-    _error = _activeKey == null ? '请先在“后端”中添加一个后端' : widget.session.error.value;
+    final coreError = _isLocalCore ? widget.core?.lastError ?? '' : '';
+    _error = _activeKey == null
+        ? '请先在“后端”中添加一个后端'
+        : coreError.isNotEmpty
+        ? coreError
+        : widget.session.error.value;
     if (mounted && _active) setState(() {});
   }
 
@@ -153,15 +221,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 10),
                 Text(
                   core,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ],
           ),
         ),
       ),
+      floatingActionButton: _isLocalCore ? _coreFab() : null,
       body: AppPageBodyTransition(
         child: SafeArea(
           bottom: false,
@@ -298,6 +366,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           samples: _history.memorySamples,
           color: const Color(0xfff59e0b),
           formatY: (v) => formatBytes(BigInt.from(v.round())),
+          onTap: () => showMemoryDetailsSheet(
+            context: context,
+            localKernel: _isLocalCore,
+            memory: widget.session.memory,
+          ),
         );
       },
     );
@@ -347,6 +420,7 @@ class _MetricChartCard extends StatelessWidget {
     required this.formatY,
     this.footer,
     this.showChart = true,
+    this.onTap,
   });
 
   final IconData icon;
@@ -358,6 +432,7 @@ class _MetricChartCard extends StatelessWidget {
   final Color color;
   final String Function(double) formatY;
   final bool showChart;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -370,135 +445,138 @@ class _MetricChartCard extends StatelessWidget {
       scheme.surfaceContainerHigh,
     );
 
-    return AppPanelSurface(
-      groupBackdrop: true,
-      child: RepaintBoundary(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: onTap,
+      child: AppPanelSurface(
+        groupBackdrop: true,
+        child: RepaintBoundary(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, size: 18, color: color),
                     ),
-                    child: Icon(icon, size: 18, color: color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                value,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ),
-                            if (unit.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
                                 child: Text(
-                                  unit,
-                                  style: textTheme.titleMedium?.copyWith(
+                                  label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.bodyMedium?.copyWith(
                                     color: scheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                             ],
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  value,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ),
+                              if (unit.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    unit,
+                                    style: textTheme.titleMedium?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (showChart) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    height: 78,
+                    decoration: BoxDecoration(
+                      color: chartBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: scheme.outlineVariant.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    child: _MetricLineChart(
+                      samples: samples,
+                      maxValue: chartMax,
+                      color: color,
+                      gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
+                      pointBorderColor: chartBackground,
+                      formatY: formatY,
                     ),
                   ),
                 ],
-              ),
-              if (showChart) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  height: 78,
-                  decoration: BoxDecoration(
-                    color: chartBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: scheme.outlineVariant.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: _MetricLineChart(
-                    samples: samples,
-                    maxValue: chartMax,
-                    color: color,
-                    gridColor: scheme.outlineVariant.withValues(alpha: 0.24),
-                    pointBorderColor: chartBackground,
-                    formatY: formatY,
-                  ),
-                ),
-              ],
-              if (footer != null || peak != null) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (footer != null)
-                      Expanded(
-                        child: Text(
-                          footer!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                if (footer != null || peak != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (footer != null)
+                        Expanded(
+                          child: Text(
+                            footer!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      if (peak != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _MetricPill(text: '峰值 $peak', color: color),
                           ),
                         ),
-                      )
-                    else
-                      const Spacer(),
-                    if (peak != null) ...[
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: _MetricPill(text: '峰值 $peak', color: color),
-                        ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -535,10 +613,8 @@ class _MetricPill extends StatelessWidget {
         text,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: scheme.onSurface,
-          fontWeight: FontWeight.w600,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w600),
       ),
     );
   }

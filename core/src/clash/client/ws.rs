@@ -22,7 +22,10 @@ use super::transport::AsyncStream;
 pub enum WsStream {
     Tcp(Box<WebSocketStream<MaybeTlsStream<TcpStream>>>),
     Ipc(Box<WebSocketStream<Box<dyn AsyncStream>>>),
+    Local(LocalFrameStream),
 }
+
+pub type LocalFrameStream = futures_util::stream::BoxStream<'static, String>;
 
 impl WsStream {
     async fn next_message(
@@ -31,6 +34,7 @@ impl WsStream {
         match self {
             Self::Tcp(s) => s.next().await,
             Self::Ipc(s) => s.next().await,
+            Self::Local(s) => s.next().await.map(|text| Ok(Message::Text(text.into()))),
         }
     }
 
@@ -38,6 +42,7 @@ impl WsStream {
         match self {
             Self::Tcp(s) => s.send(msg).await,
             Self::Ipc(s) => s.send(msg).await,
+            Self::Local(_) => Ok(()),
         }
     }
 }

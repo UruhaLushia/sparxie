@@ -22,11 +22,12 @@ import 'background_rotation.dart';
 import 'config_store.dart';
 import 'controller.dart';
 import 'controller_uri_import.dart';
+import 'core/core_controller.dart';
 import 'gamepad_navigation.dart';
 import 'imported_fonts.dart';
 import 'layout_breakpoints.dart';
 import 'rust_api.dart' as rust;
-import 'screens/remote_core_config_screen.dart';
+import 'screens/core_profiles_screen.dart';
 import 'screens/connections_screen.dart';
 import 'screens/core_actions_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -109,13 +110,18 @@ Future<void> main() async {
   } catch (e) {
     if (kDebugMode) debugPrint('cache init failed: $e');
   }
-  final store = await ControllerStore.load(config);
+  final store = await ControllerStore.load(
+    config,
+    localCoreSupported: rust.coreSupported(),
+  );
   final session = ControllerViewState(
     store,
     connectionsIntervalMs: prefs.connectionsRefreshMs,
     closedConnectionsCapacity: prefs.closedConnectionsCapacity,
     logInfoCapacity: prefs.logInfoCapacity,
   );
+  final core = CoreController(store: store);
+  core.onStopped = session.clearTelemetry;
   var allowInsecureOnlineResources = prefs.allowInsecureOnlineResources;
   var titleBarMode = prefs.desktopTitleBarMode;
   prefs.addListener(() {
@@ -155,6 +161,7 @@ Future<void> main() async {
       store: store,
       prefs: prefs,
       session: session,
+      core: core,
       systemAccentColor: systemAccentColor,
       backgroundAccentColor: backgroundAccentColor,
       appLinks: appLinks,
@@ -247,6 +254,7 @@ class MihomoControllerApp extends StatefulWidget {
     required this.store,
     required this.prefs,
     required this.session,
+    required this.core,
     required this.systemAccentColor,
     required this.backgroundAccentColor,
     required this.appLinks,
@@ -255,6 +263,7 @@ class MihomoControllerApp extends StatefulWidget {
   final ControllerStore store;
   final AppPrefs prefs;
   final ControllerViewState session;
+  final CoreController core;
   final SystemAccentColor systemAccentColor;
   final BackgroundAccentColor backgroundAccentColor;
   final AppLinks appLinks;
@@ -368,6 +377,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
     _navigationInputController.dispose();
     _controllerUriImporter.dispose();
     _backgroundRotation.dispose();
+    widget.core.dispose();
     super.dispose();
   }
 
@@ -850,6 +860,7 @@ class _MihomoControllerAppState extends State<MihomoControllerApp> {
                   store: store,
                   prefs: prefs,
                   session: session,
+                  core: widget.core,
                 ),
               ),
             );

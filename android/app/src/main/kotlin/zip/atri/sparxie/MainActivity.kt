@@ -1,5 +1,6 @@
 package zip.atri.sparxie
 
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -22,11 +23,15 @@ import io.flutter.plugin.common.StandardMethodCodec
 import org.flame_engine.gamepads_android.GamepadsCompatibleActivity
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
 
 class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
     private val channel = "zip.atri.sparxie/process_icons"
     private val systemColorsChannel = "zip.atri.sparxie/system_colors"
     private val updateInstallerChannel = "zip.atri.sparxie/update_installer"
+    private val configFileChannel = "zip.atri.sparxie/config_file"
     private val iconSize = 256
     private val installPermissionRequestCode = 2101
     private val updateDirectory = "sparxie_updates"
@@ -63,6 +68,7 @@ class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EngineBridge.attach(this, this)
         cleanupUpdatePackage()
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         // Concurrent background pool: icon decode + PNG compression are
@@ -88,6 +94,37 @@ class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
                 "getAccentColor" -> result.success(systemAccentColor())
                 else -> result.notImplemented()
             }
+        }
+        MethodChannel(messenger, configFileChannel).setMethodCallHandler { call, result ->
+            if (call.method != "read") { result.notImplemented(); return@setMethodCallHandler }
+            try {
+                val source = call.argument<String>("uri") ?: error("缺少文件路径")
+                val uri = Uri.parse(source)
+                val bytes = if (uri.scheme.isNullOrEmpty()) {
+                    File(source).readBytes()
+                } else {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: error("无法读取配置文件")
+                }
+                val text = when {
+                    bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte() ->
+                        bytes.copyOfRange(2, bytes.size).toString(Charsets.UTF_16LE)
+                    bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte() ->
+                        bytes.copyOfRange(2, bytes.size).toString(Charsets.UTF_16BE)
+                    bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte() ->
+                        bytes.copyOfRange(3, bytes.size).toString(Charsets.UTF_8)
+                    else -> runCatching {
+                        Charsets.UTF_8.newDecoder()
+                            .onMalformedInput(CodingErrorAction.REPORT)
+                            .onUnmappableCharacter(CodingErrorAction.REPORT)
+                            .decode(ByteBuffer.wrap(bytes))
+                            .toString()
+                    }.getOrElse {
+                        bytes.toString(Charset.forName("GB18030"))
+                    }
+                }
+                result.success(text)
+            } catch (e: Exception) { result.error("READ_CONFIG", e.message, null) }
         }
 
         MethodChannel(messenger, updateInstallerChannel).setMethodCallHandler { call, result ->
@@ -175,12 +212,18 @@ class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != installPermissionRequestCode) return
-        installPermissionResult?.success(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-                packageManager.canRequestPackageInstalls()
-        )
-        installPermissionResult = null
+        when (requestCode) {
+            installPermissionRequestCode -> {
+                installPermissionResult?.success(
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                        packageManager.canRequestPackageInstalls()
+                )
+                installPermissionResult = null
+            }
+            EngineBridge.REQUEST_VPN_CONSENT -> {
+                EngineBridge.onVpnConsentResult(resultCode == RESULT_OK)
+            }
+        }
     }
 
     private fun systemAccentColor(): Long? {

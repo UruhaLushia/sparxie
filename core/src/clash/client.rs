@@ -1,5 +1,6 @@
 mod insecure_tls;
 mod ipc;
+mod local;
 mod service;
 mod transport;
 mod ws;
@@ -13,7 +14,7 @@ use serde_json::Value;
 use crate::MihomoError;
 
 use transport::Transport;
-pub use ws::{WsStream, read_ws_text};
+pub use ws::{LocalFrameStream, WsStream, read_ws_text};
 
 /// Internal mihomo controller client. Held only on the Rust side; Dart never
 /// sees it. TCP backends use reqwest; IPC backends use hyper over a raw stream.
@@ -77,6 +78,7 @@ impl MihomoClient {
                 let bytes = send_tcp(req).await?;
                 serde_json::from_slice(&bytes).map_err(|e| MihomoError::InvalidJson(e.to_string()))
             }
+            Transport::Local => local::request(Method::GET, path, None).await,
             _ => self.ipc_request(Method::GET, path, None).await,
         }
     }
@@ -87,6 +89,7 @@ impl MihomoClient {
     pub async fn get_json_isolated(&self, path: &str) -> Result<Value, MihomoError> {
         match &self.transport {
             Transport::Tcp { .. } => self.get_json(path).await,
+            Transport::Local => local::request(Method::GET, path, None).await,
             _ => self.ipc_request_isolated(Method::GET, path, None).await,
         }
     }
@@ -106,6 +109,7 @@ impl MihomoClient {
                 let bytes = send_tcp(self.auth(req)).await?;
                 Ok(parse_body_or_ok(&bytes))
             }
+            Transport::Local => local::request(method, path, body).await,
             _ => self.ipc_request(method, path, body).await,
         }
     }
@@ -236,6 +240,7 @@ impl MihomoClient {
             Transport::Tcp { base } => {
                 ws::open_tcp(base, path, self.secret.as_deref(), self.allow_insecure).await
             }
+            Transport::Local => Ok(WsStream::Local(local::open_stream(path)?)),
             _ => {
                 let path = self.transport.request_path(path);
                 let headers = self.transport.auth_headers(&Method::GET, &path, &[])?;

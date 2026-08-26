@@ -5,7 +5,7 @@ allprojects {
     }
 }
 
-val projectNdkVersion = "29.0.14206865"
+val projectNdkVersion = "30.0.16248370"
 val projectCmakeVersion = "3.22.1"
 val projectBuildToolsVersion = "37.0.0"
 val projectCompileSdk = 37

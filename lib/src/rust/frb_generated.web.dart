@@ -8,7 +8,9 @@
 
 import 'backend/api/connections.dart';
 import 'backend/api/control.dart';
+import 'backend/api/core.dart';
 import 'backend/api/diagnostics.dart';
+import 'backend/api/memory.dart';
 import 'backend/api/providers.dart';
 import 'backend/api/proxies.dart';
 import 'backend/api/proxy_delay.dart';
@@ -42,6 +44,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ConnectionsFrame> dco_decode_StreamSink_connections_frame_Sse(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<CoreSnapshot> dco_decode_StreamSink_core_snapshot_Sse(
     dynamic raw,
   );
 
@@ -85,6 +92,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AppInfo dco_decode_app_info(dynamic raw);
+
+  @protected
+  AppMemoryInfo dco_decode_app_memory_info(dynamic raw);
+
+  @protected
+  AppWindow dco_decode_app_window(dynamic raw);
+
+  @protected
   BackendTarget dco_decode_backend_target(dynamic raw);
 
   @protected
@@ -92,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AppMemoryInfo dco_decode_box_autoadd_app_memory_info(dynamic raw);
 
   @protected
   BackendTarget dco_decode_box_autoadd_backend_target(dynamic raw);
@@ -103,10 +122,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ConnectionStats dco_decode_box_autoadd_connection_stats(dynamic raw);
 
   @protected
+  CoreConfig dco_decode_box_autoadd_core_config(dynamic raw);
+
+  @protected
+  KernelMemoryInfo dco_decode_box_autoadd_kernel_memory_info(dynamic raw);
+
+  @protected
   TailscalePeer dco_decode_box_autoadd_tailscale_peer(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   Connection dco_decode_connection(dynamic raw);
@@ -139,6 +167,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ControllerConfig dco_decode_controller_config(dynamic raw);
 
   @protected
+  CoreConfig dco_decode_core_config(dynamic raw);
+
+  @protected
+  CoreConfigProfile dco_decode_core_config_profile(dynamic raw);
+
+  @protected
+  CoreProfileKind dco_decode_core_profile_kind(dynamic raw);
+
+  @protected
+  CoreSnapshot dco_decode_core_snapshot(dynamic raw);
+
+  @protected
+  CoreState dco_decode_core_state(dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -151,13 +194,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  KernelMemoryInfo dco_decode_kernel_memory_info(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AppInfo> dco_decode_list_app_info(dynamic raw);
 
   @protected
   List<Connection> dco_decode_list_connection(dynamic raw);
 
   @protected
   List<ConnectionGroup> dco_decode_list_connection_group(dynamic raw);
+
+  @protected
+  List<CoreConfigProfile> dco_decode_list_core_config_profile(dynamic raw);
 
   @protected
   List<GroupDelayEntry> dco_decode_list_group_delay_entry(dynamic raw);
@@ -216,6 +268,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LogsFrame dco_decode_logs_frame(dynamic raw);
 
   @protected
+  MemoryDetails dco_decode_memory_details(dynamic raw);
+
+  @protected
   MemorySample dco_decode_memory_sample(dynamic raw);
 
   @protected
@@ -228,16 +283,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  AppMemoryInfo? dco_decode_opt_box_autoadd_app_memory_info(dynamic raw);
+
+  @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
   @protected
   ConnectionStats? dco_decode_opt_box_autoadd_connection_stats(dynamic raw);
 
   @protected
+  KernelMemoryInfo? dco_decode_opt_box_autoadd_kernel_memory_info(dynamic raw);
+
+  @protected
   TailscalePeer? dco_decode_opt_box_autoadd_tailscale_peer(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
@@ -309,6 +373,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TrafficSample dco_decode_traffic_sample(dynamic raw);
 
   @protected
+  TunSettings dco_decode_tun_settings(dynamic raw);
+
+  @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
@@ -331,6 +398,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ConnectionsFrame> sse_decode_StreamSink_connections_frame_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<CoreSnapshot> sse_decode_StreamSink_core_snapshot_Sse(
     SseDeserializer deserializer,
   );
 
@@ -378,6 +450,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AppInfo sse_decode_app_info(SseDeserializer deserializer);
+
+  @protected
+  AppMemoryInfo sse_decode_app_memory_info(SseDeserializer deserializer);
+
+  @protected
+  AppWindow sse_decode_app_window(SseDeserializer deserializer);
+
+  @protected
   BackendTarget sse_decode_backend_target(SseDeserializer deserializer);
 
   @protected
@@ -385,6 +466,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AppMemoryInfo sse_decode_box_autoadd_app_memory_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   BackendTarget sse_decode_box_autoadd_backend_target(
@@ -400,12 +486,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  CoreConfig sse_decode_box_autoadd_core_config(SseDeserializer deserializer);
+
+  @protected
+  KernelMemoryInfo sse_decode_box_autoadd_kernel_memory_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TailscalePeer sse_decode_box_autoadd_tailscale_peer(
     SseDeserializer deserializer,
   );
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   Connection sse_decode_connection(SseDeserializer deserializer);
@@ -442,6 +539,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ControllerConfig sse_decode_controller_config(SseDeserializer deserializer);
 
   @protected
+  CoreConfig sse_decode_core_config(SseDeserializer deserializer);
+
+  @protected
+  CoreConfigProfile sse_decode_core_config_profile(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CoreProfileKind sse_decode_core_profile_kind(SseDeserializer deserializer);
+
+  @protected
+  CoreSnapshot sse_decode_core_snapshot(SseDeserializer deserializer);
+
+  @protected
+  CoreState sse_decode_core_state(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -454,13 +568,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  KernelMemoryInfo sse_decode_kernel_memory_info(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AppInfo> sse_decode_list_app_info(SseDeserializer deserializer);
 
   @protected
   List<Connection> sse_decode_list_connection(SseDeserializer deserializer);
 
   @protected
   List<ConnectionGroup> sse_decode_list_connection_group(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CoreConfigProfile> sse_decode_list_core_config_profile(
     SseDeserializer deserializer,
   );
 
@@ -541,6 +666,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LogsFrame sse_decode_logs_frame(SseDeserializer deserializer);
 
   @protected
+  MemoryDetails sse_decode_memory_details(SseDeserializer deserializer);
+
+  @protected
   MemorySample sse_decode_memory_sample(SseDeserializer deserializer);
 
   @protected
@@ -555,10 +683,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  AppMemoryInfo? sse_decode_opt_box_autoadd_app_memory_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   ConnectionStats? sse_decode_opt_box_autoadd_connection_stats(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  KernelMemoryInfo? sse_decode_opt_box_autoadd_kernel_memory_info(
     SseDeserializer deserializer,
   );
 
@@ -569,6 +707,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -656,6 +797,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TrafficSample sse_decode_traffic_sample(SseDeserializer deserializer);
 
   @protected
+  TunSettings sse_decode_tun_settings(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
@@ -682,6 +826,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_connections_frame_Sse(
     RustStreamSink<ConnectionsFrame> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_core_snapshot_Sse(
+    RustStreamSink<CoreSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -737,6 +887,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_app_info(AppInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_memory_info(AppMemoryInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_window(AppWindow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_backend_target(BackendTarget self, SseSerializer serializer);
 
   @protected
@@ -744,6 +903,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_app_memory_info(
+    AppMemoryInfo self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_backend_target(
@@ -761,6 +926,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_core_config(
+    CoreConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_kernel_memory_info(
+    KernelMemoryInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_tailscale_peer(
     TailscalePeer self,
     SseSerializer serializer,
@@ -768,6 +945,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_connection(Connection self, SseSerializer serializer);
@@ -827,6 +1007,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_core_config(CoreConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_core_config_profile(
+    CoreConfigProfile self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_core_profile_kind(
+    CoreProfileKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_core_snapshot(CoreSnapshot self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_core_state(CoreState self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -842,7 +1043,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_kernel_memory_info(
+    KernelMemoryInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_info(List<AppInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_connection(
@@ -853,6 +1063,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_connection_group(
     List<ConnectionGroup> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_core_config_profile(
+    List<CoreConfigProfile> self,
     SseSerializer serializer,
   );
 
@@ -950,6 +1166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_logs_frame(LogsFrame self, SseSerializer serializer);
 
   @protected
+  void sse_encode_memory_details(MemoryDetails self, SseSerializer serializer);
+
+  @protected
   void sse_encode_memory_sample(MemorySample self, SseSerializer serializer);
 
   @protected
@@ -965,11 +1184,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_app_memory_info(
+    AppMemoryInfo? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_connection_stats(
     ConnectionStats? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_kernel_memory_info(
+    KernelMemoryInfo? self,
     SseSerializer serializer,
   );
 
@@ -981,6 +1212,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
@@ -1101,6 +1335,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_traffic_sample(TrafficSample self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tun_settings(TunSettings self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);
