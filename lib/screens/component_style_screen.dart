@@ -590,6 +590,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
         final surface = AppSurfaceBackdrop(
           borderRadius: borderRadius,
           surfaceTheme: surfaceTheme,
+          grouped: true,
           child: Container(
             height: style.buttonHeight,
             decoration: BoxDecoration(

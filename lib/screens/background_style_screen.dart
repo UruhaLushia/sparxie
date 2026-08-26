@@ -811,6 +811,7 @@ class _BackgroundPreview extends StatelessWidget {
               AppSurfaceBackdrop(
                 borderRadius: BorderRadius.circular(12),
                 surfaceTheme: surfaceTheme,
+                grouped: true,
                 child: Container(
                   height: 42,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -876,6 +877,7 @@ class _PreviewCard extends StatelessWidget {
     return AppSurfaceBackdrop(
       borderRadius: BorderRadius.circular(14),
       surfaceTheme: surfaceTheme,
+      grouped: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: color,

@@ -46,21 +46,24 @@ class CompactSettingsPanel extends StatelessWidget {
     final panel = AppSurfaceBackdrop(
       borderRadius: borderRadius,
       surfaceTheme: effectiveSurfaceTheme,
-      child: Container(
-        decoration: BoxDecoration(
-          color: effectiveSurfaceTheme.surfaceColor(
-            backgroundColor ?? scheme.surfaceContainerLow,
-            surfaceLift,
+      grouped: true,
+      child: RepaintBoundary(
+        child: Container(
+          decoration: BoxDecoration(
+            color: effectiveSurfaceTheme.surfaceColor(
+              backgroundColor ?? scheme.surfaceContainerLow,
+              surfaceLift,
+            ),
+            borderRadius: borderRadius,
           ),
-          borderRadius: borderRadius,
-        ),
-        foregroundDecoration: BoxDecoration(
-          borderRadius: borderRadius,
-          border: outline,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: ClipRRect(borderRadius: borderRadius, child: content),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: outline,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: ClipRRect(borderRadius: borderRadius, child: content),
+          ),
         ),
       ),
     );
