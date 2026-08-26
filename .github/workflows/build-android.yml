@@ -81,6 +81,7 @@ jobs:
 
       - name: Install matching Android SDK dependencies
         run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           sdkmanager --install \
             "platforms;android-$ANDROID_PLATFORM_PACKAGE" \
             "build-tools;$ANDROID_BUILD_TOOLS_VERSION" \
