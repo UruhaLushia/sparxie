@@ -296,9 +296,19 @@ pub async fn controller_version(target: BackendTarget) -> Result<String, MihomoE
 
 pub async fn controller_version_info(target: BackendTarget) -> Result<VersionInfo, MihomoError> {
     match target.backend_type {
-        BackendType::Clash => Ok(crate::clash::api::version_info(target.clash())
-            .await?
-            .into()),
+        BackendType::Clash => {
+            let local = target.is_local();
+            let mut info: VersionInfo = crate::clash::api::version_info(target.clash())
+                .await?
+                .into();
+            if local {
+                info.is_cmfa = true;
+                info.supports_core_config = false;
+                info.supports_core_management = false;
+                info.supports_core_actions = info.supports_cache_flush;
+            }
+            Ok(info)
+        }
         BackendType::Surge => crate::surge::api::version_info(target.surge()).await,
         BackendType::SurgeController => {
             crate::surge_controller::api::version_info(target.surge_controller()).await

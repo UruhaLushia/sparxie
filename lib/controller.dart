@@ -302,6 +302,9 @@ class ControllerImportRequest {
 }
 
 class ControllerStore extends ChangeNotifier {
+  /// Reserved id for the embedded kernel on supported platforms.
+  static const localId = 'local-core';
+
   ControllerStore._(this._store);
 
   final JsonStore _store;
@@ -310,10 +313,21 @@ class ControllerStore extends ChangeNotifier {
 
   Map<String, dynamic> get _section => _store.section('controllers');
 
-  static Future<ControllerStore> load(JsonStore store) async {
+  static Future<ControllerStore> load(
+    JsonStore store, {
+    bool localCoreSupported = false,
+  }) async {
     final s = ControllerStore._(store);
     s._restore();
-    if (s._controllers.isEmpty) {
+    final localCore = Controller(
+      id: localId,
+      name: '本地代理',
+      baseUrl: 'local://core',
+    );
+    s._controllers.removeWhere((c) => c.id == localCore.id);
+    if (localCoreSupported) {
+      s._controllers = [localCore, ...s._controllers];
+    } else if (s._controllers.isEmpty) {
       s._controllers = [
         Controller(
           id: _newId(),
@@ -321,9 +335,11 @@ class ControllerStore extends ChangeNotifier {
           baseUrl: 'http://127.0.0.1:9090',
         ),
       ];
-      s._activeId = s._controllers.first.id;
-      await s._persist();
     }
+    if (!s._controllers.any((controller) => controller.id == s._activeId)) {
+      s._activeId = s._controllers.first.id;
+    }
+    await s._persist();
     return s;
   }
 
@@ -407,6 +423,7 @@ class ControllerStore extends ChangeNotifier {
     String? secret,
     bool? allowInsecure,
   }) async {
+    if (id == localId) return;
     _controllers = _controllers
         .map(
           (c) => c.id == id
@@ -426,6 +443,7 @@ class ControllerStore extends ChangeNotifier {
   }
 
   Future<void> remove(String id) async {
+    if (id == localId) return;
     _controllers = _controllers.where((c) => c.id != id).toList();
     if (_activeId == id) {
       _activeId = _controllers.isEmpty ? null : _controllers.first.id;
@@ -438,6 +456,8 @@ class ControllerStore extends ChangeNotifier {
     RangeError.checkValidIndex(oldIndex, _controllers, 'oldIndex');
     RangeError.checkValidIndex(newIndex, _controllers, 'newIndex');
     if (oldIndex == newIndex) return;
+    final localPinned = _controllers.first.id == localId;
+    if (localPinned && (oldIndex == 0 || newIndex == 0)) return;
 
     final reordered = List<Controller>.of(_controllers);
     final controller = reordered.removeAt(oldIndex);

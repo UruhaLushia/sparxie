@@ -30,6 +30,8 @@ JNI_LIBS="$PROJECT_ROOT/android/app/src/main/jniLibs"
 rm -rf "$JNI_LIBS"
 mkdir -p "$JNI_LIBS"
 
+"$PROJECT_ROOT/scripts/build-go-core.sh"
+
 NDK_ARGS=(--platform 24 -o "$JNI_LIBS")
 for abi in $ABIS; do
   NDK_ARGS+=(-t "$abi")

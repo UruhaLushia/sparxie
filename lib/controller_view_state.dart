@@ -251,7 +251,8 @@ class ControllerViewState {
     // IPC transports are always on this machine.
     if (url.startsWith('unix:') ||
         url.startsWith('pipe:') ||
-        url.startsWith('sparkle-service:')) {
+        url.startsWith('sparkle-service:') ||
+        url.startsWith('local:')) {
       return true;
     }
     final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
@@ -495,9 +496,7 @@ class ControllerViewState {
     _resubscribeAll();
   }
 
-  void _resubscribeAll() {
-    _cancelAll();
-    isStreaming.value = false;
+  void clearTelemetry() {
     traffic.value = rust.TrafficSample(
       up: BigInt.zero,
       down: BigInt.zero,
@@ -509,6 +508,12 @@ class ControllerViewState {
       oslimit: BigInt.zero,
       goroutines: 0,
     );
+  }
+
+  void _resubscribeAll() {
+    _cancelAll();
+    isStreaming.value = false;
+    clearTelemetry();
     connections.reset();
     connectionsTotals.value = ConnectionsTotals.zero;
     logs.reset();

@@ -1,5 +1,6 @@
 package zip.atri.sparxie
 
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -63,6 +64,7 @@ class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EngineBridge.attach(this, this)
         cleanupUpdatePackage()
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         // Concurrent background pool: icon decode + PNG compression are
@@ -175,12 +177,18 @@ class MainActivity : FlutterActivity(), GamepadsCompatibleActivity {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != installPermissionRequestCode) return
-        installPermissionResult?.success(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-                packageManager.canRequestPackageInstalls()
-        )
-        installPermissionResult = null
+        when (requestCode) {
+            installPermissionRequestCode -> {
+                installPermissionResult?.success(
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                        packageManager.canRequestPackageInstalls()
+                )
+                installPermissionResult = null
+            }
+            EngineBridge.REQUEST_VPN_CONSENT -> {
+                EngineBridge.onVpnConsentResult(resultCode == RESULT_OK)
+            }
+        }
     }
 
     private fun systemAccentColor(): Long? {

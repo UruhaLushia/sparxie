@@ -1,0 +1,1 @@
+-keep class zip.atri.sparxie.EngineBridge { *; }

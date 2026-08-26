@@ -6,6 +6,8 @@ pub mod connections;
 pub mod control;
 #[path = "convert.rs"]
 mod convert;
+#[path = "core.rs"]
+pub mod core;
 #[path = "diagnostics.rs"]
 pub mod diagnostics;
 #[path = "providers.rs"]

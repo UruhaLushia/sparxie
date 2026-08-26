@@ -38,6 +38,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: core/go/go.mod
+          cache-dependency-path: core/go/go.sum
 
       - uses: actions/setup-java@v4
         with:

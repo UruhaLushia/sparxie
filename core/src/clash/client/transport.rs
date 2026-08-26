@@ -40,6 +40,8 @@ impl IpcEndpoint {
 pub(super) enum Transport {
     /// http(s) — `base` is the parsed TCP URL.
     Tcp { base: Url },
+    /// Embedded kernel reached through the Go bridge.
+    Local,
     /// Direct mihomo IPC transport.
     Ipc(IpcEndpoint),
     /// Sparkle service IPC. Requests are signed and proxied through
@@ -76,6 +78,9 @@ impl Transport {
                 path: path.to_string(),
             }));
         }
+        if trimmed == "local://core" {
+            return Ok(Self::Local);
+        }
         if let Some(rest) = trimmed.strip_prefix("pipe:") {
             let name = rest.strip_prefix("//").unwrap_or(rest);
             if name.is_empty() {
@@ -101,7 +106,9 @@ impl Transport {
                 endpoint.key(),
                 auth.key_id()
             )),
-            Self::Tcp { .. } => Err(MihomoError::Other("ipc_key on tcp transport".into())),
+            Self::Tcp { .. } | Self::Local => {
+                Err(MihomoError::Other("ipc_key on tcp transport".into()))
+            }
         }
     }
 
@@ -109,7 +116,9 @@ impl Transport {
         match self {
             Self::Ipc(endpoint) => endpoint.connect().await,
             Self::SparkleService { endpoint, .. } => endpoint.connect().await,
-            Self::Tcp { .. } => Err(MihomoError::Other("connect_ipc on tcp transport".into())),
+            Self::Tcp { .. } | Self::Local => {
+                Err(MihomoError::Other("connect_ipc on tcp transport".into()))
+            }
         }
     }
 

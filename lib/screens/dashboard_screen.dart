@@ -3,7 +3,10 @@ import 'dart:collection';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../rust_api.dart' as rust;
+
 import '../controller.dart' as ctl;
+import '../core/core_controller.dart';
 import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
@@ -19,10 +22,12 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.store,
     required this.session,
+    this.core,
   });
 
   final ctl.ControllerStore store;
   final ControllerViewState session;
+  final CoreController? core;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -47,6 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.supportsMemory.addListener(_onSupportsMemory);
     widget.session.error.addListener(_onSessionError);
     widget.session.versionString.addListener(_onVersion);
+    widget.core?.addListener(_onCore);
     _bind();
   }
 
@@ -58,6 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     widget.session.supportsMemory.removeListener(_onSupportsMemory);
     widget.session.error.removeListener(_onSessionError);
     widget.session.versionString.removeListener(_onVersion);
+    widget.core?.removeListener(_onCore);
     _history.dispose();
     super.dispose();
   }
@@ -99,16 +106,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted && _active) setState(() {});
   }
 
+  void _onCore() {
+    final core = widget.core;
+    if (core == null) return;
+    if (core.state == rust.CoreState.stopped ||
+        core.state == rust.CoreState.error) {
+      _history.reset(notify: false);
+    }
+    if (_isLocalCore) {
+      _error = core.lastError.isEmpty
+          ? widget.session.error.value
+          : core.lastError;
+    }
+    if (mounted && _active) setState(() {});
+  }
+
   void _onSessionError() {
     if (!mounted) return;
-    _error = widget.session.error.value;
+    final coreError = _isLocalCore ? widget.core?.lastError ?? '' : '';
+    _error = coreError.isEmpty ? widget.session.error.value : coreError;
     if (_active) setState(() {});
+  }
+
+  Widget _coreFab() {
+    final core = widget.core!;
+    return ListenableBuilder(
+      listenable: core,
+      builder: (context, _) {
+        return FloatingActionButton.extended(
+          heroTag: 'core-fab',
+          onPressed: core.state == rust.CoreState.stopping
+              ? null
+              : core.running
+              ? core.stop
+              : core.start,
+          icon: Icon(core.running ? Icons.stop : Icons.play_arrow),
+          label: Text(
+            core.state == rust.CoreState.stopping
+                ? '停止中'
+                : core.running
+                ? '停止'
+                : '启动',
+          ),
+          // Explicit colors: some custom themes yield a near-invisible
+          // primaryContainer for the idle state, so pin both states.
+          backgroundColor: core.running
+              ? Theme.of(context).colorScheme.errorContainer
+              : Theme.of(context).colorScheme.primary,
+          foregroundColor: core.running
+              ? Theme.of(context).colorScheme.onErrorContainer
+              : Theme.of(context).colorScheme.onPrimary,
+        );
+      },
+    );
+  }
+
+  bool get _isLocalCore {
+    final core = widget.core;
+    return core != null &&
+        widget.store.active?.id == ctl.ControllerStore.localId;
   }
 
   void _bind() {
     _activeKey = widget.store.active;
     _history.reset(notify: false);
-    _error = _activeKey == null ? '请先在“后端”中添加一个后端' : widget.session.error.value;
+    final coreError = _isLocalCore ? widget.core?.lastError ?? '' : '';
+    _error = _activeKey == null
+        ? '请先在“后端”中添加一个后端'
+        : coreError.isNotEmpty
+        ? coreError
+        : widget.session.error.value;
     if (mounted && _active) setState(() {});
   }
 
@@ -162,6 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
+      floatingActionButton: _isLocalCore ? _coreFab() : null,
       body: AppPageBodyTransition(
         child: SafeArea(
           bottom: false,

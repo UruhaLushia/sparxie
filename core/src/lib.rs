@@ -4,6 +4,7 @@ mod assets;
 pub mod backend;
 mod cache;
 pub(crate) mod clash;
+pub(crate) mod core;
 pub(crate) mod sing_box;
 pub(crate) mod surge;
 pub(crate) mod surge_controller;

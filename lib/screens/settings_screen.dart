@@ -8,9 +8,10 @@ import 'package:file_selector/file_selector.dart';
 
 import '../app_prefs.dart';
 import '../controller.dart' as ctl;
+import '../controller_view_state.dart';
+import '../core/core_controller.dart';
 import '../imported_fonts.dart';
 import '../rust_api.dart' as rust;
-import '../controller_view_state.dart';
 import '../utils.dart';
 import '../widgets/active_listenable_builder.dart';
 import '../widgets/app_background.dart';
@@ -24,6 +25,8 @@ import '../widgets/section_panel.dart';
 import 'about_screen.dart';
 import 'core_actions_screen.dart';
 import 'remote_core_config_screen.dart';
+import 'core_profiles_screen.dart';
+import 'core_config_screen.dart';
 import 'diagnostics_screen.dart';
 import 'resources_screen.dart';
 import 'rules_screen.dart';
@@ -47,6 +50,7 @@ class SettingsScreen extends StatelessWidget {
     required this.store,
     required this.prefs,
     required this.session,
+    this.core,
     this.extras = const <SettingsExtra>[],
     this.railManagesPages = false,
   });
@@ -54,6 +58,7 @@ class SettingsScreen extends StatelessWidget {
   final ctl.ControllerStore store;
   final AppPrefs prefs;
   final ControllerViewState session;
+  final CoreController? core;
   final List<SettingsExtra> extras;
   final bool railManagesPages;
 
@@ -71,6 +76,8 @@ class SettingsScreen extends StatelessWidget {
       ]),
       builder: (context, _) {
         final isCards = prefs.navLayout == NavLayout.cards;
+        final isLocalCore =
+            core != null && store.active?.id == ctl.ControllerStore.localId;
         // 分流规则 has a dedicated 规则 card in cards layout; in wide standard
         // it's a rail item. Only the compact bottom bar shows its tile here.
         final showRules =
@@ -79,13 +86,21 @@ class SettingsScreen extends StatelessWidget {
             session.supportsTailscale.value && !isCards && !railManagesPages;
         final showDiagnostics =
             session.supportsDiagnostics.value && !isCards && !railManagesPages;
+        // 核心配置 / 核心操作 are remote-controller features; the embedded
+        // kernel has its own 基础配置/配置管理 tiles above.
+        final showCoreConfigRemote =
+            session.supportsCoreConfig.value &&
+            !isCards &&
+            !railManagesPages &&
+            !isLocalCore;
         final showCoreActions =
-            !railManagesPages && session.supportsCoreActions.value;
+            session.supportsCoreActions.value && !isCards && !railManagesPages;
+
         // 核心配置 / 外部资源 are hero cards in cards layout and rail items in
         // wide standard; only the compact bottom bar (neither) needs the
         // static tiles below.
         final showCoreResources = !isCards && !railManagesPages;
-        final showCore = showCoreResources && session.supportsCoreConfig.value;
+
         final showResources =
             showCoreResources && session.supportsExternalResources.value;
 
@@ -94,21 +109,32 @@ class SettingsScreen extends StatelessWidget {
             _Tile(icon: e.icon, title: e.label, onTap: e.onTap),
         ];
         final toolTiles = <Widget>[
-          if (showCore)
+          if (rust.coreSupported() && isLocalCore)
             _Tile(
-              icon: Icons.memory_outlined,
+              icon: Icons.layers_outlined,
+              title: '配置管理',
+              subtitle: '导入与切换内核配置',
+              onTap: () => _push(context, const CoreProfilesScreen()),
+            ),
+          if (rust.coreSupported() && isLocalCore)
+            _Tile(
+              icon: Icons.tune_outlined,
+              title: '基础配置',
+              subtitle: '内核基础与 TUN 设置',
+              onTap: () => _push(context, CoreConfigScreen(core: core!)),
+            ),
+          if (showCoreConfigRemote)
+            _Tile(
+              icon: Icons.settings_outlined,
               title: '核心配置',
-              subtitle: '出站模式、日志级别、端口等',
-              onTap: () => _push(
-                context,
-                RemoteCoreConfigScreen(store: store, prefs: prefs),
-              ),
+              subtitle: '远程控制器的基础参数',
+              onTap: () => _push(context, RemoteCoreConfigScreen(store: store)),
             ),
           if (showCoreActions)
             _Tile(
               icon: Icons.build_outlined,
               title: '核心操作',
-              subtitle: '重载、重启、升级与缓存维护',
+              subtitle: '重载配置、刷新缓存与升级',
               onTap: () => _push(
                 context,
                 CoreActionsScreen(store: store, session: session),
@@ -1240,15 +1266,17 @@ class _BackendSettingsPanelState extends State<BackendSettingsPanel> {
               onReorderItem: _reorder,
               itemBuilder: (context, index) {
                 final controller = controllers[index];
+                final locked = controller.id == ctl.ControllerStore.localId;
                 return _BackendReorderDragStartListener(
                   key: ValueKey(controller.id),
                   index: index,
-                  enabled: controllers.length > 1,
+                  enabled: !locked && controllers.length > 1,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: _ControllerTile(
                       controller: controller,
                       active: controller.id == activeId,
+                      locked: locked,
                       canRemove: controllers.length > 1,
                       onActivate: () => widget.store.activate(controller.id),
                       onEdit: () => _edit(existing: controller),
@@ -1351,6 +1379,7 @@ class _ControllerTile extends StatelessWidget {
   const _ControllerTile({
     required this.controller,
     required this.active,
+    required this.locked,
     required this.canRemove,
     required this.onActivate,
     required this.onEdit,
@@ -1359,6 +1388,7 @@ class _ControllerTile extends StatelessWidget {
 
   final ctl.Controller controller;
   final bool active;
+  final bool locked;
   final bool canRemove;
   final VoidCallback onActivate;
   final VoidCallback onEdit;
@@ -1439,30 +1469,42 @@ class _ControllerTile extends StatelessWidget {
         ],
       ),
       onTap: active ? null : onActivate,
-      trailing: SizedBox.square(
-        dimension: 40,
-        child: PopupMenuButton<String>(
-          padding: EdgeInsets.zero,
-          iconSize: 20,
-          onSelected: (value) {
-            switch (value) {
-              case 'activate':
-                onActivate();
-              case 'edit':
-                onEdit();
-              case 'remove':
-                onRemove();
-            }
-          },
-          itemBuilder: (context) => [
-            if (!active)
-              const PopupMenuItem(value: 'activate', child: Text('设为当前')),
-            const PopupMenuItem(value: 'edit', child: Text('编辑')),
-            if (canRemove)
-              const PopupMenuItem(value: 'remove', child: Text('删除')),
-          ],
-        ),
-      ),
+      trailing: locked
+          ? Tooltip(
+              message: '本地代理为系统内置，不可修改',
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Icon(
+                  Icons.vpn_lock_outlined,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          : SizedBox.square(
+              dimension: 40,
+              child: PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                iconSize: 20,
+                onSelected: (value) {
+                  switch (value) {
+                    case 'activate':
+                      onActivate();
+                    case 'edit':
+                      onEdit();
+                    case 'remove':
+                      onRemove();
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (!active)
+                    const PopupMenuItem(value: 'activate', child: Text('设为当前')),
+                  const PopupMenuItem(value: 'edit', child: Text('编辑')),
+                  if (canRemove)
+                    const PopupMenuItem(value: 'remove', child: Text('删除')),
+                ],
+              ),
+            ),
     );
   }
 }

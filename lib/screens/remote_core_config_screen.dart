@@ -1,64 +1,22 @@
 import 'package:flutter/material.dart';
 
-import '../app_prefs.dart';
 import '../controller.dart' as ctl;
-import '../widgets/active_listenable_builder.dart';
 import '../widgets/basic_config_panel.dart';
-import '../widgets/desktop_title_bar.dart';
 import '../widgets/route_app_bar.dart';
 import '../widgets/section_panel.dart';
 
 class RemoteCoreConfigScreen extends StatelessWidget {
-  const RemoteCoreConfigScreen({super.key, required this.store, this.prefs});
+  const RemoteCoreConfigScreen({super.key, required this.store});
 
   final ctl.ControllerStore store;
 
-  /// Optional prefs reference. When provided and the cards layout is active,
-  /// the 出站模式 section is hidden because the launcher already exposes it
-  /// as a dedicated card.
-  final AppPrefs? prefs;
-
   @override
   Widget build(BuildContext context) {
-    return ActiveListenableSelector<ctl.Controller?>(
-      listenable: store,
-      selector: () => store.active,
-      builder: (context, activeController, _) =>
-          _buildScreen(context, activeController),
-    );
-  }
-
-  Widget _buildScreen(BuildContext context, ctl.Controller? activeController) {
-    final hideMode = prefs?.navLayout == NavLayout.cards;
     return Scaffold(
-      appBar: AppRouteAppBar(
-        child: AppBar(
-          leading: AppRouteAppBar.leadingOf(context),
-          automaticallyImplyLeading: false,
-          title: const Text('核心配置'),
-          flexibleSpace: const DesktopAppBarDragArea(),
-        ),
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            16 + MediaQuery.paddingOf(context).bottom,
-          ),
-          children: [
-            MaxWidthContent(
-              maxWidth: 720,
-              child: BasicConfigPanel(
-                key: ValueKey((store, activeController)),
-                store: store,
-                showOutboundMode: !hideMode,
-              ),
-            ),
-          ],
-        ),
+      appBar: AppRouteAppBar(child: AppBar(title: const Text('核心配置'))),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [AppPanelSurface(child: BasicConfigPanel(store: store))],
       ),
     );
   }
