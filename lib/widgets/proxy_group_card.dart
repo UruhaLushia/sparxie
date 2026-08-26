@@ -12,6 +12,7 @@ import 'pressable_scale.dart';
 import 'proxy_avatar.dart';
 import 'proxy_node_context_menu.dart';
 import 'transient_animation.dart';
+import 'transition_snapshot.dart';
 
 const _gradientHueOffsets = <double>[
   -60,
@@ -1508,17 +1509,20 @@ class _ProxyGroupCardDetailState extends State<_ProxyGroupCardDetail> {
           ),
         );
         final detailLayer = RepaintBoundary(
-          child: _detailBody(
-            group,
-            widget.showIcon,
-            style,
-            _groupDelayButton(style, testing: _testing, onPressed: _runTest),
-            onSelect: widget.onSelect,
-            onToggleFixed: widget.onToggleFixed,
-            onTestNode: widget.onTestNode,
-            loadNodeDetails: widget.loadNodeDetails,
-            onMissingMember: _queueMemberLoad,
-            scrollController: memberScroll,
+          child: HighRefreshTransitionSnapshot(
+            animation: widget.flightTimeline,
+            child: _detailBody(
+              group,
+              widget.showIcon,
+              style,
+              _groupDelayButton(style, testing: _testing, onPressed: _runTest),
+              onSelect: widget.onSelect,
+              onToggleFixed: widget.onToggleFixed,
+              onTestNode: widget.onTestNode,
+              loadNodeDetails: widget.loadNodeDetails,
+              onMissingMember: _queueMemberLoad,
+              scrollController: memberScroll,
+            ),
           ),
         );
         final cardContent = AnimatedBuilder(
