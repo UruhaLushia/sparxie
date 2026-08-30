@@ -5,6 +5,7 @@ use super::client::SurgeControllerTarget;
 
 mod config;
 mod connections;
+mod performance;
 mod policies;
 mod resources;
 mod value;
@@ -30,15 +31,22 @@ pub async fn version(target: SurgeControllerTarget) -> Result<String, MihomoErro
 
 pub async fn version_info(target: SurgeControllerTarget) -> Result<VersionInfo, MihomoError> {
     let welcome = target.welcome().await?;
+    let supports_memory = performance::memory_sample(target).await.is_ok();
     Ok(VersionInfo {
         version: version_label(&welcome),
         supports_core_config: true,
         supports_core_actions: false,
         supports_core_management: true,
         supports_cache_flush: false,
-        supports_memory: false,
+        supports_memory,
         ..Default::default()
     })
+}
+
+pub async fn memory_sample(
+    target: SurgeControllerTarget,
+) -> Result<crate::backend::api::MemorySample, MihomoError> {
+    performance::memory_sample(target).await
 }
 
 pub async fn proxy_detail(
