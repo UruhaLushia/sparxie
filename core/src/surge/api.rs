@@ -8,6 +8,7 @@ use crate::surge::client::SurgeTarget;
 
 mod config;
 mod connections;
+mod metrics;
 mod policies;
 pub(crate) mod traffic;
 mod value;
@@ -29,14 +30,20 @@ pub async fn version(_: SurgeTarget) -> Result<String, MihomoError> {
 }
 
 pub async fn version_info(target: SurgeTarget) -> Result<VersionInfo, MihomoError> {
-    target.client()?.get_json("v1/outbound").await?;
+    let client = target.client()?;
+    client.get_json("v1/outbound").await?;
+    let supports_memory = client
+        .get_text("v1/metrics")
+        .await
+        .and_then(|metrics| metrics::parse_memory(&metrics))
+        .is_ok();
     Ok(VersionInfo {
         version: "Surge".into(),
         supports_core_config: true,
         supports_core_actions: false,
         supports_core_management: false,
         supports_cache_flush: false,
-        supports_memory: false,
+        supports_memory,
         ..Default::default()
     })
 }
@@ -118,6 +125,12 @@ pub async fn flush_dns(target: SurgeTarget) -> Result<(), MihomoError> {
 pub async fn traffic_sample(target: SurgeTarget) -> Result<TrafficSample, MihomoError> {
     let raw = target.client()?.get_json("v1/traffic").await?;
     Ok(parse_traffic(&raw))
+}
+
+pub async fn memory_sample(
+    target: SurgeTarget,
+) -> Result<crate::backend::api::MemorySample, MihomoError> {
+    metrics::memory_sample(target).await
 }
 
 pub async fn proxy_provider_catalog(

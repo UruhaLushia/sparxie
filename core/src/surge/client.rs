@@ -44,11 +44,29 @@ impl SurgeClient {
     }
 
     pub async fn get_json(&self, path: &str) -> Result<Value, MihomoError> {
-        self.request(Method::GET, path, None).await
+        self.request_json(Method::GET, path, None).await
+    }
+
+    pub async fn get_text(&self, path: &str) -> Result<String, MihomoError> {
+        let bytes = self.request(Method::GET, path, None).await?;
+        String::from_utf8(bytes).map_err(|e| MihomoError::Other(e.to_string()))
     }
 
     pub async fn post_json(&self, path: &str, body: Value) -> Result<Value, MihomoError> {
-        self.request(Method::POST, path, Some(body)).await
+        self.request_json(Method::POST, path, Some(body)).await
+    }
+
+    async fn request_json(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Value, MihomoError> {
+        let bytes = self.request(method, path, body).await?;
+        if bytes.is_empty() {
+            return Ok(serde_json::json!({"ok": true}));
+        }
+        serde_json::from_slice(&bytes).map_err(|e| MihomoError::InvalidJson(e.to_string()))
     }
 
     async fn request(
@@ -56,7 +74,7 @@ impl SurgeClient {
         method: Method,
         path: &str,
         body: Option<Value>,
-    ) -> Result<Value, MihomoError> {
+    ) -> Result<Vec<u8>, MihomoError> {
         let url = self
             .base
             .join(path.trim_start_matches('/'))
@@ -80,10 +98,7 @@ impl SurgeClient {
                 body: String::from_utf8_lossy(&bytes).into_owned(),
             });
         }
-        if bytes.is_empty() {
-            return Ok(serde_json::json!({"ok": true}));
-        }
-        serde_json::from_slice(&bytes).map_err(|e| MihomoError::InvalidJson(e.to_string()))
+        Ok(bytes.to_vec())
     }
 }
 

@@ -72,14 +72,21 @@ pub async fn controller_memory_stream(
             }
             Ok(())
         }
-        BackendType::Surge => {
-            let _ = sink;
-            crate::surge::api::unsupported("内存流").await
-        }
-        BackendType::SurgeController => {
-            let _ = sink;
-            crate::surge_controller::api::unsupported("内存流").await
-        }
+        BackendType::Surge => loop {
+            let sample = crate::surge::api::memory_sample(target.surge()).await?;
+            if sink.add(sample).is_err() {
+                break Ok(());
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        },
+        BackendType::SurgeController => loop {
+            let sample =
+                crate::surge_controller::api::memory_sample(target.surge_controller()).await?;
+            if sink.add(sample).is_err() {
+                break Ok(());
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        },
         BackendType::SingBox => {
             let rx = crate::sing_box::state::status::subscribe(target.sing_box(), 1000).await?;
             let mut stream = BroadcastStream::new(rx);
