@@ -273,11 +273,24 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       }
     } else if (wide) {
       final navigationStyle = CompactControlTheme.navigationBarOf(context);
-      final itemHeight = SideNavigationRail.itemHeightFor(navigationStyle);
+      final iconOnlyRail =
+          layout == NavLayout.floating && widget.prefs.navBarIconOnly;
+      final itemHeight = layout == NavLayout.floating
+          ? SideNavigationRail.floatingItemHeightFor(
+              navigationStyle,
+              iconOnly: iconOnlyRail,
+            )
+          : SideNavigationRail.itemHeightFor(navigationStyle);
       final n = destinations.length;
       final otherIndex = n - 1;
-      final topInset = MediaQuery.paddingOf(context).top;
-      final fit = ((size.height - topInset) / itemHeight).floor().clamp(2, n);
+      final padding = MediaQuery.paddingOf(context);
+      final inset =
+          padding.vertical +
+          SideNavigationRail.verticalInsetFor(
+            layout == NavLayout.floating,
+            iconOnly: iconOnlyRail,
+          );
+      final fit = ((size.height - inset) / itemHeight).floor().clamp(2, n);
       final shownLeading = fit >= n ? otherIndex : fit - 1;
       indices.addAll([for (var i = 0; i < shownLeading; i++) i, otherIndex]);
     } else {
@@ -408,16 +421,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Widget _buildWideStandard(List<AppNavDestination> destinations) {
     final navigationStyle = CompactControlTheme.navigationBarOf(context);
     final navigationSurface = _navigationSurfaceTheme(context);
-    final railItemHeight = SideNavigationRail.itemHeightFor(navigationStyle);
+    final floating = widget.prefs.navLayout == NavLayout.floating;
+    final iconOnlyRail = floating && widget.prefs.navBarIconOnly;
+    final railItemHeight = floating
+        ? SideNavigationRail.floatingItemHeightFor(
+            navigationStyle,
+            iconOnly: iconOnlyRail,
+          )
+        : SideNavigationRail.itemHeightFor(navigationStyle);
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
           final n = destinations.length;
           final otherIndex = n - 1;
-          // Fixed item height (rail items never stretch). Account for the top
-          // safe-area inset so the fit count matches what actually renders.
-          final topInset = MediaQuery.paddingOf(context).top;
-          final fit = ((constraints.maxHeight - topInset) / railItemHeight)
+          final inset =
+              MediaQuery.paddingOf(context).vertical +
+              SideNavigationRail.verticalInsetFor(
+                floating,
+                iconOnly: iconOnlyRail,
+              );
+          final fit = ((constraints.maxHeight - inset) / railItemHeight)
               .floor()
               .clamp(2, n);
           final shownLeading = fit >= n ? otherIndex : fit - 1;
@@ -468,23 +491,42 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 pages[i],
           ];
 
+          final navigation = SideNavigationRail(
+            destinations: [for (final i in visibleReal) destinations[i]],
+            selectedIndex: visibleReal.indexOf(effectiveIndex),
+            onSelected: (pos) => _selectPage(visibleReal[pos], destinations),
+            style: widget.prefs.navBarStyle,
+            styleConfig: navigationStyle,
+            surfaceTheme: navigationSurface,
+            floating: floating,
+            iconOnly: widget.prefs.navBarIconOnly,
+          );
+          final pageStack = _LazyIndexedStack(
+            index: effectiveIndex,
+            children: children,
+          );
+          if (floating) {
+            final inset = SideNavigationRail.floatingExtentFor(
+              navigationStyle,
+              MediaQuery.paddingOf(context).left,
+              iconOnly: iconOnlyRail,
+            );
+            return Row(
+              children: [
+                navigation,
+                Expanded(
+                  child: WideFloatingNavigationScope(
+                    contentInset: inset,
+                    child: pageStack,
+                  ),
+                ),
+              ],
+            );
+          }
           return Row(
             children: [
-              SideNavigationRail(
-                destinations: [for (final i in visibleReal) destinations[i]],
-                selectedIndex: visibleReal.indexOf(effectiveIndex),
-                onSelected: (pos) =>
-                    _selectPage(visibleReal[pos], destinations),
-                style: widget.prefs.navBarStyle,
-                styleConfig: navigationStyle,
-                surfaceTheme: navigationSurface,
-              ),
-              Expanded(
-                child: _LazyIndexedStack(
-                  index: effectiveIndex,
-                  children: children,
-                ),
-              ),
+              navigation,
+              Expanded(child: pageStack),
             ],
           );
         },
@@ -766,9 +808,8 @@ class _NavCardGrid extends StatelessWidget {
                     ),
                     child: Text(
                       'Sparxie',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -942,9 +983,8 @@ class _StatusHeroCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '核心配置',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: colors.secondary),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: colors.secondary),
                   ),
                   const Spacer(),
                   ActiveValueListenableBuilder<bool>(
@@ -1188,10 +1228,8 @@ class _BadgeLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: colors.accent,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(fontWeight: FontWeight.w600, color: colors.accent),
       ),
     );
   }

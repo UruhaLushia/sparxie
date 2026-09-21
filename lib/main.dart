@@ -49,6 +49,7 @@ import 'widgets/compact_controls.dart';
 import 'widgets/desktop_title_bar.dart';
 import 'widgets/outbound_mode_card.dart';
 import 'widgets/page_body_transition.dart';
+import 'widgets/route_app_bar.dart';
 import 'widgets/section_panel.dart';
 import 'platform_capabilities.dart';
 import 'window_state.dart';

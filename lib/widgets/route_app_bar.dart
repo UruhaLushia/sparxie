@@ -1,5 +1,22 @@
 import 'package:flutter/material.dart';
 
+class WideFloatingNavigationScope extends InheritedWidget {
+  const WideFloatingNavigationScope({
+    super.key,
+    required this.contentInset,
+    required super.child,
+  });
+
+  final double contentInset;
+
+  static WideFloatingNavigationScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<WideFloatingNavigationScope>();
+
+  @override
+  bool updateShouldNotify(WideFloatingNavigationScope oldWidget) =>
+      contentInset != oldWidget.contentInset;
+}
+
 class _RouteAppBarHeroTag {
   const _RouteAppBarHeroTag();
 }
@@ -23,6 +40,23 @@ class AppRouteAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final floatingNavigation = WideFloatingNavigationScope.maybeOf(context);
+    final header = floatingNavigation == null
+        ? child
+        : LayoutBuilder(
+            builder: (context, constraints) => OverflowBox(
+              alignment: Alignment.centerLeft,
+              minWidth: constraints.maxWidth + floatingNavigation.contentInset,
+              maxWidth: constraints.maxWidth + floatingNavigation.contentInset,
+              child: Transform.translate(
+                offset: Offset(-floatingNavigation.contentInset, 0),
+                child: SizedBox(
+                  width: constraints.maxWidth + floatingNavigation.contentInset,
+                  child: child,
+                ),
+              ),
+            ),
+          );
     return Hero(
       tag: _routeAppBarHeroTag,
       // Keep the header in the overlay while the route body and its background
@@ -30,7 +64,7 @@ class AppRouteAppBar extends StatelessWidget implements PreferredSizeWidget {
       // switch directly instead of drifting with the page.
       transitionOnUserGestures: true,
       flightShuttleBuilder: _buildFlight,
-      child: child,
+      child: header,
     );
   }
 

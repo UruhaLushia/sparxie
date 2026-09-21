@@ -171,6 +171,7 @@ class AppPrefs extends ChangeNotifier {
   static const _kProxiesGroupByProvider = 'proxiesGroupByProvider';
   static const _kNavLayout = 'navLayout';
   static const _kNavBarStyle = 'navBarStyle';
+  static const _kNavBarIconOnly = 'navBarIconOnly';
   static const _kAutoCloseOnSwitch = 'autoCloseOnSwitch';
   static const _kDelayTestUrl = 'delayTestUrl';
   static const _kDelayTestTimeoutMs = 'delayTestTimeoutMs';
@@ -492,6 +493,15 @@ class AppPrefs extends ChangeNotifier {
   Future<void> setNavBarStyle(NavBarStyle value) async {
     if (value == navBarStyle) return;
     _put(_kNavBarStyle, value.name);
+  }
+
+  /// Hides labels in the wide floating sidebar.
+  bool get navBarIconOnly =>
+      _bool(_kNavBarIconOnly, navLayout == NavLayout.floating);
+
+  Future<void> setNavBarIconOnly(bool value) async {
+    if (value == navBarIconOnly) return;
+    _put(_kNavBarIconOnly, value);
   }
 
   /// When true, switching a group's selected proxy also closes all active

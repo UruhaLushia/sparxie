@@ -35,10 +35,57 @@ class SideNavigationRail extends StatelessWidget {
     required this.style,
     required this.surfaceTheme,
     this.styleConfig,
+    this.floating = false,
+    this.iconOnly = false,
   });
+
+  static const floatingPanelKey = ValueKey('side-navigation-floating-panel');
+
+  static const floatingMargin = 12.0;
+
+  static const floatingPadding = 8.0;
+
+  static const _iconOnlyPadding = 6.0;
+
+  static const floatingContentGap = 8.0;
+
+  static const floatingSurfaceLift = 0.04;
+
+  static const _iconOnlyWidth = 60.0;
+  static const _iconOnlyItemHeight = 44.0;
+  static const _iconOnlyIndicator = 38.0;
+
+  static double floatingWidthFor(
+    CompactControlStyle style, {
+    bool iconOnly = false,
+  }) => iconOnly
+      ? (_iconOnlyWidth * style.widthScale).clamp(52.0, 80.0).toDouble()
+      : (68 * style.widthScale).clamp(64.0, 96.0).toDouble();
+
+  static double floatingExtentFor(
+    CompactControlStyle style,
+    double leftInset, {
+    bool iconOnly = false,
+  }) =>
+      leftInset +
+      floatingWidthFor(style, iconOnly: iconOnly) +
+      floatingMargin * 2 +
+      floatingContentGap;
 
   static double itemHeightFor(CompactControlStyle style) =>
       style.buttonHeight.clamp(52.0, 76.0).toDouble();
+
+  static double floatingItemHeightFor(
+    CompactControlStyle style, {
+    bool iconOnly = false,
+  }) => iconOnly
+      ? _iconOnlyItemHeight
+      : style.buttonHeight.clamp(44.0, 52.0).toDouble();
+
+  static double verticalInsetFor(bool floating, {bool iconOnly = false}) =>
+      floating
+      ? 2 * (floatingMargin + (iconOnly ? _iconOnlyPadding : floatingPadding))
+      : 0;
 
   final List<AppNavDestination> destinations;
   final int selectedIndex;
@@ -46,39 +93,120 @@ class SideNavigationRail extends StatelessWidget {
   final NavBarStyle style;
   final AppSurfaceTheme surfaceTheme;
   final CompactControlStyle? styleConfig;
+  final bool floating;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
     final controlStyle =
         styleConfig ?? CompactControlTheme.navigationBarOf(context);
     final leftInset = MediaQuery.paddingOf(context).left;
-    final itemHeight = itemHeightFor(controlStyle);
+    final iconOnlyRail = floating && iconOnly;
+    final itemHeight = floating
+        ? floatingItemHeightFor(controlStyle, iconOnly: iconOnlyRail)
+        : itemHeightFor(controlStyle);
     final railWidth = (84 * controlStyle.widthScale)
         .clamp(68.0, 116.0)
         .toDouble();
-    return AppSurfaceBackdrop(
-      surfaceTheme: surfaceTheme,
-      child: ColoredBox(
-        color: surfaceTheme.surfaceColor(controlStyle.background(context)),
-        child: SizedBox(
-          width: railWidth + leftInset,
-          child: Padding(
-            padding: EdgeInsets.only(left: leftInset),
-            child: SafeArea(
-              left: false,
-              right: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _SideNavigationRailItems(
-                    destinations: destinations,
-                    selectedIndex: selectedIndex,
-                    onSelected: onSelected,
-                    style: style,
-                    styleConfig: controlStyle,
-                    itemHeight: itemHeight,
+    final items = _SideNavigationRailItems(
+      destinations: destinations,
+      selectedIndex: selectedIndex,
+      onSelected: onSelected,
+      style: style,
+      styleConfig: controlStyle,
+      itemHeight: itemHeight,
+      iconOnly: iconOnlyRail,
+      floating: floating,
+    );
+    if (!floating) {
+      return AppSurfaceBackdrop(
+        surfaceTheme: surfaceTheme,
+        child: ColoredBox(
+          color: surfaceTheme.surfaceColor(controlStyle.background(context)),
+          child: SizedBox(
+            width: railWidth + leftInset,
+            child: Padding(
+              padding: EdgeInsets.only(left: leftInset),
+              child: SafeArea(
+                left: false,
+                right: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [items],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    final floatingWidth = floatingWidthFor(
+      controlStyle,
+      iconOnly: iconOnlyRail,
+    );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = controlStyle.borderRadius;
+    final surfaceColor = surfaceTheme.surfaceColor(
+      controlStyle.background(context),
+      floatingSurfaceLift,
+    );
+    final shadowStrength = surfaceTheme.enabled
+        ? surfaceTheme.effectiveSurfaceOpacity()
+        : 1.0;
+    final border = Border.all(
+      color: (isDark ? Colors.white : Colors.black).withValues(
+        alpha: isDark ? 0.1 : 0.05,
+      ),
+      width: 0.5,
+    );
+    return Align(
+      alignment: Alignment.bottomLeft,
+      widthFactor: 1,
+      child: SafeArea(
+        left: false,
+        right: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            floatingMargin + leftInset,
+            floatingMargin,
+            floatingMargin + floatingContentGap,
+            floatingMargin,
+          ),
+          child: SizedBox(
+            width: floatingWidth,
+            child: DecoratedBox(
+              key: floatingPanelKey,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: (isDark ? 0.32 : 0.1) * shadowStrength,
+                    ),
+                    blurRadius: 22,
+                    spreadRadius: -6,
+                    offset: const Offset(0, 6),
                   ),
                 ],
+              ),
+              child: AppSurfaceBackdrop(
+                borderRadius: radius,
+                surfaceTheme: surfaceTheme,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: radius,
+                    border: border,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      vertical: iconOnlyRail
+                          ? _iconOnlyPadding
+                          : floatingPadding,
+                    ),
+                    child: items,
+                  ),
+                ),
               ),
             ),
           ),
@@ -96,6 +224,8 @@ class _SideNavigationRailItems extends StatelessWidget {
     required this.style,
     required this.styleConfig,
     required this.itemHeight,
+    this.iconOnly = false,
+    this.floating = false,
   });
 
   final List<AppNavDestination> destinations;
@@ -104,6 +234,8 @@ class _SideNavigationRailItems extends StatelessWidget {
   final NavBarStyle style;
   final CompactControlStyle styleConfig;
   final double itemHeight;
+  final bool iconOnly;
+  final bool floating;
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +253,8 @@ class _SideNavigationRailItems extends StatelessWidget {
               onTap: () => onSelected(i),
               style: style,
               styleConfig: styleConfig,
+              iconOnly: iconOnly,
+              floating: floating,
             ),
           ),
       ],
@@ -175,6 +309,8 @@ class _SideNavigationRailItem extends StatefulWidget {
     required this.onTap,
     required this.style,
     required this.styleConfig,
+    this.iconOnly = false,
+    this.floating = false,
   });
 
   final AppNavDestination destination;
@@ -182,6 +318,8 @@ class _SideNavigationRailItem extends StatefulWidget {
   final VoidCallback onTap;
   final NavBarStyle style;
   final CompactControlStyle styleConfig;
+  final bool iconOnly;
+  final bool floating;
 
   @override
   State<_SideNavigationRailItem> createState() =>
@@ -218,10 +356,23 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
     required double minHeight,
   }) {
     final availableWidth = constraints.maxWidth;
+    final indicatorWidth = widget.floating
+        ? ((availableWidth - 4) * style.indicatorWidthScale)
+              .clamp(36.0, availableWidth)
+              .toDouble()
+        : _sideIndicatorWidth(availableWidth, style);
     return Size(
-      _sideIndicatorWidth(availableWidth, style),
+      indicatorWidth,
       style.indicatorHeight.clamp(minHeight, constraints.maxHeight).toDouble(),
     );
+  }
+
+  Size _iconIndicatorSize(BoxConstraints constraints) {
+    final extent = math.min(
+      SideNavigationRail._iconOnlyIndicator,
+      math.min(constraints.maxWidth, constraints.maxHeight),
+    );
+    return Size(extent, extent);
   }
 
   Widget _buildVisual(BuildContext context, Set<WidgetState> states) {
@@ -241,7 +392,8 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
         ? styleConfig.foreground(context)
         : foreground;
     final capsule = style == NavBarStyle.capsule;
-    final showLabel = style != NavBarStyle.capsule || selected;
+    final showLabel =
+        !widget.iconOnly && (style != NavBarStyle.capsule || selected);
     final material3IndicatorHeight = styleConfig.indicatorHeight
         .clamp(
           24.0,
@@ -275,11 +427,14 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
               width: visual.width,
               height: visual.height,
               decoration: visual.decoration,
+              alignment: Alignment.center,
               child: child,
             ),
           )
         : TransientAnimatedScale(
-            scale: selected && style != NavBarStyle.capsule ? 1.12 : 1,
+            scale: selected && !widget.iconOnly && style != NavBarStyle.capsule
+                ? 1.12
+                : 1,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             child: TransientAnimatedValue<Color>(
@@ -291,55 +446,65 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
                   Icon(destination.icon, size: 22, color: color),
             ),
           );
+    final label = TransientAnimatedValue<double>(
+      value: showLabel ? 1 : 0,
+      duration: _navAnimationDuration,
+      curve: Curves.easeOutCubic,
+      lerp: _lerpDouble,
+      builder: (context, value, child) => ClipRect(
+        child: Align(
+          heightFactor: value,
+          child: Opacity(opacity: value, child: child),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(
+          destination.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontSize: capsule ? 10.5 : 10,
+            color: labelForeground,
+            fontWeight: selected
+                ? style == NavBarStyle.m3
+                      ? FontWeight.w600
+                      : FontWeight.w700
+                : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
     final content = Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          TransientAnimatedValue<double>(
-            value: showLabel ? 1 : 0,
-            duration: _navAnimationDuration,
-            curve: Curves.easeOutCubic,
-            lerp: _lerpDouble,
-            builder: (context, value, child) => ClipRect(
-              child: Align(
-                heightFactor: value,
-                child: Opacity(opacity: value, child: child),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontSize: capsule ? 10.5 : 10,
-                  color: labelForeground,
-                  fontWeight: selected
-                      ? style == NavBarStyle.m3
-                            ? FontWeight.w600
-                            : FontWeight.w700
-                      : FontWeight.w400,
-                ),
-              ),
-            ),
-          ),
-        ],
+        children: [Flexible(child: icon), if (!widget.iconOnly) label],
       ),
     );
     return LayoutBuilder(
       builder: (context, constraints) {
         if (style == NavBarStyle.m3) return content;
-        final size = _indicatorSize(
-          constraints,
-          styleConfig,
-          minHeight: capsule ? 40 : 28,
-        );
-        final background = capsule && selected
+        final iconOnlySize = widget.iconOnly
+            ? _iconIndicatorSize(constraints)
+            : null;
+        final size =
+            iconOnlySize ??
+            _indicatorSize(
+              constraints,
+              styleConfig,
+              minHeight: capsule ? 40 : 28,
+            );
+        final background = iconOnlySize != null
+            ? (selected
+                  ? _indicatorColor(context, styleConfig, isDark)
+                  : Colors.transparent)
+            : capsule && selected
             ? _indicatorColor(context, styleConfig, isDark)
             : Colors.transparent;
+        final indicatorRadius = iconOnlySize == null
+            ? styleConfig.indicatorBorderRadius
+            : BorderRadius.all(Radius.circular(iconOnlySize.height / 2));
         final stateLayer = TransientAnimatedValue<_NavBoxVisual>(
           value: (
             width: size.width,
@@ -348,7 +513,7 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
                 : size.height,
             decoration: BoxDecoration(
               color: _withStateLayer(context, styleConfig, background, states),
-              borderRadius: styleConfig.indicatorBorderRadius,
+              borderRadius: indicatorRadius,
             ),
           ),
           duration: _navAnimationDuration,
@@ -359,6 +524,7 @@ class _SideNavigationRailItemState extends State<_SideNavigationRailItem> {
             width: visual.width,
             height: visual.height,
             decoration: visual.decoration,
+            alignment: Alignment.center,
             child: child,
           ),
         );

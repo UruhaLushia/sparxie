@@ -26,6 +26,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
   late double _innerHeight;
   late double _innerWidthScale;
   late double _floatingHeightOffset;
+  late bool _navBarIconOnly;
   late bool _followGlobalSurface;
   late AppSurfaceEffect _navigationSurfaceEffect;
   late double _navigationSurfaceOpacity;
@@ -55,6 +56,7 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
     _innerHeight = widget.prefs.navigationInnerHeight;
     _innerWidthScale = widget.prefs.navigationInnerWidthScale;
     _floatingHeightOffset = widget.prefs.navigationFloatingHeightOffset;
+    _navBarIconOnly = widget.prefs.navBarIconOnly;
     _followGlobalSurface = widget.prefs.navigationSurfaceFollowsGlobal;
     _navigationSurfaceEffect = widget.prefs.navigationSurfaceEffect;
     _navigationSurfaceOpacity = widget.prefs.navigationSurfaceOpacity;
@@ -231,6 +233,17 @@ class _ComponentStyleScreenState extends State<ComponentStyleScreen> {
                                 onSelectionChanged: (selection) {
                                   widget.prefs.setNavBarStyle(selection.first);
                                   setState(_load);
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              CompactSwitch.tile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('仅显示图标'),
+                                subtitle: const Text('悬浮导航栏隐藏文字标签'),
+                                value: _navBarIconOnly,
+                                onChanged: (value) async {
+                                  await widget.prefs.setNavBarIconOnly(value);
+                                  if (mounted) setState(_load);
                                 },
                               ),
                               const Divider(height: 32),
