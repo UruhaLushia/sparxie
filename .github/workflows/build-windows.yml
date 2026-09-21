@@ -44,6 +44,41 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Prepare Windows shell and archive tools
+        shell: pwsh
+        run: |
+          $gitCandidates = @(
+            (Join-Path $env:ProgramFiles 'Git\bin'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Git\bin')
+          )
+          $gitBin = $gitCandidates |
+            Where-Object { Test-Path (Join-Path $_ 'bash.exe') } |
+            Select-Object -First 1
+          if (-not $gitBin) {
+            choco install git -y --no-progress
+            $gitBin = $gitCandidates |
+              Where-Object { Test-Path (Join-Path $_ 'bash.exe') } |
+              Select-Object -First 1
+          }
+          if (-not $gitBin) {
+            throw 'Git Bash was not found on the Windows runner'
+          }
+
+          $nativeBin = Join-Path $env:SystemRoot 'System32'
+          $nativeTar = Join-Path $nativeBin 'tar.exe'
+          if (-not (Test-Path $nativeTar)) {
+            throw "Windows tar was not found at $nativeTar"
+          }
+
+          $path = "$gitBin;$nativeBin;$env:Path"
+          "PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SPARXIE_GIT_BASH=$(Join-Path $gitBin 'bash.exe')" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using Bash: $(Join-Path $gitBin 'bash.exe')"
+          Write-Host "Using archive tool: $nativeTar"
+          & (Join-Path $gitBin 'bash.exe') --version | Select-Object -First 1
+          & $nativeTar --version | Select-Object -First 1
+
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ matrix.flutter_channel }}
@@ -69,26 +104,49 @@ jobs:
         run: flutter pub get
 
       - name: Build bundle and portable archive
-        shell: bash
+        shell: pwsh
         run: |
+          $buildNumber = & $env:SPARXIE_GIT_BASH ./scripts/git-build-number.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $buildNumber = "$buildNumber".Trim()
+          if ($buildNumber -notmatch '^[1-9][0-9]*$') {
+            throw "Invalid Git build number: $buildNumber"
+          }
+          Write-Host "Build number: $buildNumber"
+
+          # Only this PowerShell step prioritizes System32; Bash keeps its own tools.
+          $env:Path = "$(Join-Path $env:SystemRoot 'System32');$env:Path"
+          Get-Command tar.exe | Select-Object -ExpandProperty Source
           cargo build --manifest-path core/Cargo.toml --release
-          cargo build --manifest-path updater/Cargo.toml --release --locked \
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --manifest-path updater/Cargo.toml --release --locked `
             --target ${{ matrix.rust_target }}
-          BUILD_NUMBER="$(./scripts/git-build-number.sh)"
-          flutter build windows --release \
-            --dart-define=SPARXIE_BUILD_NUMBER="$BUILD_NUMBER" \
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release `
+            --dart-define=SPARXIE_BUILD_NUMBER="$buildNumber" `
             --dart-define=SPARXIE_UPDATE_CHANNEL="${{ inputs.update_channel }}"
-          BUNDLE=$(ls -d build/windows/*/runner/Release | head -n1)
-          cp core/target/release/sparxie.dll "$BUNDLE/"
-          cp \
-            updater/target/${{ matrix.rust_target }}/release/sparxie-updater.exe \
-            "$BUNDLE/"
-          mkdir -p out
-          ZIP="$GITHUB_WORKSPACE/out/sparxie-windows-${{ matrix.arch }}.zip"
-          (cd "$BUNDLE" && 7z a "$ZIP" .)
-          : > .portable
-          7z a "$ZIP" .portable
-          rm -f .portable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bundle = (Get-ChildItem build/windows/*/runner/Release -Directory |
+            Select-Object -First 1).FullName
+          if (-not $bundle) { throw 'Windows release bundle was not produced' }
+          Copy-Item core/target/release/sparxie.dll $bundle
+          Copy-Item updater/target/${{ matrix.rust_target }}/release/sparxie-updater.exe $bundle
+          New-Item -ItemType Directory -Force out | Out-Null
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'out/sparxie-windows-${{ matrix.arch }}.zip'
+          Push-Location $bundle
+          try {
+            7z a "$zip" .
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+          New-Item -ItemType File -Force .portable | Out-Null
+          try {
+            7z a "$zip" .portable
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item .portable
+          }
 
       - name: Build installer
         shell: pwsh
