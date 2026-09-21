@@ -475,8 +475,11 @@ class AppPrefs extends ChangeNotifier {
     _put(_kProxiesGroupByProvider, value);
   }
 
-  NavLayout get navLayout =>
-      _decodeNavLayout(_str(_kNavLayout, defaultNavLayout.name));
+  NavLayout get navLayout {
+    final raw = _s[_kNavLayout];
+    if (raw is String) return _decodeNavLayout(raw);
+    return isMobilePlatform ? NavLayout.floating : defaultNavLayout;
+  }
 
   Future<void> setNavLayout(NavLayout value) async {
     if (value == navLayout) return;
